@@ -1,0 +1,34 @@
+production:
+  tax_queue_sweep:
+    class: TaxQueueSweepJob
+    queue: tax
+    schedule: every 5 minutes
+  daily_summaries:
+    class: DailySummaryFanoutJob
+    queue: messages
+    schedule: every day at 23:00 Asia/Karachi
+  report_schedule_sweep:
+    class: ReportScheduleSweepJob
+    queue: messages
+    schedule: every 15 minutes
+  birthday_offers:
+    class: BirthdayOffersJob
+    queue: messages
+    schedule: every day at 09:00 Asia/Karachi
+  campaign_sweep:
+    class: CampaignSweepJob
+    queue: messages
+    schedule: every 5 minutes
+  reservation_reminders:
+    class: ReservationReminderJob
+    queue: messages
+    schedule: every 15 minutes
+  preorder_due:
+    class: PreorderDueJob
+    queue: messages
+    schedule: every 10 minutes
+development:
+  tax_queue_sweep:
+    class: TaxQueueSweepJob
+    queue: tax
+    schedule: every 5 minutes

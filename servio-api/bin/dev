@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Starts the API and the job worker together. Needs the PostgreSQL container running: docker start servio-pg
+# foreman is not in the Gemfile, so run it as a global gem when present; otherwise start both processes here.
+export PORT="${PORT:-3001}"
+cd "$(dirname "$0")/.."
+rm -f tmp/pids/server.pid  # left behind when a previous server was killed; Rails refuses to start while it exists
+
+if command -v foreman >/dev/null 2>&1; then
+  exec foreman start -f Procfile.dev
+fi
+
+echo "foreman not installed; starting the job worker in the background and the API in the foreground"
+bin/jobs &
+JOBS=$!
+trap 'kill "$JOBS" 2>/dev/null' EXIT INT TERM
+bin/rails server -p "$PORT"

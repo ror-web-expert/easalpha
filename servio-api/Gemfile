@@ -1,0 +1,31 @@
+source "https://rubygems.org"
+
+gem "rails", "~> 8.0.4"
+gem "pg", "~> 1.6"
+gem "puma", ">= 6.0"
+gem "solid_queue"
+gem "solid_cache"
+gem "solid_cable"
+gem "bootsnap", require: false
+gem "tzinfo-data", platforms: %i[ windows jruby ]
+
+gem "bcrypt", "~> 3.1"
+gem "jwt", "~> 2.9"
+gem "pundit", "~> 2.5"
+gem "rack-attack", "~> 6.8"
+gem "rack-cors"
+gem "oj"
+gem "csv"
+
+group :development, :test do
+  gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
+  gem "rspec-rails", "~> 8.0"
+  gem "factory_bot_rails"
+  gem "faker"
+  gem "brakeman", require: false
+  gem "rubocop-rails-omakase", require: false
+end
+
+group :test do
+  gem "shoulda-matchers"
+end
