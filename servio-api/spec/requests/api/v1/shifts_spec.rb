@@ -120,7 +120,9 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
     api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }] }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/audit_logs?table_name=day_closes", headers: headers
-    expect(json[:data].size).to eq(2)
+    # The two rows the controller writes plus the create the Audited concern writes for the day_closes record.
+    expect(json[:data].size).to eq(3)
+    expect(json[:data].map { |a| a[:action] }).to include("create")
   end
 
   it "a cashier sees only their own shifts and other businesses see nothing" do

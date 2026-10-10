@@ -50,9 +50,10 @@ module Serializers
       signed_out_at: rt.revoked_at, expires_at: rt.expires_at, active: rt.revoked_at.nil? && rt.expires_at > Time.current }
   end
 
-  def audit_log(a)
-    { id: a.id, action: a.action, table_name: a.table_name, record_id: a.record_id, user_id: a.user_id, device_id: a.device_id,
-      approved_by_user_id: a.approved_by_user_id, before: a.before, after: a.after, ip: a.ip, occurred_at: a.occurred_at }
+  def audit_log(a, names: {})
+    { id: a.id, action: a.action, table_name: a.table_name, record_id: a.record_id, user_id: a.user_id, user_name: names[a.user_id],
+      device_id: a.device_id, approved_by_user_id: a.approved_by_user_id, approved_by_name: names[a.approved_by_user_id],
+      before: a.before, after: a.after, ip: a.ip, occurred_at: a.occurred_at }
   end
 
   def checklist_item(i)

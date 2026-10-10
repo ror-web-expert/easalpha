@@ -6,6 +6,7 @@ module Tenanted
   class NoTenantError < StandardError; end
 
   included do
+    include Audited
     belongs_to :business
     default_scope do
       if Current.business_id

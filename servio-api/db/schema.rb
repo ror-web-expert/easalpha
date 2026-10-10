@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_10_000003) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -138,8 +138,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000003) do
     t.datetime "occurred_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["business_id", "action", "occurred_at"], name: "index_audit_logs_on_business_id_and_action_and_occurred_at"
     t.index ["business_id", "occurred_at"], name: "index_audit_logs_on_business_id_and_occurred_at"
     t.index ["business_id", "table_name", "record_id"], name: "index_audit_logs_on_business_id_and_table_name_and_record_id"
+    t.index ["business_id", "user_id", "occurred_at"], name: "index_audit_logs_on_business_id_and_user_id_and_occurred_at"
   end
 
   create_table "branches", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

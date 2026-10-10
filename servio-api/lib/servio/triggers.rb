@@ -4,6 +4,7 @@ module Servio
     module_function
 
     def apply!(conn = ActiveRecord::Base.connection)
+      apply_audit_logs!(conn) if conn.table_exists?("audit_logs")
       return unless conn.table_exists?("stock_ledger_entries")
       conn.execute(<<~SQL)
         CREATE OR REPLACE FUNCTION servio_block_ledger_change() RETURNS trigger AS $$
@@ -21,6 +22,19 @@ module Servio
         DROP TRIGGER IF EXISTS stock_ledger_insert_only ON stock_ledger_entries;
         CREATE TRIGGER stock_ledger_insert_only BEFORE UPDATE OR DELETE ON stock_ledger_entries
           FOR EACH ROW EXECUTE FUNCTION servio_block_ledger_change();
+      SQL
+    end
+
+    # SPEC: the audit log is append-only; nothing can be changed or erased.
+    def apply_audit_logs!(conn)
+      conn.execute(<<~SQL)
+        CREATE OR REPLACE FUNCTION servio_block_audit_change() RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'audit_logs is append-only';
+        END $$ LANGUAGE plpgsql;
+        DROP TRIGGER IF EXISTS audit_logs_append_only ON audit_logs;
+        CREATE TRIGGER audit_logs_append_only BEFORE UPDATE OR DELETE ON audit_logs
+          FOR EACH ROW EXECUTE FUNCTION servio_block_audit_change();
       SQL
     end
   end

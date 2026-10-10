@@ -41,7 +41,12 @@ Rails.application.routes.draw do
           post :heartbeat
         end
       end
-      resources :audit_logs, only: :index
+      resources :audit_logs, only: :index do
+        collection do
+          get :entities
+          get :insights
+        end
+      end
       get "setup_checklist", to: "setup_checklist#index"
       post "setup_checklist/:key/complete", to: "setup_checklist#complete"
       resources :notifications, only: :index do
