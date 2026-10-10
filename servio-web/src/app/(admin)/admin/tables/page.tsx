@@ -10,7 +10,9 @@ import { useRemove, useSave } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Dialog, Field, Input, Loading, Select, SummaryCard, Tabs, tableStatusVariant } from "@/components/ui";
 import { toast } from "@/store/toast";
 
-interface TableForm { id?: string; code: string; name: string; seats: number; floor_id: string; location: string }
+interface TableForm { id?: string; code: string; name: string; seats: number; floor_id: string; location: string; status?: string }
+// SPEC table statuses: Available, Occupied, Reserved or Maintenance (bill_requested is set by the QR flow).
+const TABLE_STATUSES = ["available", "occupied", "reserved", "bill_requested", "maintenance"];
 type Pos = { x: number; y: number; w: number; h: number };
 
 export default function TablesPage() {
@@ -58,8 +60,13 @@ export default function TablesPage() {
         <SummaryCard label="Tables" value={s?.total ?? 0} sub={`${s?.seats ?? 0} seats`} />
         <SummaryCard label="Available" value={s?.available ?? 0} tone="success" />
         <SummaryCard label="Occupied" value={s?.occupied ?? 0} tone="warning" />
-        <SummaryCard label="Floors" value={floorList.length} tone="neutral" />
+        <SummaryCard label="Maintenance" value={all.filter((t) => t.status === "maintenance").length} sub="Out of service" tone="neutral" />
       </Cards>
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-fg-secondary">
+        <span>Legend:</span>
+        {TABLE_STATUSES.map((st) => <Badge key={st} variant={tableStatusVariant(st)}>{titleCase(st)}</Badge>)}
+        <span className="ml-auto">{floorList.length} {floorList.length === 1 ? "floor" : "floors"}</span>
+      </div>
       {floors.isLoading || tables.isLoading ? <Loading /> : (
         <>
           <Tabs value={floorId} onChange={setFloorId} items={[...floorList.map((f) => ({ value: f.id, label: f.name, count: all.filter((t) => t.floor_id === f.id).length })), { value: "none", label: "Unassigned", count: all.filter((t) => !t.floor_id).length }]} className="mb-4 w-fit" />
@@ -89,7 +96,7 @@ export default function TablesPage() {
                   return (
                     <div key={t.id} className="rounded-md border p-2">
                       <div className="flex items-center justify-between">
-                        <button className="text-sm font-semibold text-primary hover:underline" onClick={() => setForm({ id: t.id, code: t.code, name: t.name ?? "", seats: t.seats, floor_id: t.floor_id ?? "", location: t.location ?? "" })}>{t.code}{t.name ? ` · ${t.name}` : ""}</button>
+                        <button className="text-sm font-semibold text-primary hover:underline" onClick={() => setForm({ id: t.id, code: t.code, name: t.name ?? "", seats: t.seats, floor_id: t.floor_id ?? "", location: t.location ?? "", status: t.status })}>{t.code}{t.name ? ` · ${t.name}` : ""}</button>
                         <Button variant="ghost" size="icon-sm" onClick={() => setDel(t)} aria-label="Remove"><Trash2 className="h-4 w-4 text-danger" /></Button>
                       </div>
                       <div className="mt-1 grid grid-cols-4 gap-1">
@@ -115,6 +122,7 @@ export default function TablesPage() {
             <Field label="Seats"><Input type="number" min={1} value={form.seats} onChange={(e) => setForm({ ...form, seats: Number(e.target.value) })} /></Field>
             <Field label="Floor"><Select value={form.floor_id} onChange={(e) => setForm({ ...form, floor_id: e.target.value })}><option value="">Unassigned</option>{floorList.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</Select></Field>
             <Field label="Location"><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Window, terrace…" /></Field>
+            {form.id ? <Field label="Status" hint="Maintenance takes the table out of service on the till and the QR menu"><Select value={form.status ?? "available"} onChange={(e) => setForm({ ...form, status: e.target.value })}>{TABLE_STATUSES.map((st) => <option key={st} value={st}>{titleCase(st)}</option>)}</Select></Field> : null}
           </div>
         ) : null}
       </Dialog>

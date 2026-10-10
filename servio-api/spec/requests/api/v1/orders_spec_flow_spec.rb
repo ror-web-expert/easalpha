@@ -187,4 +187,18 @@ RSpec.describe "SPEC order flows", type: :request do
       expect(response).to have_http_status(:created)
     end
   end
+
+  describe "receipt payments and table maintenance" do
+    it "names who collected each payment and lets a table be put in maintenance" do
+      o = create_order([{ product_id: m[:chai].id }])
+      pay(o[:id], o[:total_minor])
+      get "/api/v1/orders/#{o[:id]}/receipt", headers: headers
+      expect(json[:payments].first).to include(method: "cash", received_by: owner.user.name)
+      expect(json[:payments].first[:received_at]).to be_present
+      t = within(biz) { DiningTable.create!(branch: branch, code: "T8", seats: 2) }
+      api_patch "/api/v1/tables/#{t.id}", { status: "maintenance" }, headers: headers
+      expect(response).to have_http_status(:ok)
+      expect(json[:status]).to eq("maintenance")
+    end
+  end
 end

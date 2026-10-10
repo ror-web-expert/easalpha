@@ -1,13 +1,15 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, RotateCw, Trash2, Clock } from "lucide-react";
+import { AlertTriangle, RotateCw, Trash2, Clock, Lock } from "lucide-react";
 import { db, type AttentionItem, type QueueItem } from "@/lib/db";
 import { dismissAttention, processQueue, retryAttention } from "@/lib/sync";
 import { formatDateTime } from "@/lib/dates";
+import { usePosCan } from "@/store/device";
 import { PosShell } from "@/components/pos/shell";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, Tabs } from "@/components/ui";
 
 export default function AttentionPage() {
+  const can = usePosCan();
   const [items, setItems] = useState<AttentionItem[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [tab, setTab] = useState<"attention" | "queue">("attention");
@@ -16,6 +18,14 @@ export default function AttentionPage() {
     setQueue(await db.queue.orderBy("created_at").toArray());
   }, []);
   useEffect(() => { reload(); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [reload]);
+  // SPEC "Offline behaviour": the Offline Orders queue has its own permission to view it; admins (settings.manage) always may.
+  if (!can("OFFLINE_ORDERS", "settings.manage")) {
+    return (
+      <PosShell title="Needs attention">
+        <EmptyState icon={Lock} title="You need the OFFLINE_ORDERS permission" hint="The queue of orders punched without a connection is only shown to users with Offline orders (Dashboard module). Ask an admin to grant it; it applies at your next sign-in." className="m-6" />
+      </PosShell>
+    );
+  }
   return (
     <PosShell title="Needs attention">
       <div className="mx-auto max-w-3xl space-y-4 p-4">

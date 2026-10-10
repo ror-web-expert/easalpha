@@ -23,6 +23,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/orders", label: "Orders", icon: ReceiptText, exact: true },
+      { href: "/admin/orders/pending", label: "Pending Orders", icon: Clock, exact: true },
       { href: "/admin/expenses", label: "Expenses", icon: Banknote, exact: true, perms: ["expenses.manage", "finance.view", "reports.view_all", "EXPENSES"] },
       { href: "/admin/tables", label: "Tables", icon: Grid3X3, perms: ["tables.manage", "orders.create"] },
     ],

@@ -12,6 +12,7 @@ import type { Session } from "@/lib/types";
 import { Badge, Button, ThemeToggle } from "@/components/ui";
 import { format } from "date-fns";
 import { toast } from "@/store/toast";
+import { HeaderPills } from "./dashboard-pills";
 
 function isActive(it: NavItem, pathname: string) {
   const base = it.href.split("#")[0];
@@ -371,6 +372,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <button onClick={() => setSearchOpen(true)} className="grid h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8 lg:hidden" aria-label="Search pages">
             <Search className="h-6 w-6" />
           </button>
+          <HeaderPills />
           <BranchPicker />
           <DayBar />
           <ThemeToggle />

@@ -44,6 +44,10 @@ Autonomous build started 9 Oct 2026. One sprint at a time, each ending with auto
 | 2 Desktop application | `servio-desktop/` Electron app wrapping the web POS: ESC/POS encoder, network and system printers (USB lazy), printer settings window, print server on :9977 that tablets print through, Windows NSIS and Linux targets; Linux dir build produced | Done | 16 encoder tests |
 | 2 Gate | The menu renders in the POS with a Quick Add item, a product discount and a favourited deal | Passed | `scripts/e2e-web.mjs` |
 
+| 3 Orders and POS, API | SPEC statuses and payment statuses over the internal states; order story (punched, reopened, edited with item and money diff, completed, cancelled); reopen flow with REOPEN_ORDER, DELETE_ORDER_ITEM, MODIFY_REOPEN_DECREASE_QTY and the order-update PIN; complete, place-and-complete, Direct Unpaid Orders; list filters, sorts, Mark All Completed, Sync Complimentary; Pending Orders; Cost Analysis; customer required per order type (till orders); SPEC dashboard cards, charts and pills; Mobile App source; Maintenance tables; collector on receipt payments | Done | 185 passing |
+| 3 Orders and POS, web | Orders Management with SPEC filters, sorts, totals and bulk actions; 3-tab order drawer with the story; Pending Orders calendar and list; SPEC dashboard with period selector; top-bar pills; POS: order-type permissions, customer required, default and part payment, confirmation popup, Direct Unpaid, reopen with PIN and the two edit permissions, pending reminder, OFFLINE_ORDERS gate; KDS timeout and sounds from settings | Done | 105 Vitest; build 98 pages; Playwright 104 of 104 |
+| 3 Gate | Walk-in order on the POS, paid by cash, on the kitchen display, reopened, item added, story shows the diff and the amount change | Passed | `scripts/e2e-web.mjs` |
+
 Phase 2 leaves for later: USB printing native module, Urdu and logo as a raster image on receipts, desktop auto-update. Phase 1 leaves for later phases: the dashboard cards, hourly charts and pills (Phase 3); the SPEC screens marked Soon in the sidebar (their phases). Open: the SPEC's unnamed 8th Orders permission code.
 
 Environment:

@@ -116,6 +116,8 @@ export interface BusinessRef { id: ID; name: string; slug: string; role: string;
 export interface Session {
   access_token: string; refresh_token: string; token_type: string; expires_in: number; app: string;
   user: User; business: Business; branch: Branch | null; membership: Membership; permissions: string[]; businesses: BusinessRef[];
+  /** GET /me only: the SPEC top-bar pills. */
+  pills?: HeaderPills | null;
 }
 
 // ---- Menu ----
@@ -203,6 +205,29 @@ export interface OrderSummary {
   placed_at: string | null; ready_at: string | null; served_at: string | null; paid_at: string | null; closed_at: string | null; voided_at: string | null;
   void_reason: string | null; notes: string | null; payment_method_summary: string | null; receipt_number: string | null;
   taken_by_membership_id: ID | null; device_id: ID | null; client_created_at: string | null; created_at: string; updated_at: string;
+  // SPEC statuses read over the internal ones, and the reopen/edit counters of the order story.
+  spec_status: SpecStatus; spec_payment_status: SpecPaymentStatus; reopen_count: number; edit_count: number; reopened_at: string | null;
+  unpaid_direct: boolean; completed_by_membership_id: ID | null; scheduled_for?: string | null;
+}
+export type SpecStatus = "pending" | "preparing" | "ready" | "dispatched" | "completed" | "cancelled";
+export type SpecPaymentStatus = "paid" | "pending" | "unpaid" | "account" | "complimentary";
+export type OrderEventType = "punched" | "reopened" | "edited" | "completed" | "cancelled" | "payment";
+export interface OrderDiff { added: { name: string; quantity: string }[]; removed: { name: string; quantity: string }[]; changed: { name: string; from: string; to: string }[] }
+export interface OrderEvent {
+  id: ID; type: OrderEventType | string; user: string | null; role: string | null; at: string; diff: OrderDiff | null;
+  amount_before: number | null; amount_after: number | null; note: string | null;
+}
+export interface OrderStory { punched_by: string | null; completed_by: string | null; collected_by: string | null; reopen_count: number; edit_count: number; events: OrderEvent[] }
+export interface CostAnalysis {
+  order_id: ID; revenue_minor: number; cogs_minor: number; labour_minor: number; profit_minor: number; margin_percent: number | null;
+  ingredients: { item: string; quantity: string; unit: string; cost_minor: number; line_id: ID | null; kind: string }[];
+  items: { id: ID; name: string; quantity: string; revenue_minor: number; cost_minor: number }[];
+}
+/** GET /orders with a sort other than newest: page-based instead of cursor-based. */
+export interface OrdersPage { data: OrderSummary[]; next_cursor: string | null; next_page: number | null }
+export interface PendingOrders {
+  tiles: { today: number; yesterday: number; last_30_days: number; previous_days: number; all_time: number; oldest_day: string | null };
+  calendar: { day: string; count: number }[]; data: OrderSummary[]; next_cursor: string | null;
 }
 export interface OrderDiscount {
   id: ID; order_item_id: ID | null; promotion_id: ID | null; kind: string; value: number; amount_minor: number; reason: string | null;
@@ -214,6 +239,7 @@ export interface Order extends OrderSummary {
   events: { from: string | null; to: string; membership_id: ID | null; device_id: ID | null; reason: string | null; at: string }[];
   voids: { id: ID; reason: string; stock_action: string | null; amount_minor: number; by_membership_id: ID | null; approved_by_membership_id: ID | null; at: string }[];
   service_charge_percent: number; staff_meal_reason: string | null;
+  story?: OrderStory;
 }
 export interface KitchenOrder extends OrderSummary { items: OrderItem[]; elapsed_seconds: number }
 export interface KitchenTicket {
@@ -377,6 +403,16 @@ export interface Dashboard {
   change_vs_last_week_percent: number | null; change_vs_yesterday_percent: number | null; open_orders: number; open_minor: number; shifts_open: number; day_locked: boolean;
   tax_queue: { queued: number; failed: number }; needs_attention: number; khata_outstanding_minor: number; top_items: ItemRow[]; recent_orders: OrderSummary[];
   trend_7_days: ByDayRow[]; checklist: { key: string; done: boolean }[]; low_stock: unknown;
+}
+
+/** SPEC top-bar pills, from GET /me and GET /reports/dashboard/spec. */
+export interface HeaderPills { open_orders_today: number; open_orders_previous: number; low_stock_items: number }
+export type DashboardPeriod = "today" | "yesterday" | "7d" | "30d" | "month" | "custom";
+export interface DashboardSpec {
+  period: DashboardPeriod; from: string; to: string;
+  cards: { total_products: number; total_revenue_minor: number; open_minor: number; incl_open_minor: number; total_orders: number; cancelled_orders: number; total_customers: number; expenses_minor: number };
+  charts: { sales_by_hour: ByHourRow[]; products_by_category: { category: string; products: number }[]; order_status: { status: SpecStatus; orders: number }[]; expenses_by_category: { category: string; count: number; amount_minor: number }[] };
+  top_selling: ItemRow[]; pills: HeaderPills;
 }
 
 export interface Notification { id: ID; kind: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string }

@@ -132,7 +132,8 @@ module Api
 
       private
 
-      def table_params = params.permit(:code, :name, :seats, :location, :floor_id, position: {})
+      # status: SPEC Maintenance (and Reserved) can be set by hand; Occupied and Available follow the orders.
+      def table_params = params.permit(:code, :name, :seats, :location, :floor_id, :status, position: {})
     end
   end
 end

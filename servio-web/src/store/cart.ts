@@ -32,6 +32,13 @@ export interface Cart {
   zone_name?: string | null;
   /** Order-level discount already applied on the server (loyalty points). */
   discount_minor?: number;
+  /** SPEC reopen flow: set when the order was reopened on the server and is being edited; it must go back through payment. */
+  reopened?: boolean;
+  reopen_count?: number;
+  /** Money already taken against this order (part payments, or the payments of a reopened order). */
+  paid_minor?: number;
+  /** "cash:4500,khata:2000" from the server; a reopened order pre-selects its original method from it. */
+  payment_method_summary?: string | null;
 }
 
 const fresh = (orderType: OrderType = "walk_in"): Cart => ({

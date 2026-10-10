@@ -1,14 +1,18 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useCartStore } from "@/store/cart";
+import { useCartStore, type Cart } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
-import { useDeviceStore } from "@/store/device";
-import { errorMessage } from "@/lib/api";
+import { useDeviceStore, usePosCan } from "@/store/device";
+import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt } from "@/lib/types";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit } from "@/lib/pos-actions";
+import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid } from "@/lib/pos-actions";
+import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
+import { hasPrinter, printJob, receiptLines } from "@/lib/print";
+import { formatMoney } from "@/lib/money";
+import { titleCase } from "@/lib/utils";
 import { useApproval } from "@/components/approval";
 import { PosShell } from "@/components/pos/shell";
 import { ItemGrid } from "@/components/pos/item-grid";
@@ -18,9 +22,11 @@ import { OrderPanel, OrderTypeSwitch } from "@/components/pos/order-panel";
 import { PaymentDialog } from "@/components/pos/payment-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { CustomerDialog, OpenItemDialog, PriceOverrideDialog, StaffMealDialog, TablePicker } from "@/components/pos/dialogs";
-import { Button, Dialog, EmptyState, Field, Textarea } from "@/components/ui";
+import { Button, Dialog, EmptyState, Field, PinDialog, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 import { Package } from "lucide-react";
+
+type PinOpts = { pin?: string; approver_pin?: string };
 
 function SellScreen() {
   const router = useRouter();
@@ -30,6 +36,7 @@ function SellScreen() {
   const refreshTables = useCatalogStore((s) => s.refreshTables);
   const refreshCatalog = useCatalogStore((s) => s.refresh);
   const session = useDeviceStore((s) => s.session);
+  const can = usePosCan();
   const { cart, reset, load, patch, addLine, updateLine, removeLine, setQty } = useCartStore();
   const { run, dialog: pinDialog } = useApproval();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -48,21 +55,41 @@ function SellScreen() {
   const [receipt, setReceipt] = useState<{ receipt: Receipt; change: number; offline: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState("");
+  // SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own PIN, asked once per reopened order and reused for the payment save.
+  const [orderPin, setOrderPin] = useState<string | undefined>();
+  const [pinAsk, setPinAsk] = useState<{ resolve: (pin: string | null) => void } | null>(null);
   const settings = catalog?.business.settings;
   const currency = catalog?.business.currency;
   const display = displaySettings(settings);
+  const perms = session?.permissions;
+  const staffType = session?.membership?.staff_type;
+  // SPEC "Take Orders": SALES_WALKIN / SALES_TAKEAWAY / SALES_DELIVERY gate the type switch.
+  const allowedTypes = useMemo(() => allowedOrderTypes(perms), [perms]);
+  // SPEC reopen flow: which edit controls this user may use on a reopened order.
+  const reopened = !!cart.reopened;
+  const canRemove = !reopened || can("DELETE_ORDER_ITEM");
+  const canDecrease = !reopened || can("MODIFY_REOPEN_DECREASE_QTY");
+  const needsPin = reopened && can("REQUIRE_PIN_FOR_ORDER_UPDATE");
+  // SPEC "Direct Unpaid Orders": never for a reopened order.
+  const unpaidOk = directUnpaidAllowed(settings, perms, staffType) && !reopened;
+  const unpaidLabel = cart.saved && !["draft", "held"].includes(cart.status) ? "Complete unpaid" : "Place unpaid";
   // Lines loaded from the server or an older cache carry no product discount; copy it from the catalog so totals match.
   const loadCart = useCallback((c: Parameters<typeof load>[0]) => load({ ...c, lines: attachDiscounts(c.lines, useCatalogStore.getState().catalog) }), [load]);
 
-  // ?order=<id> opens an existing order (from the orders tab / table picker)
+  // ?order=<id> opens an existing order (from the orders tab / table picker / reopen)
   useEffect(() => {
     const id = params.get("order");
     if (!id) return;
-    loadOrderForEdit(id).then((c) => { loadCart(c); router.replace("/pos"); }).catch((e) => toast.error("Could not open order", errorMessage(e)));
+    loadOrderForEdit(id).then((c) => { setOrderPin(undefined); loadCart(c); router.replace("/pos"); }).catch((e) => toast.error("Could not open order", errorMessage(e)));
   }, [params, loadCart, router]);
   useEffect(() => { if (settings?.default_order_type) useCartStore.setState({ defaultType: settings.default_order_type }); }, [settings?.default_order_type]);
+  // A new cart never sits on a type the user may not take.
+  useEffect(() => {
+    if (cart.saved || !allowedTypes.length || allowedTypes.includes(cart.order_type)) return;
+    patch({ order_type: allowedTypes[0], lines: repriceLines(cart.lines, allowedTypes[0], catalog, catalog?.branch?.id), table_id: null, table_code: null });
+  }, [allowedTypes, cart.saved, cart.order_type, cart.lines, patch, catalog]);
 
-  const newOrder = useCallback(() => { reset(); setReceipt(null); setPayOpen(false); }, [reset]);
+  const newOrder = useCallback(() => { reset(); setReceipt(null); setPayOpen(false); setOrderPin(undefined); }, [reset]);
 
   const addProduct = (p: Product) => {
     const needsSheet = (p.variants?.length ?? 0) > 0 || (p.modifier_group_ids?.length ?? 0) > 0;
@@ -104,19 +131,66 @@ function SellScreen() {
   };
   const pickTable = async (t: DiningTable | null) => {
     if (t?.current_order_id && t.current_order_id !== cart.id) {
-      try { loadCart(await loadOrderForEdit(t.current_order_id)); toast.info(`Opened the running order on ${t.code}`); } catch (e) { toast.error("Could not open table order", errorMessage(e)); }
+      try { setOrderPin(undefined); loadCart(await loadOrderForEdit(t.current_order_id)); toast.info(`Opened the running order on ${t.code}`); } catch (e) { toast.error("Could not open table order", errorMessage(e)); }
       return;
     }
     patch({ table_id: t?.id ?? null, table_code: t?.code ?? null });
   };
 
+  // SPEC "Customer Required": enforced at order placement, per order type; the picker opens so the cashier can carry on.
+  const ensureCustomer = (): boolean => {
+    if (!customerRequired(settings, cart.order_type) || cart.customer) return true;
+    toast.error("Customer required", `${titleCase(cart.order_type)} orders need a customer before they are placed. Pick one (F3) to continue.`);
+    setCustomerOpen(true);
+    return false;
+  };
+  const askOwnPin = () => new Promise<string | null>((resolve) => setPinAsk({ resolve }));
+  /**
+   * Runs a save on a reopened order the way SPEC REQUIRE_PIN_FOR_ORDER_UPDATE wants it: the user's own PIN first
+   * (asked once with the PinPad), then a manager with REOPEN_ORDER through the usual approval dialog if the server
+   * still answers pin.required. Permission refusals (permission.denied) go through the same approval dialog.
+   * Returns null when the user cancels the PIN.
+   */
+  const withOrderPin = async <T,>(fn: (opts: PinOpts) => Promise<T>, label: string): Promise<T | null> => {
+    let pin = orderPin;
+    if (needsPin && !pin) { pin = (await askOwnPin()) ?? undefined; if (!pin) return null; }
+    try {
+      const v = await run((approver) => fn({ pin, approver_pin: approver }), label);
+      if (pin) setOrderPin(pin);
+      return v;
+    } catch (e) {
+      if (!(e instanceof ApiError && e.code === "pin.required")) throw e;
+      setOrderPin(undefined);
+      toast.error("PIN not accepted", "A manager with REOPEN_ORDER can approve instead.");
+      return run((approver) => (approver ? fn({ approver_pin: approver }) : Promise.reject(new ApiError("approval.required", e.message, 403))), label);
+    }
+  };
+
   const hold = async () => {
+    if (reopened) return;
     setBusy(true);
     try { await run((pin) => (pin ? saveOrder(cart, { approver_pin: pin }).then(() => holdOrder(cart)) : holdOrder(cart)), "Hold order"); toast.success("Order held. Recall it from Orders."); reset(); }
     catch (e) { toast.error("Could not hold", errorMessage(e)); }
     finally { setBusy(false); }
   };
+  /** SPEC reopen flow: saving a reopened order (PIN as required) leads straight to the payment screen. */
+  const saveReopened = async (): Promise<Cart | null> => {
+    setBusy(true);
+    try {
+      const r = await withOrderPin((o) => saveOrder(cart, o), `Save changes to ${cart.label ?? "the reopened order"}`);
+      if (!r) return null;
+      loadCart(r.cart);
+      return r.cart;
+    } catch (e) { toast.error("Could not save", errorMessage(e)); return null; }
+    finally { setBusy(false); }
+  };
   const send = async () => {
+    if (!ensureCustomer()) return;
+    if (reopened) {
+      const c = await saveReopened();
+      if (c) { toast.success("Changes saved", "Take payment of the amount due to complete the order."); setPayOpen(true); }
+      return;
+    }
     setBusy(true);
     try {
       const r = await run((pin) => saveOrder(cart, { place: true, approver_pin: pin }), "Send to kitchen");
@@ -125,14 +199,49 @@ function SellScreen() {
     } catch (e) { toast.error("Could not send", errorMessage(e)); }
     finally { setBusy(false); }
   };
+  const openPay = async () => {
+    if (!cart.lines.length || !ensureCustomer()) return;
+    if (reopened) { const c = await saveReopened(); if (!c) return; }
+    setPayOpen(true);
+  };
+  const printReceipt = async (r: Receipt) => {
+    const res = await printJob({ role: "receipt", lines: receiptLines(r, { settings }) }, { settings });
+    if (!res.ok) toast.error("Could not print", res.error);
+  };
   const pay = async (payments: PaymentInput[], tip: number) => {
     setBusy(true);
     try {
-      const r = await run((pin) => payOrder(cart, payments, tip, pin), "Take payment");
+      const r = await withOrderPin((o) => payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin }), "Take payment");
+      if (!r) return;
       setPayOpen(false);
-      setReceipt({ receipt: r.receipt, change: r.change_minor, offline: r.offline });
+      const fullyPaid = ["paid", "closed"].includes(r.local.status) || r.local.paid_minor >= r.local.total_minor;
+      if (!fullyPaid) {
+        // SPEC part payment: the order stays open as Pending with the remaining due on the panel.
+        patch({ saved: true, local_only: r.local.local_only, status: r.local.status, label: r.local.label, paid_minor: r.local.paid_minor });
+        toast.info("Part payment taken", `${formatMoney(r.local.total_minor - r.local.paid_minor, currency)} still due on ${r.local.label}. The order stays open until it is paid.`);
+        return;
+      }
       if (cart.table_id) refreshTables();
+      // SPEC "Order confirmation popup": on shows the receipt; off goes straight to a new order (and prints when a printer is reachable).
+      if (confirmationPopup(settings)) setReceipt({ receipt: r.receipt, change: r.change_minor, offline: r.offline });
+      else {
+        if (hasPrinter(settings)) void printReceipt(r.receipt);
+        toast.success(`${r.receipt.order.label} paid${r.change_minor ? ` · change ${formatMoney(r.change_minor, currency)}` : ""}`);
+        newOrder();
+      }
     } catch (e) { toast.error("Payment failed", errorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  /** SPEC "Direct Unpaid Orders": place (or complete) without the payment screen. */
+  const placeUnpaid = async () => {
+    if (!ensureCustomer()) return;
+    setBusy(true);
+    try {
+      const r = await run((pin) => completeUnpaid(cart, pin), unpaidLabel);
+      toast.success(`${r.order.label} ${cart.saved ? "completed" : "placed"} unpaid`, "Payment is still due; it shows as Unpaid in Orders.");
+      if (cart.table_id) refreshTables();
+      newOrder();
+    } catch (e) { toast.error(e instanceof ApiError && e.code === "order.unpaid" ? "Payment needed" : "Could not place", errorMessage(e)); }
     finally { setBusy(false); }
   };
 
@@ -144,7 +253,7 @@ function SellScreen() {
       if (e.key === "F3") { e.preventDefault(); setCustomerOpen(true); }
       if (e.key === "F4") { e.preventDefault(); if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
       if (e.key === "F5") { e.preventDefault(); if (cart.lines.length) send(); }
-      if (e.key === "F8") { e.preventDefault(); if (cart.lines.length) setPayOpen(true); }
+      if (e.key === "F8") { e.preventDefault(); openPay(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -162,7 +271,7 @@ function SellScreen() {
     <PosShell title={<span className="hidden md:inline">{session?.user?.name}</span>}>
       <div className="grid h-full grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
         <div className="flex min-h-0 flex-col">
-          <div className="border-b bg-card p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} /></div>
+          <div className="border-b bg-card p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} allowed={allowedTypes} /></div>
           <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} /></div>
         </div>
         <div className="flex min-h-0 flex-col border-l">
@@ -170,7 +279,8 @@ function SellScreen() {
           <div className="min-h-0 flex-1">
             <OrderPanel cart={cart} currency={currency} settings={settings} onQty={setQty} onEditLine={editLine} onOverride={setOverride} onRemove={removeLine}
               onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? patch({ is_staff_meal: false, staff_meal_reason: "" }) : setStaffOpen(true))}
-              onHold={hold} onSend={send} onPay={() => setPayOpen(true)} onNew={newOrder} busy={busy} canOverride={true} />
+              onHold={hold} onSend={send} onPay={openPay} onNew={newOrder} busy={busy} canOverride={true}
+              canRemove={canRemove} canDecrease={canDecrease} onPlaceUnpaid={unpaidOk ? placeUnpaid : undefined} unpaidLabel={unpaidLabel} />
           </div>
         </div>
       </div>
@@ -185,6 +295,8 @@ function SellScreen() {
       </Dialog>
       <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
+      {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
+      <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />
       {pinDialog}
     </PosShell>
   );

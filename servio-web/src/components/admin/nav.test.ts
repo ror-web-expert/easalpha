@@ -3,9 +3,9 @@ import { NAV } from "./nav";
 
 // The sidebar follows docs/SPEC.md: four standalone screens, then the 12 groups in SPEC order.
 describe("SPEC sidebar", () => {
-  it("has the four standalone screens first, flat", () => {
+  it("has the four standalone screens first, flat, with Pending Orders right after Orders", () => {
     expect(NAV[0].flat).toBe(true);
-    expect(NAV[0].items.map((i) => i.label)).toEqual(["Dashboard", "Orders", "Expenses", "Tables"]);
+    expect(NAV[0].items.map((i) => i.label)).toEqual(["Dashboard", "Orders", "Pending Orders", "Expenses", "Tables"]);
   });
 
   it("has the 12 SPEC groups in SPEC order", () => {

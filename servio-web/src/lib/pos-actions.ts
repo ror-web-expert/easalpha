@@ -9,7 +9,8 @@ import { uuid } from "@/lib/utils";
 import { useCartStore, type Cart } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
-import type { Order, OrderInput, PaymentInput, PaymentResult, Receipt, Shift, ZReport, CashMovement } from "@/lib/types";
+import { useSyncStore, type OpenCounts } from "@/store/sync";
+import type { HeaderPills, Order, OrderInput, PaymentInput, PaymentResult, Receipt, Shift, ZReport, CashMovement } from "@/lib/types";
 import { OPEN_STATUSES } from "@/lib/types";
 
 const isNetwork = (e: unknown) => e instanceof ApiError && e.isNetwork;
@@ -70,6 +71,7 @@ export function localToCart(o: LocalOrder): Cart {
     customer: o.customer_id ? { id: o.customer_id, name: o.customer_name ?? "Customer", phone: o.customer_phone } : null, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name ?? "", covers: o.covers, notes: o.notes ?? "", is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? "", label: o.label, client_created_at: o.client_created_at,
     discount_minor: o.discount_minor || undefined, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
+    paid_minor: o.paid_minor || undefined,
   };
 }
 
@@ -92,8 +94,16 @@ function orderInput(cart: Cart, place: boolean, approver_pin?: string): OrderInp
   };
 }
 
-/** Save the current cart: create or update on the server when online, else keep it local and queue it. */
-export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pin?: string } = {}): Promise<{ cart: Cart; local: LocalOrder; offline: boolean }> {
+/** SPEC reopen flow: the server fields the cart keeps so the till knows the order must go back through payment. */
+export function reopenFields(o: Order): Pick<Cart, "reopened" | "reopen_count" | "paid_minor" | "payment_method_summary"> {
+  return { reopened: !!o.reopened_at && OPEN_STATUSES.includes(o.status), reopen_count: o.reopen_count ?? 0, paid_minor: o.paid_minor ?? 0, payment_method_summary: o.payment_method_summary ?? null };
+}
+
+/**
+ * Save the current cart: create or update on the server when online, else keep it local and queue it.
+ * `pin` is the user's own order-update PIN (SPEC REQUIRE_PIN_FOR_ORDER_UPDATE) for a reopened order; `approver_pin` is a manager's.
+ */
+export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pin?: string; pin?: string } = {}): Promise<{ cart: Cart; local: LocalOrder; offline: boolean }> {
   const place = !!opts.place;
   const { membershipId } = ctx();
   // Already queued locally and not yet accepted: just update the queued record.
@@ -109,13 +119,13 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
       let order: Order;
       if (cart.saved && !cart.local_only) {
         const input = orderInput(cart, place, opts.approver_pin);
-        order = await api<Order>(`/orders/${cart.id}`, { method: "PATCH", auth: "pos", body: { ...input, place: undefined, id: undefined, is_staff_meal: undefined, staff_meal_reason: undefined } });
+        order = await api<Order>(`/orders/${cart.id}`, { method: "PATCH", auth: "pos", body: { ...input, place: undefined, id: undefined, is_staff_meal: undefined, staff_meal_reason: undefined, pin: opts.pin } });
         if (place && ["draft", "held"].includes(order.status)) order = await api<Order>(`/orders/${cart.id}/place`, { method: "POST", auth: "pos" });
       } else {
         order = await api<Order>("/orders", { method: "POST", auth: "pos", body: orderInput(cart, place, opts.approver_pin) });
       }
       const local = await storeServerOrder(order);
-      return { cart: { ...localToCart(local), lines: local.lines.filter((l) => l.status !== "cancelled") }, local, offline: false };
+      return { cart: { ...localToCart(local), lines: local.lines.filter((l) => l.status !== "cancelled"), ...reopenFields(order) }, local, offline: false };
     } catch (e) {
       if (!isNetwork(e)) throw e;
     }
@@ -136,8 +146,11 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
   return { cart: { ...cart, saved: true, local_only: true, status: local.status, label: till_serial }, local, offline: true };
 }
 
-/** Take one or more payments. Returns the receipt (server-built when online, local otherwise). */
-export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor = 0, approver_pin?: string): Promise<{ receipt: Receipt; change_minor: number; offline: boolean; local: LocalOrder }> {
+/**
+ * Take one or more payments (a part payment is allowed; the order then stays open with payment_status "partial").
+ * Returns the receipt (server-built when online, local otherwise). `pin` is the order-update PIN for a reopened order.
+ */
+export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor = 0, approver_pin?: string, opts: { pin?: string } = {}): Promise<{ receipt: Receipt; change_minor: number; offline: boolean; local: LocalOrder }> {
   const { settings, membershipId } = ctx();
   let current = cart;
   if (isOnline()) {
@@ -145,7 +158,7 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
     if (!current.local_only) {
       try {
         // Always sync the cart to the server first so the payment applies to the latest lines.
-        const saved = await saveOrder(current, { approver_pin });
+        const saved = await saveOrder(current, { approver_pin, pin: opts.pin });
         current = saved.cart;
         if (saved.offline) throw new ApiError("network", "Offline", 0);
         const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: payments.map((p) => ({ ...p, id: p.id ?? uuid() })), tip_minor } });
@@ -244,10 +257,73 @@ export async function resumeOrder(id: string): Promise<Cart> {
 export async function loadOrderForEdit(id: string): Promise<Cart> {
   const prev = await db.orders.get(id);
   if (isOnline() && (!prev || !prev.local_only)) {
-    try { return localToCart(await storeServerOrder(await api<Order>(`/orders/${id}`, { auth: "pos" }))); } catch (e) { if (!isNetwork(e)) throw e; }
+    try {
+      const o = await api<Order>(`/orders/${id}`, { auth: "pos" });
+      return { ...localToCart(await storeServerOrder(o)), ...reopenFields(o) };
+    } catch (e) { if (!isNetwork(e)) throw e; }
   }
   if (!prev) throw new ApiError("not_found", "Order not available offline", 404);
   return localToCart(prev);
+}
+
+/**
+ * SPEC reopen flow (REOPEN_ORDER): POST /orders/:id/reopen brings a completed order back as open, keeping its payments.
+ * The cart comes back in edit mode with `reopened` set so the panel hides the controls the user may not use and the
+ * save goes through the payment screen. Online only: a reopen is never queued.
+ */
+export async function reopenOrder(id: string): Promise<Cart> {
+  if (!isOnline()) throw new ApiError("offline", "Reopening an order needs the internet", 0);
+  const o = await api<Order>(`/orders/${id}/reopen`, { method: "POST", auth: "pos" });
+  const local = await storeServerOrder(o);
+  return { ...localToCart(local), ...reopenFields(o) };
+}
+
+/**
+ * SPEC "Direct Unpaid Orders": place (or complete) an order without the payment screen. A new cart goes through
+ * POST /orders with complete: true (PLACE_AND_COMPLETE_ORDER); an order already on the server is saved, placed if
+ * needed, then POST /orders/:id/complete (COMPLETE_ORDER). The server answers 409 order.unpaid when the setting or
+ * PLACE_UNPAID_DIRECT is missing, and always for a reopened order. Online only.
+ */
+export async function completeUnpaid(cart: Cart, approver_pin?: string): Promise<{ order: Order; local: LocalOrder }> {
+  if (!isOnline()) throw new ApiError("offline", "Placing an unpaid order needs the internet", 0);
+  if (cart.reopened) throw new ApiError("order.unpaid", "A reopened order must go through the payment screen", 409);
+  let order: Order;
+  if (cart.saved && !cart.local_only) {
+    const saved = await saveOrder(cart, { place: true, approver_pin });
+    if (saved.offline) throw new ApiError("offline", "Placing an unpaid order needs the internet", 0);
+    order = await api<Order>(`/orders/${cart.id}/complete`, { method: "POST", auth: "pos" });
+  } else {
+    if (cart.local_only) { await processQueue(); const o = await db.orders.get(cart.id); if (o?.local_only) throw new ApiError("offline", "This order is still waiting to sync", 0); }
+    order = await api<Order>("/orders", { method: "POST", auth: "pos", body: { ...orderInput(cart, true, approver_pin), complete: true } });
+  }
+  const local = await storeServerOrder(order);
+  return { order, local };
+}
+
+/** Open orders on this till (not drafts), split into the current business day and earlier days, for the offline reminder. */
+export async function localOpenCounts(business_day: string): Promise<OpenCounts> {
+  const rows = await db.orders.where("open").equals(1).toArray();
+  const live = rows.filter((o) => o.status !== "draft");
+  return { today: live.filter((o) => o.business_day === business_day).length, previous: live.filter((o) => o.business_day < business_day).length };
+}
+
+/**
+ * SPEC "Pending Orders" reminder: refresh the header counts from GET /me pills (every 60 s from the shell), falling
+ * back to the orders cached on this till when offline or when the request fails.
+ */
+export async function refreshOpenCounts(): Promise<OpenCounts> {
+  const { branch } = ctx();
+  const day = businessDayFor(branch?.day_end_time);
+  let counts: OpenCounts | null = null;
+  if (isOnline()) {
+    try {
+      const me = await api<{ pills?: HeaderPills | null }>("/me", { auth: "pos" });
+      if (me.pills) counts = { today: me.pills.open_orders_today ?? 0, previous: me.pills.open_orders_previous ?? 0 };
+    } catch {}
+  }
+  counts ??= await localOpenCounts(day);
+  useSyncStore.getState().set({ openCounts: counts });
+  return counts;
 }
 
 /** Today's orders: server summaries merged over local copies (local-only orders and cached lines are kept). */

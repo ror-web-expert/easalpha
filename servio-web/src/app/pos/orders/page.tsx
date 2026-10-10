@@ -1,9 +1,9 @@
 "use client";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RefreshCw, Printer, Ban, RotateCcw, Play, Pencil } from "lucide-react";
+import { RefreshCw, Printer, Ban, RotateCcw, Play, Pencil, Unlock } from "lucide-react";
 import { type LocalOrder } from "@/lib/db";
-import { fetchReceipt, listLocalOrders, refreshOrdersFromServer, refundOrder, resumeOrder, voidOrder } from "@/lib/pos-actions";
+import { fetchReceipt, listLocalOrders, refreshOrdersFromServer, refundOrder, reopenOrder, resumeOrder, voidOrder } from "@/lib/pos-actions";
 import { businessDayFor } from "@/lib/business-day";
 import { useDeviceStore, usePosCan } from "@/store/device";
 import { useCatalogStore } from "@/store/catalog";
@@ -68,6 +68,19 @@ function OrdersScreen() {
     catch (e) { toast.error("Could not refund", errorMessage(e)); }
     finally { setBusy(false); }
   };
+  // SPEC reopen flow (REOPEN_ORDER): the server reopens the order, then the sell screen loads it in edit mode with the
+  // reopened flags (loadOrderForEdit reads them from the server), so the catalog discounts attach as for any edit.
+  const doReopen = async (o: LocalOrder) => {
+    if (status === "offline") { toast.error("Needs the internet", "Reopening an order is never queued."); return; }
+    setBusy(true);
+    try {
+      const c = await reopenOrder(o.id);
+      toast.info(`${c.label} reopened`, "Make the changes, save them, then take payment to complete it again.");
+      setSel(null);
+      router.push(`/pos?order=${o.id}`);
+    } catch (e) { toast.error("Could not reopen", errorMessage(e)); }
+    finally { setBusy(false); }
+  };
   const openInSell = async (o: LocalOrder, resume = false) => {
     try {
       const c = resume ? await resumeOrder(o.id) : null;
@@ -118,6 +131,7 @@ function OrdersScreen() {
         footer={sel ? <>
           {OPEN.includes(sel.status) ? <Button variant="destructive" onClick={() => setVoidOpen(true)}><Ban className="h-4 w-4" /> Void</Button> : null}
           {["paid", "closed"].includes(sel.status) && can("orders.refund", "shifts.any") ? <Button variant="secondary" onClick={() => setRefund({ amount: sel.paid_minor, method: methods.find((m) => m.kind === "cash")?.code ?? "cash", reason: "" })}><RotateCcw className="h-4 w-4" /> Refund</Button> : null}
+          {["paid", "closed"].includes(sel.status) && !sel.local_only && can("REOPEN_ORDER") ? <Button variant="secondary" onClick={() => doReopen(sel)} loading={busy} title="Reopen this completed order for editing (REOPEN_ORDER)"><Unlock className="h-4 w-4" /> Reopen</Button> : null}
           {["paid", "closed", "refunded"].includes(sel.status) ? <Button variant="secondary" onClick={() => print(sel, true)}><Printer className="h-4 w-4" /> Reprint</Button> : null}
           {sel.status === "held" ? <Button onClick={() => openInSell(sel, true)}><Play className="h-4 w-4" /> Recall</Button> : OPEN.includes(sel.status) ? <Button onClick={() => openInSell(sel)}><Pencil className="h-4 w-4" /> Open</Button> : null}
         </> : undefined}>

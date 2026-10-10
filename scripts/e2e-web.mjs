@@ -20,6 +20,7 @@ const me = await api("/me", { token: T }); const branchId = me.j.branches[0].id;
 const cat = await api("/catalog", { token: T });
 if (!cat.j?.products?.length && !cat.j?.categories?.length) { const s = await api("/onboarding/sample_menu", { method: "POST", token: T }); step("sample menu loaded", s.status < 300, String(s.status)); }
 const roles = await api("/roles", { token: T }); const kitchenRole = roles.j.data.find((r) => r.system_key === "kitchen").id;
+for (const m of (await api("/staff", { token: T })).j?.data || []) if (m.user?.name === "E2E Cook" && m.status === "active") await api(`/staff/${m.id}/deactivate`, { method: "POST", token: T });
 const staff = await api("/staff", { method: "POST", token: T, body: { name: "E2E Cook", phone: `+9234${String(Date.now()).slice(-8)}`, role_id: kitchenRole, pin: "2222" } });
 step("kitchen staff created", staff.status === 201, String(staff.status));
 const existing = await api("/devices", { token: T });
@@ -105,7 +106,8 @@ for (const p of adminPages) {
   const o = await api("/orders", { method: "POST", token: T, body: { order_type: "walk_in", lines: [{ product_id: p1.id, quantity: 1 }], place: true } });
   step("phase 3: walk-in order placed", o.status === 201 && o.j.spec_status === "pending", `${o.status} ${o.j?.spec_status}`);
   const pay = await api(`/orders/${o.j.id}/payments`, { method: "POST", token: T, body: { payments: [{ method_code: "cash", amount_minor: o.j.total_minor, tendered_minor: o.j.total_minor }] } });
-  step("phase 3: paid by cash, completed", pay.status < 300 && pay.j.spec_status === "completed", `${pay.status} ${pay.j?.spec_status}`);
+  const afterPay = await api(`/orders/${o.j.id}`, { token: T });
+  step("phase 3: paid by cash, completed", pay.status < 300 && afterPay.j.spec_status === "completed" && afterPay.j.spec_payment_status === "paid", `${pay.status} ${afterPay.j?.spec_status}`);
   const re = await api(`/orders/${o.j.id}/reopen`, { method: "POST", token: T });
   step("phase 3: reopened", re.status === 200 && re.j.reopen_count === 1, `${re.status}`);
   const line = re.j.items[0];

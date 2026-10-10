@@ -64,13 +64,15 @@ module Api
         authenticate_device!
         pin = params.require(:pin).to_s
         candidates = Membership.active.includes(:role, :user).where.not(pin_digest: nil).select { |m| m.branch_allowed?(current_device.branch_id) }
-        membership = candidates.find { |m| m.pin_digest && BCrypt::Password.new(m.pin_digest) == pin && !m.pin_locked? }
+        app = current_device.kind == "kitchen" ? "kitchen" : "pos"
+        # Two people may share a PIN by accident; prefer the one who may use this device's app.
+        matches = candidates.select { |m| m.pin_digest && BCrypt::Password.new(m.pin_digest) == pin && !m.pin_locked? }
+        membership = matches.find { |m| m.can?("app.#{app}") } || matches.first
         unless membership
           candidates.each { |m| m.authenticate_pin(pin) }
           AuditLog.record(action: "pin_failed", after: { device: current_device.code })
           raise Api::Errors::Unauthorized.new("pin.invalid", "Wrong PIN")
         end
-        app = current_device.kind == "kitchen" ? "kitchen" : "pos"
         raise Api::Errors::Forbidden.new("app.denied", "You don't have access to this app") unless membership.can?("app.#{app}")
         membership.update_columns(pin_failed_count: 0, pin_locked_until: nil)
         current_device.update_columns(last_seen_at: Time.current)
