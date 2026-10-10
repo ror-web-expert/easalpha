@@ -1,0 +1,98 @@
+"use client";
+import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent } from "lucide-react";
+import type { Cart } from "@/store/cart";
+import type { OrderType } from "@/lib/types";
+import { computeTotals, lineTotals, type CartLine } from "@/lib/pricing";
+import { formatMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
+import { Badge, Button } from "@/components/ui";
+
+const TYPES: { value: OrderType; label: string; icon: React.ComponentType<{ className?: string }>; cls: string }[] = [
+  { value: "dine_in", label: "Dine-in", icon: Utensils, cls: "data-[active=true]:bg-primary data-[active=true]:text-primary-fg" },
+  { value: "takeaway", label: "Takeaway", icon: ShoppingBag, cls: "data-[active=true]:bg-accent data-[active=true]:text-accent-fg" },
+  { value: "delivery", label: "Delivery", icon: Bike, cls: "data-[active=true]:bg-info data-[active=true]:text-info-fg" },
+  { value: "walk_in", label: "Walk-in", icon: Coffee, cls: "data-[active=true]:bg-inverse data-[active=true]:text-inverse-fg" },
+];
+
+export function OrderTypeSwitch({ value, onChange }: { value: OrderType; onChange: (t: OrderType) => void }) {
+  return (
+    <div className="grid grid-cols-4 overflow-hidden rounded-full border border-border-strong">
+      {TYPES.map((t) => (
+        <button key={t.value} data-active={value === t.value} onClick={() => onChange(t.value)} className={cn("flex h-12 items-center justify-center gap-2 border-l border-border-strong text-sm font-medium tracking-[0.1px] text-fg transition-colors first:border-l-0 hover:bg-fg/8", t.cls)}>
+          <t.icon className="h-5 w-5" /><span className="hidden lg:inline">{t.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface Props {
+  cart: Cart; currency?: string; settings?: Record<string, unknown>;
+  onQty: (key: string, q: number) => void; onEditLine: (l: CartLine) => void; onOverride: (l: CartLine) => void; onRemove: (key: string) => void;
+  onCustomer: () => void; onTable: () => void; onNotes: () => void; onStaffMeal: () => void;
+  onHold: () => void; onSend: () => void; onPay: () => void; onNew: () => void; busy?: boolean; canOverride: boolean;
+}
+
+export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride }: Props) {
+  const t = computeTotals(cart.lines, { orderType: cart.order_type, settings, staffMeal: cart.is_staff_meal });
+  const empty = cart.lines.length === 0;
+  return (
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <div className="min-w-0">
+          <div className="truncate font-semibold">{cart.label ?? "New order"}{cart.saved ? <Badge className="ml-2" variant={cart.local_only ? "warning" : "primary"}>{cart.local_only ? "on till" : cart.status}</Badge> : null}{cart.is_staff_meal ? <Badge className="ml-1" variant="accent">staff meal</Badge> : null}</div>
+          <div className="truncate text-xs text-fg-muted">{cart.lines.reduce((s, l) => s + l.quantity, 0)} items</div>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onNew} title="New order (F1)">New</Button>
+      </div>
+      <div className="flex gap-1 border-b p-2">
+        <button onClick={onCustomer} className={cn("flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 text-sm", cart.customer ? "border-primary bg-primary-soft" : "hover:bg-muted")}><User className="h-4 w-4 shrink-0" /><span className="truncate">{cart.customer?.name ?? "Customer (F3)"}</span></button>
+        {cart.order_type === "dine_in" ? <button onClick={onTable} className={cn("flex h-11 items-center gap-1.5 rounded-md border px-3 text-sm", cart.table_id ? "border-primary bg-primary-soft" : "hover:bg-muted")}><Grid3X3 className="h-4 w-4" />{cart.table_code ?? "Table"}</button> : null}
+        <button onClick={onNotes} className={cn("grid h-11 w-11 place-items-center rounded-md border", cart.notes ? "border-primary bg-primary-soft" : "hover:bg-muted")} title="Order notes"><StickyNote className="h-4 w-4" /></button>
+        <button onClick={onStaffMeal} className={cn("grid h-11 w-11 place-items-center rounded-md border", cart.is_staff_meal ? "border-accent bg-accent-soft" : "hover:bg-muted")} title="Staff meal"><BadgePercent className="h-4 w-4" /></button>
+      </div>
+      <ul className="flex-1 overflow-y-auto">
+        {empty ? <li className="px-4 py-12 text-center text-fg-muted">Tap items to add them. F2 searches.</li> : null}
+        {cart.lines.map((l) => {
+          const lt = lineTotals(l);
+          return (
+            <li key={l.key} className="border-b px-3 py-2">
+              <div className="flex items-start gap-2">
+                <button className="min-w-0 flex-1 text-left" onClick={() => onEditLine(l)}>
+                  <div className="font-semibold leading-tight">{l.name}{l.sent ? <Badge className="ml-1" variant="info">sent</Badge> : null}</div>
+                  {l.modifiers.length ? <div className="text-xs text-fg-secondary">{l.modifiers.map((m) => m.name).join(", ")}</div> : null}
+                  {l.notes ? <div className="text-xs italic text-fg-secondary">“{l.notes}”</div> : null}
+                  <div className="text-xs text-fg-muted">
+                    {l.price_override_minor != null ? <span className="text-warning">override </span> : null}{formatMoney(l.price_override_minor ?? l.unit_price_minor, currency)}{lt.modifiers_minor ? ` + ${formatMoney(lt.modifiers_minor, currency)}` : ""} each
+                  </div>
+                </button>
+                <div className="text-right font-semibold tabular">{formatMoney(lt.line_total_minor, currency)}</div>
+              </div>
+              <div className="mt-1 flex items-center gap-1">
+                <button className="grid h-11 w-11 place-items-center rounded-md border" onClick={() => onQty(l.key, l.quantity - 1)} aria-label="Less"><Minus className="h-4 w-4" /></button>
+                <span className="w-10 text-center text-lg font-semibold tabular">{l.quantity}</span>
+                <button className="grid h-11 w-11 place-items-center rounded-md border" onClick={() => onQty(l.key, l.quantity + 1)} aria-label="More"><Plus className="h-4 w-4" /></button>
+                <div className="flex-1" />
+                {canOverride && !l.open_item ? <button className="h-11 rounded-md border px-2 text-xs" onClick={() => onOverride(l)}>Price</button> : null}
+                <button className="grid h-11 w-11 place-items-center rounded-md text-danger hover:bg-danger-soft" onClick={() => onRemove(l.key)} aria-label="Remove"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="border-t p-3">
+        <div className="space-y-0.5 text-sm text-fg-secondary">
+          <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(t.subtotal_minor, currency)}</span></div>
+          {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {t.service_charge_percent}%</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
+          {t.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(t.tax_minor, currency)}</span></div> : null}
+        </div>
+        <div className="mt-1 flex items-baseline justify-between"><span className="text-lg font-semibold">Total</span><span className="text-3xl font-bold tabular">{formatMoney(t.total_minor, currency)}</span></div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button variant="secondary" size="lg" onClick={onHold} disabled={empty || busy}><Pause className="h-5 w-5" /> Hold (F4)</Button>
+          <Button variant="secondary" size="lg" onClick={onSend} disabled={empty || busy}><Send className="h-5 w-5" /> Kitchen (F5)</Button>
+          <Button size="xl" className="col-span-2 h-14 text-lg" onClick={onPay} disabled={empty || busy} loading={busy}><Banknote className="h-6 w-6" /> Pay (F8)</Button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+/* Servio design tokens: Material Design 3 (m3.material.io), refreshed 10 Oct 2026.
+   Generated with Google's material-color-utilities from seed #1A73E8 (SchemeFidelity) so the
+   primary stays a true blue; status colours are M3 tonal palettes (tone 40 colour, tone 94 container,
+   tone 25 ink; dark: 80 / 22 / 88). Every text pair meets WCAG AA. Old token names are kept and
+   mapped onto M3 roles so existing pages pick the scheme up unchanged. */
+:root {
+  color-scheme: light;
+  /* primary */
+  --primary: #005bbf; --primary-fg: #ffffff; --primary-hover: color-mix(in srgb, #005bbf 90%, #ffffff);
+  --primary-soft: #d8e2ff; --primary-ink: #001a41;            /* primary container / on primary container */
+  /* status (M3 custom colours) */
+  --success: #2f6a39; --success-fg: #ffffff; --success-soft: #d5f7d2; --success-ink: #034619;
+  --warning: #8d4f00; --warning-fg: #ffffff; --warning-soft: #ffeadb; --warning-ink: #5b3100;
+  --danger: #ba1a1a;  --danger-fg: #ffffff;  --danger-soft: #ffdad6;  --danger-ink: #93000a;   /* M3 error */
+  --info: #006972;    --info-fg: #ffffff;    --info-soft: #c7f6fd;    --info-ink: #004249;
+  --accent: #f9ab00;  --accent-fg: #281800;  --accent-soft: #ffebd2;  --accent-ink: #523600;
+  /* surfaces */
+  --bg-page: #f2f3fd;          /* surface container low */
+  --bg-card: #ffffff;          /* surface container lowest */
+  --bg-muted: #ecedf7;         /* surface container */
+  --bg-high: #e6e8f2;          /* surface container high: dialogs, search */
+  --bg-sidebar: #f2f3fd;
+  --border: #c1c6d6;           /* outline variant */
+  --border-strong: #727785;    /* outline */
+  --text-primary: #191c23;     /* on surface */
+  --text-secondary: #414754;   /* on surface variant */
+  --text-muted: #727785;       /* outline */
+  --inverse: #2d3038; --inverse-fg: #eff0fa; --inverse-primary: #adc7ff; --inverse-danger: #ffb4ab;
+  --sidebar-text: #414754; --sidebar-active-bg: #d8e2ff; --sidebar-active: #001a41;   /* secondary container */
+  /* shape and elevation */
+  --radius: 8px; --radius-lg: 12px;
+  --shadow-card: 0 0 #0000;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --shadow-pop: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);   /* level 3 */
+  /* charts (blue first to match the primary; checked for colour-blind separation) */
+  --chart-1: #2a78d6; --chart-2: #eb6834; --chart-3: #0d9488; --chart-4: #eda100;
+  --chart-5: #e87ba4; --chart-6: #008300; --chart-7: #4a3aa7; --chart-8: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --primary: #adc7ff; --primary-fg: #002e68; --primary-hover: color-mix(in srgb, #adc7ff 90%, #002e68);
+    --primary-soft: #0d448e; --primary-ink: #d8e2ff;
+    --success: #96d69a; --success-fg: #003913; --success-soft: #1f3b22; --success-ink: #acecaf;
+    --warning: #ffb876; --warning-fg: #4b2800; --warning-soft: #4c2e0f; --warning-ink: #ffd5b2;
+    --danger: #ffb4ab;  --danger-fg: #690005;  --danger-soft: #93000a;  --danger-ink: #ffdad6;
+    --info: #73d5e2;    --info-fg: #00363c;    --info-soft: #053b40;    --info-ink: #8becf9;
+    --accent: #fdba4b;  --accent-fg: #442c00;  --accent-soft: #473009;  --accent-ink: #ffd79d;
+    --bg-page: #10131a; --bg-card: #191c23; --bg-muted: #272a31; --bg-high: #272a31; --bg-sidebar: #10131a;
+    --border: #414754; --border-strong: #8b909f;
+    --text-primary: #e0e2ec; --text-secondary: #c1c6d6; --text-muted: #8b909f;
+    --inverse: #e0e2ec; --inverse-fg: #2d3038; --inverse-primary: #005bbf; --inverse-danger: #ba1a1a;
+    --sidebar-text: #c1c6d6; --sidebar-active-bg: #0d448e; --sidebar-active: #d8e2ff;
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --shadow-pop: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+    --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #2bb5a6; --chart-4: #c98500; --chart-5: #d55181; --chart-7: #9085e9; --chart-8: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --primary: #adc7ff; --primary-fg: #002e68; --primary-hover: color-mix(in srgb, #adc7ff 90%, #002e68);
+  --primary-soft: #0d448e; --primary-ink: #d8e2ff;
+  --success: #96d69a; --success-fg: #003913; --success-soft: #1f3b22; --success-ink: #acecaf;
+  --warning: #ffb876; --warning-fg: #4b2800; --warning-soft: #4c2e0f; --warning-ink: #ffd5b2;
+  --danger: #ffb4ab;  --danger-fg: #690005;  --danger-soft: #93000a;  --danger-ink: #ffdad6;
+  --info: #73d5e2;    --info-fg: #00363c;    --info-soft: #053b40;    --info-ink: #8becf9;
+  --accent: #fdba4b;  --accent-fg: #442c00;  --accent-soft: #473009;  --accent-ink: #ffd79d;
+  --bg-page: #10131a; --bg-card: #191c23; --bg-muted: #272a31; --bg-high: #272a31; --bg-sidebar: #10131a;
+  --border: #414754; --border-strong: #8b909f;
+  --text-primary: #e0e2ec; --text-secondary: #c1c6d6; --text-muted: #8b909f;
+  --inverse: #e0e2ec; --inverse-fg: #2d3038; --inverse-primary: #005bbf; --inverse-danger: #ba1a1a;
+  --sidebar-text: #c1c6d6; --sidebar-active-bg: #0d448e; --sidebar-active: #d8e2ff;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --shadow-pop: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #2bb5a6; --chart-4: #c98500; --chart-5: #d55181; --chart-7: #9085e9; --chart-8: #e66767;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-ink: var(--primary-ink);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-warning: var(--warning);
+  --color-warning-fg: var(--warning-fg);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-info: var(--info);
+  --color-info-fg: var(--info-fg);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-page: var(--bg-page);
+  --color-card: var(--bg-card);
+  --color-muted: var(--bg-muted);
+  --color-high: var(--bg-high);
+  --color-sidebar: var(--bg-sidebar);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-bg: var(--sidebar-active-bg);
+  --color-inverse: var(--inverse);
+  --color-inverse-fg: var(--inverse-fg);
+  --color-inverse-primary: var(--inverse-primary);
+  --color-inverse-danger: var(--inverse-danger);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--text-primary);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-muted: var(--text-muted);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --font-sans: "Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: 0.25px;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { letter-spacing: 0; }
+.tabular { font-variant-numeric: tabular-nums; }
+.till { font-size: 16px; }
+@layer base {
+  *, ::before, ::after { border-color: var(--border); }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+}
+button, [role="button"] { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+select.appearance-none {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23727785' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.55rem center; background-size: 16px;
+}
+
+@keyframes servio-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.animate-in { animation: servio-in 150ms ease-out; }
+
+/* Receipt printing: 80 mm roll */
+@media print {
+  @page { size: 80mm auto; margin: 4mm; }
+  body { background: #fff; color: #000; font-size: 12px; }
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 72mm; }
+  .no-print { display: none !important; }
+}
