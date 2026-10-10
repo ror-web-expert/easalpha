@@ -8,7 +8,7 @@ import { useDeviceStore, usePosCan } from "@/store/device";
 import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt } from "@/lib/types";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice } from "@/lib/pos-actions";
+import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment } from "@/lib/pos-actions";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
@@ -203,7 +203,25 @@ function SellScreen() {
   const openPay = async () => {
     if (!cart.lines.length || !ensureCustomer()) return;
     if (reopened) { const c = await saveReopened(); if (!c) return; }
+    else if (cart.customer) {
+      // SPEC regular discounts: the server applies the best recency tier for this customer; sync once so the payment
+      // page shows it before money is taken. Offline (or on a failure) the page opens with the local total.
+      setBusy(true);
+      try { const c = await withOrderPin((o) => syncForPayment(cart, o), "Check discounts"); if (c) loadCart(c); }
+      catch (e) { toast.error("Could not check discounts", errorMessage(e)); }
+      finally { setBusy(false); }
+    }
     setPayOpen(true);
+  };
+  /** SPEC discounts: a voucher, loyalty points or a redemption option (or removing one), re-priced by the server. Online only. */
+  const runDiscount = async (fn: (orderId: string) => Promise<Order>, label: string): Promise<boolean> => {
+    setBusy(true);
+    try {
+      const r = await withOrderPin((o) => applyServerDiscount(cart, fn, o), label);
+      if (!r) return false;
+      loadCart(r);
+      return true;
+    } finally { setBusy(false); }
   };
   const printReceipt = async (r: Receipt) => {
     const res = await printJob({ role: "receipt", lines: receiptLines(r, { settings }) }, { settings });
@@ -318,7 +336,7 @@ function SellScreen() {
       <Dialog open={notesOpen} onClose={() => setNotesOpen(false)} title={editing ? `Notes for ${editing.name}` : "Order notes"} size="sm" footer={<><Button variant="secondary" onClick={() => setNotesOpen(false)}>Cancel</Button><Button onClick={() => { if (editing) updateLine(editing.key, { notes: notes || null }); else patch({ notes }); setNotesOpen(false); setEditing(null); }}>Save</Button></>}>
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
-      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} onCharges={updateCharges} onTaxChoice={chooseTax} />
+      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} onCharges={updateCharges} onTaxChoice={chooseTax} onDiscount={runDiscount} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />

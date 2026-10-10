@@ -4,6 +4,7 @@ import type { Cart } from "@/store/cart";
 import type { OrderType } from "@/lib/types";
 import { lineTotals, type CartLine } from "@/lib/pricing";
 import { chargeDisplay, resolveServiceCharge, totalsWithCharges } from "@/lib/pos-charges";
+import { discountRows } from "@/lib/pos-discounts";
 import { SALES_PERMISSION } from "@/lib/pos-rules";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -104,7 +105,8 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
       <div className="border-t p-3">
         <div className="space-y-0.5 text-sm text-fg-secondary">
           <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(t.subtotal_minor, currency)}</span></div>
-          {t.discount_minor ? <div className="flex justify-between"><span>Discount</span><span className="tabular">-{formatMoney(t.discount_minor, currency)}</span></div> : null}
+          {/* SPEC discounts: one row per applied line (voucher with its code, loyalty, the automatic regular discount) plus the item discounts. */}
+          {discountRows(cart.discounts, t.discount_minor).map((d) => <div key={d.key} className="flex justify-between gap-2"><span className="truncate">{d.label}</span><span className="shrink-0 tabular">-{formatMoney(d.amount_minor, currency)}</span></div>)}
           {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(resolveServiceCharge(cart, settings), currency)}</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
           {t.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery</span><span className="tabular">{formatMoney(t.delivery_charge_minor, currency)}</span></div> : null}
           {t.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(t.tax_minor, currency)}</span></div> : null}

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Lock, ShoppingCart, ListOrdered, Wallet, AlertTriangle, LayoutDashboard, QrCode, Bike, Printer, Clock } from "lucide-react";
+import { Lock, ShoppingCart, ListOrdered, Wallet, AlertTriangle, LayoutDashboard, QrCode, Bike, Printer, Clock, Megaphone } from "lucide-react";
 import { useDeviceStore, usePosCan } from "@/store/device";
 import { useCatalogStore } from "@/store/catalog";
 import { useSyncStore } from "@/store/sync";
@@ -20,6 +20,8 @@ const TABS = [
   { href: "/pos/qr", label: "QR orders", icon: QrCode },
   { href: "/pos/delivery", label: "Delivery", icon: Bike },
   { href: "/pos/shift", label: "Shift", icon: Wallet },
+  // SPEC Vouchers: personal codes are sent from the POS campaign screen (MARKETING / MARKETING_CAMPAIGN; admins always).
+  { href: "/pos/campaign", label: "Campaign", icon: Megaphone, perms: ["MARKETING", "MARKETING_CAMPAIGN", "settings.manage"] },
   // SPEC "Offline behaviour": the offline queue has its own permission (OFFLINE_ORDERS); admins (settings.manage) always see it.
   { href: "/pos/attention", label: "Attention", icon: AlertTriangle, perms: ["OFFLINE_ORDERS", "settings.manage"] },
 ];

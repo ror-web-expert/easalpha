@@ -885,3 +885,129 @@ export interface MyTill {
   shift: Shift | null; drawer_balance_minor: number; business_day: string; collected_today_minor: number; payments_today: number; by_method: Record<string, number>;
   orders_taken_today: number; unsettled_shifts: number; last_settlement: DayEndSettlement | null;
 }
+
+// ---- Report catalogue (SPEC "Report catalogue"): Grand Report shares, Sales detail, Sales Calendar, Operations, marketing and AI reports ----
+export interface GrandMethodRow { method: string; count: number; amount_minor: number; share_percent: number }
+export interface GrandShare { count: number; amount_minor: number; share_percent: number }
+export interface GrandSpec {
+  from: string; to: string; sales_minor: number; orders: number; methods: GrandMethodRow[]; methods_total_minor: number;
+  unpaid: GrandShare; complimentary: GrandShare; account_receipts: { count: number; amount_minor: number; by_method: Record<string, number> }; on_account_minor: number;
+}
+export interface GrandReportFull extends GrandReport { spec: GrandSpec }
+export interface SalesDetailRow {
+  id: ID; label: string; business_day: string; placed_at: string | null; order_type: string; source: string; status: string; payment_status: string; customer: string | null;
+  taken_by: string | null; completed_by: string | null; items: number; subtotal_minor: number; discount_minor: number; tax_minor: number; service_charge_minor: number;
+  delivery_charge_minor: number; total_minor: number; payment_method_summary: string | null;
+}
+export interface SalesDetailPage extends Page<SalesDetailRow> { from: string; to: string; totals: { orders: number; revenue_minor: number; discount_minor: number; tax_minor: number } }
+export interface SalesCalendarDay { date: string; wday: number; orders: number; revenue_minor: number }
+export interface SalesCalendar { month: string; days: SalesCalendarDay[]; totals: { orders: number; revenue_minor: number; average_day_minor: number; best_day: string | null } }
+export interface OperationsReport {
+  from: string; to: string; orders: number; orders_per_day: number; items_per_order: number; avg_prep_minutes: number | null; avg_complete_minutes: number | null; avg_delivery_minutes: number | null;
+  peak_hour: number | null; by_hour: { hour: number; orders: number }[]; cancelled: number; modified: number; reopened: number; by_type: Record<string, number>; by_source: Record<string, number>; tables_turned: number;
+}
+export interface VoucherBatchRef {
+  id: ID; name: string; kind: string; value_kind: string; value: number; min_spend_minor: number | null; expires_on: string | null; usage_limit: number | null; public_code: string | null;
+  issued_count: number; redeemed_count: number; active: boolean; expired: boolean; exhausted: boolean; created_at: string;
+}
+export interface VouchersReportRow { batch: VoucherBatchRef; issued: number; issued_in_period: number; redeemed_in_period: number; redeemed_total: number; amount_minor: number }
+export interface VouchersReport { from: string; to: string; rows: VouchersReportRow[]; totals: { redeemed: number; amount_minor: number; issued: number } }
+export interface LoyaltyRedemptionOptionRef { id: ID; name: string; points: number; kind: string; value: number; product_id: ID | null; product_name: string | null; active: boolean; sort_order: number }
+export interface LoyaltyPointsReport {
+  from: string; to: string; issued: number; redeemed: number; adjusted: number; outstanding: number; redeemed_value_minor: number;
+  by_day: { date: string; issued: number; redeemed: number; adjusted: number }[]; top_customers: { customer_id: ID; name: string | null; points: number }[]; options: LoyaltyRedemptionOptionRef[];
+}
+export interface RegularDiscountTierRef { id: ID; name: string; within_days: number; kind: string; value: number; min_order_minor: number | null; active: boolean; archived_at: string | null }
+export interface RegularDiscountsRow { tier_id: ID | null; tier: string; within_days: number | null; kind: string | null; value: number | null; orders: number; amount_minor: number }
+export interface RegularDiscountsReport { from: string; to: string; rows: RegularDiscountsRow[]; totals: { orders: number; amount_minor: number }; tiers: RegularDiscountTierRef[] }
+export type AiPricingSuggestion = "raise_price" | "promote" | "review_cost" | "ok";
+export interface AiPricingRow {
+  product_id: ID | null; name: string; quantity: number; revenue_minor: number; revenue_share: number; price_minor: number; cost_minor: number | null; margin_percent: number | null; discount_minor: number;
+  suggestion: AiPricingSuggestion; reason: string | null; suggested_price_minor: number | null;
+}
+export interface AiPricingPayload { from: string; to: string; rows: AiPricingRow[]; summary: { items_reviewed: number; flagged: number; underpriced: number; promote: number; review_cost: number; revenue_opportunity_minor: number } }
+export type StockUrgency = "critical" | "soon" | "ok";
+export interface AiStockForecastRow {
+  item: StockItem; daily_usage: string; on_hand: string; days_left: number | null; needed: string; order_qty: string; unit_code: string; est_cost_minor: number; supplier: Supplier | null; urgency: StockUrgency; note: string;
+}
+export interface AiStockForecastPayload { lookback_days: number; forecast_days: number; total_cost_minor: number; rows: AiStockForecastRow[]; summary: { items: number; critical: number; soon: number; est_cost_minor: number } }
+export interface AiInsight<P> { id: ID; kind: string; from_date: string | null; to_date: string | null; engine: string; generated_at: string; payload: P }
+export interface CustomerLedgerSummary { total_outstanding_minor: number; customers_with_due: number; credit_customers: number; total_customers: number; collected_this_month_minor: number }
+
+// ---- Customers: ledger, payments, insights and account screens (SPEC "Customers, credit, loyalty and feedback") ----
+export type CustomerStatus = "active" | "pending_approval" | "deactivated";
+export type CustomerSource = "in_store" | "online" | "qr" | "phone" | "import";
+export interface CustomerPaymentRow extends CustomerPayment { customer_name: string; khata_no: string | null }
+export interface CustomerPaymentsPage extends Page<CustomerPaymentRow> { totals: { received_minor: number; paid_minor: number; count: number } }
+export interface CustomerInsightRow {
+  customer: Customer; spent_minor: number; orders: number; average_minor: number; paid_on_account_minor: number; balance_minor: number; loyalty_points: number; last_order_on: string | null;
+}
+export interface CustomerInsights {
+  from: string; to: string; sort: string; rows: CustomerInsightRow[];
+  totals: { customers: number; spent_minor: number; orders: number; balance_minor: number; with_balance: number; by_status: Record<string, number>; by_source: Record<string, number> };
+}
+
+// ---- Marketing: regular discounts, vouchers, reviews (SPEC "Three discount mechanisms") ----
+export type DiscountValueKind = "percent" | "fixed";
+export interface RegularDiscountTier {
+  id: ID; name: string; within_days: number; kind: DiscountValueKind; value: number; min_order_minor: number; excluded_product_ids: ID[]; excluded_category_ids: ID[];
+  excluded_order_types: string[]; active: boolean; archived_at?: string | null;
+}
+export interface RegularDiscountTiers { data: RegularDiscountTier[]; enabled: boolean; blocked_customer_ids: ID[] }
+export type VoucherKind = "personal" | "public";
+export interface VoucherBatch {
+  id: ID; name: string; kind: VoucherKind; value_kind: DiscountValueKind; value: number; min_spend_minor: number; expires_on: string | null; usage_limit: number | null; public_code: string | null;
+  issued_count: number; redeemed_count: number; active: boolean; expired: boolean; exhausted: boolean; created_at: string;
+}
+export type VoucherStatus = "issued" | "redeemed" | "void";
+export interface Voucher {
+  id: ID; voucher_batch_id: ID; batch_name: string; code: string; customer_id: ID | null; customer_name: string | null; status: VoucherStatus; redeemed_order_id: ID | null; redeemed_at: string | null; sent_at: string | null; created_at: string;
+}
+export interface VoucherBatchDetail extends VoucherBatch { vouchers: Voucher[] }
+export type ReviewSource = "tablet" | "website" | "pos" | "qr";
+export interface Review {
+  id: ID; order_id: ID | null; order_label: string | null; customer_id: ID | null; customer_name: string | null; rating: number | null; rating_word: string | null; comment: string | null;
+  source: ReviewSource | string; order_type: string | null; order_total_minor: number | null; pending: boolean; rated_at: string | null; created_at: string;
+}
+export interface ReviewSummary { total: number; rated: number; pending: number; average: number | null; five_star: number; one_star: number; by_rating: Record<string, number> }
+export interface ReviewsPage extends Page<Review> { summary: ReviewSummary }
+
+// ---- WhatsApp account notifications (SPEC "Account notifications over WhatsApp") ----
+export interface WhatsappTemplate { id: ID; name: string; language: string; category: string; body: string; variables: string[]; approval_status: string | null; shared: boolean }
+export interface WhatsappMessageRow {
+  id: ID; to_phone: string; template_name: string | null; kind: string | null; status: string; error: string | null; sent_at: string | null; delivered_at: string | null; read_at: string | null; created_at: string;
+}
+export interface WhatsappUsage { used: number; limit: number | null; credits: number | null }
+
+// ---- Plan and billing (SPEC "Plan (subscription tier)") ----
+export interface BillingPlan { code: string; name: string; price_pkr_minor: number; price_usd_minor: number | null; limits: Record<string, number | null>; features: Record<string, unknown> }
+export interface BillingSubscription {
+  id: ID; plan_code: string; plan_name: string; billing_cycle: string; status: string; current_period_start: string | null; current_period_end: string | null; grace_ends_on: string | null; tills: number; provider: string | null;
+}
+export interface BillingInvoice {
+  id: ID; number: string; amount_minor: number; currency: string; due_on: string | null; status: string; period_label: string | null; lines: unknown; payment_method: string | null; payment_reference: string | null;
+  reported_at: string | null; confirmed_at: string | null; created_at: string;
+}
+export interface Billing {
+  business: Business; subscription: BillingSubscription | null; plans: BillingPlan[]; invoices: BillingInvoice[];
+  usage: Record<string, { used: number; limit: number | null; credits?: number | null }>;
+  payment_instructions: { jazzcash?: string | null; easypaisa?: string | null; bank?: string | null; provider?: string };
+}
+
+// ---- Website Config and the public storefront (SPEC "The storefront is configured from Website Config") ----
+export type WebsiteSections = Record<string, Record<string, unknown>>;
+export interface WebsiteConfig { id: ID; slug: string | null; published: boolean; sections: WebsiteSections; section_names: string[]; updated_at: string }
+export interface StorefrontProduct { id: ID; name: string; description: string | null; category_id: ID; price_minor: number; image_key: string | null; variants: { id: ID; name: string; price_minor: number }[] }
+export interface Storefront {
+  business: { name: string; slug: string; currency: string; logo_key: string | null; phone: string | null };
+  branch: { id: ID; name: string; address: string | null; hours: string | null } | null;
+  config: WebsiteSections; menus: { id: ID; name: string }[]; categories: { id: ID; name: string; subtitle: string | null; menu_id: ID | null }[]; products: StorefrontProduct[];
+  reviews: { summary: ReviewSummary; recent: { rating: number; rating_word: string; comment: string | null; order_type: string | null; at: string }[] };
+}
+
+// ---- POS discounts and reviews (SPEC "Three discount mechanisms", reviews "from the tablet") ----
+export type LoyaltyRedemptionKind = "fixed" | "percent" | "free_item";
+export interface LoyaltyRedemptionOption extends LoyaltyRedemptionOptionRef { kind: LoyaltyRedemptionKind | string }
+/** POST /voucher_batches/:id/issue: personal codes generated per customer and sent from the POS campaign screen. */
+export interface VoucherIssueResult { issued: number; data: Voucher[]; batch?: VoucherBatch }
+export type OrderDiscountKind = "percent" | "fixed" | "promotion" | "loyalty" | "voucher" | "regular";

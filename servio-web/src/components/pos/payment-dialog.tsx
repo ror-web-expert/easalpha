@@ -7,6 +7,8 @@ import { cashRounding } from "@/lib/pricing";
 import { defaultPaymentMethod } from "@/lib/pos-rules";
 import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, totalsWithCharges, type ChargeState } from "@/lib/pos-charges";
 import type { Cart } from "@/store/cart";
+import { discountRows } from "@/lib/pos-discounts";
+import { DiscountsPanel, type DiscountRunner } from "./discounts-panel";
 import { useCatalogStore } from "@/store/catalog";
 import { useSyncStore } from "@/store/sync";
 import { Button, Dialog, Field, Input, MoneyInput, Tabs } from "@/components/ui";
@@ -20,6 +22,8 @@ interface Props {
   onCharges?: (fields: Partial<Cart>) => Promise<void>;
   /** SPEC Tax: No Tax / linked rate. Online only; the page re-prices through the server. */
   onTaxChoice?: (choice: TaxChoiceInput) => Promise<void>;
+  /** SPEC discounts: vouchers, loyalty points and redemption options, applied on the server. Online only. */
+  onDiscount?: DiscountRunner;
 }
 
 interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: number; reference: string }
@@ -32,7 +36,7 @@ interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: n
  * fixed amount and can be changed or removed here. SPEC "Tax": a No Tax / rate choice appears only when the selected
  * method's finance account is linked to a tax rate.
  */
-export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onTaxChoice }: Props) {
+export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onTaxChoice, onDiscount }: Props) {
   const methods = useCatalogStore((s) => s.paymentMethods);
   const catalog = useCatalogStore((s) => s.catalog);
   const status = useSyncStore((s) => s.status);
@@ -99,6 +103,9 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const payLabel = remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
   // Charges cannot change once money has been taken against the order; the total they feed is already partly settled.
   const chargesLocked = !onCharges || paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
+  // SPEC discounts: the same lock, and the lines by kind for the totals block.
+  const discountsLocked = paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
+  const discountLines = discountRows(cart.discounts, base.discount_minor);
 
   return (
     <Dialog open={open} onClose={onClose} title={cart.reopened ? "Payment (F8) · reopened order" : "Payment (F8)"} description={cart.reopened ? "A reopened order is completed through the payment screen. It opens on its original method." : undefined} size="xl" className="sm:max-h-[95vh]">
@@ -147,6 +154,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
               ) : null}
             </div>
           ) : null}
+          {onDiscount ? <DiscountsPanel cart={cart} currency={currency} online={online} busy={busy} locked={discountsLocked} totalDiscountMinor={base.discount_minor} onRun={onDiscount} /> : null}
           <Field label="Tip"><div className="flex gap-2"><MoneyInput value={tip} onChange={setTip} className="h-12" />{[0, 5000, 10000, 20000].map((v) => <button key={v} onClick={() => setTip(v)} className={cn("min-h-12 rounded-lg border px-3 text-sm", tip === v ? "border-primary bg-primary-soft" : "bg-card")}>{v ? formatMoney(v, currency) : "None"}</button>)}</div></Field>
         </div>
         <div className="flex flex-col rounded-lg bg-muted p-4">
@@ -154,7 +162,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
           <div className="text-4xl font-bold tabular">{formatMoney(due, currency)}</div>
           <div className="mt-2 space-y-1 text-sm text-fg-secondary">
             <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(base.subtotal_minor, currency)}</span></div>
-            {base.discount_minor ? <div className="flex justify-between"><span>Discount</span><span className="tabular">-{formatMoney(base.discount_minor, currency)}</span></div> : null}
+            {discountLines.map((d) => <div key={d.key} className="flex justify-between gap-2"><span className="truncate">{d.label}</span><span className="shrink-0 tabular">-{formatMoney(d.amount_minor, currency)}</span></div>)}
             {base.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(service, currency)}</span><span className="tabular">{formatMoney(base.service_charge_minor, currency)}</span></div> : null}
             {base.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery {delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}</span><span className="tabular">{formatMoney(base.delivery_charge_minor, currency)}</span></div> : null}
             {base.tax_minor || cart.tax_choice ? <div className="flex justify-between"><span>Tax{cart.tax_choice === "none" ? " (none)" : ""}</span><span className="tabular">{formatMoney(base.tax_minor, currency)}</span></div> : null}

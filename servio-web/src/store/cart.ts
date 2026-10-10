@@ -2,8 +2,11 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { CartLine } from "@/lib/pricing";
-import type { Address, OrderType, TaxChoice } from "@/lib/types";
+import type { Address, OrderDiscount, OrderType, TaxChoice } from "@/lib/types";
 import { uuid } from "@/lib/utils";
+
+/** One applied order-level discount line as the server reports it (the fields the till shows). */
+export type CartDiscount = Pick<OrderDiscount, "id" | "kind" | "value" | "amount_minor" | "reason" | "order_item_id">;
 
 export interface CartCustomer { id: string; name: string; phone: string | null; balance_minor?: number; credit_limit_minor?: number | null; addresses?: Address[] }
 
@@ -30,8 +33,10 @@ export interface Cart {
   address_text?: string | null;
   delivery_charge_minor?: number;
   zone_name?: string | null;
-  /** Order-level discount already applied on the server (loyalty points). */
+  /** Order-level discount already applied on the server: the sum of `discounts` (loyalty points, vouchers, regular tiers, promotions). */
   discount_minor?: number;
+  /** SPEC discounts: the applied discount lines as the server reports them, so the till shows each by kind. Server-side only. */
+  discounts?: CartDiscount[];
   /** SPEC reopen flow: set when the order was reopened on the server and is being edited; it must go back through payment. */
   reopened?: boolean;
   reopen_count?: number;

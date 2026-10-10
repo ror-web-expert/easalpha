@@ -6,6 +6,7 @@ import { api, errorMessage } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { Button, Dialog, Input } from "@/components/ui";
 import { ReceiptView } from "./receipt";
+import { ReviewCard } from "./review-card";
 import { toast } from "@/store/toast";
 import { isOnline } from "@/lib/sync";
 import { useCatalogStore } from "@/store/catalog";
@@ -52,6 +53,8 @@ export function ReceiptDialog({ receipt, change, onClose, onNew, offline }: { re
               <Button variant="secondary" className="w-full" size="lg" onClick={send} loading={sending} disabled={offline || (!phone && !receipt.order.customer?.phone)}><MessageCircle className="h-4 w-4" /> Send</Button>
               {offline ? <p className="mt-1 text-xs text-fg-muted">Available when online.</p> : null}
             </div>
+            {/* SPEC Reviews from the tablet: offered once the order is completed, skippable, online only (a reprint is not a new review). */}
+            {!offline && !receipt.duplicate && isOnline() ? <ReviewCard orderId={receipt.order.id} orderLabel={receipt.order.label} /> : null}
           </div>
         </div>
       ) : null}

@@ -66,7 +66,19 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: prev?.address_id ?? null,
     service_charge_percent: o.service_charge_percent ?? null, service_charge_fixed_minor: o.service_charge_fixed_minor ?? 0, delivery_charge_percent: o.delivery_charge_percent ?? 0,
     tax_choice: o.tax_choice ?? null, tax_rate_id: o.tax_rate_id ?? null,
+    // SPEC discounts: a summary row carries no lines; keep the ones already known rather than dropping them.
+    order_discounts: o.discounts ? o.discounts.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })) : prev?.order_discounts,
   };
+}
+
+/**
+ * The order-level discount the cart carries (loyalty, voucher, regular, promotion, percent, fixed lines). The server's
+ * discount_minor also holds the product discounts, which the cart re-derives from its lines, so only the lines count here.
+ */
+function orderLevelDiscount(o: LocalOrder): number | undefined {
+  if (!o.order_discounts) return o.discount_minor || undefined;
+  const sum = o.order_discounts.reduce((s, d) => s + (d.amount_minor || 0), 0);
+  return sum || undefined;
 }
 
 export function localToCart(o: LocalOrder): Cart {
@@ -74,7 +86,7 @@ export function localToCart(o: LocalOrder): Cart {
     id: o.id, saved: true, local_only: o.local_only, status: o.status, order_type: o.order_type as Cart["order_type"], lines: o.lines.filter((l) => l.status !== "cancelled"),
     customer: o.customer_id ? { id: o.customer_id, name: o.customer_name ?? "Customer", phone: o.customer_phone } : null, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name ?? "", covers: o.covers, notes: o.notes ?? "", is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? "", label: o.label, client_created_at: o.client_created_at,
-    discount_minor: o.discount_minor || undefined, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
+    discount_minor: orderLevelDiscount(o), discounts: o.order_discounts, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
     paid_minor: o.paid_minor || undefined,
     service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
@@ -288,6 +300,34 @@ export async function applyTaxChoice(cart: Cart, choice: { none: true } | { tax_
   const order = await api<Order>(`/orders/${current.id}/tax_choice`, { method: "POST", auth: "pos", body: { ...choice, pin: opts.pin, approver_pin: opts.approver_pin } });
   const local = await storeServerOrder(order);
   return { ...localToCart(local), customer: current.customer, address_text: current.address_text, zone_name: current.zone_name, lines: local.lines.filter((l) => l.status !== "cancelled"), ...reopenFields(order) };
+}
+
+/**
+ * SPEC discounts: a voucher code, loyalty points or a redemption option, or removing one of them. The server decides
+ * and re-prices (POST /orders/:id/discounts, /redeem_points, /redeem_option, DELETE /orders/:id/discounts/:id), so this
+ * is online only and never queued. The cart is saved first so the server has the latest lines and customer (which is
+ * also when a regular discount tier is applied automatically), then `fn` runs against the server order id.
+ */
+export async function applyServerDiscount(cart: Cart, fn: (orderId: string) => Promise<Order>, opts: { approver_pin?: string; pin?: string } = {}): Promise<Cart> {
+  if (!isOnline()) throw new ApiError("offline", "Discounts need the internet", 0);
+  const saved = await saveOrder(cart, opts);
+  if (saved.offline) throw new ApiError("offline", "Discounts need the internet", 0);
+  const current = saved.cart;
+  const order = await fn(current.id);
+  const local = await storeServerOrder(order);
+  return { ...localToCart(local), customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name, lines: local.lines.filter((l) => l.status !== "cancelled"), ...reopenFields(order) };
+}
+
+/**
+ * SPEC regular discounts: the server applies the best recency tier when a customer with recent orders is attached, so
+ * before the payment screen opens the cart is synced once (online, with a customer) and the applied lines come back.
+ * Returns null when nothing was synced (offline, no customer, or the order is already on the server unchanged).
+ */
+export async function syncForPayment(cart: Cart, opts: { approver_pin?: string; pin?: string } = {}): Promise<Cart | null> {
+  if (!isOnline() || !cart.customer) return null;
+  const saved = await saveOrder(cart, opts);
+  if (saved.offline) return null;
+  return { ...saved.cart, customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name };
 }
 
 export async function loadOrderForEdit(id: string): Promise<Cart> {

@@ -53,7 +53,12 @@ export interface LocalOrder {
   delivery_charge_percent?: number | null;
   tax_choice?: "none" | "rate" | null;
   tax_rate_id?: string | null;
+  /** SPEC discounts: the order-level discount lines the server holds (voucher, loyalty, regular, promotion, percent, fixed). */
+  order_discounts?: LocalDiscount[];
 }
+
+/** One applied discount as the server reports it; discount_minor on the order is the sum of these plus the product discounts. */
+export interface LocalDiscount { id: string; kind: string; value: number; amount_minor: number; reason: string | null; order_item_id: string | null }
 
 export interface QueueItem {
   id: string;
