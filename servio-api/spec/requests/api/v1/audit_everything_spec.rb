@@ -35,9 +35,9 @@ RSpec.describe "Audit log of every change", type: :request do
     within(owner.business) do
       t = DiningTable.create!(branch: Branch.first, code: "T9", name: "T9", seats: 4)
       t.update!(status: "occupied")
-      expect(AuditLog.where(table_name: "dining_tables", record_id: t.id).pluck(:action)).to eq(%w[create status_change])
+      expect(AuditLog.where(table_name: "dining_tables", record_id: t.id).order(:occurred_at, :created_at).pluck(:action)).to eq(%w[create status_change])
       t.update!(archived_at: Time.current)
-      expect(AuditLog.where(table_name: "dining_tables", record_id: t.id).pluck(:action).last).to eq("delete")
+      expect(AuditLog.where(table_name: "dining_tables", record_id: t.id).order(:occurred_at, :created_at).pluck(:action).last).to eq("delete")
     end
     expect(AuditLog::ACTIONS).to include("cancel", "receive", "ledger_debit", "ledger_credit", "bulk_update", "bulk_delete")
   end
