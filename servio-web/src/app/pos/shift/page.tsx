@@ -16,6 +16,7 @@ import { formatDate, formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { printJob, zReportLines } from "@/lib/print";
 import { PosShell } from "@/components/pos/shell";
+import { PushToggle } from "@/components/admin/push-enable";
 import { ZReportView } from "@/components/z-report";
 import { useApproval } from "@/components/approval";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyState, Field, Input, MoneyInput, Stat, Textarea } from "@/components/ui";
@@ -98,6 +99,13 @@ export default function ShiftPage() {
           </>
         )}
         {status === "offline" ? <p className="text-center text-sm text-warning">Offline: shift actions are saved on the till and sent later.</p> : null}
+        {/* Device-level: browser push for this till (new online orders, big voids and the like), independent of the cashier signed in. */}
+        <Card>
+          <CardBody className="flex flex-wrap items-center justify-between gap-3">
+            <div><div className="text-sm font-medium">This till</div><div className="text-xs text-fg-muted">Alerts arrive on this device even when the till tab is closed.</div></div>
+            <PushToggle app="pos" />
+          </CardBody>
+        </Card>
       </div>
       <Dialog open={opening !== null} onClose={() => setOpening(null)} title="Open shift" description="Count the cash in the drawer before you start." size="sm" footer={<><Button variant="secondary" onClick={() => setOpening(null)}>Cancel</Button><Button loading={busy} onClick={doOpen}>Open</Button></>}>
         <Field label="Opening cash"><MoneyInput value={opening ?? 0} onChange={setOpening} className="h-14 text-2xl" autoFocus /></Field>

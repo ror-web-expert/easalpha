@@ -15,6 +15,7 @@ import { useAuthStore } from "@/store/auth";
 import { Badge, Button, Select, orderTypeVariant } from "@/components/ui";
 import { toast } from "@/store/toast";
 import { useLocalState } from "@/lib/hooks";
+import { PushToggle } from "@/components/admin/push-enable";
 
 /**
  * SPEC "KDS Alerts": the three store-wide settings (new-order sound, timeout minutes, red sound) sync to the KDS on the
@@ -111,6 +112,7 @@ function Board() {
         <span className="text-sm text-fg-secondary">{list.length} orders{alerts.timeoutMinutes ? ` · red after ${alerts.timeoutMinutes} min` : ""}</span>
         <div className="flex-1" />
         <span className={cn("flex items-center gap-1 text-sm", live ? "text-success" : "text-fg-muted")}>{live ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}{live ? "Live" : "Polling"}</span>
+        <PushToggle app="kitchen" label="Push" className="hidden md:inline-flex" />
         {alerts.newOrderSound
           ? <Button variant="ghost" size="icon" onClick={() => setDeviceSound(!deviceSound)} aria-label="Sound" title={deviceSound ? "Mute new-order sound on this screen" : "Unmute new-order sound on this screen"}>{deviceSound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
           : <Button variant="ghost" size="icon" disabled aria-label="Sound off" title="New-order sound is off in Settings, Point of Sale, KDS Alerts"><VolumeX className="h-5 w-5" /></Button>}

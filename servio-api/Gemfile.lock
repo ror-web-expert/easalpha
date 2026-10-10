@@ -166,6 +166,7 @@ GEM
     oj (3.17.7)
       bigdecimal (>= 3.0)
       ostruct (>= 0.2)
+    openssl (3.3.3)
     ostruct (0.6.3)
     parallel (2.3.0)
     parser (3.3.12.0)
@@ -320,6 +321,9 @@ GEM
     unicode-emoji (4.3.0)
     uri (1.1.2)
     useragent (0.16.11)
+    web-push (3.0.1)
+      jwt (~> 2.0)
+      openssl (~> 3.0)
     websocket-driver (0.8.2)
       base64
       websocket-extensions (>= 0.1.0)
@@ -360,6 +364,7 @@ DEPENDENCIES
   solid_cache
   solid_queue
   tzinfo-data
+  web-push (~> 3.0)
 
 BUNDLED WITH
    2.5.11

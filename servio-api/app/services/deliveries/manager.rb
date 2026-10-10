@@ -30,6 +30,9 @@ module Deliveries
         rider.update!(status: "busy") if rider.status == "available"
       end
       Realtime.order_changed(delivery.order)
+      if rider.membership_id
+        Push::Notifier.to_memberships([ rider.membership_id ], title: "New delivery #{delivery.order.label}", body: "Open the rider app to see the address and start the delivery.", url: "/rider", kind: "delivery_assigned", apps: %w[rider])
+      end
       delivery
     end
 

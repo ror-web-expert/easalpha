@@ -10,6 +10,7 @@ import { formatAgo, formatTime } from "@/lib/dates";
 import { DELIVERY_LABELS, deliveryStatusVariant } from "@/components/admin/delivery";
 import { addressLine, groupDeliveries, isCashOrder, riderNextSteps, type RiderStep } from "@/components/admin/riders-helpers";
 import { riderApi } from "@/components/rider/api";
+import { PushToggle } from "@/components/admin/push-enable";
 import { useRiderStore } from "@/components/rider/store";
 import { Badge, Button, Card, CardBody, Dialog, EmptyState, ErrorState, Field, Input, Loading, MoneyInput, Stat, ThemeToggle } from "@/components/ui";
 import { toast } from "@/store/toast";
@@ -83,6 +84,7 @@ export default function RiderHomePage() {
           </CardBody>
         </Card>
         {float.data ? <p className="text-xs text-fg-muted">Hand in {formatMoney(float.data.settlement.expected_minor)} at the till when you settle: collected cash plus the float.</p> : null}
+        <Card><CardBody className="flex items-center justify-between gap-3 py-3"><PushToggle app="rider" request={riderApi} label="Alert me when a delivery is assigned" /></CardBody></Card>
 
         <div className="flex items-center justify-between">
           <h2 className="text-base font-medium">My deliveries</h2>

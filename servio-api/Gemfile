@@ -29,3 +29,5 @@ end
 group :test do
   gem "shoulda-matchers"
 end
+
+gem "web-push", "~> 3.0" # browser push notifications (VAPID)

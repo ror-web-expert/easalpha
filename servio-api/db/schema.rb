@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_11_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -120,7 +120,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.datetime "updated_at", null: false
     t.index ["business_id", "kind", "generated_at"], name: "index_ai_insights_on_business_id_and_kind_and_generated_at"
     t.index ["business_id"], name: "index_ai_insights_on_business_id"
-    t.check_constraint "kind::text = ANY (ARRAY['pricing'::character varying, 'stock_forecast'::character varying]::text[])", name: "ai_insights_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['pricing'::character varying::text, 'stock_forecast'::character varying::text])", name: "ai_insights_kind_check"
   end
 
   create_table "attendance_rules", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1059,7 +1059,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.datetime "updated_at", null: false
     t.uuid "product_id"
     t.index ["business_id"], name: "index_loyalty_redemption_options_on_business_id"
-    t.check_constraint "kind::text = ANY (ARRAY['fixed'::character varying, 'percent'::character varying, 'free_item'::character varying]::text[])", name: "loyalty_redemption_options_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['fixed'::character varying::text, 'percent'::character varying::text, 'free_item'::character varying::text])", name: "loyalty_redemption_options_kind_check"
   end
 
   create_table "loyalty_transactions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1752,6 +1752,25 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.check_constraint "settlement::text = ANY (ARRAY['credit_note'::character varying::text, 'cash_refund'::character varying::text])", name: "purchase_returns_settlement_check"
   end
 
+  create_table "push_subscriptions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "membership_id", null: false
+    t.uuid "device_id"
+    t.string "app", default: "admin", null: false
+    t.text "endpoint", null: false
+    t.string "p256dh", null: false
+    t.string "auth", null: false
+    t.string "user_agent"
+    t.integer "failed_count", default: 0, null: false
+    t.datetime "last_used_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_push_subscriptions_on_business_id"
+    t.index ["endpoint"], name: "index_push_subscriptions_on_endpoint", unique: true
+    t.index ["membership_id"], name: "index_push_subscriptions_on_membership_id"
+    t.check_constraint "app::text = ANY (ARRAY['admin'::character varying, 'pos'::character varying, 'kitchen'::character varying, 'rider'::character varying]::text[])", name: "push_subscriptions_app_check"
+  end
+
   create_table "quick_add_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "product_id", null: false
@@ -1873,7 +1892,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["business_id"], name: "index_regular_discount_tiers_on_business_id"
-    t.check_constraint "kind::text = ANY (ARRAY['percent'::character varying, 'fixed'::character varying]::text[])", name: "regular_discount_tiers_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['percent'::character varying::text, 'fixed'::character varying::text])", name: "regular_discount_tiers_kind_check"
   end
 
   create_table "report_schedules", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1947,7 +1966,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.index ["business_id"], name: "index_reviews_on_business_id"
     t.index ["order_id"], name: "index_reviews_on_order_id"
     t.check_constraint "rating IS NULL OR rating >= 1 AND rating <= 5", name: "reviews_rating_check"
-    t.check_constraint "source::text = ANY (ARRAY['tablet'::character varying, 'website'::character varying, 'pos'::character varying, 'qr'::character varying]::text[])", name: "reviews_source_check"
+    t.check_constraint "source::text = ANY (ARRAY['tablet'::character varying::text, 'website'::character varying::text, 'pos'::character varying::text, 'qr'::character varying::text])", name: "reviews_source_check"
   end
 
   create_table "rider_cash_movements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2721,6 +2740,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.index ["phone"], name: "index_users_on_phone", unique: true, where: "(phone IS NOT NULL)"
   end
 
+  create_table "vapid_keypairs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.text "public_key", null: false
+    t.text "private_key", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
   create_table "voids", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "order_id", null: false
@@ -2756,7 +2782,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.datetime "updated_at", null: false
     t.index ["business_id", "public_code"], name: "index_voucher_batches_on_business_id_and_public_code", unique: true, where: "(public_code IS NOT NULL)"
     t.index ["business_id"], name: "index_voucher_batches_on_business_id"
-    t.check_constraint "(kind::text = ANY (ARRAY['personal'::character varying, 'public'::character varying]::text[])) AND (value_kind::text = ANY (ARRAY['fixed'::character varying, 'percent'::character varying]::text[]))", name: "voucher_batches_kind_check"
+    t.check_constraint "(kind::text = ANY (ARRAY['personal'::character varying::text, 'public'::character varying::text])) AND (value_kind::text = ANY (ARRAY['fixed'::character varying::text, 'percent'::character varying::text]))", name: "voucher_batches_kind_check"
   end
 
   create_table "vouchers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2775,7 +2801,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
     t.index ["business_id"], name: "index_vouchers_on_business_id"
     t.index ["customer_id"], name: "index_vouchers_on_customer_id"
     t.index ["voucher_batch_id"], name: "index_vouchers_on_voucher_batch_id"
-    t.check_constraint "status::text = ANY (ARRAY['issued'::character varying, 'redeemed'::character varying, 'void'::character varying]::text[])", name: "vouchers_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['issued'::character varying::text, 'redeemed'::character varying::text, 'void'::character varying::text])", name: "vouchers_status_check"
   end
 
   create_table "website_configs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -3013,6 +3039,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
   add_foreign_key "purchase_returns", "stock_documents"
   add_foreign_key "purchase_returns", "stock_sections"
   add_foreign_key "purchase_returns", "suppliers"
+  add_foreign_key "push_subscriptions", "businesses"
   add_foreign_key "quick_add_items", "businesses"
   add_foreign_key "quick_add_items", "products"
   add_foreign_key "receipt_events", "businesses"

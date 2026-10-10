@@ -2,10 +2,12 @@
 import { Bell } from "lucide-react";
 import { PageHeader } from "@/components/admin/page";
 import { SettingsScreenCard, SettingsVersion, useSettings } from "@/components/admin/settings-screen";
+import { PushCard } from "@/components/admin/push-enable";
 import { Card, CardBody, CardHeader, CardTitle, Loading } from "@/components/ui";
 
 // SPEC Notifications: six owner alerts (low stock, cash short, big void, daily summary, new online order, pending
-// customers), each a boolean settings key on the store group rendered by the settings registry card.
+// customers), each a boolean settings key on the store group rendered by the settings registry card. Above them, the
+// browser push card: whether this device receives those alerts, and every device that does.
 
 export default function NotificationsSettingsPage() {
   const settings = useSettings();
@@ -16,7 +18,10 @@ export default function NotificationsSettingsPage() {
       <SettingsVersion version={settings.data?.version} />
       {settings.isLoading ? <Loading /> : (
         <div className="grid gap-4 lg:grid-cols-3">
-          <SettingsScreenCard screen="Notifications" keys={keys} className="lg:col-span-2" />
+          <div className="grid gap-4 lg:col-span-2">
+            <PushCard />
+            <SettingsScreenCard screen="Notifications" keys={keys} />
+          </div>
           <Card>
             <CardHeader><CardTitle>What each one does</CardTitle></CardHeader>
             <CardBody>
