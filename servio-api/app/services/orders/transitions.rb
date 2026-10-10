@@ -154,6 +154,7 @@ module Orders
     # until a new payment or a zero balance is recorded.
     def require_customer!(order)
       return if order.customer_id.present?
+      return unless order.source.in?(%w[till app]) # web, QR and aggregator orders carry their own customer details
       required = order.business.setting("pos.customer_required.#{order.order_type}")
       raise Api::Errors::Unprocessable.new("customer.required", "A customer must be selected on #{order.order_type.tr('_', '-')} orders") if required
     end
