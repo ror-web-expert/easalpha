@@ -86,9 +86,17 @@ Rails.application.routes.draw do
       get "catalog", to: "catalog#show"
 
       resources :orders, only: %i[index show create update] do
-        collection { get :summary }
+        collection do
+          get :summary
+          get :pending
+          post :bulk_complete
+          post :sync_complimentary
+        end
         member do
           post :place
+          post :reopen
+          post :complete
+          get :cost_analysis
           post :hold
           post :resume
           post :serve
@@ -117,6 +125,7 @@ Rails.application.routes.draw do
       end
       get "day_close", to: "day_closes#show"
       get "reports/dashboard", to: "reports#dashboard"
+      get "reports/dashboard/spec", to: "reports#dashboard_spec"
       %w[overview by_day by_hour items categories cashiers order_takers voids discounts modified customers shifts grand].each { |r| get "reports/#{r}", to: "reports##{r}" }
       post "sync/push", to: "sync#push"
       get "sync/changes", to: "sync#changes"

@@ -1,6 +1,6 @@
 class DiningTable < ApplicationRecord
   include Tenanted
-  STATUSES = %w[available occupied reserved bill_requested].freeze
+  STATUSES = %w[available occupied reserved bill_requested maintenance].freeze
   belongs_to :branch
   belongs_to :floor, optional: true
   validates :code, presence: true, uniqueness: { scope: :branch_id, conditions: -> { where(archived_at: nil) } }

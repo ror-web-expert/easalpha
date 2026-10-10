@@ -44,7 +44,7 @@ await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
-  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add"];
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -95,6 +95,27 @@ for (const p of adminPages) {
   const cat = await api("/catalog", { token: T });
   step("phase 2: catalog carries quick add items", (cat.j.quick_add_items || []).length === 1, JSON.stringify(cat.j.quick_add_items?.map((q) => q.name)));
   report.phase2 = { quickAddName: chai.name };
+}
+
+
+// ---- Phase 3 gate (SPEC): a paid walk-in order is reopened, an item is added, and the story shows the diff and the amount change.
+{
+  const cat = await api("/catalog", { token: T });
+  const [p1, p2] = cat.j.products;
+  const o = await api("/orders", { method: "POST", token: T, body: { order_type: "walk_in", lines: [{ product_id: p1.id, quantity: 1 }], place: true } });
+  step("phase 3: walk-in order placed", o.status === 201 && o.j.spec_status === "pending", `${o.status} ${o.j?.spec_status}`);
+  const pay = await api(`/orders/${o.j.id}/payments`, { method: "POST", token: T, body: { payments: [{ method_code: "cash", amount_minor: o.j.total_minor, tendered_minor: o.j.total_minor }] } });
+  step("phase 3: paid by cash, completed", pay.status < 300 && pay.j.spec_status === "completed", `${pay.status} ${pay.j?.spec_status}`);
+  const re = await api(`/orders/${o.j.id}/reopen`, { method: "POST", token: T });
+  step("phase 3: reopened", re.status === 200 && re.j.reopen_count === 1, `${re.status}`);
+  const line = re.j.items[0];
+  const ed = await api(`/orders/${o.j.id}`, { method: "PATCH", token: T, body: { lines: [{ id: line.id, quantity: 1 }, { product_id: p2.id, quantity: 1 }] } });
+  const last = ed.j?.story?.events?.at(-1);
+  step("phase 3: story shows the item diff and amount change", ed.status === 200 && last?.type === "edited" && last.diff.added.length === 1 && last.amount_after > last.amount_before, JSON.stringify({ type: last?.type, added: last?.diff?.added, from: last?.amount_before, to: last?.amount_after }));
+  report.phase3 = { orderId: o.j.id, serial: o.j.serial };
+  const resp = await a.goto(WEB + "/admin/orders?status=open", { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
+  await a.waitForTimeout(800); await shot(a, "phase3-orders-open");
+  step("phase 3: admin orders page renders", !!resp && resp.status() === 200, "");
 }
 
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");

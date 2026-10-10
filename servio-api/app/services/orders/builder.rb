@@ -89,6 +89,7 @@ module Orders
 
     def cancel_item!(item, reason:)
       raise Api::Errors::Forbidden.new("permission.denied", "Removing a sent item needs orders.edit_after_send") if item.sent_at && !can?("orders.edit_after_send")
+      raise Api::Errors::Forbidden.new("permission.denied", "Deleting a line on a reopened order needs DELETE_ORDER_ITEM") if order.reopened? && !can?("DELETE_ORDER_ITEM")
       item.update!(status: "cancelled", cancelled_reason: reason)
       @removed << item
     end
@@ -117,6 +118,7 @@ module Orders
       end
       return if changes.except(:sort_order).empty?
       raise Api::Errors::Forbidden.new("permission.denied", "Changing a sent item needs orders.edit_after_send") if item.sent_at && !can?("orders.edit_after_send") && changes.except(:sort_order, :notes).any?
+      raise Api::Errors::Forbidden.new("permission.denied", "Lowering a quantity on a reopened order needs MODIFY_REOPEN_DECREASE_QTY") if order.reopened? && changes.key?(:quantity) && changes[:quantity] < item.quantity_was.to_d && !can?("MODIFY_REOPEN_DECREASE_QTY")
       item.update!(changes)
       @added << item if item.sent_at && changes.key?(:quantity) && changes[:quantity] > item.quantity_was.to_d
     end

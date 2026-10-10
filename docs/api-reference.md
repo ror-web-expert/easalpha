@@ -914,3 +914,20 @@ The access token now carries `perms`, the effective permission codes at sign-in.
 | PATCH | /api/v1/deals/:id | adds is_favourite |
 | GET | /api/v1/qr/:token | hidden menus and categories are left out |
 | GET | /api/v1/settings | adds the Display Settings keys catalog.display.* |
+
+## Phase 3 additions (10 Oct 2026, SPEC "Orders, order taking and tables")
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/orders?status=&payment_status=&payment_method=&from=&to=&sort= | SPEC status and payment-status names, method, date range, sorts |
+| GET | /api/v1/orders/pending | open orders across days: tiles, calendar, list |
+| POST | /api/v1/orders/bulk_complete | Mark All Completed for a business day |
+| POST | /api/v1/orders/sync_complimentary | settle complimentary orders at zero |
+| POST | /api/v1/orders/:id/reopen | SPEC reopen (REOPEN_ORDER) |
+| POST | /api/v1/orders/:id/complete | SPEC complete (COMPLETE_ORDER); Direct Unpaid Orders |
+| POST | /api/v1/orders with complete: true | place and complete (PLACE_AND_COMPLETE_ORDER) |
+| GET | /api/v1/orders/:id/cost_analysis | revenue, COGS, labour, profit, margin, ingredients |
+| GET | /api/v1/reports/dashboard/spec?period= | SPEC KPI cards, charts, top selling, pills |
+| GET | /api/v1/me | adds pills: open orders today and previous, low-stock items |
+
+Orders carry spec_status, spec_payment_status, reopen_count, edit_count, reopened_at, unpaid_direct and a story block.

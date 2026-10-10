@@ -10,6 +10,12 @@ module Api
         render json: Reports::Dashboard.build(current_branch, day)
       end
 
+      # GET /reports/dashboard/spec?period=today|yesterday|7d|30d|month|custom&from&to  SPEC KPI cards, charts and pills
+      def dashboard_spec
+        require_permission!("reports.view_all", "reports.view_branch", "DASHBOARD", "VIEW_DAILY_SALES")
+        render json: Reports::Dashboard.spec(current_branch, period: params[:period].presence || "today", from: params[:from], to: params[:to])
+      end
+
       def overview = render(json: report.overview)
       def by_day = render(json: { from: @from, to: @to, data: report.by_day })
       def by_hour = render(json: { from: @from, to: @to, data: report.by_hour })

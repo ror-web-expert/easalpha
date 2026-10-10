@@ -598,7 +598,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["business_id"], name: "index_dining_tables_on_business_id"
     t.index ["floor_id"], name: "index_dining_tables_on_floor_id"
     t.index ["qr_token"], name: "index_dining_tables_on_qr_token", unique: true
-    t.check_constraint "status::text = ANY (ARRAY['available'::character varying, 'occupied'::character varying, 'reserved'::character varying, 'bill_requested'::character varying]::text[])", name: "dining_tables_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['available'::character varying, 'occupied'::character varying, 'reserved'::character varying, 'bill_requested'::character varying, 'maintenance'::character varying]::text[])", name: "dining_tables_status_check"
   end
 
   create_table "discounts_applied", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -990,6 +990,26 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["business_id"], name: "index_notifications_on_business_id"
   end
 
+  create_table "order_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "order_id", null: false
+    t.string "event_type", null: false
+    t.uuid "membership_id"
+    t.string "user_name"
+    t.string "role_name"
+    t.uuid "device_id"
+    t.jsonb "diff"
+    t.bigint "amount_before"
+    t.bigint "amount_after"
+    t.string "note"
+    t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_order_events_on_business_id"
+    t.index ["order_id", "occurred_at"], name: "index_order_events_on_order_id_and_occurred_at"
+    t.index ["order_id"], name: "index_order_events_on_order_id"
+  end
+
   create_table "order_item_modifiers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "order_item_id", null: false
@@ -1136,6 +1156,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.string "qr_guest_token"
     t.datetime "scheduled_for"
     t.datetime "preorder_notified_at"
+    t.datetime "reopened_at"
+    t.integer "reopen_count", default: 0, null: false
+    t.integer "edit_count", default: 0, null: false
+    t.boolean "unpaid_direct", default: false, null: false
     t.index ["branch_id", "business_day", "serial"], name: "index_orders_on_branch_id_and_business_day_and_serial", unique: true, where: "(serial IS NOT NULL)"
     t.index ["branch_id", "qr_status"], name: "index_orders_on_branch_id_and_qr_status", where: "(qr_status IS NOT NULL)"
     t.index ["branch_id", "scheduled_for"], name: "index_orders_on_branch_id_and_scheduled_for", where: "(scheduled_for IS NOT NULL)"
@@ -1147,7 +1171,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.check_constraint "order_type::text = ANY (ARRAY['dine_in'::character varying, 'takeaway'::character varying, 'delivery'::character varying, 'walk_in'::character varying]::text[])", name: "orders_order_type_check"
     t.check_constraint "payment_status::text = ANY (ARRAY['unpaid'::character varying, 'partial'::character varying, 'paid'::character varying, 'refunded'::character varying]::text[])", name: "orders_payment_status_check"
     t.check_constraint "qr_status IS NULL OR (qr_status::text = ANY (ARRAY['pending'::character varying, 'accepted'::character varying, 'rejected'::character varying]::text[]))", name: "orders_qr_status_check"
-    t.check_constraint "source::text = ANY (ARRAY['till'::character varying, 'qr'::character varying, 'online'::character varying, 'phone'::character varying, 'foodpanda'::character varying, 'kiosk'::character varying]::text[])", name: "orders_source_check"
+    t.check_constraint "source::text = ANY (ARRAY['till'::character varying, 'qr'::character varying, 'online'::character varying, 'app'::character varying, 'phone'::character varying, 'foodpanda'::character varying, 'kiosk'::character varying]::text[])", name: "orders_source_check"
     t.check_constraint "status::text = ANY (ARRAY['draft'::character varying, 'held'::character varying, 'placed'::character varying, 'preparing'::character varying, 'ready'::character varying, 'served'::character varying, 'dispatched'::character varying, 'paid'::character varying, 'closed'::character varying, 'voided'::character varying, 'refunded'::character varying]::text[])", name: "orders_status_check"
   end
 
@@ -2574,6 +2598,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "modifiers", "businesses"
   add_foreign_key "modifiers", "modifier_groups"
   add_foreign_key "notifications", "businesses"
+  add_foreign_key "order_events", "businesses"
+  add_foreign_key "order_events", "orders"
   add_foreign_key "order_item_modifiers", "businesses"
   add_foreign_key "order_item_modifiers", "order_items"
   add_foreign_key "order_items", "businesses"

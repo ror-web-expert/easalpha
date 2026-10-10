@@ -6,6 +6,7 @@ module Orders
     def place!(order, actor:, device: nil)
       raise Api::Errors::Conflict.new("order.empty", "Add at least one item before sending") if order.active_items.empty?
       raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.status.in?(%w[draft held])
+      require_customer!(order)
       Order.transaction do
         order.business_day ||= order.branch.business_day_for(order.client_created_at || Time.current)
         order.serial ||= OrderSerial.next!(branch_id: order.branch_id, business_day: order.business_day)
@@ -13,6 +14,7 @@ module Orders
         change!(order, "placed", actor: actor, device: device)
         order.items.each { |i| i.update!(status: "sent", sent_at: Time.current) if i.status == "pending" }
         Kitchen::Tickets.create_for!(order, kind: "new", items: order.active_items)
+        Story.record!(order, "punched", actor: actor, device: device, amount_after: order.total_minor)
         SetupChecklistItem.complete!("first_order")
       end
       Stock::Deduction.deduct!(order, actor: actor)
@@ -84,6 +86,7 @@ module Orders
         active = order.active_items
         order.items.where.not(status: "cancelled").update_all(status: "cancelled", cancelled_reason: "void: #{reason}")
         change!(order, "voided", actor: actor, device: device, reason: reason)
+        Story.record!(order, "cancelled", actor: actor, device: device, amount_before: order.total_minor, amount_after: 0, note: reason)
         Kitchen::Tickets.create_for!(order, kind: "cancelled", items: active) if order.sent?
         order.dining_table&.release! if order.table_id
         AuditLog.record(action: "void", record: order, after: { reason: reason, amount_minor: order.total_minor, stock_action: stock_action }, approved_by: approver&.user)
@@ -104,22 +107,55 @@ module Orders
 
     def mark_paid!(order, actor:, device: nil)
       order.paid_at ||= Time.current
-      order.completed_by_membership_id ||= actor&.id
+      order.completed_by_membership_id = actor&.id
       order.items.where(status: %w[sent preparing ready]).update_all(status: "served")
       change!(order, "paid", actor: actor, device: device)
+      Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor)
       order.dining_table&.release! if order.table_id
       Realtime.order_changed(order)
       order
     end
 
-    def close!(order, actor:, device: nil)
-      raise Api::Errors::Conflict.new("order.unpaid", "Order must be paid before closing") unless order.payment_status == "paid" || order.total_minor.zero?
+    # Completing (SPEC COMPLETE_ORDER). An unpaid order completes only through Direct Unpaid Orders; a reopened order
+    # always goes back through the payment screen, so it must be paid again first.
+    def close!(order, actor:, device: nil, allow_unpaid: false)
+      paid = order.payment_status == "paid" || order.total_minor.zero?
+      raise Api::Errors::Conflict.new("order.unpaid", "Order must be paid before closing") unless paid || (allow_unpaid && !order.reopened_since_payment?)
+      was_completed = order.completed?
       order.closed_at = Time.current
       order.completed_by_membership_id = actor&.id
+      order.unpaid_direct = true unless paid
       change!(order, "closed", actor: actor, device: device)
+      Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor, note: paid ? nil : "placed unpaid") unless was_completed
       order.dining_table&.release! if order.table_id
       Realtime.order_changed(order)
       order
+    end
+
+    # SPEC reopen: a completed order comes back for editing. It stays open (served or dispatched) until it goes
+    # through the payment screen and is completed again; the story counts every reopen.
+    def reopen!(order, actor:, device: nil)
+      raise Api::Errors::Conflict.new("order.status", "Only a completed order can be reopened; this one is #{order.status}") unless order.completed?
+      raise Api::Errors::Conflict.new("order.empty", "This order has no items") if order.active_items.empty?
+      to = order.order_type == "delivery" ? "dispatched" : "served"
+      Order.transaction do
+        order.reopened_at = Time.current
+        order.reopen_count += 1
+        order.closed_at = nil
+        order.unpaid_direct = false
+        change!(order, to, actor: actor, device: device, reason: "reopened")
+        Story.record!(order, "reopened", actor: actor, device: device, amount_before: order.total_minor, amount_after: order.total_minor)
+      end
+      Realtime.order_changed(order)
+      order
+    end
+
+    # Reopened orders always use the payment screen (SPEC): an order reopened after it was paid is not "paid" again
+    # until a new payment or a zero balance is recorded.
+    def require_customer!(order)
+      return if order.customer_id.present?
+      required = order.business.setting("pos.customer_required.#{order.order_type}")
+      raise Api::Errors::Unprocessable.new("customer.required", "A customer must be selected on #{order.order_type.tr('_', '-')} orders") if required
     end
 
     def change!(order, to, actor:, device:, reason: nil)

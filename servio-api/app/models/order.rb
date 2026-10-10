@@ -1,7 +1,7 @@
 class Order < ApplicationRecord
   include Tenanted
   ORDER_TYPES = %w[dine_in takeaway delivery walk_in].freeze
-  SOURCES = %w[till qr online phone foodpanda kiosk].freeze
+  SOURCES = %w[till qr online app phone foodpanda kiosk].freeze
   STATUSES = %w[draft held placed preparing ready served dispatched paid closed voided refunded].freeze
   OPEN_STATUSES = %w[draft held placed preparing ready served dispatched].freeze
   KITCHEN_STATUSES = %w[placed preparing ready].freeze
@@ -14,6 +14,7 @@ class Order < ApplicationRecord
   belongs_to :address, class_name: "CustomerAddress", optional: true
   has_many :items, -> { order(:sort_order, :created_at) }, class_name: "OrderItem", dependent: :destroy
   has_many :status_events, -> { order(:occurred_at) }, class_name: "OrderStatusEvent", dependent: :destroy
+  has_many :story_events, -> { order(:occurred_at) }, class_name: "OrderEvent", dependent: :destroy
   has_many :discounts, class_name: "DiscountApplied", dependent: :destroy
   has_many :voids, dependent: :destroy
   has_many :kitchen_tickets, dependent: :destroy
@@ -41,4 +42,14 @@ class Order < ApplicationRecord
   def active_items = items.reject { |i| i.status == "cancelled" }
   def due_minor = [total_minor - paid_minor, 0].max
   def label = serial ? "##{serial}" : (till_serial || "draft")
+  def completed? = status.in?(%w[paid closed])
+  def reopened? = reopened_at.present?
+  # True when the order was reopened after its last payment, so it must go through the payment screen again (SPEC).
+  def reopened_since_payment?
+    return false unless reopened_at
+    last = payments.where(status: "captured").maximum(:created_at)
+    last.nil? || reopened_at > last
+  end
+  def spec_status = Orders::SpecStatus.of(self)
+  def spec_payment_status = Orders::SpecStatus.payment_of(self)
 end

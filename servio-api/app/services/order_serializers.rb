@@ -3,7 +3,8 @@ module OrderSerializers
 
   def summary(o)
     { id: o.id, serial: o.serial, label: o.label, till_serial: o.till_serial, business_day: o.business_day, order_type: o.order_type, source: o.source,
-      status: o.status, payment_status: o.payment_status, table_id: o.table_id, table_code: o.dining_table&.code, guest_name: o.guest_name, covers: o.covers,
+      status: o.status, payment_status: o.payment_status, spec_status: o.spec_status, spec_payment_status: o.spec_payment_status,
+      reopen_count: o.reopen_count, edit_count: o.edit_count, reopened_at: o.reopened_at, unpaid_direct: o.unpaid_direct, completed_by_membership_id: o.completed_by_membership_id, table_id: o.table_id, table_code: o.dining_table&.code, guest_name: o.guest_name, covers: o.covers,
       customer_id: o.customer_id, rider_id: o.rider_id, shift_id: o.shift_id, is_staff_meal: o.is_staff_meal, scheduled_for: o.scheduled_for,
       subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor,
       rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, delivery_charge_minor: o.delivery_charge_minor, total_minor: o.total_minor,
@@ -19,7 +20,8 @@ module OrderSerializers
       discounts: o.discounts.map { |d| { id: d.id, order_item_id: d.order_item_id, promotion_id: d.promotion_id, kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, reason: d.reason, applied_by_membership_id: d.applied_by_membership_id, approved_by_membership_id: d.approved_by_membership_id } },
       events: o.status_events.map { |e| { from: e.from_status, to: e.to_status, membership_id: e.membership_id, device_id: e.device_id, reason: e.reason, at: e.occurred_at } },
       voids: o.voids.map { |v| { id: v.id, reason: v.reason, stock_action: v.stock_action, amount_minor: v.amount_minor, by_membership_id: v.by_membership_id, approved_by_membership_id: v.approved_by_membership_id, at: v.voided_at } },
-      service_charge_percent: o.service_charge_percent.to_f, staff_meal_reason: o.staff_meal_reason
+      service_charge_percent: o.service_charge_percent.to_f, staff_meal_reason: o.staff_meal_reason,
+      story: Orders::Story.for(o)
     )
   end
 

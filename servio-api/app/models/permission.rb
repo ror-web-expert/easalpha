@@ -124,6 +124,8 @@ module Permission
   ].freeze
 
   MODULES = SPEC_ROWS.map(&:first).uniq.freeze
+  # SPEC codes that must be granted explicitly: a role's Servio codes never imply them in reverse.
+  EXPLICIT_ONLY = %w[REOPEN_ORDER DELETE_ORDER_ITEM MODIFY_REOPEN_DECREASE_QTY PLACE_UNPAID_DIRECT PLACE_AND_COMPLETE_ORDER].freeze
 
   REGISTRY = (
     SPEC_ROWS.map { |m, code, label, desc, surface, restriction, implies| Entry.new(code: code, module_name: m, label: label, description: desc, surface: surface, restriction: restriction, implies: implies) } +
@@ -150,7 +152,7 @@ module Permission
     set.dup.each { |c| entry(c)&.implies&.each { |i| set << i } }
     if reverse
       REGISTRY.each_value do |e|
-        next if set.include?(e.code) || e.implies.empty? || e.restriction
+        next if set.include?(e.code) || e.implies.empty? || e.restriction || EXPLICIT_ONLY.include?(e.code)
         set << e.code if e.implies.all? { |i| set.include?(i) }
       end
     end

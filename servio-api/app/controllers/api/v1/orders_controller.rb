@@ -11,14 +11,114 @@ module Api
         scope = scope.on_day(params[:business_day].presence || current_branch.business_day_for(Time.current)) unless params[:all_days] == "true" || params[:preorders] == "true"
         scope = scope.open if params[:open] == "true"
         scope = scope.where.not(scheduled_for: nil).reorder(:scheduled_for) if params[:preorders] == "true"
-        %i[status order_type source payment_status customer_id rider_id table_id].each { |f| scope = scope.where(f => params[f]) if params[f].present? }
+        # SPEC filters: status accepts the SPEC names (pending, preparing, ready, dispatched, completed, cancelled) or open;
+        # payment_status the SPEC names (paid, pending, unpaid, account, complimentary); payment_method; a date range.
+        scope = scope.where(status: Orders::SpecStatus.internal_for(params[:status])) if params[:status].present?
+        scope = Orders::SpecStatus.payment_scope(scope, params[:payment_status]) if params[:payment_status].present?
+        scope = scope.where(id: Payment.where(status: "captured", method_code: params[:payment_method]).select(:order_id)) if params[:payment_method].present?
+        if params[:from].present? || params[:to].present?
+          scope = scope.unscope(where: :business_day).where(business_day: (params[:from].presence || "2000-01-01")..(params[:to].presence || "2100-01-01"))
+        end
+        %i[order_type source customer_id rider_id table_id].each { |f| scope = scope.where(f => params[f]) if params[f].present? }
         scope = scope.where(taken_by_membership_id: current_membership.id) if only_own?
         if params[:q].present?
           q = params[:q].to_s.strip
           scope = q.match?(/\A#?\d+\z/) ? scope.where(serial: q.delete("#").to_i) : scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: "%#{q}%")
         end
+        if params[:sort].present? && params[:sort] != "newest"
+          # SPEC sorts other than newest use page and limit rather than a cursor.
+          order_by = { "oldest" => "orders.created_at ASC", "serial_asc" => "orders.serial ASC NULLS LAST", "serial_desc" => "orders.serial DESC NULLS LAST",
+                       "amount_desc" => "orders.total_minor DESC", "amount_asc" => "orders.total_minor ASC" }.fetch(params[:sort]) { raise Api::Errors::BadRequest.new("sort.unknown", "Unknown sort #{params[:sort]}") }
+          limit = [[params[:limit].to_i, 1].max, 200].min
+          limit = 50 if params[:limit].blank?
+          page = [params[:page].to_i, 1].max
+          rows = scope.reorder(Arel.sql(order_by)).offset((page - 1) * limit).limit(limit + 1).to_a
+          more = rows.size > limit
+          return render json: { data: rows.first(limit).map { |o| OrderSerializers.summary(o) }, next_cursor: nil, next_page: more ? page + 1 : nil }
+        end
         rows, cursor = paginate(scope)
         render_page(rows, cursor) { |o| OrderSerializers.summary(o) }
+      end
+
+      # GET /orders/pending  SPEC Pending Orders: orders left open across days, with tiles and a calendar
+      def pending
+        require_permission!("orders.create", "reports.view_all", "reports.view_branch", "ORDERS")
+        today = current_branch.business_day_for(Time.current)
+        scope = Order.open.where(branch_id: current_branch.id).where.not(status: "draft")
+        by_day = scope.group(:business_day).count
+        tiles = { today: by_day[today].to_i, yesterday: by_day[today - 1].to_i, last_30_days: by_day.select { |d, _| d >= today - 29 }.values.sum,
+                  previous_days: by_day.reject { |d, _| d == today }.values.sum, all_time: by_day.values.sum, oldest_day: by_day.keys.min }
+        list = params[:business_day].present? ? scope.where(business_day: params[:business_day]) : scope
+        rows, cursor = paginate(list.includes(:dining_table, :items))
+        render json: { tiles: tiles, calendar: by_day.sort.map { |d, n| { day: d, count: n } }, data: rows.map { |o| OrderSerializers.summary(o) }, next_cursor: cursor }
+      end
+
+      # POST /orders/bulk_complete  business_day?  SPEC Mark All Completed: every open, paid order of the day completes
+      def bulk_complete
+        require_permission!("COMPLETE_ORDER", "orders.create")
+        day = params[:business_day].presence || current_branch.business_day_for(Time.current)
+        scope = Order.open.where(branch_id: current_branch.id, business_day: day).where.not(status: %w[draft held])
+        done, skipped = 0, 0
+        scope.find_each do |o|
+          if o.payment_status == "paid" || o.total_minor.zero?
+            Orders::Transitions.close!(o, actor: current_membership, device: current_device)
+            done += 1
+          else
+            skipped += 1
+          end
+        end
+        audit!("bulk_update", table_name: "orders", after: { business_day: day, completed: done, skipped_unpaid: skipped })
+        render json: { completed: done, skipped_unpaid: skipped, business_day: day }
+      end
+
+      # POST /orders/sync_complimentary  SPEC Sync Complimentary: complimentary orders left with a due amount are settled at zero
+      def sync_complimentary
+        require_permission!("COMPLIMENTARY_ORDER", "orders.staff_meal")
+        fixed = 0
+        Order.where(branch_id: current_branch.id, is_staff_meal: true).where.not(payment_status: "paid").where.not(status: %w[voided refunded]).find_each do |o|
+          Orders::Pricing.recompute!(o) if Orders::Pricing.respond_to?(:recompute!)
+          next unless o.total_minor.zero?
+          o.update!(payment_status: "paid")
+          Orders::Transitions.mark_paid!(o, actor: current_membership, device: current_device) unless o.completed?
+          fixed += 1
+        end
+        render json: { synced: fixed }
+      end
+
+      # POST /orders/:id/reopen  pin? approver_pin?  SPEC reopen flow
+      def reopen
+        require_permission!("REOPEN_ORDER", "orders.refund")
+        order = Order.find(params[:id])
+        day_lock_guard!(order.business_day)
+        order = Orders::Transitions.reopen!(order, actor: current_membership, device: current_device)
+        audit!("update", record: order, after: { reopened: true, reopen_count: order.reopen_count })
+        render json: OrderSerializers.full(order.reload)
+      end
+
+      # POST /orders/:id/complete  SPEC COMPLETE_ORDER; unpaid completes only through Direct Unpaid Orders
+      def complete
+        require_permission!("COMPLETE_ORDER", "orders.create")
+        order = Order.includes(:items).find(params[:id])
+        raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.open? && order.sent?
+        allow_unpaid = current_business.setting("pos.order_behavior.direct_unpaid_orders") && (current_membership.staff_type == "admin" || current_membership.can?("PLACE_UNPAID_DIRECT"))
+        order = Orders::Transitions.close!(order, actor: current_membership, device: current_device, allow_unpaid: allow_unpaid)
+        render json: OrderSerializers.full(order.reload)
+      end
+
+      # GET /orders/:id/cost_analysis  SPEC Cost Analysis tab: revenue, COGS, profit and margin, itemised by ingredient
+      def cost_analysis
+        require_permission!("reports.view_all", "reports.view_branch", "finance.view", "ORDERS")
+        order = Order.includes(:items).find(params[:id])
+        entries = StockLedgerEntry.where(ref_table: "orders", ref_id: order.id, reversed_by_entry_id: nil, reverses_entry_id: nil).includes(stock_item: :base_unit)
+        ingredients = entries.map { |e| { item: e.stock_item.name, quantity: e.quantity.abs.to_s("F"), unit: e.stock_item.base_unit.code, cost_minor: (e.quantity.abs * e.unit_cost_minor.to_i).round, line_id: e.ref_line_id, kind: e.kind } }
+        cogs = ingredients.sum { |i| i[:cost_minor] }
+        cogs = order.active_items.sum { |i| i.recipe_cost_minor_snapshot.to_i } if cogs.zero?
+        labour = defined?(Overhead) && Overhead.respond_to?(:per_order_minor) ? Overhead.per_order_minor(current_branch, order.business_day) : 0
+        revenue = order.total_minor - order.tax_minor
+        profit = revenue - cogs - labour
+        render json: { order_id: order.id, revenue_minor: revenue, cogs_minor: cogs, labour_minor: labour, profit_minor: profit,
+                       margin_percent: revenue.positive? ? (profit * 100.0 / revenue).round(1) : nil, ingredients: ingredients,
+                       items: order.active_items.map { |i| { id: i.id, name: i.name_snapshot, quantity: i.quantity.to_s("F"), revenue_minor: i.line_total_minor, cost_minor: i.recipe_cost_minor_snapshot.to_i } } }
       end
 
       # GET /orders/summary?business_day=  totals for the day: paid, open, voided, counts by type and status
@@ -60,7 +160,13 @@ module Api
         builder = Orders::Builder.create!(attrs, lines: lines_param, actor: current_membership, device: current_device, branch: current_branch, approvals: approvals)
         order = builder.order
         audit!("create", record: order, after: { total_minor: order.total_minor, items: order.items.size })
-        Orders::Transitions.place!(order, actor: current_membership, device: current_device) if ActiveModel::Type::Boolean.new.cast(params[:place])
+        Orders::Transitions.place!(order, actor: current_membership, device: current_device) if ActiveModel::Type::Boolean.new.cast(params[:place]) || ActiveModel::Type::Boolean.new.cast(params[:complete])
+        if ActiveModel::Type::Boolean.new.cast(params[:complete])
+          # SPEC PLACE_AND_COMPLETE_ORDER
+          require_permission!("PLACE_AND_COMPLETE_ORDER", "orders.create")
+          allow_unpaid = current_business.setting("pos.order_behavior.direct_unpaid_orders") && (current_membership.staff_type == "admin" || current_membership.can?("PLACE_UNPAID_DIRECT"))
+          Orders::Transitions.close!(order.reload, actor: current_membership, device: current_device, allow_unpaid: allow_unpaid)
+        end
         render json: OrderSerializers.full(order.reload), status: :created
       end
 
@@ -69,9 +175,19 @@ module Api
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
         approvals = collect_approvals
+        require_order_update_pin!(order) if order.reopened?
+        before_items = Orders::Story.snapshot(order)
+        amount_before = order.total_minor
         builder = Orders::Builder.new(order, actor: current_membership, device: current_device, branch: current_branch)
         builder.update!(attrs: order_attrs.except(:id, :is_staff_meal, :staff_meal_reason), lines: lines_param, approvals: approvals)
         Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
+        if order.sent?
+          diff = Orders::Story.diff(before_items, Orders::Story.snapshot(order.reload))
+          unless Orders::Story.empty_diff?(diff) && amount_before == order.total_minor
+            order.increment!(:edit_count)
+            Orders::Story.record!(order, "edited", actor: current_membership, device: current_device, diff: diff, amount_before: amount_before, amount_after: order.total_minor)
+          end
+        end
         audit!("update", record: order, after: { total_minor: order.total_minor, added: builder.added.size, removed: builder.removed.size })
         render json: OrderSerializers.full(order.reload)
       end
@@ -154,6 +270,17 @@ module Api
       end
 
       private
+
+      # SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: a restriction that demands the order-update PIN (the user's own PIN, or a
+      # manager's PIN) before a reopened order is saved.
+      def require_order_update_pin!(order)
+        return unless current_membership.can?("REQUIRE_PIN_FOR_ORDER_UPDATE")
+        pin = params[:pin].to_s
+        return if pin.present? && current_membership.authenticate_pin(pin)
+        approver = Auth::PinApproval.find_approver(pin: params[:approver_pin], permission: "REOPEN_ORDER", exclude_membership: current_membership)
+        raise Api::Errors::Forbidden.new("pin.required", "The order-update PIN is required to save a reopened order") unless approver
+        audit!("approve", record: order, approved_by: approver.user, after: { reopened_order_update: true })
+      end
 
       # Lines arrive as nested parameters; the builder works on plain hashes.
       def lines_param
