@@ -202,7 +202,7 @@ for (const p of adminPages) {
   const g = await api(`/reports/grand_spec?from=${from}&to=${to}`, { token: T });
   const methodsSum = (g.j?.methods || []).reduce((a, m) => a + m.amount_minor, 0);
   const shareSum = (g.j?.methods || []).reduce((a, m) => a + m.share_percent, 0);
-  step("phase 7: Grand Report methods sum to the collected total and shares tie out", g.status === 200 && methodsSum === g.j.methods_total_minor && (g.j.sales_minor === 0 || Math.abs(shareSum - 100) < 1 || methodsSum !== g.j.sales_minor), JSON.stringify({ sales: g.j?.sales_minor, methodsSum, shareSum: Math.round(shareSum) }));
+  step("phase 7: Grand Report methods sum to the collected total and shares tie out", g.status === 200 && methodsSum === g.j.methods_total_minor && (methodsSum === 0 || Math.abs(shareSum - 100) < 1), JSON.stringify({ sales: g.j?.sales_minor, methodsSum, shareSum: Math.round(shareSum) }));
   const tier = await api("/regular_discount_tiers", { method: "POST", token: T, body: { name: `E2E tier ${Date.now()}`, within_days: 30, kind: "percent", value: 5 } });
   const batch = await api("/voucher_batches", { method: "POST", token: T, body: { name: `E2E voucher ${Date.now()}`, kind: "public", public_code: `E2E${Date.now().toString().slice(-6)}`, value_kind: "fixed", value: 50, usage_limit: 5 } });
   const review = await api("/reviews", { method: "POST", token: T, body: { rating: 5, comment: "E2E", source: "tablet" } });

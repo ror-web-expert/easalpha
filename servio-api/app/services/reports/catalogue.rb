@@ -9,14 +9,17 @@ module Reports
       paid = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded])
       payments = Payment.where(branch_id: branch.id, business_day: from..to, status: "captured")
       sales = paid.sum(:total_minor)
+      collected = payments.sum(:amount_minor)
+      # Shares are of the money collected in the period, so they always add up to 100 even when a paid order was later
+      # reopened or refunded (its payments stay on the books while the order leaves the paid set).
       methods = payments.group(:method_code).pluck(Arel.sql("method_code, count(*), sum(amount_minor)")).map do |code, c, amt|
-        { method: code, count: c, amount_minor: amt.to_i, share_percent: sales.zero? ? 0 : (amt.to_i * 100.0 / sales).round(1) }
+        { method: code, count: c, amount_minor: amt.to_i, share_percent: collected.zero? ? 0 : (amt.to_i * 100.0 / collected).round(1) }
       end.sort_by { |r| -r[:amount_minor] }
       unpaid = Order.where(branch_id: branch.id, business_day: from..to).where(status: %w[placed preparing ready served]).where("paid_minor < total_minor")
       unpaid_direct = Order.where(branch_id: branch.id, business_day: from..to, unpaid_direct: true)
       complimentary = Order.where(branch_id: branch.id, business_day: from..to, is_staff_meal: true)
       account_receipts = CustomerPayment.where(branch_id: branch.id, business_day: from..to, direction: "received")
-      { from: from, to: to, sales_minor: sales, orders: paid.count, methods: methods, methods_total_minor: methods.sum { |m| m[:amount_minor] },
+      { from: from, to: to, sales_minor: sales, orders: paid.count, methods: methods, methods_total_minor: collected, collected_minor: collected,
         unpaid: { count: unpaid.count + unpaid_direct.where.not(id: unpaid.select(:id)).count, amount_minor: unpaid_amount(unpaid) + unpaid_amount(unpaid_direct.where.not(id: unpaid.select(:id))),
                   share_percent: sales.zero? ? 0 : (unpaid_amount(unpaid) * 100.0 / sales).round(1) },
         complimentary: { count: complimentary.count, amount_minor: complimentary.sum(:subtotal_minor), share_percent: sales.zero? ? 0 : (complimentary.sum(:subtotal_minor) * 100.0 / sales).round(1) },
