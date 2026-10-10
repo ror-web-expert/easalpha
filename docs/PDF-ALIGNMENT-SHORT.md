@@ -40,6 +40,8 @@ Done on 10 Oct 2026: `01` to `08` now follow the PDF; old text in `archive/befor
 
 ## What to build, by PDF phase
 
+Status 11 Oct 2026: all seven phases were built and their gates passed; see `docs/BUILD-LOG.md` and `docs/PRODUCT-READY.md`.
+
 Only what is not built yet. Each phase ends with its PDF gate and the PDF test rule (per endpoint: happy path, permission denial, one edge case).
 
 | Phase | Build | Gate |
