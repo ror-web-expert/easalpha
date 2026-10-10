@@ -57,6 +57,35 @@ module Api
         head :no_content
       end
 
+      # GET /products/:id/consumables  SPEC Order Inventory tab
+      def consumables
+        product = Product.find(params[:id])
+        render json: { data: product.order_type_consumables.includes(:stock_item, :unit, :variant).order(:order_type).map { |c| MenuSerializers.consumable(c) } }
+      end
+
+      # PUT /products/:id/consumables  rows: [{variant_id, order_type, stock_item_id, quantity, unit_id}], copy_all_order_types
+      def set_consumables
+        product = Product.find(params[:id])
+        rows = Array(params[:rows]).map { |r| r.permit(:variant_id, :order_type, :stock_item_id, :quantity, :unit_id).to_h }
+        OrderTypeConsumable.replace!(product, rows, copy_all_order_types: ActiveModel::Type::Boolean.new.cast(params[:copy_all_order_types]))
+        audit!("update", record: product, after: { consumables: rows.size })
+        consumables
+      end
+
+      # GET /products/codes  SPEC Product Codes panel: every product with its SKU and PCT code
+      def codes
+        rows = Product.where(archived_at: nil).includes(:category).order(:name).map { |p| { id: p.id, name: p.name, category: p.category.name, sku: p.sku, pct_code: p.pct_code } }
+        render json: { data: rows }
+      end
+
+      # PUT /products/codes  rows: [{id, sku, pct_code}]
+      def set_codes
+        rows = Array(params.require(:rows))
+        Product.transaction { rows.each { |r| Product.find(r[:id]).update!(sku: r[:sku].presence, pct_code: r[:pct_code].presence) } }
+        audit!("bulk_update", table_name: "products", after: { codes_updated: rows.size })
+        codes
+      end
+
       def favourite
         product = Product.find(params[:id])
         product.update!(is_favourite: ActiveModel::Type::Boolean.new.cast(params[:value]))
@@ -67,7 +96,7 @@ module Api
 
       def product_params
         params.permit(:name, :name_ur, :description, :sku, :image_key, :base_price_minor, :tax_rate_id, :is_favourite, :show_online, :active,
-                      :sold_by_weight, :weight_unit, :station_id, allergens: [], dietary_tags: [])
+                      :sold_by_weight, :weight_unit, :station_id, :discount_value, :discount_type, :pct_code, allergens: [], dietary_tags: [])
       end
 
       # variants: [{id?, name, price_minor, sku}], prices: [{variant_id?, branch_id?, order_type, price_minor}], modifier_group_ids: [...]

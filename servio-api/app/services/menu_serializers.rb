@@ -15,7 +15,7 @@ module MenuSerializers
   end
 
   def category(c, product_count: nil)
-    { id: c.id, menu_id: c.menu_id, name: c.name, name_ur: c.name_ur, image_key: c.image_key, sort_order: c.sort_order,
+    { id: c.id, menu_id: c.menu_id, name: c.name, name_ur: c.name_ur, subtitle: c.subtitle, image_key: c.image_key, sort_order: c.sort_order,
       show_online: c.show_online, station_id: c.station_id, product_count: product_count, archived_at: c.archived_at }
   end
 
@@ -23,6 +23,7 @@ module MenuSerializers
     h = { id: p.id, category_id: p.category_id, name: p.name, name_ur: p.name_ur, description: p.description, sku: p.sku, image_key: p.image_key,
           base_price_minor: p.base_price_minor, tax_rate_id: p.tax_rate_id, is_favourite: p.is_favourite, show_online: p.show_online, active: p.active,
           sold_by_weight: p.sold_by_weight, weight_unit: p.weight_unit, allergens: p.allergens, dietary_tags: p.dietary_tags, station_id: p.station_id,
+          discount_value: p.discount_value.to_s, discount_type: p.discount_type, pct_code: p.pct_code,
           sort_order: p.sort_order, archived_at: p.archived_at, updated_at: p.updated_at }
     if full
       h[:variants] = p.variants.map { |v| variant(v) }
@@ -30,6 +31,16 @@ module MenuSerializers
       h[:modifier_group_ids] = p.product_modifier_groups.map(&:modifier_group_id)
     end
     h
+  end
+
+  def consumable(c)
+    { id: c.id, product_id: c.product_id, variant_id: c.variant_id, variant_name: c.variant&.name, order_type: c.order_type, stock_item_id: c.stock_item_id,
+      item_name: c.stock_item.name, quantity: c.quantity.to_s, unit_id: c.unit_id, unit_code: c.unit.code }
+  end
+
+  def quick_add_item(q)
+    { id: q.id, product_id: q.product_id, variant_id: q.variant_id, position: q.position, name: q.product.name, variant_name: q.variant&.name,
+      price_minor: q.variant&.price_minor.presence || q.product.base_price_minor, image_key: q.product.image_key, active: q.product.active && q.product.archived_at.nil? }
   end
 
   def variant(v)
@@ -42,7 +53,7 @@ module MenuSerializers
   end
 
   def deal(d)
-    { id: d.id, name: d.name, description: d.description, image_key: d.image_key, price_minor: d.price_minor, active: d.active, show_online: d.show_online,
+    { id: d.id, name: d.name, description: d.description, image_key: d.image_key, price_minor: d.price_minor, active: d.active, show_online: d.show_online, is_favourite: d.is_favourite,
       valid_from: d.valid_from, valid_to: d.valid_to, tax_rate_id: d.tax_rate_id, sort_order: d.sort_order,
       items: d.deal_items.map { |i| { id: i.id, product_id: i.product_id, variant_id: i.variant_id, quantity: i.quantity, choice_group: i.choice_group } } }
   end

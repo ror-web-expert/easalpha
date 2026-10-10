@@ -17,6 +17,14 @@ module Stock
       entries, missing = [], []
       StockLedgerEntry.transaction do
         items.each do |item|
+          # SPEC Order Inventory: consumables set per order type and variant on the product, charged with the sale.
+          if item.product_id && packaging
+            OrderTypeConsumable.for_line(product_id: item.product_id, variant_id: item.variant_id, order_type: order.order_type).each do |c|
+              r = Ledger.apply!(section: section_default, item: c.stock_item, kind: "packaging", quantity: -(c.base_quantity * item.quantity), actor: actor, ref: order, ref_line_id: item.id,
+                                business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot} consumables")
+              entries << r.entry
+            end
+          end
           moves = moves_for_item(item)
           if moves.nil?
             missing << item.name_snapshot

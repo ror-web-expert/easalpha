@@ -15,8 +15,9 @@ module Qr
       base = { business: { name: business.name, currency: business.currency, logo_key: business.respond_to?(:logo_key) ? business.logo_key : nil }, branch: { id: branch.id, name: branch.name, address: branch.address, phone: branch.phone },
                table: { id: table.id, code: table.code, name: table.name, seats: table.seats }, settings: cfg.slice("enabled", "cashier_accept", "call_waiter", "ask_bill", "running_bill", "guest_name", "welcome") }
       return base.merge(ordering: false, message: "Ordering is not available right now. Please ask a waiter.") unless cfg["enabled"]
-      menus = Menu.active.order(:sort_order).select { |m| m.available_at?(Time.current, zone: business.time_zone) }
-      categories = Category.active.where(menu_id: menus.map(&:id)).order(:sort_order)
+      # SPEC: a hidden menu or category keeps its products off the customer-facing site while staff can still sell them.
+      menus = Menu.active.where(show_online: true).order(:sort_order).select { |m| m.available_at?(Time.current, zone: business.time_zone) }
+      categories = Category.active.where(menu_id: menus.map(&:id), show_online: true).order(:sort_order)
       products = Product.live.where(category_id: categories.map(&:id)).includes(:variants, :product_prices, :product_modifier_groups, :tax_rate).order(:sort_order)
       base.merge(ordering: true,
                  categories: categories.map { |c| MenuSerializers.category(c) },

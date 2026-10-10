@@ -44,7 +44,7 @@ await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
-  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist"];
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -81,6 +81,22 @@ for (const p of adminPages) {
   await ctx.close();
 }
 
+
+// ---- Phase 2 gate (SPEC): the menu renders in the POS with a Quick Add item, a product discount and a favourited deal.
+{
+  const catBefore = await api("/catalog", { token: T });
+  const chai = catBefore.j.products.find((p) => /chai|tea|water|roti/i.test(p.name)) || catBefore.j.products[0];
+  const qa = await api("/quick_add_items", { method: "PUT", token: T, body: { items: [{ product_id: chai.id }] } });
+  step("phase 2: quick add item saved", qa.status === 200 && qa.j.data.length === 1, String(qa.status));
+  const disc = await api(`/products/${chai.id}`, { method: "PATCH", token: T, body: { discount_value: 10, discount_type: "percent", pct_code: "98.21.00" } });
+  step("phase 2: product discount and PCT code saved", disc.status === 200 && disc.j.pct_code === "98.21.00", JSON.stringify([disc.j?.discount_value, disc.j?.discount_type]));
+  const deal = catBefore.j.deals[0];
+  if (deal) { const fav = await api(`/deals/${deal.id}`, { method: "PATCH", token: T, body: { is_favourite: true } }); step("phase 2: deal favourited", fav.status === 200 && fav.j.is_favourite === true, String(fav.status)); }
+  const cat = await api("/catalog", { token: T });
+  step("phase 2: catalog carries quick add items", (cat.j.quick_add_items || []).length === 1, JSON.stringify(cat.j.quick_add_items?.map((q) => q.name)));
+  report.phase2 = { quickAddName: chai.name };
+}
+
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");
 await t.goto(WEB + "/pos/pair"); await t.waitForSelector("button", { timeout: 60000 });
 for (const d of till.j.pairing_code) await t.getByRole("button", { name: d, exact: true }).first().click();
@@ -94,6 +110,9 @@ step("till shows prices", /Rs\s?\d/.test(posText || ""), "");
 const burgers = t.getByRole("button", { name: /^Burgers$/ }); if (await burgers.count()) await burgers.first().click(); await t.waitForTimeout(600);
 const tiles = t.locator("button").filter({ hasText: /Rs\s?\d/ });
 const n = await tiles.count(); step("till product tiles", n > 0, `${n} tiles`);
+const tillText = await t.evaluate(() => document.body.innerText).catch(() => "");
+step("phase 2: till shows the quick add item", new RegExp(report.phase2.quickAddName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(tillText), report.phase2.quickAddName);
+await shot(t, "phase2-till-quick-add");
 if (n > 0) {
   await tiles.first().click(); await t.waitForTimeout(800);
   const add = t.getByRole("button", { name: /^Add/ }); if (await add.count()) await add.first().click();

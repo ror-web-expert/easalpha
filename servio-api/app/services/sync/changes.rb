@@ -16,6 +16,7 @@ module Sync
         modifier_groups: changed.call(ModifierGroup.all).includes(:modifiers).map { |g| MenuSerializers.modifier_group(g) },
         deals: changed.call(Deal.all).includes(:deal_items).map { |d| MenuSerializers.deal(d) },
         promotions: changed.call(Promotion.all).map { |p| MenuSerializers.promotion(p) },
+        quick_add_items: QuickAddItem.ordered.includes(:product, :variant).map { |q| MenuSerializers.quick_add_item(q) },
         tax_rates: changed.call(TaxRate.all).map { |t| MenuSerializers.tax_rate(t) },
         stations: changed.call(Station.where(branch_id: branch.id)).map { |s| MenuSerializers.station(s) },
         payment_methods: changed.call(PaymentMethod.all).map { |m| PaymentSerializers.payment_method(m) },

@@ -44,7 +44,7 @@ module Api
 
       private
 
-      def deal_params = params.permit(:name, :description, :image_key, :price_minor, :active, :show_online, :valid_from, :valid_to, :tax_rate_id, :sort_order)
+      def deal_params = params.permit(:name, :description, :image_key, :price_minor, :active, :show_online, :is_favourite, :valid_from, :valid_to, :tax_rate_id, :sort_order)
 
       def sync_items!(deal)
         return unless params[:items].is_a?(Array)

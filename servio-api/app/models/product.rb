@@ -1,6 +1,19 @@
 class Product < ApplicationRecord
   include Tenanted
   ORDER_TYPES = %w[dine_in takeaway delivery walk_in online].freeze
+  DISCOUNT_TYPES = %w[percent amount].freeze
+  has_many :order_type_consumables, dependent: :destroy
+  has_many :quick_add_items, dependent: :destroy
+  validates :discount_type, inclusion: { in: DISCOUNT_TYPES }
+  validates :discount_value, numericality: { greater_than_or_equal_to: 0 }
+  validates :discount_value, numericality: { less_than_or_equal_to: 100 }, if: -> { discount_type == "percent" }
+
+  # SPEC product discount: a % of the line, or Rs per unit, taken before order-level discounts.
+  def discount_minor_for(line_subtotal_minor, quantity)
+    return 0 if discount_value.to_d <= 0
+    amount = discount_type == "percent" ? (line_subtotal_minor * discount_value / 100) : (discount_value * 100 * quantity)
+    [amount.round, line_subtotal_minor].min
+  end
   belongs_to :category
   belongs_to :tax_rate, optional: true
   has_many :variants, -> { where(archived_at: nil).order(:sort_order) }, class_name: "ProductVariant", dependent: :destroy

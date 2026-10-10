@@ -9,7 +9,8 @@ module Orders
       items.each do |i|
         i.modifiers_minor = i.modifiers.sum { |m| (m.price_minor_snapshot * m.quantity).round }
         i.line_subtotal_minor = ((i.unit_price_minor + i.modifiers_minor) * i.quantity).round
-        i.line_discount_minor = 0
+        # SPEC: the discount set on the product itself (% or Rs) comes off first.
+        i.line_discount_minor = i.product && !i.price_overridden ? i.product.discount_minor_for(i.line_subtotal_minor, i.quantity) : 0
       end
       subtotal = items.sum(&:line_subtotal_minor)
 

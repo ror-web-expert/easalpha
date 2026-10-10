@@ -899,3 +899,18 @@ Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1
 | GET | /api/v1/audit_logs/insights?from&to | counts by action, entity, actor and day |
 
 The access token now carries `perms`, the effective permission codes at sign-in.
+
+## Phase 2 additions (10 Oct 2026, SPEC "Menu and catalog")
+
+| Method | Path | Action |
+|---|---|---|
+| POST | /api/v1/uploads | image upload (PNG, JPG, WEBP, max 5 MB) → key used as image_key |
+| GET | /api/v1/uploads/:id | public image by signed id |
+| GET, PUT | /api/v1/products/:id/consumables | Order Inventory: consumables per order type and variant; copy_all_order_types |
+| GET, PUT | /api/v1/products/codes | Product Codes panel: SKU and PCT code in bulk |
+| GET, PUT | /api/v1/quick_add_items | Quick Add Menu; also in /catalog and /sync/changes |
+| PATCH | /api/v1/products/:id | adds discount_value, discount_type (percent, amount), pct_code |
+| PATCH | /api/v1/categories/:id | adds subtitle |
+| PATCH | /api/v1/deals/:id | adds is_favourite |
+| GET | /api/v1/qr/:token | hidden menus and categories are left out |
+| GET | /api/v1/settings | adds the Display Settings keys catalog.display.* |

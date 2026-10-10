@@ -5,3 +5,7 @@
 scripts/node_modules
 scripts/shots
 scripts/report.json
+servio-desktop/node_modules
+servio-desktop/dist
+servio-desktop/out
+servio-desktop/*.log

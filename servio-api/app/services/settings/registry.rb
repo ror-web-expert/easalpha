@@ -37,6 +37,10 @@ module Settings
       ["pos.receipt.footer_qr_url", "point_of_sale", "Receipt Branding", "string", nil, "QR code in the footer: a review link or menu URL"],
       ["pos.receipt.paper", "point_of_sale", "Receipt Branding", "string", "80", "Thermal paper width, 58 or 80 mm"],
       ["pos.receipt.language", "point_of_sale", "Receipt Branding", "string", "en", "Receipt language"],
+      ["catalog.display.images", "point_of_sale", "Display Settings", "boolean", true, "Show product images on POS tiles and the catalog"],
+      ["catalog.display.columns", "point_of_sale", "Display Settings", "integer", 4, "Tiles per row on the POS"],
+      ["catalog.display.show_prices", "point_of_sale", "Display Settings", "boolean", true, "Show prices on POS tiles"],
+      ["catalog.display.show_inactive", "point_of_sale", "Display Settings", "boolean", false, "Show inactive products in the admin catalog"],
       ["pos.print_server.ip", "point_of_sale", "Print Server", "string", nil, "IP address of the desktop computer every order-taker tablet prints through"],
       ["pos.print_server.port", "point_of_sale", "Print Server", "integer", 9100, "Print server port"],
 

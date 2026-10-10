@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -37,6 +37,34 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
     t.index ["business_id"], name: "index_account_entries_on_business_id"
     t.index ["payment_account_id"], name: "index_account_entries_on_payment_account_id"
     t.check_constraint "kind::text = ANY (ARRAY['order_payment'::character varying, 'refund'::character varying, 'expense'::character varying, 'supplier_payment'::character varying, 'customer_payment'::character varying, 'customer_refund'::character varying, 'transfer_in'::character varying, 'transfer_out'::character varying, 'deposit'::character varying, 'withdrawal'::character varying, 'adjustment'::character varying, 'rider_float'::character varying, 'opening'::character varying, 'closing'::character varying]::text[])", name: "account_entries_kind_check"
+  end
+
+  create_table "active_storage_attachments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "name", null: false
+    t.string "record_type", null: false
+    t.uuid "record_id", null: false
+    t.uuid "blob_id", null: false
+    t.datetime "created_at", null: false
+    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
+    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
+  end
+
+  create_table "active_storage_blobs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "key", null: false
+    t.string "filename", null: false
+    t.string "content_type"
+    t.text "metadata"
+    t.string "service_name", null: false
+    t.bigint "byte_size", null: false
+    t.string "checksum"
+    t.datetime "created_at", null: false
+    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true
+  end
+
+  create_table "active_storage_variant_records", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "blob_id", null: false
+    t.string "variation_digest", null: false
+    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
   end
 
   create_table "advances", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -245,6 +273,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "subtitle"
     t.index ["business_id"], name: "index_categories_on_business_id"
     t.index ["menu_id", "sort_order"], name: "index_categories_on_menu_id_and_sort_order"
     t.index ["menu_id"], name: "index_categories_on_menu_id"
@@ -432,6 +461,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "is_favourite", default: false, null: false
     t.index ["business_id"], name: "index_deals_on_business_id"
     t.index ["tax_rate_id"], name: "index_deals_on_tax_rate_id"
   end
@@ -1035,6 +1065,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
     t.index ["order_id"], name: "index_order_status_events_on_order_id"
   end
 
+  create_table "order_type_consumables", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "product_id", null: false
+    t.uuid "variant_id"
+    t.string "order_type", null: false
+    t.uuid "stock_item_id", null: false
+    t.decimal "quantity", precision: 14, scale: 3, default: "1.0", null: false
+    t.uuid "unit_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_order_type_consumables_on_business_id"
+    t.index ["product_id", "variant_id", "order_type", "stock_item_id"], name: "index_consumables_unique", unique: true, nulls_not_distinct: true
+    t.index ["product_id"], name: "index_order_type_consumables_on_product_id"
+    t.index ["stock_item_id"], name: "index_order_type_consumables_on_stock_item_id"
+  end
+
   create_table "orders", id: :uuid, default: nil, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "branch_id", null: false
@@ -1379,11 +1425,15 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "discount_value", precision: 12, scale: 2, default: "0.0", null: false
+    t.string "discount_type", default: "percent", null: false
+    t.string "pct_code"
     t.index ["business_id", "sku"], name: "index_products_on_business_id_and_sku", unique: true, where: "((sku IS NOT NULL) AND (archived_at IS NULL))"
     t.index ["business_id"], name: "index_products_on_business_id"
     t.index ["category_id", "sort_order"], name: "index_products_on_category_id_and_sort_order"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["tax_rate_id"], name: "index_products_on_tax_rate_id"
+    t.check_constraint "discount_type::text = ANY (ARRAY['percent'::character varying, 'amount'::character varying]::text[])", name: "products_discount_type_check"
   end
 
   create_table "promotions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1494,6 +1544,18 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
     t.index ["stock_section_id"], name: "index_purchase_returns_on_stock_section_id"
     t.index ["supplier_id"], name: "index_purchase_returns_on_supplier_id"
     t.check_constraint "settlement::text = ANY (ARRAY['credit_note'::character varying, 'cash_refund'::character varying]::text[])", name: "purchase_returns_settlement_check"
+  end
+
+  create_table "quick_add_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "product_id", null: false
+    t.uuid "variant_id"
+    t.integer "position", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "product_id", "variant_id"], name: "idx_on_business_id_product_id_variant_id_eef9e3fd26", unique: true, nulls_not_distinct: true
+    t.index ["business_id"], name: "index_quick_add_items_on_business_id"
+    t.index ["product_id"], name: "index_quick_add_items_on_product_id"
   end
 
   create_table "receipt_events", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2406,6 +2468,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
 
   add_foreign_key "account_entries", "businesses"
   add_foreign_key "account_entries", "payment_accounts"
+  add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "advances", "businesses"
   add_foreign_key "advances", "employees"
   add_foreign_key "aggregator_events", "branches"
@@ -2516,6 +2580,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_status_events", "businesses"
   add_foreign_key "order_status_events", "orders"
+  add_foreign_key "order_type_consumables", "businesses"
+  add_foreign_key "order_type_consumables", "products"
+  add_foreign_key "order_type_consumables", "stock_items"
   add_foreign_key "orders", "branches"
   add_foreign_key "orders", "businesses"
   add_foreign_key "orders", "customer_addresses", column: "address_id"
@@ -2576,6 +2643,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_000004) do
   add_foreign_key "purchase_returns", "stock_documents"
   add_foreign_key "purchase_returns", "stock_sections"
   add_foreign_key "purchase_returns", "suppliers"
+  add_foreign_key "quick_add_items", "businesses"
+  add_foreign_key "quick_add_items", "products"
   add_foreign_key "receipt_events", "businesses"
   add_foreign_key "receipt_events", "orders"
   add_foreign_key "recipe_lines", "businesses"

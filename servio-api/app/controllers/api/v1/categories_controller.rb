@@ -41,7 +41,7 @@ module Api
 
       private
 
-      def category_params = params.permit(:name, :name_ur, :image_key, :show_online, :station_id, :sort_order)
+      def category_params = params.permit(:name, :name_ur, :subtitle, :image_key, :show_online, :station_id, :sort_order)
     end
   end
 end

@@ -59,12 +59,22 @@ Rails.application.routes.draw do
       resources :categories, only: %i[index create update destroy] do
         collection { post :reorder }
       end
+      get "products/codes", to: "products#codes"
+      put "products/codes", to: "products#set_codes"
       resources :products, only: %i[index show create update destroy] do
+        member do
+          get :consumables
+          put :consumables, action: :set_consumables
+        end
         collection { post :reorder }
         member { post :favourite }
       end
       resources :modifier_groups, only: %i[index show create update destroy]
       resources :deals, only: %i[index show create update destroy]
+      get "quick_add_items", to: "quick_add_items#index"
+      put "quick_add_items", to: "quick_add_items#replace"
+      post "uploads", to: "uploads#create"
+      get "uploads/:id", to: "uploads#show", as: :upload
       resources :promotions, only: %i[index show create update destroy] do
         collection { get :check }
       end

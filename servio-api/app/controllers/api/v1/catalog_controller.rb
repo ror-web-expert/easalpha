@@ -22,6 +22,7 @@ module Api
           modifier_groups: ModifierGroup.active.includes(:modifiers).map { |g| MenuSerializers.modifier_group(g) },
           deals: Deal.active.includes(:deal_items).map { |d| MenuSerializers.deal(d) },
           promotions: Promotion.active.map { |p| MenuSerializers.promotion(p) },
+          quick_add_items: QuickAddItem.ordered.includes(:product, :variant).map { |q| MenuSerializers.quick_add_item(q) },
           since: since
         }
       end
