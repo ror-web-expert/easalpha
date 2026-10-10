@@ -86,12 +86,6 @@ module Api
         scope = scope.where("note ILIKE :q OR paid_to ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
         scope
       end
-
-      def range
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
-        from..to
-      end
     end
   end
 end

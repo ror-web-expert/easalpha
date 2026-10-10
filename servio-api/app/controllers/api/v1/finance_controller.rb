@@ -50,12 +50,6 @@ module Api
       private
 
       def day_param = params[:business_day].present? ? Date.parse(params[:business_day]) : current_branch.business_day_for(Time.current)
-
-      def range
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
-        from..to
-      end
     end
   end
 end

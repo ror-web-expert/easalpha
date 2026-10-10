@@ -115,6 +115,15 @@ module Api
       def current_device = @device
       def current_shift = @membership && Shift.open.find_by(cashier_membership_id: @membership.id)
 
+      # from..to from the query, defaulting to the current month (shared by the money and report controllers).
+      def range
+        from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month
+        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from..to
+      rescue Date::Error
+        raise Api::Errors::BadRequest.new("report.range", "Dates must be YYYY-MM-DD")
+      end
+
       def day_lock_guard!(day)
         raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if day && DayClose.locked?(current_branch.id, day)
       end
