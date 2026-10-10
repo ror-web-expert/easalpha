@@ -22,7 +22,7 @@ module Payments
                                       business_day: day, ref: cp, description: "#{direction == 'received' ? 'Khata payment from' : 'Paid to'} #{customer.name}", by: actor, shift_id: shift&.id, branch_id: branch.id)
         AuditLog.record(action: "create", record: cp, after: { customer: customer.name, amount_minor: amount_minor, direction: direction, method: method.code })
       end
-      if direction == "received" && customer.phone.present? && customer.business.setting("whatsapp_balance_message", true)
+      if direction == "received" && customer.phone.present? && customer.business.setting("whatsapp_balance_message", true) && Whatsapp::Account.auto_send_on_payment?(customer.business)
         Whatsapp::Sender.deliver(phone: customer.phone, template: "khata_payment_received", customer_id: customer.id,
                                  variables: { customer_name: customer.name, amount: amount_minor / 100, new_balance: customer.balance_minor / 100, business_name: customer.business.name })
       end

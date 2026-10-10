@@ -118,6 +118,39 @@ Rails.application.routes.draw do
       get "day_end_settlements", to: "shifts#day_end_settlements"
       post "day_end_settlements", to: "shifts#day_end_settle"
       get "reports/cashier_till", to: "reports#cashier_till"
+      %w[grand_spec sales sales_calendar operations vouchers loyalty_points regular_discounts ai_pricing ai_stock_forecast].each { |r| get "reports/#{r}", to: "reports##{r}" }
+      # SPEC Phase 7: regular discounts, vouchers, loyalty redemption options, reviews, website config, storefront
+      get "regular_discount_tiers", to: "marketing#tiers"
+      post "regular_discount_tiers", to: "marketing#create_tier"
+      patch "regular_discount_tiers/:id", to: "marketing#update_tier"
+      delete "regular_discount_tiers/:id", to: "marketing#destroy_tier"
+      get "voucher_batches", to: "marketing#batches"
+      post "voucher_batches", to: "marketing#create_batch"
+      get "voucher_batches/:id", to: "marketing#batch"
+      patch "voucher_batches/:id", to: "marketing#update_batch"
+      delete "voucher_batches/:id", to: "marketing#destroy_batch"
+      post "voucher_batches/:id/issue", to: "marketing#issue"
+      get "vouchers", to: "marketing#vouchers"
+      get "loyalty/redemption_options", to: "marketing#redemption_options"
+      post "loyalty/redemption_options", to: "marketing#create_option"
+      patch "loyalty/redemption_options/:id", to: "marketing#update_option"
+      delete "loyalty/redemption_options/:id", to: "marketing#destroy_option"
+      post "orders/:id/redeem_option", to: "marketing#redeem_option"
+      resources :reviews, only: %i[index create destroy] do
+        collection { get :summary }
+        member { patch :rate }
+      end
+      get "website_config", to: "website_config#show"
+      patch "website_config", to: "website_config#update"
+      get "public/storefront/:slug", to: "storefront#show"
+      post "public/storefront/:slug/reviews", to: "storefront#create_review"
+      get "customer_payments", to: "customer_payments#all"
+      post "whatsapp/templates", to: "whatsapp#create_template"
+      patch "whatsapp/templates/:id", to: "whatsapp#update_template"
+      delete "whatsapp/templates/:id", to: "whatsapp#destroy_template"
+      get "whatsapp/variables", to: "whatsapp#variables"
+      post "whatsapp/send", to: "whatsapp#send_one"
+      post "whatsapp/bulk", to: "whatsapp#bulk"
       get "reports/riders", to: "reports#riders"
       resources :shifts, only: %i[index show create] do
         collection { get :current }
@@ -165,11 +198,13 @@ Rails.application.routes.draw do
       resources :customers, only: %i[index show create update destroy] do
         collection do
           get :lookup
+          get :insights
           post :import
         end
         member do
           get :orders
           post :approve
+          post :send_statement
           get :payments, to: "customer_payments#index"
           post :payments, to: "customer_payments#create"
           post :addresses, action: :add_address

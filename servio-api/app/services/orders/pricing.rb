@@ -60,7 +60,7 @@ module Orders
     def discount_amount(d, base)
       case d.kind
       when "percent", "promotion" then (base * d.value / 100).round
-      when "fixed", "loyalty" then (d.value * 100).round
+      when "fixed", "loyalty", "voucher", "regular" then (d.value * 100).round
       else 0
       end
     end

@@ -30,12 +30,30 @@ module Api
       def shifts = render(json: { from: @from, to: @to, data: report.shifts })
       # SPEC Cashier Till and Delivery Riders reports
       def cashier_till = render(json: Reports::CashierTill.run(branch: current_branch, from: @from, to: @to))
+      # SPEC report catalogue (Phase 7)
+      def grand_spec = render(json: Reports::Catalogue.grand(branch: current_branch, from: @from, to: @to))
+      def sales = render(json: Reports::Catalogue.sales_detail(branch: current_branch, from: @from, to: @to, cursor: params[:cursor], limit: params[:limit], order_type: params[:order_type], source: params[:source]).merge(from: @from, to: @to))
+      def sales_calendar = render(json: Reports::Catalogue.calendar(branch: current_branch, month: params[:month].present? ? Date.parse("#{params[:month]}-01") : Date.current.beginning_of_month))
+      def operations = render(json: Reports::Catalogue.operations(branch: current_branch, from: @from, to: @to))
+      def vouchers = render(json: Marketing::Vouchers.report(branch: current_branch, from: @from, to: @to))
+      def loyalty_points = render(json: Reports::Catalogue.loyalty_points(branch: current_branch, from: @from, to: @to))
+      def regular_discounts = render(json: Marketing::RegularDiscounts.report(branch: current_branch, from: @from, to: @to))
+      def ai_pricing
+        i = Ai::Insights.latest("pricing", branch: current_branch)
+        i = Ai::Insights.pricing!(branch: current_branch) if i.nil? || params[:refresh] == "true"
+        render json: MarketingSerializers.insight(i)
+      end
+      def ai_stock_forecast
+        i = Ai::Insights.latest("stock_forecast", branch: current_branch)
+        i = Ai::Insights.stock_forecast!(branch: current_branch) if i.nil? || params[:refresh] == "true"
+        render json: MarketingSerializers.insight(i)
+      end
       def riders = render(json: Reports::Riders.run(branch: current_branch, from: @from, to: @to))
 
       # One payload for the printed daily or monthly report.
       def grand
         r = report
-        render json: { from: @from, to: @to, overview: r.overview, by_day: r.by_day, items: r.items(limit: 20), categories: r.categories, cashiers: r.cashiers, voids: r.voids.except(:rows), discounts: r.discounts.except(:rows), shifts: r.shifts }
+        render json: { from: @from, to: @to, spec: Reports::Catalogue.grand(branch: current_branch, from: @from, to: @to), overview: r.overview, by_day: r.by_day, items: r.items(limit: 20), categories: r.categories, cashiers: r.cashiers, voids: r.voids.except(:rows), discounts: r.discounts.except(:rows), shifts: r.shifts }
       end
 
       private

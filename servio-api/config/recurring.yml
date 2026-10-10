@@ -1,4 +1,8 @@
 production:
+  ai_insights:
+    class: AiInsightsJob
+    queue: default
+    schedule: every day at 05:00 Asia/Karachi
   attendance_auto_close:
     class: AttendanceAutoCloseJob
     queue: default

@@ -14,6 +14,18 @@ module Settings
     ROWS = [
       ["store.secondary_phone", "store", "Store Profile", "string", nil, "Secondary phone printed on the receipt"],
       ["store.linked_stores", "store", "Store Management", "json", [], "Other store accounts managed from this dashboard"],
+      ["whatsapp.account.master_enabled", "store", "WhatsApp", "boolean", true, "Master toggle: off disables every WhatsApp send button everywhere"],
+      ["whatsapp.account.auto_send_on_payment", "store", "WhatsApp", "boolean", true, "Send the account statement automatically when a customer pays on account"],
+      ["whatsapp.account.receipt_image", "store", "WhatsApp", "boolean", false, "Attach the receipt as an image"],
+      ["whatsapp.account.store_logo", "store", "WhatsApp", "boolean", true, "Print the store logo on images"],
+      ["notifications.low_stock", "store", "Notifications", "boolean", true, "Notify when an item falls below its minimum"],
+      ["notifications.cash_short", "store", "Notifications", "boolean", true, "Notify the owner when a shift closes short"],
+      ["notifications.big_void", "store", "Notifications", "boolean", true, "Notify the owner of large voids"],
+      ["notifications.daily_summary", "store", "Notifications", "boolean", true, "Send the daily summary at close"],
+      ["notifications.new_online_order", "store", "Notifications", "boolean", true, "Alert the POS when a website or app order arrives"],
+      ["notifications.pending_customers", "store", "Notifications", "boolean", true, "Badge for online sign-ups waiting for approval"],
+      ["marketing.regular_discounts.enabled", "store", "Regular Discounts", "boolean", true, "Apply recency tier discounts automatically at the till"],
+      ["marketing.regular_discounts.blocked_customer_ids", "store", "Regular Discounts", "json", [], "Customers who never receive a regular discount"],
 
       ["pos.order_taker.print_through_desktop", "point_of_sale", "Order Taker", "boolean", true, "Tablets print through the desktop print server"],
       ["pos.customer_required.walk_in", "point_of_sale", "Customer Required", "boolean", false, "A customer must be selected on walk-in orders"],

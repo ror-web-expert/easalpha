@@ -242,11 +242,16 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
-      # POST /orders/:id/discounts  kind (percent|fixed|promotion), value, reason, order_item_id?, coupon_code?, approver_pin?
+      # POST /orders/:id/discounts  kind (percent|fixed|promotion), value, reason, order_item_id?, coupon_code?, voucher_code?, approver_pin?
       def add_discount
         require_permission!("orders.create", "discounts.apply")
         order = Order.includes(items: :modifiers).find(params[:id])
         raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+        if params[:voucher_code].present?
+          # SPEC: a voucher's value was fixed when the batch was created, so it never counts against the cashier's limit.
+          Marketing::Vouchers.redeem!(order, code: params[:voucher_code], actor: current_membership)
+          return render json: OrderSerializers.full(order.reload)
+        end
         kind, value, promotion = params[:kind].to_s, params[:value].to_d, nil
         if params[:coupon_code].present?
           promotion = Promotion.active.find_by(coupon_code: params[:coupon_code].to_s.strip.upcase)
@@ -275,6 +280,7 @@ module Api
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
         d = order.discounts.find(params[:discount_id])
+        Marketing::Vouchers.release!(d) if d.kind == "voucher"
         d.destroy!
         Orders::Pricing.recalculate!(order.reload)
         Orders::Pricing.save_all!(order)

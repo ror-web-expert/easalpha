@@ -43,6 +43,30 @@ module Loyalty
     order
   end
 
+  # SPEC: redemption options convert points back. A fixed amount, a percent of the bill, or a free item (its price).
+  def redeem_option!(order, option:, actor:)
+    raise Api::Errors::Conflict.new("loyalty.option_inactive", "#{option.name} is switched off") unless option.active && option.archived_at.nil?
+    value_minor = case option.kind
+                  when "fixed" then (option.value * 100).round
+                  when "percent" then (order.subtotal_minor * option.value / 100).round
+                  when "free_item"
+                    line = order.items.reject(&:cancelled?).find { |i| i.product_id == option.product_id }
+                    raise Api::Errors::Conflict.new("loyalty.item_missing", "Add #{option.product&.name} to the order first") unless line
+                    line.unit_price_minor
+                  end
+    customer = order.customer_id && Customer.find_by(id: order.customer_id)
+    raise Api::Errors::Conflict.new("loyalty.no_customer", "Attach a customer to redeem points") if customer.nil? || customer.is_walk_in
+    raise Api::Errors::Conflict.new("loyalty.insufficient", "#{customer.name} has #{customer.loyalty_points} points; #{option.name} needs #{option.points}") if customer.loyalty_points < option.points
+    raise Api::Errors::Conflict.new("loyalty.already", "Points were already redeemed on this order") if order.discounts.where(kind: "loyalty").exists?
+    Order.transaction do
+      order.discounts.create!(kind: "loyalty", value: BigDecimal(value_minor.to_s) / 100, reason: "#{option.points} points: #{option.name}", applied_by_membership_id: actor&.id)
+      Orders::Pricing.recalculate!(order.reload)
+      Orders::Pricing.save_all!(order)
+      post!(customer, points: -option.points, kind: "redeem", order: order, note: "#{option.name} on #{order.label}", by: actor)
+    end
+    order
+  end
+
   def refund_on_void!(order)
     redeemed = LoyaltyTransaction.where(order_id: order.id, kind: "redeem").sum(:points)
     return if redeemed.zero? || LoyaltyTransaction.where(order_id: order.id, kind: "refund").exists?

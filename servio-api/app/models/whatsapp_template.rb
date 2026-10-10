@@ -31,5 +31,6 @@ class WhatsappTemplate < ApplicationRecord
     DEFAULTS.each do |name, lang, cat, body, vars|
       find_or_initialize_by(business_id: nil, name: name, language: lang).update!(category: cat, body: body, variables: vars, approval_status: "approved")
     end
+    Whatsapp::Account.seed_account_templates! # SPEC account statements and receipts
   end
 end

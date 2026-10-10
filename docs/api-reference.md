@@ -993,3 +993,18 @@ Permissions: PURCHASE_ORDERS, PO_CREATE, PO_EDIT, PO_DELETE, PO_RECEIVE, PO_RETU
 | POST | /api/v1/devices { kind: "rider" } | a rider's phone as a device; PIN login issues a rider token |
 
 Permissions: RIDERS, RIDER_VIEW, RIDER_CREATE, RIDER_EDIT, RIDER_DELETE, DUMMY_RIDER_VIEW, DUMMY_RIDER_CREATE, DUMMY_RIDER_EDIT, DUMMY_RIDER_DELETE; MY_TILL; PAYROLL.
+
+## Phase 7 additions (11 Oct 2026, SPEC "Customers, credit, loyalty and feedback", "Settings and multi-outlet", report catalogue)
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/reports/grand_spec, /sales, /sales_calendar?month, /operations, /vouchers, /loyalty_points, /regular_discounts, /ai_pricing, /ai_stock_forecast (?refresh=true) | the SPEC report catalogue; /reports/grand carries `spec` too |
+| GET, POST, PATCH, DELETE | /api/v1/regular_discount_tiers | recency tiers; settings marketing.regular_discounts.enabled and .blocked_customer_ids |
+| GET, POST, PATCH, DELETE | /api/v1/voucher_batches; POST /:id/issue; GET /vouchers | batches, personal codes, redemptions |
+| POST | /api/v1/orders/:id/discounts { voucher_code } | redeem a voucher (no cashier limit) |
+| GET, POST, PATCH, DELETE | /api/v1/loyalty/redemption_options; POST /orders/:id/redeem_option | redemption options |
+| GET, POST, PATCH /:id/rate, DELETE | /api/v1/reviews (+ /summary) | reviews with filters rating, source, order_type, pending |
+| GET, POST, PATCH, DELETE | /api/v1/whatsapp/templates; GET /whatsapp/variables; POST /whatsapp/send; POST /whatsapp/bulk | account notifications |
+| GET | /api/v1/customers/insights?sort=; GET /customer_payments; POST /customers/:id/send_statement | customer screens |
+| GET, PATCH | /api/v1/website_config | the builder sections, slug, published |
+| GET | /api/v1/public/storefront/:slug; POST .../reviews | the public storefront |

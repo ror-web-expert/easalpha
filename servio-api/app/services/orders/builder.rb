@@ -24,6 +24,8 @@ module Orders
         order.save!
         builder.apply_lines!(lines)
         Pricing.recalculate!(order)
+        Marketing::RegularDiscounts.apply!(order) # SPEC: the till applies the best recency tier automatically
+        Pricing.recalculate!(order)
         Pricing.save_all!(order)
         OrderStatusEvent.create!(order: order, from_status: nil, to_status: order.status, membership_id: actor&.id, device_id: device&.id, occurred_at: Time.current)
         builder.assign_table!(order.table_id) if order.table_id
@@ -70,6 +72,8 @@ module Orders
         validate_customer! if order.customer_id_changed?
         apply_lines!(lines, amend: true) if lines
         reprice_lines! if attrs.key?(:order_type)
+        Pricing.recalculate!(order)
+        Marketing::RegularDiscounts.apply!(order) if order.customer_id_changed? || lines || attrs.key?(:order_type)
         Pricing.recalculate!(order)
         Pricing.save_all!(order)
         assign_table!(order.table_id) if order.table_id_changed? && order.table_id

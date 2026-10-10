@@ -4,7 +4,7 @@ class AttendanceAutoCloseJob < ApplicationJob
   queue_as :default
 
   def perform
-    Tenancy.unscoped do
+    Tenancy::Context.unscoped do
       Business.find_each do |biz|
         Tenancy::Context.with(biz) do
           Branch.active.find_each do |branch|

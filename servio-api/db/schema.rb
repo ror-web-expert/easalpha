@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_11_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -107,6 +107,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["business_id"], name: "index_aggregator_events_on_business_id"
   end
 
+  create_table "ai_insights", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.string "kind", null: false
+    t.date "from_date"
+    t.date "to_date"
+    t.jsonb "payload", default: {}, null: false
+    t.string "engine", default: "rules", null: false
+    t.datetime "generated_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "kind", "generated_at"], name: "index_ai_insights_on_business_id_and_kind_and_generated_at"
+    t.index ["business_id"], name: "index_ai_insights_on_business_id"
+    t.check_constraint "kind::text = ANY (ARRAY['pricing'::character varying, 'stock_forecast'::character varying]::text[])", name: "ai_insights_kind_check"
+  end
+
   create_table "attendance_rules", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "employee_id"
@@ -141,7 +157,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["business_id", "employee_id"], name: "idx_attendance_rules_unique", unique: true, where: "(employee_id IS NOT NULL)"
     t.index ["business_id"], name: "index_attendance_rules_on_business_id"
     t.index ["employee_id"], name: "index_attendance_rules_on_employee_id"
-    t.check_constraint "(late_penalty::text = ANY (ARRAY['fine_only'::character varying, 'lose_day'::character varying, 'both'::character varying, 'none'::character varying]::text[])) AND (half_day_penalty::text = ANY (ARRAY['fine_only'::character varying, 'lose_day'::character varying, 'both'::character varying, 'none'::character varying]::text[])) AND (absent_penalty::text = ANY (ARRAY['fine_only'::character varying, 'lose_day'::character varying, 'both'::character varying, 'none'::character varying]::text[]))", name: "attendance_rules_penalty_check"
+    t.check_constraint "(late_penalty::text = ANY (ARRAY['fine_only'::character varying::text, 'lose_day'::character varying::text, 'both'::character varying::text, 'none'::character varying::text])) AND (half_day_penalty::text = ANY (ARRAY['fine_only'::character varying::text, 'lose_day'::character varying::text, 'both'::character varying::text, 'none'::character varying::text])) AND (absent_penalty::text = ANY (ARRAY['fine_only'::character varying::text, 'lose_day'::character varying::text, 'both'::character varying::text, 'none'::character varying::text]))", name: "attendance_rules_penalty_check"
     t.check_constraint "absent_rule::text = ANY (ARRAY['calendar_days'::character varying::text, 'fixed_26'::character varying::text])", name: "attendance_rules_absent_check"
   end
 
@@ -160,7 +176,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["business_id", "scanned_at"], name: "index_attendance_scans_on_business_id_and_scanned_at"
     t.index ["business_id"], name: "index_attendance_scans_on_business_id"
     t.index ["employee_id"], name: "index_attendance_scans_on_employee_id"
-    t.check_constraint "result::text = ANY (ARRAY['check_in'::character varying, 'check_out'::character varying, 'already_marked'::character varying, 'rejected'::character varying, 'unknown'::character varying, 'manual_out'::character varying, 'auto_close'::character varying]::text[])", name: "attendance_scans_result_check"
+    t.check_constraint "result::text = ANY (ARRAY['check_in'::character varying::text, 'check_out'::character varying::text, 'already_marked'::character varying::text, 'rejected'::character varying::text, 'unknown'::character varying::text, 'manual_out'::character varying::text, 'auto_close'::character varying::text])", name: "attendance_scans_result_check"
   end
 
   create_table "attendances", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -189,7 +205,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["employee_id", "business_day"], name: "index_attendances_on_employee_id_and_business_day", unique: true
     t.index ["employee_id"], name: "index_attendances_on_employee_id"
     t.check_constraint "source::text = ANY (ARRAY['fingerprint'::character varying::text, 'selfie'::character varying::text, 'manual'::character varying::text, 'pin'::character varying::text])", name: "attendances_source_check"
-    t.check_constraint "status::text = ANY (ARRAY['present'::character varying, 'late'::character varying, 'half_day'::character varying, 'absent'::character varying, 'leave'::character varying, 'holiday'::character varying, 'weekly_off'::character varying]::text[])", name: "attendances_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['present'::character varying::text, 'late'::character varying::text, 'half_day'::character varying::text, 'absent'::character varying::text, 'leave'::character varying::text, 'holiday'::character varying::text, 'weekly_off'::character varying::text])", name: "attendances_status_check"
   end
 
   create_table "audit_logs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -629,7 +645,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["business_id", "branch_id", "code"], name: "index_devices_on_business_id_and_branch_id_and_code", unique: true
     t.index ["business_id"], name: "index_devices_on_business_id"
     t.index ["pairing_code"], name: "index_devices_on_pairing_code", unique: true, where: "(pairing_code IS NOT NULL)"
-    t.check_constraint "kind::text = ANY (ARRAY['till'::character varying, 'tablet'::character varying, 'kitchen'::character varying, 'customer_display'::character varying, 'token_screen'::character varying, 'kiosk'::character varying, 'rider'::character varying]::text[])", name: "devices_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['till'::character varying::text, 'tablet'::character varying::text, 'kitchen'::character varying::text, 'customer_display'::character varying::text, 'token_screen'::character varying::text, 'kiosk'::character varying::text, 'rider'::character varying::text])", name: "devices_kind_check"
   end
 
   create_table "dining_tables", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -670,6 +686,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.uuid "approved_by_membership_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "regular_discount_tier_id"
+    t.uuid "voucher_id"
     t.index ["business_id"], name: "index_discounts_applied_on_business_id"
     t.index ["order_id"], name: "index_discounts_applied_on_order_id"
   end
@@ -1026,6 +1044,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["employee_id"], name: "index_leave_requests_on_employee_id"
     t.check_constraint "kind::text = ANY (ARRAY['paid'::character varying::text, 'unpaid'::character varying::text, 'sick'::character varying::text])", name: "leave_requests_kind_check"
     t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'approved'::character varying::text, 'rejected'::character varying::text])", name: "leave_requests_status_check"
+  end
+
+  create_table "loyalty_redemption_options", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.string "name", null: false
+    t.integer "points", null: false
+    t.string "kind", default: "fixed", null: false
+    t.decimal "value", precision: 12, scale: 2, null: false
+    t.boolean "active", default: true, null: false
+    t.integer "sort_order", default: 0, null: false
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.uuid "product_id"
+    t.index ["business_id"], name: "index_loyalty_redemption_options_on_business_id"
+    t.check_constraint "kind::text = ANY (ARRAY['fixed'::character varying, 'percent'::character varying, 'free_item'::character varying]::text[])", name: "loyalty_redemption_options_kind_check"
   end
 
   create_table "loyalty_transactions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1824,6 +1858,24 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["payment_method_id"], name: "index_refunds_on_payment_method_id"
   end
 
+  create_table "regular_discount_tiers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.string "name", null: false
+    t.integer "within_days", null: false
+    t.string "kind", default: "percent", null: false
+    t.decimal "value", precision: 12, scale: 2, null: false
+    t.bigint "min_order_minor", default: 0, null: false
+    t.uuid "excluded_product_ids", default: [], null: false, array: true
+    t.uuid "excluded_category_ids", default: [], null: false, array: true
+    t.string "excluded_order_types", default: [], null: false, array: true
+    t.boolean "active", default: true, null: false
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_regular_discount_tiers_on_business_id"
+    t.check_constraint "kind::text = ANY (ARRAY['percent'::character varying, 'fixed'::character varying]::text[])", name: "regular_discount_tiers_kind_check"
+  end
+
   create_table "report_schedules", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "branch_id"
@@ -1876,6 +1928,26 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["customer_id"], name: "index_reservations_on_customer_id"
     t.index ["table_id"], name: "index_reservations_on_table_id"
     t.check_constraint "status::text = ANY (ARRAY['booked'::character varying::text, 'confirmed'::character varying::text, 'seated'::character varying::text, 'completed'::character varying::text, 'no_show'::character varying::text, 'cancelled'::character varying::text])", name: "reservations_status_check"
+  end
+
+  create_table "reviews", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.uuid "order_id"
+    t.uuid "customer_id"
+    t.integer "rating"
+    t.text "comment"
+    t.string "source", default: "tablet", null: false
+    t.string "order_type"
+    t.bigint "order_total_minor", default: 0, null: false
+    t.datetime "rated_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "created_at"], name: "index_reviews_on_business_id_and_created_at"
+    t.index ["business_id"], name: "index_reviews_on_business_id"
+    t.index ["order_id"], name: "index_reviews_on_order_id"
+    t.check_constraint "rating IS NULL OR rating >= 1 AND rating <= 5", name: "reviews_rating_check"
+    t.check_constraint "source::text = ANY (ARRAY['tablet'::character varying, 'website'::character varying, 'pos'::character varying, 'qr'::character varying]::text[])", name: "reviews_source_check"
   end
 
   create_table "rider_cash_movements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1952,7 +2024,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["business_id", "membership_id"], name: "index_riders_on_business_id_and_membership_id", unique: true, where: "(membership_id IS NOT NULL)"
     t.index ["business_id"], name: "index_riders_on_business_id"
     t.index ["membership_id"], name: "index_riders_on_membership_id"
-    t.check_constraint "lifetime_kind IS NULL OR (lifetime_kind::text = ANY (ARRAY['one_order'::character varying, 'n_orders'::character varying, 'rest_of_today'::character varying, 'n_hours'::character varying]::text[]))", name: "riders_lifetime_kind_check"
+    t.check_constraint "lifetime_kind IS NULL OR (lifetime_kind::text = ANY (ARRAY['one_order'::character varying::text, 'n_orders'::character varying::text, 'rest_of_today'::character varying::text, 'n_hours'::character varying::text]))", name: "riders_lifetime_kind_check"
   end
 
   create_table "role_permissions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2665,6 +2737,59 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
     t.index ["order_id"], name: "index_voids_on_order_id"
   end
 
+  create_table "voucher_batches", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.string "name", null: false
+    t.string "kind", null: false
+    t.string "value_kind", default: "fixed", null: false
+    t.decimal "value", precision: 12, scale: 2, null: false
+    t.bigint "min_spend_minor", default: 0, null: false
+    t.date "expires_on"
+    t.integer "usage_limit"
+    t.string "public_code"
+    t.integer "issued_count", default: 0, null: false
+    t.integer "redeemed_count", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.uuid "created_by_membership_id"
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "public_code"], name: "index_voucher_batches_on_business_id_and_public_code", unique: true, where: "(public_code IS NOT NULL)"
+    t.index ["business_id"], name: "index_voucher_batches_on_business_id"
+    t.check_constraint "(kind::text = ANY (ARRAY['personal'::character varying, 'public'::character varying]::text[])) AND (value_kind::text = ANY (ARRAY['fixed'::character varying, 'percent'::character varying]::text[]))", name: "voucher_batches_kind_check"
+  end
+
+  create_table "vouchers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "voucher_batch_id", null: false
+    t.string "code", null: false
+    t.uuid "customer_id"
+    t.uuid "redeemed_order_id"
+    t.datetime "redeemed_at"
+    t.datetime "sent_at"
+    t.uuid "whatsapp_message_id"
+    t.string "status", default: "issued", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "code"], name: "index_vouchers_on_business_id_and_code", unique: true
+    t.index ["business_id"], name: "index_vouchers_on_business_id"
+    t.index ["customer_id"], name: "index_vouchers_on_customer_id"
+    t.index ["voucher_batch_id"], name: "index_vouchers_on_voucher_batch_id"
+    t.check_constraint "status::text = ANY (ARRAY['issued'::character varying, 'redeemed'::character varying, 'void'::character varying]::text[])", name: "vouchers_status_check"
+  end
+
+  create_table "website_configs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.string "slug"
+    t.boolean "published", default: false, null: false
+    t.jsonb "sections", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_website_configs_on_business_id"
+    t.index ["business_id"], name: "index_website_configs_unique_business", unique: true
+    t.index ["slug"], name: "index_website_configs_on_slug", unique: true, where: "(slug IS NOT NULL)"
+  end
+
   create_table "whatsapp_messages", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id"
     t.uuid "customer_id"
@@ -2709,6 +2834,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
   add_foreign_key "advances", "employees"
   add_foreign_key "aggregator_events", "branches"
   add_foreign_key "aggregator_events", "businesses"
+  add_foreign_key "ai_insights", "businesses"
   add_foreign_key "attendance_rules", "businesses"
   add_foreign_key "attendance_rules", "employees"
   add_foreign_key "attendance_scans", "businesses"
@@ -2804,6 +2930,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
   add_foreign_key "kitchen_tickets", "orders"
   add_foreign_key "leave_requests", "businesses"
   add_foreign_key "leave_requests", "employees"
+  add_foreign_key "loyalty_redemption_options", "businesses"
   add_foreign_key "loyalty_transactions", "businesses"
   add_foreign_key "loyalty_transactions", "customers"
   add_foreign_key "loyalty_transactions", "orders"
@@ -2908,12 +3035,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
   add_foreign_key "refunds", "payment_accounts"
   add_foreign_key "refunds", "payment_methods"
   add_foreign_key "refunds", "shifts"
+  add_foreign_key "regular_discount_tiers", "businesses"
   add_foreign_key "report_schedules", "branches"
   add_foreign_key "report_schedules", "businesses"
   add_foreign_key "reservations", "branches"
   add_foreign_key "reservations", "businesses"
   add_foreign_key "reservations", "customers"
   add_foreign_key "reservations", "dining_tables", column: "table_id"
+  add_foreign_key "reviews", "businesses"
   add_foreign_key "rider_cash_movements", "businesses"
   add_foreign_key "rider_cash_movements", "riders"
   add_foreign_key "rider_settlements", "businesses"
@@ -2988,4 +3117,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
   add_foreign_key "user_permissions", "memberships"
   add_foreign_key "voids", "businesses"
   add_foreign_key "voids", "orders"
+  add_foreign_key "voucher_batches", "businesses"
+  add_foreign_key "vouchers", "businesses"
+  add_foreign_key "website_configs", "businesses"
 end

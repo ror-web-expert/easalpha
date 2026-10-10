@@ -18,6 +18,41 @@ module Api
         render_page(rows, cursor) { |c| CustomerSerializers.customer(c) }
       end
 
+      # GET /customers/insights?sort=spent|orders|balance|recent|name&from&to  (SPEC Customer Insights)
+      def insights
+        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 90
+        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        customers = Customer.active.where(is_walk_in: false).to_a
+        ids = customers.map(&:id)
+        orders = Order.where(customer_id: ids, business_day: from..to, status: %w[paid closed refunded])
+        spent = orders.group(:customer_id).sum(:total_minor)
+        counts = orders.group(:customer_id).count
+        last = Order.where(customer_id: ids, status: %w[paid closed refunded]).group(:customer_id).maximum(:business_day)
+        paid = CustomerPayment.where(customer_id: ids, direction: "received", business_day: from..to).group(:customer_id).sum(:amount_minor)
+        rows = customers.map do |c|
+          { customer: CustomerSerializers.customer(c), spent_minor: spent[c.id] || 0, orders: counts[c.id] || 0, average_minor: (counts[c.id] || 0).zero? ? 0 : spent[c.id] / counts[c.id], paid_on_account_minor: paid[c.id] || 0,
+            balance_minor: c.balance_minor, loyalty_points: c.loyalty_points, last_order_on: last[c.id] }
+        end
+        rows = case params[:sort].to_s
+               when "orders" then rows.sort_by { |r| -r[:orders] }
+               when "balance" then rows.sort_by { |r| -r[:balance_minor] }
+               when "recent" then rows.sort_by { |r| r[:last_order_on] ? -r[:last_order_on].jd : 0 }
+               when "name" then rows.sort_by { |r| r[:customer][:name].downcase }
+               else rows.sort_by { |r| -r[:spent_minor] }
+               end
+        render json: { from: from, to: to, sort: params[:sort].presence || "spent", rows: rows.first((params[:limit].presence || 200).to_i),
+                       totals: { customers: rows.size, spent_minor: rows.sum { |r| r[:spent_minor] }, orders: rows.sum { |r| r[:orders] }, balance_minor: rows.sum { |r| r[:balance_minor] }, with_balance: rows.count { |r| r[:balance_minor].positive? },
+                                 by_status: Customer.active.group(:status).count, by_source: Customer.active.group(:source).count } }
+      end
+
+      # POST /customers/:id/send_statement  (SPEC Customer Account: SEND_ACCOUNT_BILL)
+      def send_statement
+        require_permission!("SEND_ACCOUNT_BILL", "CUSTOMER_ACCOUNT", "customers.manage")
+        c = Customer.active.find(params[:id])
+        msg = Whatsapp::Account.send_statement!(c, actor: current_membership)
+        render json: { message_id: msg&.id, status: msg&.status, to: c.phone }, status: :created
+      end
+
       # GET /customers/lookup?phone=  exact match by phone with the last order, for one-tap repeat on the till
       def lookup
         phone = User.normalize_phone(params[:phone])
