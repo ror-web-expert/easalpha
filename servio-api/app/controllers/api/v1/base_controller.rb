@@ -50,6 +50,7 @@ module Api
           raise Api::Errors::Unauthorized.new("session.invalid", "Session is no longer valid") unless @membership&.active?
           @user = @membership.user
           @business = @membership.business
+          @membership.permission_codes = Array(@claims[:perms]).map(&:to_s) if @claims[:perms].is_a?(Array)
           raise Api::Errors::Unauthorized.new("business.deleted", "This business was deleted") if @business.status == "deleted"
           @device = @claims[:did] && Device.find_by(id: @claims[:did])
           raise Api::Errors::Unauthorized.new("device.revoked", "This device was removed") if @claims[:did] && (@device.nil? || @device.revoked_at)
@@ -89,8 +90,14 @@ module Api
 
       def require_permission!(*codes)
         authenticate!
-        return if codes.any? { |c| @membership.can?(c) }
+        return if codes.any? { |c| @membership.can?(c, surface: current_surface) }
         raise Api::Errors::Forbidden.new("permission.denied", "Missing permission: #{codes.join(' or ')}")
+      end
+
+      # SPEC surface: the desktop POS is "software", a device paired as a tablet is "app"; the admin panel ignores it.
+      def current_surface
+        return nil unless @claims && @claims[:app].to_s == "pos"
+        @device&.kind == "tablet" ? "app" : "software"
       end
 
       def require_app!(app)

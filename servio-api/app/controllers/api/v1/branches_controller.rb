@@ -44,7 +44,7 @@ module Api
       private
 
       def branch_params
-        params.permit(:name, :code, :address, :city, :phone, :time_zone, :day_end_time, tax_registration: {}, opening_hours: {}, qr_settings: {})
+        params.permit(:name, :code, :address, :city, :phone, :time_zone, :day_end_time, :business_day_start, tax_registration: {}, opening_hours: {}, qr_settings: {})
       end
     end
   end

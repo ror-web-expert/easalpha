@@ -23,7 +23,7 @@ module Sync
         tables: changed.call(DiningTable.where(branch_id: branch.id)).map { |t| CustomerSerializers.table(t) },
         customers: changed.call(Customer.where(archived_at: nil)).order(updated_at: :desc).limit(2000).map { |c| CustomerSerializers.customer(c) },
         staff: staff_payload(branch, device, since),
-        settings: Current.business.settings, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now))
+        settings: Current.business.settings.merge(Setting.effective(Current.business, branch: branch)), settings_version: Current.business.settings_version, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now))
       }
     end
 

@@ -34,7 +34,13 @@ class Business < ApplicationRecord
     "default_order_type" => "walk_in", "receipt" => { "header" => "", "footer" => "Thank you", "show_logo" => true, "language" => "en", "paper" => "80" }
   }.freeze
 
+  # The settings table (SPEC store) wins; the legacy jsonb and defaults are the fallback.
   def setting(key, default = nil)
+    if Settings::Registry.valid?(key)
+      row = Setting.unscoped.find_by(business_id: id, branch_id: nil, key: key.to_s)
+      return row.value if row
+      return settings.fetch(key.to_s) { Settings::Registry.key(key).default } if Settings::Registry.key(key).default != nil || settings.key?(key.to_s)
+    end
     settings.fetch(key.to_s) { DEFAULT_SETTINGS.fetch(key.to_s, default) }
   end
 

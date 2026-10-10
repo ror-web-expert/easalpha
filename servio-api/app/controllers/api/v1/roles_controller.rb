@@ -2,7 +2,7 @@ module Api
   module V1
     class RolesController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("staff.manage") }, except: [:index, :show, :permissions]
+      before_action -> { require_permission!("staff.manage") }, except: [:index, :show, :permissions, :presets]
 
       def index
         render json: { data: Role.active.includes(:role_permissions).order(:created_at).map { |r| Serializers.role(r) } }
@@ -12,8 +12,13 @@ module Api
         render json: Serializers.role(Role.includes(:role_permissions).find(params[:id]))
       end
 
+      # The full registry: SPEC codes with module, surface and restriction, then the Servio extras.
       def permissions
-        render json: { data: Permission::ALL.map { |code, desc| { code: code, description: desc } } }
+        render json: { data: Permission::REGISTRY.values.map(&:to_h), modules: Permission::MODULES + [Permission::SERVIO_MODULE] }
+      end
+
+      def presets
+        render json: { data: PermissionPreset.list }
       end
 
       # POST /roles  name, copy_from_role_id

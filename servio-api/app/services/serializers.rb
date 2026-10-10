@@ -10,19 +10,21 @@ module Serializers
     { id: b.id, name: b.name, slug: b.slug, legal_name: b.legal_name, country: b.country, currency: b.currency, time_zone: b.time_zone,
       phone: b.phone, email: b.email, status: b.status, trial_ends_on: b.trial_ends_on, trial_days_left: b.trial_days_left,
       plan: b.plan && { code: b.plan.code, name: b.plan.name, features: b.plan.features, limits: b.plan.limits },
-      settings: b.settings, read_only: b.read_only?, created_at: b.created_at }
+      settings: b.settings, settings_version: b.settings_version, read_only: b.read_only?, created_at: b.created_at }
   end
 
   def branch(br)
     { id: br.id, business_id: br.business_id, name: br.name, code: br.code, address: br.address, city: br.city, phone: br.phone,
-      time_zone: br.time_zone, day_end_time: br.day_end_time&.strftime("%H:%M"), tax_registration: br.tax_registration,
+      time_zone: br.time_zone, day_end_time: br.day_end_time&.strftime("%H:%M"), business_day_start: br.business_day_start&.strftime("%H:%M"),
+      business_day_window: br.business_day_window, tax_registration: br.tax_registration,
       opening_hours: br.opening_hours, qr_settings: br.qr_config, is_main: br.is_main, archived_at: br.archived_at }
   end
 
   def membership(m, include_user: true)
     h = { id: m.id, business_id: m.business_id, user_id: m.user_id, role: { id: m.role.id, name: m.role.name, system_key: m.role.system_key },
           status: m.status, all_branches: m.all_branches, branch_ids: m.branch_ids, has_pin: m.pin_digest.present?,
-          pin_locked: m.pin_locked?, invited_via: m.invited_via, created_at: m.created_at, deactivated_at: m.deactivated_at }
+          pin_locked: m.pin_locked?, invited_via: m.invited_via, permissions_mode: m.permissions_mode, staff_type: m.staff_type, cashier_role: m.cashier_role,
+          created_at: m.created_at, deactivated_at: m.deactivated_at }
     h[:user] = user(m.user) if include_user
     h
   end
@@ -38,6 +40,14 @@ module Serializers
     h[:pairing_code] = d.pairing_code if include_code
     h[:pairing_expires_at] = d.pairing_expires_at if include_code
     h
+  end
+
+  # SPEC User Sessions: one row per sign-in, from the refresh token it issued.
+  def user_session(rt, membership: nil)
+    m = membership || rt.membership
+    { id: rt.id, membership_id: rt.membership_id, user_id: rt.user_id, name: m&.user&.name, staff_type: m&.staff_type, app: rt.app,
+      device_id: rt.device_id, device: rt.device&.code, ip: rt.ip, user_agent: rt.user_agent, signed_in_at: rt.created_at,
+      signed_out_at: rt.revoked_at, expires_at: rt.expires_at, active: rt.revoked_at.nil? && rt.expires_at > Time.current }
   end
 
   def audit_log(a)

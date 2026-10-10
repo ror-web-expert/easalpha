@@ -21,7 +21,8 @@ module Auth
 
       # Session token for a person working in a business.
       def access_token(user:, membership:, app:, device: nil, branch: nil)
-        encode({ typ: "access", sub: user.id, mid: membership.id, bid: membership.business_id, brid: branch&.id, did: device&.id, app: app }, ttl: ACCESS_TTL)
+        # perms: the granted set at sign-in, so a permission change takes effect at the next sign-in or refresh (SPEC).
+        encode({ typ: "access", sub: user.id, mid: membership.id, bid: membership.business_id, brid: branch&.id, did: device&.id, app: app, perms: membership.permission_codes }, ttl: ACCESS_TTL)
       end
 
       # Long-lived token identifying a paired device before anyone logs in with a PIN.

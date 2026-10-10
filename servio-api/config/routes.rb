@@ -16,15 +16,22 @@ Rails.application.routes.draw do
       get "business", to: "business#show"
       patch "business", to: "business#update"
       resources :branches, only: %i[index show create update destroy]
+      get "staff/sessions", to: "staff#sessions"
+      post "staff/sessions/:id/revoke", to: "staff#revoke_session"
       resources :staff, only: %i[index show create update] do
         member do
           post :set_pin
           post :deactivate
           post :reactivate
+          get :permissions
+          put :permissions, action: :set_permissions
         end
       end
       resources :roles, only: %i[index show create update destroy] do
-        collection { get :permissions }
+        collection do
+          get :permissions
+          get :presets
+        end
       end
       resources :devices, only: %i[index create update destroy] do
         member { post :regenerate_code }
@@ -98,6 +105,9 @@ Rails.application.routes.draw do
       %w[overview by_day by_hour items categories cashiers order_takers voids discounts modified customers shifts grand].each { |r| get "reports/#{r}", to: "reports##{r}" }
       post "sync/push", to: "sync#push"
       get "sync/changes", to: "sync#changes"
+      get "settings", to: "settings#show"
+      patch "settings", to: "settings#update"
+      get "settings/version", to: "settings#version"
       get "sync/rejections", to: "sync#rejections"
       post "sync/rejections/:id/resolve", to: "sync#resolve"
       get "sync/batches", to: "sync#batches"

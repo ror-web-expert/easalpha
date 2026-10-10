@@ -1,6 +1,6 @@
 # The seven default roles, created for every new business. The owner can copy and edit them.
 module RoleTemplate
-  ALL_CODES = Permission.codes
+  ALL_CODES = Permission.grantable_codes
 
   TEMPLATES = {
     "owner" => { name: "Owner", permissions: ALL_CODES, limits: {} },
