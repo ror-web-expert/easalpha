@@ -14,6 +14,7 @@ module Settings
     ROWS = [
       [ "store.secondary_phone", "store", "Store Profile", "string", nil, "Secondary phone printed on the receipt" ],
       [ "store.linked_stores", "store", "Store Management", "json", [], "Other store accounts managed from this dashboard" ],
+      [ "whatsapp.provider", "store", "WhatsApp", "string", "web", "web: a phone linked by scanning a QR code; cloud: the Meta Cloud API with credentials" ],
       [ "whatsapp.account.master_enabled", "store", "WhatsApp", "boolean", true, "Master toggle: off disables every WhatsApp send button everywhere" ],
       [ "whatsapp.account.auto_send_on_payment", "store", "WhatsApp", "boolean", true, "Send the account statement automatically when a customer pays on account" ],
       [ "whatsapp.account.receipt_image", "store", "WhatsApp", "boolean", false, "Attach the receipt as an image" ],

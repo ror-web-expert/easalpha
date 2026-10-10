@@ -1011,3 +1011,19 @@ export interface LoyaltyRedemptionOption extends LoyaltyRedemptionOptionRef { ki
 /** POST /voucher_batches/:id/issue: personal codes generated per customer and sent from the POS campaign screen. */
 export interface VoucherIssueResult { issued: number; data: Voucher[]; batch?: VoucherBatch }
 export type OrderDiscountKind = "percent" | "fixed" | "promotion" | "loyalty" | "voucher" | "regular";
+
+// ---- Browser push (Web Push over the service worker) ----
+export type PushApp = "admin" | "pos" | "kitchen" | "rider";
+export interface PushPublicKey { public_key: string }
+export interface PushSubscriptionRow { id: ID; app: PushApp | string; user_agent: string | null; created_at: string; last_used_at: string | null }
+export interface PushTestResult { sent: number }
+/** JSON the service worker receives in a push event. */
+export interface PushPayload { title: string; body?: string; url?: string; tag?: string; kind?: string; icon?: string }
+
+// ---- WhatsApp phone connection (Meta Cloud API or a phone linked by QR through the gateway) ----
+export type WhatsappProvider = "cloud" | "web";
+export type WhatsappConnectionStatus = "disconnected" | "qr" | "connecting" | "connected" | "unavailable";
+export interface WhatsappConnection {
+  provider: WhatsappProvider; status: WhatsappConnectionStatus; qr: string | null; phone: string | null;
+  connected_at: string | null; last_error: string | null; gateway_configured: boolean;
+}

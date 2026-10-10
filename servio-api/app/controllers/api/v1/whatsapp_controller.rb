@@ -7,6 +7,20 @@ module Api
         render json: { data: WhatsappTemplate.where(business_id: [ nil, current_business.id ]).order(:name, :language).map { |t| { id: t.id, name: t.name, language: t.language, category: t.category, body: t.body, variables: t.variables, approval_status: t.approval_status, shared: t.business_id.nil? } } }
       end
 
+      # Link a phone by QR (WhatsApp Web style): GET /whatsapp/connection, POST /whatsapp/connection/start, POST /whatsapp/connection/logout
+      def connection = render(json: connection_payload(Whatsapp::Gateway.status(current_business)))
+      def start_connection = render(json: connection_payload(Whatsapp::Gateway.start!(current_business)), status: :accepted)
+      def logout_connection
+        r = Whatsapp::Gateway.logout!(current_business)
+        audit!("settings_change", record: current_business, after: { whatsapp_phone_unlinked: true })
+        render json: connection_payload(r)
+      end
+
+      def connection_payload(r)
+        { provider: Whatsapp::Provider.mode(current_business), status: r[:status] || "disconnected", qr: r[:qr], phone: r[:phone], connected_at: r[:connected_at], last_error: r[:last_error],
+          gateway_configured: Whatsapp::Gateway.configured?, cloud_configured: Whatsapp::Provider.cloud? }
+      end
+
       # SPEC Templates: built from the account variables; a business template with the same name overrides the shared one.
       def variables = render(json: { data: Whatsapp::Account::VARIABLES, master_enabled: Whatsapp::Account.master_enabled? })
 

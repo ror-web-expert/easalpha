@@ -9,19 +9,15 @@ module Whatsapp
 
     def deliver(phone:, template:, variables: {}, kind: "utility", business: Current.business, customer_id: nil, counted: true)
       return nil if phone.blank?
+      live = Provider.live?(business)
       msg = WhatsappMessage.create!(business_id: business&.id, to_phone: phone, template_name: template, variables: variables, kind: kind,
-                                    customer_id: customer_id, status: Provider.live? ? "queued" : "logged", counted_against_plan: counted)
+                                    customer_id: customer_id, status: live ? "queued" : "logged", counted_against_plan: counted)
       begin
-        WhatsappDeliveryJob.perform_later(msg.id) if Provider.live?
+        WhatsappDeliveryJob.perform_later(msg.id) if live
       rescue StandardError => e
         Rails.logger.error("[whatsapp] enqueue failed: #{e.message}")
       end
       msg
     end
-  end
-
-  module Provider
-    module_function
-    def live? = ENV["WHATSAPP_ACCESS_TOKEN"].present?
   end
 end
