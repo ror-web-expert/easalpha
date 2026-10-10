@@ -13,8 +13,8 @@ module Orders
 
     def self.create!(attrs, lines:, actor:, device:, branch:, approvals: {})
       shift = actor && Shift.open.find_by(cashier_membership_id: actor.id)
-      order = Order.new(attrs.merge(branch: branch, device: device, taken_by_membership_id: actor&.id, shift_id: shift&.id,
-                                    service_charge_percent: service_charge_for(attrs[:order_type] || "walk_in", branch.business)))
+      order = Order.new(attrs.merge(branch: branch, device: device, taken_by_membership_id: actor&.id, shift_id: shift&.id))
+      apply_charge_defaults!(order, attrs, branch.business)
       order.id = attrs[:id] if attrs[:id].present?
       order.business_day ||= branch.business_day_for(order.client_created_at || Time.current)
       builder = new(order, actor: actor, device: device, branch: branch)
@@ -33,7 +33,31 @@ module Orders
 
     def self.service_charge_for(order_type, business)
       types = Array(business.setting("service_charge_order_types"))
-      types.include?(order_type.to_s) ? business.setting("service_charge_percent").to_d : 0
+      return 0 unless types.include?(order_type.to_s)
+      v = business.setting("charges.service_charge.value").to_d
+      v.zero? ? business.setting("service_charge_percent").to_d : v
+    end
+
+    # SPEC Charges: service charge and delivery charge are each a percent or a fixed amount, pre-filled on the order;
+    # the cashier may change or remove either per order (the attrs win); zero or blank disables the default.
+    def self.apply_charge_defaults!(order, attrs, business)
+      value = service_charge_for(attrs[:order_type] || order.order_type || "walk_in", business)
+      unless attrs.key?(:service_charge_percent) || attrs.key?(:service_charge_fixed_minor)
+        if business.setting("charges.service_charge.mode").to_s == "fixed"
+          order.service_charge_percent = 0
+          order.service_charge_fixed_minor = (value * 100).round
+        else
+          order.service_charge_percent = value
+          order.service_charge_fixed_minor = 0
+        end
+      end
+      return unless (attrs[:order_type] || order.order_type).to_s == "delivery" && !attrs.key?(:delivery_charge_minor) && !attrs.key?(:delivery_charge_percent)
+      dv = business.setting("charges.delivery_charge.value").to_d
+      if business.setting("charges.delivery_charge.mode").to_s == "percent"
+        order.delivery_charge_percent = dv
+      elsif dv.positive? && order.delivery_charge_minor.to_i.zero?
+        order.delivery_charge_minor = (dv * 100).round
+      end
     end
 
     # Replace or amend lines. Existing lines are matched by id; lines not in the payload are cancelled (removed).
@@ -41,10 +65,8 @@ module Orders
       @approvals.merge!(approvals)
       raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
       Order.transaction do
-        if attrs.key?(:order_type) && attrs[:order_type] != order.order_type
-          order.service_charge_percent = Builder.service_charge_for(attrs[:order_type], order.business)
-        end
         order.assign_attributes(attrs.except(:id))
+        Builder.apply_charge_defaults!(order, attrs, order.business) if attrs.key?(:order_type) && order.order_type_changed?
         validate_customer! if order.customer_id_changed?
         apply_lines!(lines, amend: true) if lines
         reprice_lines! if attrs.key?(:order_type)
@@ -175,6 +197,22 @@ module Orders
         OrderItemModifier.create!(order_item: item, modifier_id: modifier.id, name_snapshot: modifier.name, price_minor_snapshot: modifier.price_minor, quantity: (m[:quantity].presence || 1).to_d)
       end
       item.modifiers.reload
+    end
+
+    # SPEC: tax rates are linked to finance accounts; the cashier picks No Tax or the rate. Re-snapshots every line.
+    def self.apply_tax_choice!(order, tax_rate: nil, none: false)
+      raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+      Order.transaction do
+        order.items.reject(&:cancelled?).each do |i|
+          i.tax_rate_snapshot = none ? 0 : tax_rate.rate
+          i.tax_inclusive_snapshot = none ? false : tax_rate.inclusive
+        end
+        order.tax_choice = none ? "none" : "rate"
+        order.tax_rate_id = none ? nil : tax_rate.id
+        Pricing.recalculate!(order)
+        Pricing.save_all!(order)
+      end
+      order
     end
 
     def reprice_lines!

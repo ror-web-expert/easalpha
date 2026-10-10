@@ -170,6 +170,18 @@ module Api
         render json: OrderSerializers.full(order.reload), status: :created
       end
 
+      # POST /orders/:id/tax_choice { tax_rate_id } or { none: true }  (SPEC: No Tax / 16% choice on a linked account)
+      def tax_choice
+        require_permission!("orders.create")
+        order = Order.includes(:items).find(params[:id])
+        if ActiveModel::Type::Boolean.new.cast(params[:none])
+          Orders::Builder.apply_tax_choice!(order, none: true)
+        else
+          Orders::Builder.apply_tax_choice!(order, tax_rate: TaxRate.active.find(params.require(:tax_rate_id)))
+        end
+        render json: OrderSerializers.full(order.reload)
+      end
+
       # PATCH /orders/:id  same payload as create (lines replace the current lines; omit lines to leave them)
       def update
         require_permission!("orders.create")
@@ -294,7 +306,7 @@ module Api
       end
 
       def order_attrs
-        attrs = params.permit(:id, :order_type, :source, :table_id, :guest_name, :covers, :customer_id, :address_id, :notes, :client_created_at, :till_serial, :is_staff_meal, :staff_meal_reason, :delivery_charge_minor, :scheduled_for).to_h.symbolize_keys
+        attrs = params.permit(:id, :order_type, :source, :table_id, :guest_name, :covers, :customer_id, :address_id, :notes, :client_created_at, :till_serial, :is_staff_meal, :staff_meal_reason, :delivery_charge_minor, :delivery_charge_percent, :service_charge_percent, :service_charge_fixed_minor, :scheduled_for).to_h.symbolize_keys
         attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
         attrs[:order_type] ||= current_business.setting("default_order_type") if action_name == "create"
         attrs

@@ -13,7 +13,7 @@ module PaymentSerializers
   end
 
   def payment_method(m)
-    { id: m.id, code: m.code, name: m.name, kind: m.kind, payment_account_id: m.payment_account_id, active: m.active, works_offline: m.works_offline, needs_reference: m.needs_reference, sort_order: m.sort_order }
+    { id: m.id, code: m.code, name: m.name, kind: m.kind, payment_account_id: m.payment_account_id, catalogue_code: m.catalogue_code, active: m.active, works_offline: m.works_offline, needs_reference: m.needs_reference, sort_order: m.sort_order }
   end
 
   def account(a)

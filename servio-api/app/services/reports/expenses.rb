@@ -14,7 +14,10 @@ module Reports
       overheads = Overhead.active.where("branch_id = ? OR branch_id IS NULL", branch.id).map { |o| { id: o.id, name: o.name, kind: o.kind, basis: o.basis, amount_minor: o.amount_minor, allocated_minor: o.allocate(orders: orders, days: days) } }
       total = scope.sum(:amount_minor)
       overhead_total = overheads.sum { |o| o[:allocated_minor] }
-      { from: from, to: to, days: days, paid_orders: orders, total_minor: total, count: scope.count, by_category: by_cat, by_subcategory: by_sub, by_method: by_method, by_source: by_source,
+      count = scope.count
+      # SPEC: total, average, count and category count
+      { from: from, to: to, days: days, paid_orders: orders, total_minor: total, count: count, average_minor: count.zero? ? 0 : (total / count), category_count: by_cat.size, subcategory_count: by_sub.size,
+        by_category: by_cat, by_subcategory: by_sub, by_method: by_method, by_source: by_source,
         overheads: overheads, overheads_minor: overhead_total, cost_per_order_minor: orders.zero? ? nil : ((total + overhead_total) / orders) }
     end
   end

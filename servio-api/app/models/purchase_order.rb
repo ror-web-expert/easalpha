@@ -8,6 +8,8 @@ class PurchaseOrder < ApplicationRecord
   validates :status, inclusion: { in: STATUSES }
 
   def label = "PO-#{number}"
+  # SPEC Payment column: Unpaid, Partial or Paid from the payments recorded against this order.
+  def payment_status = paid_minor <= 0 ? "unpaid" : (paid_minor >= total_minor ? "paid" : "partial")
   def draft? = status == "draft"
   def open? = status.in?(%w[sent partial])
   def recompute_total! = update_columns(total_minor: lines.sum { |l| (BigDecimal(l.unit_cost_minor.to_s) * l.quantity).round })

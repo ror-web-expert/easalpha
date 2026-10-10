@@ -50,7 +50,10 @@ module Stock
             entries << r.entry
           end
         end
-        order.update_columns(stock_deducted_at: Time.current) if entries.any?
+        if entries.any?
+          order.update_columns(stock_deducted_at: Time.current)
+          Finance::Journal.stock_entries!(entries, ref: order, description: "Cost of goods #{order.label}", business_day: order.business_day)
+        end
       end
       status = missing.empty? ? "ok" : (entries.empty? ? "missing" : "partial")
       record!(order, status, entries: entries, detail: { missing: missing, entries: entries.size })
@@ -72,6 +75,7 @@ module Stock
           e.save!
           returned << r.entry
         end
+        Finance::Journal.stock_entries!(returned, ref: order, description: "Stock returned #{order.label}: #{reason}", business_day: order.branch.business_day_for(Time.current)) if returned.any?
       end
       record!(order, "reversed", entries: returned, detail: { reason: reason, entries: returned.size }) if returned.any? && record
       returned

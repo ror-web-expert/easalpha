@@ -86,6 +86,7 @@ Rails.application.routes.draw do
       get "catalog", to: "catalog#show"
 
       resources :orders, only: %i[index show create update] do
+        member { post :tax_choice }
         collection do
           get :summary
           get :pending
@@ -144,7 +145,9 @@ Rails.application.routes.draw do
       post "webhooks/whatsapp", to: "webhooks#whatsapp"
       post "day_close/lock", to: "day_closes#lock"
       post "day_close/reopen", to: "day_closes#reopen"
-      resources :payment_methods, only: %i[index create update]
+      resources :payment_methods, only: %i[index create update] do
+        collection { get :catalogue }
+      end
       resources :payment_accounts, only: %i[index show create update] do
         member do
           get :entries
@@ -226,7 +229,21 @@ Rails.application.routes.draw do
       post "payroll/advances/:id/pay", to: "payroll#pay_advance"
 
       # Finance, aggregators, multi-branch (Phase 3)
-      %w[ledger reconciliation integrity profit_loss export].each { |r| get "finance/#{r}", to: "finance##{r}" }
+      %w[ledger reconciliation integrity profit_loss export dashboard trial_balance balance_sheet liabilities equity].each { |r| get "finance/#{r}", to: "finance##{r}" }
+      # SPEC double entry (Phase 5)
+      resources :gl_accounts, path: "finance/accounts", only: %i[index show create update destroy] do
+        member { get :ledger }
+        collection { post :seed }
+      end
+      resources :journal_entries, path: "finance/journal", only: %i[index show create] do
+        member { post :reverse }
+      end
+      resources :fixed_assets, path: "finance/fixed_assets", only: %i[index show create update] do
+        member do
+          post :depreciate
+          post :dispose
+        end
+      end
       get "reports/branches", to: "finance#branches"
       get "reports/foodpanda", to: "finance#foodpanda_report"
       get "integrations/foodpanda", to: "finance#foodpanda"
@@ -291,6 +308,7 @@ Rails.application.routes.draw do
       patch "expenses/categories/:id", to: "expenses#update_category"
       delete "expenses/categories/:id", to: "expenses#destroy_category"
       get "expenses/summary", to: "expenses#summary"
+      get "expenses/export", to: "expenses#export"
       resources :expenses, only: %i[index show create update] do
         member { post :void }
       end
@@ -324,11 +342,13 @@ Rails.application.routes.draw do
       get "rider/float", to: "deliveries#mine_float"
 
       # Purchasing (Phase 2)
+      get "supplier_payments", to: "suppliers#all_payments"
       resources :suppliers, only: %i[index show create update destroy] do
         collection do
           post :import
           get :aging_report
           get :summary
+          get :ranking
         end
         member do
           get :ledger
@@ -336,20 +356,24 @@ Rails.application.routes.draw do
           get :insights
           get :payments
           post :payments, action: :pay
+          get :adjustments
+          post :adjust
         end
       end
       resources :purchase_orders, only: %i[index show create update destroy] do
+        collection { get :summary }
         member do
           post :send, action: :send_order
           post :cancel
           post :receive
+          post :pay
         end
       end
       resources :goods_receipts, only: %i[index show create] do
         member { post :cancel }
       end
       resources :purchase_returns, only: %i[index show create]
-      %w[summary aging suggestions forecast prices report].each { |r| get "purchasing/#{r}", to: "purchasing##{r}" }
+      %w[summary aging suggestions forecast prices report price_history].each { |r| get "purchasing/#{r}", to: "purchasing##{r}" }
 
       # Stock (Phase 2)
       get "unit_conversions", to: "units#conversions"

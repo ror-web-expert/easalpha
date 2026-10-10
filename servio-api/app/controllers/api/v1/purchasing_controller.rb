@@ -3,7 +3,9 @@ module Api
     # Purchasing summary, supplier aging, reorder suggestions, usage forecast and price history.
     class PurchasingController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("purchasing.manage", "suppliers.manage", "stock.view", "finance.view", "reports.view_all") }
+      before_action -> { require_permission!("purchasing.manage", "suppliers.manage", "stock.view", "finance.view", "reports.view_all") }, except: :price_history
+      # SPEC Purchase Price History is a purchasing report, not a stock screen.
+      before_action -> { require_permission!("PURCHASE_ORDERS", "purchasing.manage", "finance.view", "reports.view_all") }, only: :price_history
 
       def summary = render(json: Suppliers::Ledger.summary)
       def aging = render(json: Suppliers::Ledger.aging_report(as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current))
@@ -21,6 +23,14 @@ module Api
         scope = scope.where(supplier_id: params[:supplier_id]) if params[:supplier_id].present?
         rows, cursor = paginate(scope)
         render_page(rows, cursor) { |h| SupplierSerializers.price(h) }
+      end
+
+      # GET /purchasing/price_history?from=&to=&flagged=true&q=  (SPEC Purchase Price History with verdicts)
+      def price_history
+        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 90
+        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        rows = Purchasing::PriceHistory.rows(from: from, to: to, flagged_only: params[:flagged] == "true", q: params[:q])
+        render json: { from: from, to: to, rows: rows, summary: Purchasing::PriceHistory.summary(rows), verdicts: Purchasing::PriceHistory::VERDICTS }
       end
 
       # GET /purchasing/report?from=&to=&group_by=supplier|item

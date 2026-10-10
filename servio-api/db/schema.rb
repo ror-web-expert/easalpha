@@ -718,6 +718,29 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["key", "business_id"], name: "index_feature_flags_on_key_and_business_id", unique: true
   end
 
+  create_table "fixed_assets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.string "name", null: false
+    t.uuid "gl_account_id", null: false
+    t.uuid "accumulated_account_id", null: false
+    t.uuid "expense_account_id", null: false
+    t.bigint "cost_minor", null: false
+    t.bigint "salvage_minor", default: 0, null: false
+    t.date "purchased_on", null: false
+    t.integer "useful_life_months", null: false
+    t.string "method", default: "straight_line", null: false
+    t.bigint "accumulated_minor", default: 0, null: false
+    t.date "depreciated_through"
+    t.datetime "disposed_at"
+    t.string "status", default: "active", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_fixed_assets_on_business_id"
+    t.index ["gl_account_id"], name: "index_fixed_assets_on_gl_account_id"
+  end
+
   create_table "floors", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "branch_id", null: false
@@ -729,6 +752,28 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "updated_at", null: false
     t.index ["branch_id"], name: "index_floors_on_branch_id"
     t.index ["business_id"], name: "index_floors_on_business_id"
+  end
+
+  create_table "gl_accounts", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "kind", null: false
+    t.string "normal_side", null: false
+    t.uuid "parent_id"
+    t.bigint "opening_balance_minor", default: 0, null: false
+    t.boolean "is_system", default: false, null: false
+    t.boolean "is_header", default: false, null: false
+    t.uuid "payment_account_id"
+    t.text "description"
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "code"], name: "index_gl_accounts_on_business_id_and_code", unique: true
+    t.index ["business_id"], name: "index_gl_accounts_on_business_id"
+    t.index ["payment_account_id"], name: "index_gl_accounts_on_payment_account_id"
+    t.check_constraint "kind::text = ANY (ARRAY['asset'::character varying, 'liability'::character varying, 'equity'::character varying, 'income'::character varying, 'expense'::character varying]::text[])", name: "gl_accounts_kind_check"
+    t.check_constraint "normal_side::text = ANY (ARRAY['debit'::character varying, 'credit'::character varying]::text[])", name: "gl_accounts_side_check"
   end
 
   create_table "goods_receipt_lines", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -846,6 +891,42 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["number"], name: "index_invoices_on_number", unique: true
     t.index ["subscription_id"], name: "index_invoices_on_subscription_id"
     t.check_constraint "status::text = ANY (ARRAY['open'::character varying::text, 'reported'::character varying::text, 'paid'::character varying::text, 'void'::character varying::text])", name: "invoices_status_check"
+  end
+
+  create_table "journal_entries", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.integer "number", null: false
+    t.string "kind", default: "manual", null: false
+    t.date "business_day", null: false
+    t.string "description"
+    t.string "ref_table"
+    t.uuid "ref_id"
+    t.uuid "reversed_by_id"
+    t.uuid "reverses_id"
+    t.uuid "by_membership_id"
+    t.datetime "posted_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "business_day"], name: "index_journal_entries_on_business_id_and_business_day"
+    t.index ["business_id", "number"], name: "index_journal_entries_on_business_id_and_number", unique: true
+    t.index ["business_id"], name: "index_journal_entries_on_business_id"
+    t.index ["ref_table", "ref_id"], name: "index_journal_entries_on_ref_table_and_ref_id"
+  end
+
+  create_table "journal_lines", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "journal_entry_id", null: false
+    t.uuid "gl_account_id", null: false
+    t.bigint "debit_minor", default: 0, null: false
+    t.bigint "credit_minor", default: 0, null: false
+    t.string "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_journal_lines_on_business_id"
+    t.index ["gl_account_id"], name: "index_journal_lines_on_gl_account_id"
+    t.index ["journal_entry_id"], name: "index_journal_lines_on_journal_entry_id"
+    t.check_constraint "debit_minor >= 0 AND credit_minor >= 0 AND (debit_minor = 0 OR credit_minor = 0)", name: "journal_lines_one_side"
   end
 
   create_table "kitchen_tickets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1160,6 +1241,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.integer "reopen_count", default: 0, null: false
     t.integer "edit_count", default: 0, null: false
     t.boolean "unpaid_direct", default: false, null: false
+    t.bigint "service_charge_fixed_minor", default: 0, null: false
+    t.decimal "delivery_charge_percent", precision: 5, scale: 2, default: "0.0", null: false
+    t.string "tax_choice"
+    t.uuid "tax_rate_id"
     t.index ["branch_id", "business_day", "serial"], name: "index_orders_on_branch_id_and_business_day_and_serial", unique: true, where: "(serial IS NOT NULL)"
     t.index ["branch_id", "qr_status"], name: "index_orders_on_branch_id_and_qr_status", where: "(qr_status IS NOT NULL)"
     t.index ["branch_id", "scheduled_for"], name: "index_orders_on_branch_id_and_scheduled_for", where: "(scheduled_for IS NOT NULL)"
@@ -1251,6 +1336,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.integer "sort_order", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "catalogue_code"
     t.index ["business_id", "code"], name: "index_payment_methods_on_business_id_and_code", unique: true
     t.index ["business_id"], name: "index_payment_methods_on_business_id"
     t.index ["payment_account_id"], name: "index_payment_methods_on_payment_account_id"
@@ -1518,6 +1604,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "cancelled_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "paid_minor", default: 0, null: false
     t.index ["branch_id"], name: "index_purchase_orders_on_branch_id"
     t.index ["business_id", "number"], name: "index_purchase_orders_on_business_id_and_number", unique: true
     t.index ["business_id"], name: "index_purchase_orders_on_business_id"
@@ -2247,6 +2334,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["email"], name: "index_super_admins_on_email", unique: true
   end
 
+  create_table "supplier_adjustments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.uuid "supplier_id", null: false
+    t.bigint "amount_minor", null: false
+    t.string "reason", null: false
+    t.date "business_day", null: false
+    t.uuid "by_membership_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_supplier_adjustments_on_business_id"
+    t.index ["supplier_id"], name: "index_supplier_adjustments_on_supplier_id"
+  end
+
   create_table "supplier_payments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "branch_id"
@@ -2265,10 +2366,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "shift_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "purchase_order_id"
     t.index ["branch_id"], name: "index_supplier_payments_on_branch_id"
     t.index ["business_id", "number"], name: "index_supplier_payments_on_business_id_and_number", unique: true
     t.index ["business_id"], name: "index_supplier_payments_on_business_id"
     t.index ["goods_receipt_id"], name: "index_supplier_payments_on_goods_receipt_id"
+    t.index ["purchase_order_id"], name: "index_supplier_payments_on_purchase_order_id"
     t.index ["supplier_id"], name: "index_supplier_payments_on_supplier_id"
     t.check_constraint "direction::text = ANY (ARRAY['paid'::character varying::text, 'received'::character varying::text])", name: "supplier_payments_direction_check"
   end
@@ -2418,6 +2521,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.boolean "is_default", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "payment_account_id"
     t.index ["business_id"], name: "index_tax_rates_on_business_id"
   end
 
@@ -2600,8 +2704,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "expenses", "branches"
   add_foreign_key "expenses", "businesses"
   add_foreign_key "expenses", "expense_categories", column: "category_id"
+  add_foreign_key "fixed_assets", "businesses"
   add_foreign_key "floors", "branches"
   add_foreign_key "floors", "businesses"
+  add_foreign_key "gl_accounts", "businesses"
   add_foreign_key "goods_receipt_lines", "businesses"
   add_foreign_key "goods_receipt_lines", "goods_receipts"
   add_foreign_key "goods_receipt_lines", "purchase_order_lines"
@@ -2619,6 +2725,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "inventory_settings", "businesses"
   add_foreign_key "invoices", "businesses"
   add_foreign_key "invoices", "subscriptions"
+  add_foreign_key "journal_entries", "businesses"
+  add_foreign_key "journal_lines", "businesses"
   add_foreign_key "kitchen_tickets", "branches"
   add_foreign_key "kitchen_tickets", "businesses"
   add_foreign_key "kitchen_tickets", "orders"
@@ -2781,6 +2889,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "stock_sections", "businesses"
   add_foreign_key "subscriptions", "businesses"
   add_foreign_key "subscriptions", "plans"
+  add_foreign_key "supplier_adjustments", "businesses"
   add_foreign_key "supplier_payments", "branches"
   add_foreign_key "supplier_payments", "businesses"
   add_foreign_key "supplier_payments", "goods_receipts"

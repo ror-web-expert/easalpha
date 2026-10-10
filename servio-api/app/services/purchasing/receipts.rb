@@ -23,6 +23,7 @@ module Purchasing
                                      actor: actor, branch: branch)
         Stock::Posting.post!(doc, actor: actor)
         grn.update!(stock_document: doc, total_minor: total, business_day: doc.business_day)
+        Finance::Journal.inventory_receipt!(grn)
         supplier.move_balance!(total)
         grn.lines.each do |l|
           SupplierPriceHistory.create!(supplier: supplier, stock_item: l.stock_item, goods_receipt: grn, unit: l.unit, unit_cost_minor: l.unit_cost_minor, base_unit_cost_minor: l.base_unit_cost, observed_on: received_on)
@@ -43,6 +44,7 @@ module Purchasing
       GoodsReceipt.transaction do
         Stock::Posting.cancel!(grn.stock_document, actor: actor, reason: reason || "cancelled #{grn.label}") if grn.stock_document&.posted?
         grn.supplier.move_balance!(-grn.total_minor)
+        Finance::Journal.reverse_for!(grn, actor: actor)
         grn.lines.each do |l|
           if l.purchase_order_line_id && (pl = PurchaseOrderLine.find_by(id: l.purchase_order_line_id))
             pl.update!(received_base_qty: [pl.received_base_qty - l.base_quantity, 0].max)

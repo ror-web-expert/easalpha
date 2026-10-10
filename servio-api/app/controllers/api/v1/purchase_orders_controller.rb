@@ -2,17 +2,46 @@ module Api
   module V1
     class PurchaseOrdersController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("purchasing.manage", "stock.view") }, only: %i[index show]
-      before_action -> { require_permission!("purchasing.manage") }, except: %i[index show]
-      before_action :read_only_guard!, except: %i[index show]
+      # SPEC Purchase Orders (9): each step of create, receive and pay has its own permission.
+      before_action -> { require_permission!("PURCHASE_ORDERS", "stock.view") }, only: %i[index show summary]
+      before_action -> { require_permission!("PO_CREATE") }, only: :create
+      before_action -> { require_permission!("PO_EDIT") }, only: %i[update send_order cancel]
+      before_action -> { require_permission!("PO_DELETE") }, only: :destroy
+      before_action -> { require_permission!("PO_RECEIVE") }, only: :receive
+      before_action -> { require_permission!("PO_PAYMENT") }, only: :pay
+      before_action :read_only_guard!, except: %i[index show summary]
 
       def index
         scope = PurchaseOrder.includes(:supplier, :lines).where(branch_id: current_branch.id).order(created_at: :desc)
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(status: %w[sent partial]) if params[:open] == "true"
         scope = scope.where(supplier_id: params[:supplier_id]) if params[:supplier_id].present?
+        scope = scope.where(created_at: Date.parse(params[:from]).beginning_of_day..) if params[:from].present?
+        scope = scope.where(created_at: ..Date.parse(params[:to]).end_of_day) if params[:to].present?
+        scope = scope.where("paid_minor <= 0") if params[:payment] == "unpaid"
+        scope = scope.where("paid_minor > 0 AND paid_minor < total_minor") if params[:payment] == "partial"
+        scope = scope.where("paid_minor >= total_minor AND total_minor > 0") if params[:payment] == "paid"
         rows, cursor = paginate(scope)
         render_page(rows, cursor) { |po| SupplierSerializers.purchase_order(po) }
+      end
+
+      # GET /purchase_orders/summary  SPEC KPI tiles: total POs, drafts, received and total value
+      def summary
+        scope = PurchaseOrder.where(branch_id: current_branch.id)
+        scope = scope.where(created_at: Date.parse(params[:from]).beginning_of_day..) if params[:from].present?
+        scope = scope.where(created_at: ..Date.parse(params[:to]).end_of_day) if params[:to].present?
+        by_status = scope.group(:status).count
+        render json: { total: scope.count, drafts: by_status["draft"] || 0, open: (by_status["sent"] || 0) + (by_status["partial"] || 0), received: by_status["received"] || 0, cancelled: by_status["cancelled"] || 0,
+                       total_value_minor: scope.where.not(status: "cancelled").sum(:total_minor), paid_minor: scope.sum(:paid_minor), by_status: by_status }
+      end
+
+      # POST /purchase_orders/:id/pay { amount_minor, method_code, reference?, note? }  (SPEC: create -> receive -> pay)
+      def pay
+        po = PurchaseOrder.includes(:supplier).find(params[:id])
+        raise Api::Errors::Conflict.new("purchase_order.status", "A #{po.status} order cannot be paid") if po.status.in?(%w[draft cancelled])
+        sp = Purchasing::Payments.record!(po.supplier, amount_minor: params.require(:amount_minor).to_i, method_code: params.require(:method_code), actor: current_membership, branch: current_branch,
+                                          shift: current_shift, reference: params[:reference], note: params[:note], purchase_order_id: po.id, paid_on: params[:paid_on].present? ? Date.parse(params[:paid_on]) : nil)
+        render json: { payment: SupplierSerializers.payment(sp), purchase_order: SupplierSerializers.purchase_order(po.reload, full: true) }, status: :created
       end
 
       def show

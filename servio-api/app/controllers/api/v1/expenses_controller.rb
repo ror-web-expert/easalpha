@@ -1,21 +1,26 @@
+require "csv"
+
 module Api
   module V1
     class ExpensesController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("expenses.manage", "finance.view", "reports.view_all") }, only: %i[index show summary categories]
-      before_action -> { require_permission!("expenses.manage") }, except: %i[index show summary categories]
-      before_action :read_only_guard!, except: %i[index show summary categories]
+      before_action -> { require_permission!("expenses.manage", "EXPENSES", "finance.view", "reports.view_all") }, only: %i[index show summary categories export]
+      before_action -> { require_permission!("expenses.manage", "EXPENSES") }, except: %i[index show summary categories export]
+      before_action :read_only_guard!, except: %i[index show summary categories export]
 
-      # GET /expenses?from=&to=&category_id=&source=&q=
+      # GET /expenses?from=&to=&category_id=&subcategory_id=&method_code=&source=&q=  (SPEC filters)
       def index
-        scope = Expense.includes(:category, :payment_method).where(branch_id: current_branch.id).order(spent_on: :desc, created_at: :desc)
-        scope = scope.where(spent_on: range)
-        scope = scope.where(category_id: ExpenseCategory.where(id: params[:category_id]).or(ExpenseCategory.where(parent_id: params[:category_id])).select(:id)) if params[:category_id].present?
-        scope = scope.where(source: params[:source]) if params[:source].present?
-        scope = scope.live unless params[:include_voided] == "true"
-        scope = scope.where("note ILIKE :q OR paid_to ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
-        rows, cursor = paginate(scope)
+        rows, cursor = paginate(filtered)
         render_page(rows, cursor) { |e| DeliverySerializers.expense(e) }
+      end
+
+      # GET /expenses/export  the same filters as CSV (SPEC: exports to PDF and CSV; the PDF is built in the browser)
+      def export
+        csv = CSV.generate do |out|
+          out << %w[number spent_on category amount method source paid_to note voided]
+          filtered.find_each { |e| out << [e.label, e.spent_on, e.category.full_name, e.amount_minor / 100.0, e.payment_method&.code, e.source, e.paid_to, e.note, e.voided? ? "yes" : ""] }
+        end
+        send_data csv, filename: "expenses-#{range.begin}-#{range.end}.csv", type: "text/csv"
       end
 
       def show = render(json: DeliverySerializers.expense(Expense.includes(:category, :payment_method).find(params[:id])))
@@ -69,6 +74,18 @@ module Api
       end
 
       private
+
+      def filtered
+        scope = Expense.includes(:category, :payment_method).where(branch_id: current_branch.id).order(spent_on: :desc, created_at: :desc)
+        scope = scope.where(spent_on: range)
+        scope = scope.where(category_id: ExpenseCategory.where(id: params[:category_id]).or(ExpenseCategory.where(parent_id: params[:category_id])).select(:id)) if params[:category_id].present?
+        scope = scope.where(category_id: params[:subcategory_id]) if params[:subcategory_id].present?
+        scope = scope.where(payment_method_id: PaymentMethod.where(code: params[:method_code]).select(:id)) if params[:method_code].present?
+        scope = scope.where(source: params[:source]) if params[:source].present?
+        scope = scope.live unless params[:include_voided] == "true"
+        scope = scope.where("note ILIKE :q OR paid_to ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        scope
+      end
 
       def range
         from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month

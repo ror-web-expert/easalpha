@@ -2,7 +2,7 @@ module MenuSerializers
   module_function
 
   def tax_rate(t)
-    { id: t.id, name: t.name, rate: t.rate.to_f, inclusive: t.inclusive, authority: t.authority, active: t.active, is_default: t.is_default }
+    { id: t.id, name: t.name, rate: t.rate.to_f, inclusive: t.inclusive, authority: t.authority, active: t.active, is_default: t.is_default, payment_account_id: t.payment_account_id }
   end
 
   def station(s)

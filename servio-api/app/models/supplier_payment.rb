@@ -9,4 +9,5 @@ class SupplierPayment < ApplicationRecord
   validates :amount_minor, numericality: { greater_than: 0, only_integer: true }
 
   def label = "SP-#{number}"
+  belongs_to :purchase_order, optional: true
 end

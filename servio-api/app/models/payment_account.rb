@@ -13,12 +13,13 @@ class PaymentAccount < ApplicationRecord
   end
 
   # Writes one entry and moves the balance in the same transaction. Entries are never edited, only reversed.
-  def post!(kind:, amount_minor:, business_day:, ref: nil, description: nil, by: nil, shift_id: nil, occurred_at: Time.current, branch_id: nil)
+  def post!(kind:, amount_minor:, business_day:, ref: nil, description: nil, by: nil, shift_id: nil, occurred_at: Time.current, branch_id: nil, skip_journal: false)
     PaymentAccount.transaction do
       entry = entries.create!(business_id: business_id, branch_id: branch_id || self.branch_id, kind: kind, amount_minor: amount_minor, business_day: business_day,
                               ref_table: ref&.class&.table_name, ref_id: ref&.id, description: description, by_membership_id: by&.id, shift_id: shift_id, occurred_at: occurred_at)
       PaymentAccount.where(id: id).update_all(["current_balance_minor = current_balance_minor + ?", amount_minor])
       reload
+      Finance::Journal.from_account_entry!(entry) unless skip_journal # SPEC double entry underneath every money move
       entry
     end
   end

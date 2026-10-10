@@ -45,7 +45,7 @@ await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
-  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs"];
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs", "/admin/purchasing/price-history", "/admin/suppliers/ledger", "/admin/suppliers/insights", "/admin/suppliers/payments", "/admin/finance/dashboard", "/admin/finance/combined-ledger", "/admin/finance/journal-voucher", "/admin/finance/chart-of-accounts", "/admin/finance/fixed-assets", "/admin/finance/liabilities", "/admin/finance/equity", "/admin/finance/balance-sheet", "/admin/finance/trial-balance"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -145,6 +145,26 @@ for (const p of adminPages) {
   step("phase 4: retry never deducts twice", retry.status === 200 && retry.j.movements.filter((m) => m.kind === "sale").length === 1, String(retry.j?.movements?.length));
   if (recipe.status === 201) await api(`/recipes/${recipe.j.id}`, { method: "DELETE", token: T });
   if (made.status === 201) await api(`/products/${prod.id}`, { method: "PATCH", token: T, body: { active: false } });
+}
+
+
+// ---- Phase 5 gate (SPEC): the supplier ledger ties out.
+{
+  const units = await api("/units", { token: T }); const pcs = units.j.data.find((u) => u.code === "pcs");
+  const item = await api("/stock_items", { method: "POST", token: T, body: { name: `E2E Oil ${Date.now()}`, base_unit_id: pcs.id } });
+  const sup = await api("/suppliers", { method: "POST", token: T, body: { name: `E2E Supplier ${Date.now()}`, opening_balance_minor: 10000 } });
+  step("phase 5: supplier labelled To Pay with counts", sup.status === 201 && sup.j.balance_label === "to_pay" && sup.j.items_count === 0, JSON.stringify([sup.j?.balance_label, sup.j?.items_count]));
+  const po = await api("/purchase_orders", { method: "POST", token: T, body: { supplier_id: sup.j.id, send: true, lines: [{ stock_item_id: item.j.id, quantity: 10, unit_cost_minor: 5000 }] } });
+  const rec = await api(`/purchase_orders/${po.j.id}/receive`, { method: "POST", token: T, body: {} });
+  const pay = await api(`/purchase_orders/${po.j.id}/pay`, { method: "POST", token: T, body: { amount_minor: 20000, method_code: "cash" } });
+  step("phase 5: PO received and part paid", rec.status === 201 && pay.status === 201 && pay.j.purchase_order.payment_status === "partial", JSON.stringify([rec.status, pay.j?.purchase_order?.payment_status]));
+  const adj = await api(`/suppliers/${sup.j.id}/adjust`, { method: "POST", token: T, body: { amount_minor: -1000, reason: "E2E discount" } });
+  const led = await api(`/suppliers/${sup.j.id}/ledger`, { token: T });
+  const t = led.j.tiles;
+  step("phase 5: supplier ledger ties out (opening + purchases - payments + adjustments = balance)", adj.status === 201 && t.ties_out === true && t.balance_minor === 10000 + 50000 - 20000 - 1000 && t.balance_minor === t.cached_balance_minor, JSON.stringify(t));
+  const tb = await api(`/finance/trial_balance?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`, { token: T });
+  const bs = await api("/finance/balance_sheet", { token: T });
+  step("phase 5: trial balance and balance sheet balance", tb.status === 200 && tb.j.balanced === true && bs.status === 200 && bs.j.balanced === true, JSON.stringify([tb.j?.balanced, bs.j?.balanced]));
 }
 
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");

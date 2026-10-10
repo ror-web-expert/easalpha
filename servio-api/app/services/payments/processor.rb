@@ -90,6 +90,7 @@ module Payments
     end
 
     def post_to_account!(payment)
+      return Finance::Journal.khata_sale!(payment) if payment.payment_method.khata?
       account = payment.payment_method.cash? && @shift&.drawer_account ? @shift.drawer_account : payment.payment_account
       return unless account
       payment.update_column(:payment_account_id, account.id)

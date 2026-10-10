@@ -4,7 +4,8 @@ module Api
       before_action :authenticate!
       before_action :read_only_guard!, except: %i[index show ledger]
       before_action -> { require_permission!("stock.view", "stock.actions", "stock.waste", "stock.count", "menu.edit") }, only: %i[index show ledger]
-      before_action -> { require_permission!("stock.actions") }, except: %i[index show ledger]
+      before_action -> { require_permission!("stock.actions", "PO_ADD_ITEM") }, only: :create # SPEC: an item created inline while building a PO
+      before_action -> { require_permission!("stock.actions") }, except: %i[index show ledger create]
 
       # GET /stock_items?q=&category=&low=true&packaging=true
       def index

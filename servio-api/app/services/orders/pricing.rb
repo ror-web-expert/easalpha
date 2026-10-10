@@ -41,7 +41,8 @@ module Orders
       order.subtotal_minor = subtotal
       order.discount_minor = items.sum(&:line_discount_minor)
       net = subtotal - order.discount_minor
-      order.service_charge_minor = (net * order.service_charge_percent.to_d / 100).round
+      order.service_charge_minor = order.service_charge_fixed_minor.to_i.positive? ? order.service_charge_fixed_minor : (net * order.service_charge_percent.to_d / 100).round
+      order.delivery_charge_minor = (net * order.delivery_charge_percent.to_d / 100).round if order.delivery_charge_percent.to_d.positive?
       order.tax_minor = items.sum(&:line_tax_minor)
       order.total_minor = items.sum(&:line_total_minor) + order.service_charge_minor + order.delivery_charge_minor + order.rounding_minor + order.tip_minor
       order.total_minor = 0 if order.is_staff_meal

@@ -949,3 +949,25 @@ Orders carry spec_status, spec_payment_status, reopen_count, edit_count, reopene
 | POST | /api/v1/stock_documents/:id/submit, /approve, /dispatch, /receive | Awaiting approval and In transit flows |
 
 Stock deducts at completion; `stock_documents` carry posting_date and nine kinds; sections carry slug, is_system and cogs_primary; items carry active and an auto SKU.
+
+## Phase 5 additions (10 Oct 2026, SPEC "Purchasing, suppliers and expenses" and "Payments, charges, tax and the finance ledger")
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/suppliers | rows carry balance_label (to_pay, to_receive, settled), items_count, purchases_count |
+| GET | /api/v1/suppliers/ranking?sort=purchased|paid|outstanding|name | Supplier Insights ranking |
+| GET | /api/v1/suppliers/:id/ledger | tiles, Dr/Cr entries typed Opening, Purchase, Payment, Return, Adjustment with the PO link, aging |
+| GET, POST | /api/v1/suppliers/:id/adjustments, /adjust | manual ledger adjustments |
+| GET | /api/v1/purchase_orders/summary | KPI tiles |
+| POST | /api/v1/purchase_orders/:id/pay | pay against a PO (PO_PAYMENT); list filter payment=unpaid|partial|paid |
+| GET | /api/v1/purchasing/price_history?from&to&flagged&q | Purchase Price History with verdicts |
+| GET | /api/v1/expenses/export | CSV with the list filters; summary adds average_minor, category_count, subcategory_count; filters subcategory_id, method_code |
+| GET | /api/v1/payment_methods/catalogue | wallets and banks; POST /payment_methods { catalogue_code } creates the method and its account |
+| POST | /api/v1/orders/:id/tax_choice | { none: true } or { tax_rate_id } |
+| GET | /api/v1/finance/dashboard | total balance, Today In, Today Out, counts by source, recent activity |
+| GET, POST, PATCH, DELETE | /api/v1/finance/accounts | chart of accounts (system rows protected); /:id/ledger; POST /seed |
+| GET, POST | /api/v1/finance/journal | journal vouchers; POST /:id/reverse |
+| GET | /api/v1/finance/trial_balance?from&to, /balance_sheet?as_of, /liabilities, /equity | statements |
+| GET, POST, PATCH | /api/v1/finance/fixed_assets | assets; POST /:id/depreciate, /:id/dispose |
+
+Permissions: PURCHASE_ORDERS, PO_CREATE, PO_EDIT, PO_DELETE, PO_RECEIVE, PO_RETURN, PO_PAYMENT, PO_ADD_ITEM (stock_items#create), PO_ADD_SUPPLIER (suppliers#create); SUPPLIERS, SUPPLIER_LEDGER, SUPPLIER_VIEW_LEDGER, SUPPLIER_RECORD_PAYMENT. Finance screens: finance.view to read, settings.manage to post.

@@ -21,6 +21,7 @@ module Auth
           SetupChecklistItem.create_defaults_for(business)
           Customer.walk_in
           PaymentMethod.seed_defaults!(business)
+          Tenancy::Context.with(business) { Finance::Chart.seed! }
           Current.user = user
           AuditLog.record(action: "create", record: business, after: { name: business.name, plan: plan.code }, business: business)
           Result.new(user: user, business: business, membership: membership, branch: branch)

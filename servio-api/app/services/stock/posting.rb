@@ -67,6 +67,9 @@ module Stock
           end
         end
         doc.update!(status: "posted", posted_at: Time.current, posted_by_membership_id: actor&.id, business_day: day, posting_date: day)
+        if doc.kind.in?(%w[waste adjustment count opening_balance]) || (doc.kind == "receive" && doc.goods_receipt_id.nil?)
+          Finance::Journal.stock_entries!(StockLedgerEntry.where(ref_table: "stock_documents", ref_id: doc.id), ref: doc, description: "#{doc.label} #{doc.kind.humanize.downcase}", business_day: day)
+        end
         AuditLog.record(action: "stock_post", record: doc, after: { kind: doc.kind, number: doc.number, lines: doc.lines.size })
       end
       doc
@@ -122,6 +125,7 @@ module Stock
           StockLedgerEntry.where(ref_table: "stock_documents", ref_id: doc.id, reversed_by_entry_id: nil, reverses_entry_id: nil).order(:created_at).each { |e| Ledger.reverse!(e, actor: actor, reason: reason || "voided #{doc.label}") }
         end
         doc.update!(status: "voided", cancelled_at: Time.current) # SPEC: Voided
+        Finance::Journal.reverse_for!(doc, actor: actor)
         AuditLog.record(action: "stock_cancel", record: doc, after: { reason: reason })
       end
       doc

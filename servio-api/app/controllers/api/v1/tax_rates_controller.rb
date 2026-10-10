@@ -33,7 +33,7 @@ module Api
 
       private
 
-      def tax_params = params.permit(:name, :rate, :inclusive, :authority, :active, :is_default)
+      def tax_params = params.permit(:name, :rate, :inclusive, :authority, :active, :is_default, :payment_account_id)
     end
   end
 end

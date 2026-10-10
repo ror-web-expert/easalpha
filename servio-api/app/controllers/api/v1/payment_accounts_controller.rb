@@ -48,6 +48,7 @@ module Api
         PaymentAccount.transaction do
           from.post!(kind: "transfer_out", amount_minor: -amount, business_day: day, description: "Transfer to #{to.name}: #{params[:note]}", by: current_membership)
           to.post!(kind: "transfer_in", amount_minor: amount, business_day: day, description: "Transfer from #{from.name}: #{params[:note]}", by: current_membership)
+          Finance::Journal.transfer!(from: from, to: to, amount_minor: amount, business_day: day, actor: current_membership, note: params[:note])
         end
         audit!("create", record: from, after: { transfer_to: to.name, amount_minor: amount })
         render json: { from: PaymentSerializers.account(from.reload), to: PaymentSerializers.account(to.reload) }

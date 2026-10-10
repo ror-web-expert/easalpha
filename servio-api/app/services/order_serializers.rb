@@ -20,7 +20,8 @@ module OrderSerializers
       discounts: o.discounts.map { |d| { id: d.id, order_item_id: d.order_item_id, promotion_id: d.promotion_id, kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, reason: d.reason, applied_by_membership_id: d.applied_by_membership_id, approved_by_membership_id: d.approved_by_membership_id } },
       events: o.status_events.map { |e| { from: e.from_status, to: e.to_status, membership_id: e.membership_id, device_id: e.device_id, reason: e.reason, at: e.occurred_at } },
       voids: o.voids.map { |v| { id: v.id, reason: v.reason, stock_action: v.stock_action, amount_minor: v.amount_minor, by_membership_id: v.by_membership_id, approved_by_membership_id: v.approved_by_membership_id, at: v.voided_at } },
-      service_charge_percent: o.service_charge_percent.to_f, staff_meal_reason: o.staff_meal_reason,
+      service_charge_percent: o.service_charge_percent.to_f, service_charge_fixed_minor: o.service_charge_fixed_minor, delivery_charge_percent: o.delivery_charge_percent.to_f,
+      tax_choice: o.tax_choice, tax_rate_id: o.tax_rate_id, staff_meal_reason: o.staff_meal_reason,
       story: Orders::Story.for(o)
     )
   end

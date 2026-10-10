@@ -23,6 +23,7 @@ module Purchasing
                                      lines: ret.lines.map { |l| { stock_item_id: l.stock_item_id, unit_id: l.unit_id, quantity: l.quantity, unit_cost_minor: l.unit_cost_minor } }, actor: actor, branch: branch)
         Stock::Posting.post!(doc, actor: actor)
         ret.update!(stock_document: doc, amount_minor: amount, business_day: doc.business_day)
+        Finance::Journal.inventory_return!(ret)
         supplier.move_balance!(-amount)
         if settlement == "cash_refund"
           method = attrs[:method_code].present? ? PaymentMethod.active.find_by!(code: attrs[:method_code]) : PaymentMethod.active.find_by!(kind: "cash")

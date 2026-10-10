@@ -22,6 +22,8 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.6",
+    "jspdf": "3.0.1",
+    "jspdf-autotable": "5.0.2",
     "lucide-react": "^1.53.0",
     "next": "15.5.27",
     "qrcode": "1.5.4",

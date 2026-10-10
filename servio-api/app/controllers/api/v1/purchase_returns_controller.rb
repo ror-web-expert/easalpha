@@ -2,8 +2,8 @@ module Api
   module V1
     class PurchaseReturnsController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("purchasing.manage", "stock.view") }, only: %i[index show]
-      before_action -> { require_permission!("purchasing.manage") }, only: :create
+      before_action -> { require_permission!("PURCHASE_ORDERS", "PO_RETURN", "stock.view") }, only: %i[index show]
+      before_action -> { require_permission!("PO_RETURN") }, only: :create # SPEC: returns have their own permission
       before_action :read_only_guard!, only: :create
 
       def index

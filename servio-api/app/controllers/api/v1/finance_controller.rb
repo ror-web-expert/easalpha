@@ -5,6 +5,14 @@ module Api
       before_action :authenticate!
       before_action -> { require_permission!("finance.view", "reports.view_all") }, except: %i[update_foodpanda]
 
+      # SPEC Finance Dashboard, Trial Balance, Balance Sheet, Liabilities, Equity
+      def dashboard = render(json: Finance::Statements.dashboard(branch: current_branch, day: params[:business_day].present? ? Date.parse(params[:business_day]) : nil))
+      def trial_balance = render(json: Finance::Statements.trial_balance(from: range.begin, to: range.end))
+      def balance_sheet = render(json: Finance::Statements.balance_sheet(as_of: as_of))
+      def liabilities = render(json: Finance::Statements.liabilities(as_of: as_of))
+      def equity = render(json: Finance::Statements.equity(as_of: as_of))
+      def as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current
+
       def ledger = render(json: Finance::Ledger.day(branch: current_branch, day: day_param))
       def reconciliation = render(json: Finance::Ledger.reconciliation(branch: current_branch, day: day_param))
       def integrity = render(json: Finance::Ledger.integrity(branch: current_branch, from: range.first, to: range.last))

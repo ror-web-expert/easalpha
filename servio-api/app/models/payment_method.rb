@@ -17,6 +17,23 @@ class PaymentMethod < ApplicationRecord
     { code: "khata", name: "Khata (account)", kind: "khata", works_offline: true, account: nil }
   ].freeze
 
+  # SPEC catalogue of Pakistani wallets and banks that can be added beyond the four defaults.
+  CATALOGUE = [
+    { code: "upaisa", name: "uPaisa", kind: "wallet" }, { code: "sadapay", name: "SadaPay", kind: "wallet" }, { code: "nayapay", name: "NayaPay", kind: "wallet" },
+    { code: "hbl_pay", name: "HBL Pay", kind: "bank" }, { code: "ubl_omni", name: "UBL Omni", kind: "bank" }, { code: "mcb", name: "MCB", kind: "bank" }, { code: "allied", name: "Allied Bank", kind: "bank" },
+    { code: "nbp", name: "NBP", kind: "bank" }, { code: "bank_al_habib", name: "Bank AL Habib", kind: "bank" }, { code: "soneri", name: "Soneri Bank", kind: "bank" }, { code: "dubai_islamic", name: "Dubai Islamic Bank", kind: "bank" }
+  ].freeze
+
+  ACCOUNT_KINDS = { "cash" => "cash", "wallet" => "wallet", "bank" => "bank", "card" => "bank", "qr" => "bank", "custom" => "custom" }.freeze
+
+  # Creates the matching finance account (and its ledger mirror) when a method is added without one.
+  def ensure_account!
+    return if khata? || payment_account
+    account = PaymentAccount.create!(name: name, kind: ACCOUNT_KINDS.fetch(kind, "custom"))
+    update!(payment_account: account)
+    Finance::Chart.for_payment_account(account)
+  end
+
   def self.seed_defaults!(business)
     accounts = {}
     DEFAULTS.each_with_index do |d, i|
