@@ -49,6 +49,11 @@ Rails.application.routes.draw do
       end
       get "setup_checklist", to: "setup_checklist#index"
       post "setup_checklist/:key/complete", to: "setup_checklist#complete"
+      get "push/public_key", to: "push#public_key"
+      get "push/subscriptions", to: "push#index"
+      post "push/subscriptions", to: "push#create"
+      delete "push/subscriptions", to: "push#destroy"
+      post "push/test", to: "push#test"
       resources :notifications, only: :index do
         member { post :read }
       end
@@ -149,6 +154,9 @@ Rails.application.routes.draw do
       patch "whatsapp/templates/:id", to: "whatsapp#update_template"
       delete "whatsapp/templates/:id", to: "whatsapp#destroy_template"
       get "whatsapp/variables", to: "whatsapp#variables"
+      get "whatsapp/connection", to: "whatsapp#connection"
+      post "whatsapp/connection/start", to: "whatsapp#start_connection"
+      post "whatsapp/connection/logout", to: "whatsapp#logout_connection"
       post "whatsapp/send", to: "whatsapp#send_one"
       post "whatsapp/bulk", to: "whatsapp#bulk"
       get "reports/riders", to: "reports#riders"

@@ -9,7 +9,7 @@ module Api
       end
 
       def aging
-        as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current
+        as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : today
         render json: Customers::Ledger.aging_report(as_of: as_of)
       end
 

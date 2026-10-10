@@ -9,7 +9,7 @@ module Purchasing
       settlement = attrs[:settlement].presence_in(PurchaseReturn::SETTLEMENTS) || "credit_note"
       PurchaseReturn.transaction do
         ret = PurchaseReturn.create!(branch: branch, supplier: supplier, goods_receipt: grn, stock_section: section, number: DocumentCounter.next!("purchase_return"), reason: attrs[:reason],
-                                     settlement: settlement, returned_on: Date.current, by_membership_id: actor&.id)
+                                     settlement: settlement, returned_on: branch.business_day_for(Time.current), by_membership_id: actor&.id)
         grn_cost = grn ? grn.lines.index_by(&:stock_item_id) : {}
         Array(lines).each do |l|
           item = StockItem.active.find(l[:stock_item_id])

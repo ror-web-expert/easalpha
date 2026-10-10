@@ -70,13 +70,13 @@ module Api
         render json: { supplier: SupplierSerializers.supplier(s), tiles: Suppliers::Ledger.tiles(s, entries), entries: entries, aging: Suppliers::Ledger.aging(s) }
       end
 
-      def aging = render(json: Suppliers::Ledger.aging(Supplier.find(params[:id]), as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current))
-      def aging_report = render(json: Suppliers::Ledger.aging_report(as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current))
+      def aging = render(json: Suppliers::Ledger.aging(Supplier.find(params[:id]), as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : today))
+      def aging_report = render(json: Suppliers::Ledger.aging_report(as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : today))
       def summary = render(json: Suppliers::Ledger.summary)
 
       def insights
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 90
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 90
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         render json: Suppliers::Ledger.insights(Supplier.find(params[:id]), from: from, to: to)
       end
 

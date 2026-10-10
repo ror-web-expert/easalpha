@@ -57,14 +57,14 @@ RSpec.describe "Inventory register", type: :request do
       item = within(biz) { StockItem.create!(name: "Box", base_unit: u[:pcs]) }
       sections = within(biz) { StockSection.ensure_system!(branch) }
       kitchen, warehouse = sections
-      api_post "/api/v1/stock_documents", { kind: "opening_balance", to_section_id: warehouse.id, posting_date: Date.current - 1, lines: [ { stock_item_id: item.id, quantity: 50, unit_cost_minor: 1_000 } ], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "opening_balance", to_section_id: warehouse.id, posting_date: today_for(biz) - 1, lines: [ { stock_item_id: item.id, quantity: 50, unit_cost_minor: 1_000 } ], post: true }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json[:label]).to eq("OPB-000001")
       expect(json[:status]).to eq("posted")
-      expect(json[:posting_date]).to eq((Date.current - 1).iso8601)
+      expect(json[:posting_date]).to eq((today_for(biz) - 1).iso8601)
       api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, lines: [ { stock_item_id: item.id, quantity: 10, unit_cost_minor: 1_000 } ], post: true }, headers: headers
       expect(json[:label]).to eq("GRN-000001")
-      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, posting_date: Date.current + 1, lines: [ { stock_item_id: item.id, quantity: 1 } ], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, posting_date: today_for(biz) + 1, lines: [ { stock_item_id: item.id, quantity: 1 } ], post: true }, headers: headers
       expect(response).to have_http_status(:conflict)
       expect(json[:error][:code]).to eq("stock.future_date")
 

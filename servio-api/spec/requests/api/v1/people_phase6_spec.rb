@@ -148,7 +148,7 @@ RSpec.describe "People phase 6", type: :request do
       expect(json).to include(assigned_count: 1, completed_count: 0)
       get "/api/v1/riders?temporary=true", headers: headers
       expect(json[:data].map { |r| r[:name] }).to contain_exactly("Temp", "Hours")
-      get "/api/v1/reports/riders?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/riders?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       row = json[:rows].find { |r| r[:rider][:name] == "Temp" }
       expect(row).to include(assigned: 1, completed: 1, temporary: true)
       expect(json[:totals]).to include(riders: 2, temporary_riders: 1)
@@ -174,7 +174,7 @@ RSpec.describe "People phase 6", type: :request do
       expect(json[:drawer_balance_minor]).to eq(100_000 + o[:total_minor])
       expect(json[:collected_today_minor]).to eq(o[:total_minor])
       expect(json[:orders_taken_today]).to eq(0)
-      get "/api/v1/reports/cashier_till?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/cashier_till?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       rows = json[:rows].index_by { |r| r[:membership_id] }
       expect(rows[owner.id]).to include(orders_taken: 1, taken_minor: o[:total_minor], collected_minor: 0)
       expect(rows[cashier.id]).to include(orders_taken: 0, collected_minor: o[:total_minor], in_tills_now_minor: 100_000 + o[:total_minor], shifts_open: 1)
@@ -186,7 +186,7 @@ RSpec.describe "People phase 6", type: :request do
       api_post "/api/v1/day_end_settlements", {}, headers: headers
       expect(response).to have_http_status(:created)
       expect(json).to include(shifts_count: 1, amount_minor: 100_000 + o[:total_minor])
-      get "/api/v1/reports/cashier_till?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/cashier_till?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:rows].find { |r| r[:membership_id] == cashier.id }).to include(in_tills_now_minor: 0, shifts_settled: 1)
       expect(json[:settlements].size).to eq(1)
       api_post "/api/v1/day_end_settlements", {}, headers: ch

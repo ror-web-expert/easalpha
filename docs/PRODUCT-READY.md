@@ -9,6 +9,7 @@ Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, t
 | API | `servio-api/` | Rails 8, PostgreSQL 16, row-level security, Solid Queue jobs, own JWT login with per-user permissions |
 | Admin panel, POS, kitchen display, order-taker tablet, rider app, storefront | `servio-web/` | Next.js 15. The POS, tablet and rider app are installable web pages; the storefront is `/store/<slug>` |
 | Desktop POS | `servio-desktop/` | Electron wrapper with ESC/POS printing and the print server tablets print through |
+| WhatsApp gateway | `servio-whatsapp/` | Links any WhatsApp number by QR code and sends notifications from it |
 
 ## The seven SPEC phases
 
@@ -52,6 +53,6 @@ Demo login: demo@servio.pk / password123. Manager PIN 9999, cashier PIN 1111. Pa
 ## Left for later (not in the SPEC, or needing outside services)
 
 - A real LLM behind the AI reports: the rules engine fills the same payload today.
-- WhatsApp delivery needs provider credentials (`WHATSAPP_ACCESS_TOKEN`); without them messages are logged, not sent.
+- WhatsApp sends either from a phone linked by QR (run `servio-whatsapp/`, then scan in Settings, WhatsApp) or through the Meta Cloud API with credentials; with neither, messages are logged, not sent.
 - PRA e-IMS filing uses the configured sandbox; production needs the PRA registration.
 - The opening and closing checklist screen under Settings is a Servio extra still marked Soon.

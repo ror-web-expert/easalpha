@@ -115,10 +115,14 @@ module Api
       def current_device = @device
       def current_shift = @membership && Shift.open.find_by(cashier_membership_id: @membership.id)
 
+      # SPEC business day: "today" is the branch's business day (06:01 to 02:01 by default), never the UTC calendar date.
+      def today = current_branch ? current_branch.business_day_for(Time.current) : Date.current
+      alias business_today today # for controllers whose own action is named today
+
       # from..to from the query, defaulting to the current month (shared by the money and report controllers).
       def range
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today.beginning_of_month
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         from..to
       rescue Date::Error
         raise Api::Errors::BadRequest.new("report.range", "Dates must be YYYY-MM-DD")

@@ -36,7 +36,7 @@ RSpec.describe "Customers phase 7", type: :request do
       o4 = place!(m[:burger]) # stays unpaid
       place!(m[:burger], extra: { is_staff_meal: true, staff_meal_reason: "Owner lunch" })
 
-      get "/api/v1/reports/grand_spec?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/grand_spec?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(response).to have_http_status(:ok)
       g = json
       sales = o1[:total_minor] + o2[:total_minor] + o3[:total_minor]
@@ -50,17 +50,17 @@ RSpec.describe "Customers phase 7", type: :request do
       expect(g[:complimentary][:count]).to eq(1)
       expect(g[:account_receipts]).to include(count: 1, amount_minor: 10_000)
       expect(g[:on_account_minor]).to eq(o3[:total_minor])
-      get "/api/v1/reports/grand?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/grand?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:spec][:sales_minor]).to eq(sales)
 
-      get "/api/v1/reports/sales?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/sales?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:data].size).to eq(3)
       expect(json[:data].first).to include(:label, :order_type, :payment_status, :total_minor, :items)
       expect(json[:totals][:revenue_minor]).to eq(sales)
-      get "/api/v1/reports/sales_calendar?month=#{Date.current.strftime('%Y-%m')}", headers: headers
-      expect(json[:days].size).to eq(Date.current.end_of_month.day)
+      get "/api/v1/reports/sales_calendar?month=#{today_for(biz).strftime('%Y-%m')}", headers: headers
+      expect(json[:days].size).to eq(today_for(biz).end_of_month.day)
       expect(json[:totals][:revenue_minor]).to eq(sales)
-      get "/api/v1/reports/operations?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/operations?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json).to include(orders: 3, cancelled: 0)
       expect(json[:by_hour].size).to eq(24)
       get "/api/v1/reports/grand_spec", headers: auth_headers(cashier)
@@ -87,10 +87,10 @@ RSpec.describe "Customers phase 7", type: :request do
       o_blocked = place!(m[:burger], customer_id: cust.id)
       expect(o_blocked[:discounts].none? { |d| d[:kind] == "regular" }).to be true
       api_patch "/api/v1/settings", { values: { "marketing.regular_discounts.blocked_customer_ids" => [] } }, headers: headers
-      get "/api/v1/reports/regular_discounts?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/regular_discounts?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(response).to have_http_status(:ok)
 
-      api_post "/api/v1/voucher_batches", { name: "Eid gift", kind: "personal", value_kind: "fixed", value: 200, min_spend_minor: 10_000, expires_on: (Date.current + 30).to_s }, headers: headers
+      api_post "/api/v1/voucher_batches", { name: "Eid gift", kind: "personal", value_kind: "fixed", value: 200, min_spend_minor: 10_000, expires_on: (today_for(biz) + 30).to_s }, headers: headers
       expect(response).to have_http_status(:created)
       batch = json
       api_post "/api/v1/voucher_batches/#{batch[:id]}/issue", { customer_ids: [ cust.id, never.id ], send: true }, headers: headers
@@ -121,7 +121,7 @@ RSpec.describe "Customers phase 7", type: :request do
       api_post "/api/v1/orders/#{o5[:id]}/discounts", { voucher_code: "EID50" }, headers: headers
       expect(json[:error][:code]).to eq("voucher.exhausted")
       pay!(o3); pay!(o4)
-      get "/api/v1/reports/vouchers?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/vouchers?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:totals][:redeemed]).to eq(2)
       api_post "/api/v1/voucher_batches", { name: "x", kind: "public", public_code: "Z", value: 1 }, headers: ch
       expect(response).to have_http_status(:forbidden)
@@ -142,7 +142,7 @@ RSpec.describe "Customers phase 7", type: :request do
       expect(json[:discounts].find { |d| d[:kind] == "loyalty" }[:amount_minor]).to eq(10_000)
       within(biz) { expect(cust.reload.loyalty_points).to eq(400) }
       pay!(json)
-      get "/api/v1/reports/loyalty_points?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/reports/loyalty_points?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:redeemed]).to eq(100)
       expect(json[:issued]).to be > 0
 

@@ -7,7 +7,7 @@ module Api
 
       # GET /payroll/overview  SPEC: total employees, pending advances, whether this month's payroll is generated, outstanding advances
       def overview
-        month = Date.current.beginning_of_month
+        month = today.beginning_of_month
         run = PayrollRun.where(month: month).where.not(status: "cancelled").order(created_at: :desc).first
         render json: { month: month, employees: Employee.active.count, pending_advances: Advance.where(status: "pending").count, pending_advances_minor: Advance.where(status: "pending").sum(:amount_minor),
                        month_generated: run.present?, run: run && PayrollSerializers.run(run), outstanding_advances: Advance.where(status: "paid").where("outstanding_minor > 0").count,
@@ -29,7 +29,7 @@ module Api
 
       # GET /payroll/reports?from=YYYY-MM&to=YYYY-MM  payroll cost by month and by department
       def reports
-        to = params[:to].present? ? Date.parse("#{params[:to]}-01") : Date.current.beginning_of_month
+        to = params[:to].present? ? Date.parse("#{params[:to]}-01") : today.beginning_of_month
         from = params[:from].present? ? Date.parse("#{params[:from]}-01") : to - 5.months
         runs = PayrollRun.where(month: from..to).where.not(status: "cancelled").order(:month)
         slips = Payslip.includes(employee: :department).where(payroll_run_id: runs.select(:id)).to_a

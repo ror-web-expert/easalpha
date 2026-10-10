@@ -19,9 +19,9 @@ RSpec.describe "Finance double entry", type: :request do
     o
   end
 
-  def balance(code) = within(biz) { Finance::Statements.balances(as_of: Date.current)[GlAccount.find_by!(code: code).id] }
+  def balance(code) = within(biz) { Finance::Statements.balances(as_of: today_for(biz))[GlAccount.find_by!(code: code).id] }
   # Every payment account posts to its own child account under Cash in Hand, Cash at Bank or Mobile Wallets.
-  def mirror_balance(account_name) = within(biz) { Finance::Statements.balances(as_of: Date.current)[GlAccount.find_by!(payment_account_id: PaymentAccount.find_by!(name: account_name).id).id] }
+  def mirror_balance(account_name) = within(biz) { Finance::Statements.balances(as_of: today_for(biz))[GlAccount.find_by!(payment_account_id: PaymentAccount.find_by!(name: account_name).id).id] }
 
   describe "chart of accounts" do
     it "ships seeded and numbered with system rows protected, lets users extend it, and refuses a header on a voucher" do
@@ -72,7 +72,7 @@ RSpec.describe "Finance double entry", type: :request do
       get "/api/v1/finance/accounts", headers: headers
       expect(json[:data].find { |a| a[:code] == "1000" }[:rollup_minor]).to eq(total - 5_000) # header totals everything beneath it
 
-      get "/api/v1/finance/trial_balance?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/finance/trial_balance?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:balanced]).to be true
       expect(json[:totals][:debit_minor]).to eq(json[:totals][:credit_minor])
       get "/api/v1/finance/balance_sheet", headers: headers
@@ -83,7 +83,7 @@ RSpec.describe "Finance double entry", type: :request do
       expect(json[:total_minor]).to eq(0)
       get "/api/v1/finance/equity", headers: headers
       expect(json[:total_with_earnings_minor]).to eq(total - 5_000)
-      get "/api/v1/finance/accounts/#{within(biz) { GlAccount.find_by!(code: '4000').id }}/ledger?from=#{Date.current - 1}&to=#{Date.current}", headers: headers
+      get "/api/v1/finance/accounts/#{within(biz) { GlAccount.find_by!(code: '4000').id }}/ledger?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:rows].size).to eq(1)
       expect(json[:closing_minor]).to eq(total)
     end
@@ -140,7 +140,7 @@ RSpec.describe "Finance double entry", type: :request do
   describe "fixed assets" do
     it "registers an asset against capital, depreciates straight-line by month, and disposes" do
       equipment = within(biz) { GlAccount.find_by!(code: "1510") }
-      api_post "/api/v1/finance/fixed_assets", { name: "Deck oven", gl_account_id: equipment.id, cost_minor: 1_200_000, salvage_minor: 0, purchased_on: (Date.current - 100).to_s, useful_life_months: 60, paid_from: "capital" }, headers: headers
+      api_post "/api/v1/finance/fixed_assets", { name: "Deck oven", gl_account_id: equipment.id, cost_minor: 1_200_000, salvage_minor: 0, purchased_on: (today_for(biz) - 100).to_s, useful_life_months: 60, paid_from: "capital" }, headers: headers
       expect(response).to have_http_status(:created)
       asset = json
       expect(asset[:monthly_minor]).to eq(20_000)

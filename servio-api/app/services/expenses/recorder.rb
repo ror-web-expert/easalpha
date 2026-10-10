@@ -12,7 +12,7 @@ module Expenses
       raise Api::Errors::BadRequest.new("expense.amount", "Amount must be positive") unless amount.positive?
       method = attrs[:method_code].present? ? PaymentMethod.active.find_by!(code: attrs[:method_code]) : PaymentMethod.active.find_by(kind: "cash")
       raise Api::Errors::BadRequest.new("expense.method", "Expenses cannot be paid on khata") if method&.khata?
-      spent_on = attrs[:spent_on].present? ? Date.parse(attrs[:spent_on].to_s) : Date.current
+      spent_on = attrs[:spent_on].present? ? Date.parse(attrs[:spent_on].to_s) : branch.business_day_for(Time.current)
       day = branch.business_day_for(Time.current)
       Expense.transaction do
         account = method&.cash? && shift&.drawer_account ? shift.drawer_account : method&.payment_account

@@ -31,13 +31,13 @@ module Api
 
       def depreciate
         a = FixedAsset.find(params[:id])
-        Finance::FixedAssets.depreciate!(a, through: params[:through].present? ? Date.parse(params[:through]) : Date.current, actor: current_membership)
+        Finance::FixedAssets.depreciate!(a, through: params[:through].present? ? Date.parse(params[:through]) : today, actor: current_membership)
         render json: FinanceSerializers.fixed_asset(a.reload)
       end
 
       def dispose
         a = FixedAsset.find(params[:id])
-        Finance::FixedAssets.dispose!(a, actor: current_membership, on: params[:on].present? ? Date.parse(params[:on]) : Date.current, proceeds_minor: params[:proceeds_minor].to_i, proceeds_account_id: params[:proceeds_account_id].presence)
+        Finance::FixedAssets.dispose!(a, actor: current_membership, on: params[:on].present? ? Date.parse(params[:on]) : today, proceeds_minor: params[:proceeds_minor].to_i, proceeds_account_id: params[:proceeds_account_id].presence)
         render json: FinanceSerializers.fixed_asset(a.reload)
       end
     end

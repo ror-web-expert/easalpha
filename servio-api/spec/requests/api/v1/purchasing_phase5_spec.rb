@@ -75,7 +75,7 @@ RSpec.describe "Purchasing phase 5", type: :request do
     get "/api/v1/suppliers/ranking?sort=outstanding", headers: headers
     expect(json[:rows].first[:supplier][:name]).to eq("Metro")
     expect(json[:rows].first).to include(purchased_minor: 700_000, paid_minor: 300_000, outstanding_minor: 405_000, po_count: 1)
-    expect(json[:rows].first[:last_purchase_on]).to eq(Date.current.iso8601)
+    expect(json[:rows].first[:last_purchase_on]).to eq(today_for(biz).iso8601)
     get "/api/v1/suppliers/ranking?sort=name", headers: headers
     expect(json[:rows].map { |r| r[:supplier][:name] }).to eq(%w[Metro Nobody])
   end

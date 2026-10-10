@@ -30,7 +30,7 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     api_post "/api/v1/suppliers", { name: "Metro Cash & Carry" }, headers: headers
     expect(response).to have_http_status(:unprocessable_content)
 
-    api_post "/api/v1/purchase_orders", { supplier_id: sup, expected_on: Date.current.to_s, lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 52_000 }, { stock_item_id: s[:buns].id, quantity: 200, unit_cost_minor: 2_200 } ] }, headers: headers
+    api_post "/api/v1/purchase_orders", { supplier_id: sup, expected_on: today_for(biz).to_s, lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 52_000 }, { stock_item_id: s[:buns].id, quantity: 200, unit_cost_minor: 2_200 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     po = json
     expect(po[:label]).to eq("PO-1")
@@ -132,8 +132,8 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     expect(json[:data].map { |r| r[:item][:sku] }).to include("BUN")
 
     within(biz) do
-      Stock::Ledger.apply!(section: s[:kitchen], item: s[:chicken], kind: "sale", quantity: -1_500, business_day: Date.current - 1, allow_negative: true)
-      Stock::Ledger.apply!(section: s[:kitchen], item: s[:chicken], kind: "sale", quantity: -1_500, business_day: Date.current, allow_negative: true)
+      Stock::Ledger.apply!(section: s[:kitchen], item: s[:chicken], kind: "sale", quantity: -1_500, business_day: today_for(biz) - 1, allow_negative: true)
+      Stock::Ledger.apply!(section: s[:kitchen], item: s[:chicken], kind: "sale", quantity: -1_500, business_day: today_for(biz), allow_negative: true)
     end
     get "/api/v1/purchasing/forecast?lookback_days=30&forecast_days=30&safety_percent=0", headers: headers
     row = json[:rows].first

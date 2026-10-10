@@ -20,15 +20,15 @@ module Api
       end
 
       def waste
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 30
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 30
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         render json: Reports::Stock.waste(from: from, to: to, group_by: params[:group_by] == "item" ? "item" : "reason")
       end
 
       # GET /stock/consumption?from=&to=  ingredients used by sales (sale, packaging, net of returns) with value
       def consumption
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 30
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 30
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         rows = StockLedgerEntry.where(branch_id: current_branch.id, kind: %w[sale sale_return packaging], business_day: from..to).group(:stock_item_id).pluck(:stock_item_id, Arel.sql("SUM(quantity)"), Arel.sql("SUM(value_minor)"))
         items = StockItem.where(id: rows.map(&:first)).includes(:base_unit).index_by(&:id)
         data = rows.filter_map { |id, q, v| items[id] && { item: StockSerializers.item(items[id]), quantity: (-q).to_s, value_minor: -v.to_i } }.sort_by { |r| r[:value_minor] }.reverse
@@ -61,15 +61,15 @@ module Api
 
       # GET /stock/actual_vs_theoretical?from&to&section_id  SPEC: counted stock against what recipes say should remain
       def actual_vs_theoretical
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 30
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 30
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         render json: Reports::Stock.actual_vs_theoretical(branch: current_branch, from: from, to: to, section_id: params[:section_id].presence)
       end
 
       # GET /stock/valuation_cogs?from&to  SPEC Valuation & COGS
       def valuation_cogs
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today.beginning_of_month
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         render json: Reports::Stock.valuation_cogs(branch: current_branch, from: from, to: to)
       end
 

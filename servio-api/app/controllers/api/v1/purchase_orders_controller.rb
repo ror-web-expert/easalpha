@@ -81,7 +81,7 @@ module Api
         po = PurchaseOrder.includes(lines: %i[stock_item unit]).find(params[:id])
         section = params[:section_id].present? ? StockSection.active.find(params[:section_id]) : StockSection.default_for(current_branch)
         grn = Purchasing::Orders.receive!(po, actor: current_membership, branch: current_branch, section: section, lines: params[:lines].present? ? lines_param : nil, invoice_ref: params[:invoice_ref],
-                                          received_on: params[:received_on].present? ? Date.parse(params[:received_on]) : Date.current, note: params[:note])
+                                          received_on: params[:received_on].present? ? Date.parse(params[:received_on]) : today, note: params[:note])
         render json: { receipt: SupplierSerializers.goods_receipt(grn, full: true), purchase_order: SupplierSerializers.purchase_order(po.reload, full: true) }, status: :created
       end
 

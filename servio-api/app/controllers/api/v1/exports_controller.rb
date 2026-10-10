@@ -16,14 +16,14 @@ module Api
         kind = params[:kind].to_s
         raise Api::Errors::NotFound.new("export.kind", "Unknown export #{kind}") unless KINDS.include?(kind)
         audit!("export", table_name: kind, after: { from: params[:from], to: params[:to] })
-        send_data send(:"csv_#{kind}"), filename: "servio-#{current_business.slug}-#{kind}-#{Date.current}.csv", type: "text/csv"
+        send_data send(:"csv_#{kind}"), filename: "servio-#{current_business.slug}-#{kind}-#{today}.csv", type: "text/csv"
       end
 
       private
 
       def range
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 30
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 30
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         from..to
       end
 

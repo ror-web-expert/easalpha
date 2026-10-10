@@ -33,7 +33,7 @@ module Api
       # SPEC report catalogue (Phase 7)
       def grand_spec = render(json: Reports::Catalogue.grand(branch: current_branch, from: @from, to: @to))
       def sales = render(json: Reports::Catalogue.sales_detail(branch: current_branch, from: @from, to: @to, cursor: params[:cursor], limit: params[:limit], order_type: params[:order_type], source: params[:source]).merge(from: @from, to: @to))
-      def sales_calendar = render(json: Reports::Catalogue.calendar(branch: current_branch, month: params[:month].present? ? Date.parse("#{params[:month]}-01") : Date.current.beginning_of_month))
+      def sales_calendar = render(json: Reports::Catalogue.calendar(branch: current_branch, month: params[:month].present? ? Date.parse("#{params[:month]}-01") : today.beginning_of_month))
       def operations = render(json: Reports::Catalogue.operations(branch: current_branch, from: @from, to: @to))
       def vouchers = render(json: Marketing::Vouchers.report(branch: current_branch, from: @from, to: @to))
       def loyalty_points = render(json: Reports::Catalogue.loyalty_points(branch: current_branch, from: @from, to: @to))

@@ -6,7 +6,7 @@ module Purchasing
     def create!(attrs, lines:, actor:, branch:, section:)
       supplier = Supplier.active.find(attrs[:supplier_id])
       po = attrs[:purchase_order_id].present? ? PurchaseOrder.find(attrs[:purchase_order_id]) : nil
-      received_on = attrs[:received_on].present? ? Date.parse(attrs[:received_on].to_s) : Date.current
+      received_on = attrs[:received_on].present? ? Date.parse(attrs[:received_on].to_s) : branch.business_day_for(Time.current)
       GoodsReceipt.transaction do
         grn = GoodsReceipt.create!(branch: branch, supplier: supplier, purchase_order: po, stock_section: section, number: DocumentCounter.next!("goods_receipt"), invoice_ref: attrs[:invoice_ref],
                                    invoice_key: attrs[:invoice_key], received_on: received_on, note: attrs[:note], by_membership_id: actor&.id)

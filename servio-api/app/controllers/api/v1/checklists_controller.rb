@@ -45,8 +45,8 @@ module Api
 
       # GET /checklists/runs?from=&to=
       def runs
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 7
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : business_today - 7
+        to = params[:to].present? ? Date.parse(params[:to]) : business_today
         render json: { data: ChecklistRun.where(branch_id: current_branch.id, business_day: from..to).order(business_day: :desc, kind: :asc).map { |r| run_json(r) } }
       end
 

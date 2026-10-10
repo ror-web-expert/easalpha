@@ -8,7 +8,7 @@ module Api
       before_action -> { require_permission!("PURCHASE_ORDERS", "purchasing.manage", "finance.view", "reports.view_all") }, only: :price_history
 
       def summary = render(json: Suppliers::Ledger.summary)
-      def aging = render(json: Suppliers::Ledger.aging_report(as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current))
+      def aging = render(json: Suppliers::Ledger.aging_report(as_of: params[:as_of].present? ? Date.parse(params[:as_of]) : today))
       def suggestions = render(json: { data: Purchasing::Demand.suggestions(branch: current_branch) })
 
       def forecast
@@ -27,16 +27,16 @@ module Api
 
       # GET /purchasing/price_history?from=&to=&flagged=true&q=  (SPEC Purchase Price History with verdicts)
       def price_history
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 90
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 90
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         rows = Purchasing::PriceHistory.rows(from: from, to: to, flagged_only: params[:flagged] == "true", q: params[:q])
         render json: { from: from, to: to, rows: rows, summary: Purchasing::PriceHistory.summary(rows), verdicts: Purchasing::PriceHistory::VERDICTS }
       end
 
       # GET /purchasing/report?from=&to=&group_by=supplier|item
       def report
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 30
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 30
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         receipts = GoodsReceipt.where(branch_id: current_branch.id, status: "posted", received_on: from..to).includes(:supplier)
         rows = if params[:group_by] == "item"
           GoodsReceiptLine.where(goods_receipt_id: receipts.select(:id)).includes(:stock_item, :unit).group_by(&:stock_item_id).map do |_, ls|

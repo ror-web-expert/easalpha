@@ -32,4 +32,10 @@ module RequestHelpers
   def within(business, &block)
     Tenancy::Context.with(business, &block)
   end
+
+  # The business day a business is trading in right now (06:01 to 02:01 by default), which is what "today" means
+  # everywhere in the API; the UTC calendar date differs from it for three hours every night.
+  def today_for(business)
+    Tenancy::Context.with(business) { Branch.order(:created_at).first.business_day_for(Time.current) }
+  end
 end

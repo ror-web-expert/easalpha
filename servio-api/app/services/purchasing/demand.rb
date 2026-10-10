@@ -14,8 +14,9 @@ module Purchasing
     end
 
     def forecast(branch:, lookback_days: 30, forecast_days: 7, safety_percent: 10, budget_minor: nil, category: nil)
-      from = Date.current - lookback_days
-      usage = StockLedgerEntry.where(branch_id: branch.id, kind: %w[sale sale_return packaging production_out], business_day: from..Date.current).group(:stock_item_id).sum(:quantity)
+      today = branch.business_day_for(Time.current)
+      from = today - lookback_days
+      usage = StockLedgerEntry.where(branch_id: branch.id, kind: %w[sale sale_return packaging production_out], business_day: from..today).group(:stock_item_id).sum(:quantity)
       items = StockItem.active.includes(:base_unit, :stock_levels).where(id: usage.keys)
       items = items.where(category: category) if category.present?
       rows = items.map do |i|

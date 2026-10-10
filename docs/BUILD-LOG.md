@@ -66,6 +66,10 @@ Autonomous build started 9 Oct 2026. One sprint at a time, each ending with auto
 
 Code optimisation (11 Oct 2026): Ruby style pass (907 layout fixes, no behaviour change), N+1 fixes on rider counts, sales detail and supplier aging, one shared date-range helper; Brakeman reports only the Rails 8.0 end-of-support notice; web lint clean, 272 Vitest.
 
+Web bundle optimisation (11 Oct 2026): the chart library and the PDF library load on demand; first-load JavaScript on the report and payroll pages fell from 386 to 389 kB to about 150 kB, the dashboard from 268 to 151 kB; the heaviest routes are now the POS screens at 178 to 212 kB.
+
+Push notifications and WhatsApp by QR (11 Oct 2026): Web Push with VAPID through the service worker for the admin panel, POS, kitchen display and rider app, enabled per device from Settings, Notifications, the POS shift page, the kitchen header and the rider app; every in-app notification becomes a push to the right people when its Notifications switch is on, and riders are pushed on assignment. WhatsApp can now send from any phone linked by scanning a QR code (Settings, WhatsApp, Connect a phone) through the `servio-whatsapp/` gateway, with the Meta Cloud API as the other provider. Verified against WhatsApp: the gateway returned a live QR within seconds.
+
 Phase 2 leaves for later: USB printing native module, Urdu and logo as a raster image on receipts, desktop auto-update. Phase 1 leaves for later phases: the dashboard cards, hourly charts and pills (Phase 3); the SPEC screens marked Soon in the sidebar (their phases). Open: the SPEC's unnamed 8th Orders permission code.
 
 Environment:

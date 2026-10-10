@@ -162,7 +162,7 @@ for (const p of adminPages) {
   const led = await api(`/suppliers/${sup.j.id}/ledger`, { token: T });
   const t = led.j.tiles;
   step("phase 5: supplier ledger ties out (opening + purchases - payments + adjustments = balance)", adj.status === 201 && t.ties_out === true && t.balance_minor === 10000 + 50000 - 20000 - 1000 && t.balance_minor === t.cached_balance_minor, JSON.stringify(t));
-  const tb = await api(`/finance/trial_balance?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`, { token: T });
+  const tb = await api(`/finance/trial_balance?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date(Date.now() + 86400000).toISOString().slice(0, 10)}`, { token: T });
   const bs = await api("/finance/balance_sheet", { token: T });
   step("phase 5: trial balance and balance sheet balance", tb.status === 200 && tb.j.balanced === true && bs.status === 200 && bs.j.balanced === true, JSON.stringify([tb.j?.balanced, bs.j?.balanced]));
 }
@@ -190,7 +190,7 @@ for (const p of adminPages) {
   await api("/attendance/revoke", { method: "POST", token: T, body: { employee_id: emp.j.id } });
   await api("/employees/rules", { method: "PUT", token: T, body: { rules_enabled: false } });
   const temp = await api("/riders", { method: "POST", token: T, body: { name: `E2E Temp ${Date.now()}`, temporary: true, lifetime_kind: "one_order" } });
-  const till = await api(`/reports/cashier_till?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`, { token: T });
+  const till = await api(`/reports/cashier_till?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date(Date.now() + 86400000).toISOString().slice(0, 10)}`, { token: T });
   step("phase 6: temporary rider created and Cashier Till report answers", temp.status === 201 && temp.j.lifetime_label === "One order" && till.status === 200 && Array.isArray(till.j.rows), JSON.stringify([temp.j?.lifetime_label, till.status]));
   if (temp.status === 201) await api(`/riders/${temp.j.id}`, { method: "DELETE", token: T });
 }
@@ -198,7 +198,7 @@ for (const p of adminPages) {
 
 // ---- Phase 7 gate (SPEC): the Grand Report ties out.
 {
-  const from = new Date(Date.now() - 86400000).toISOString().slice(0, 10); const to = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 86400000).toISOString().slice(0, 10); const to = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const g = await api(`/reports/grand_spec?from=${from}&to=${to}`, { token: T });
   const methodsSum = (g.j?.methods || []).reduce((a, m) => a + m.amount_minor, 0);
   const shareSum = (g.j?.methods || []).reduce((a, m) => a + m.share_percent, 0);

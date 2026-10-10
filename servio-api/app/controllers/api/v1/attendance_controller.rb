@@ -61,14 +61,14 @@ module Api
       # GET /attendance/ledger?employee_id=&month=YYYY-MM  SPEC Ledger: the month view per employee
       def ledger
         e = Employee.find(params.require(:employee_id))
-        month = params[:month].present? ? Date.parse("#{params[:month]}-01") : Date.current.beginning_of_month
+        month = params[:month].present? ? Date.parse("#{params[:month]}-01") : business_today.beginning_of_month
         rows = ::Attendance.includes(:employee).where(employee_id: e.id, business_day: month..month.end_of_month).order(:business_day)
         render json: { employee: { id: e.id, name: e.name }, month: month, days: rows.map { |a| PayrollSerializers.attendance(a) }, summary: Payroll::Attendance.month_summary(e, month), rule: PayrollSerializers.rule(e.rule) }
       end
 
       # GET /attendance/reports?month=YYYY-MM  per employee: present, late, half days, absents, overtime, fines, lost days
       def reports
-        month = params[:month].present? ? Date.parse("#{params[:month]}-01") : Date.current.beginning_of_month
+        month = params[:month].present? ? Date.parse("#{params[:month]}-01") : business_today.beginning_of_month
         rows = Employee.active.order(:name).map { |e| { employee: { id: e.id, name: e.name, designation: e.designation, department: e.department&.name }, summary: Payroll::Attendance.month_summary(e, month) } }
         totals = %i[present late half_days absent leave holiday overtime_minutes fines_minor missing_punches].index_with { |k| rows.sum { |r| r[:summary][k] } }
         render json: { month: month, rows: rows, totals: totals.merge(lost_days: rows.sum { |r| r[:summary][:lost_days] }) }
@@ -114,14 +114,14 @@ module Api
 
       def fill_absences
         require_permission!("payroll.manage")
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current - 1
+        to = params[:to].present? ? Date.parse(params[:to]) : business_today - 1
         from = params[:from].present? ? Date.parse(params[:from]) : to.beginning_of_month
         render json: { filled: Payroll::Attendance.fill_absences!(from: from, to: to) }
       end
 
       # GET /attendance/summary?month=YYYY-MM
       def summary
-        month = params[:month].present? ? Date.parse("#{params[:month]}-01") : Date.current.beginning_of_month
+        month = params[:month].present? ? Date.parse("#{params[:month]}-01") : business_today.beginning_of_month
         render json: { month: month, data: Employee.active.order(:name).map { |e| { employee: { id: e.id, name: e.name }, summary: Payroll::Attendance.month_summary(e, month) } } }
       end
 

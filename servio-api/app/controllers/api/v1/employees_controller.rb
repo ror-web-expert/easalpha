@@ -39,7 +39,7 @@ module Api
 
       def destroy
         e = Employee.active.find(params[:id])
-        e.update!(archived_at: Time.current, left_on: e.left_on || Date.current)
+        e.update!(archived_at: Time.current, left_on: e.left_on || today)
         head :no_content
       end
 

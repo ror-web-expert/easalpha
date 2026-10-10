@@ -11,7 +11,7 @@ module Api
       def balance_sheet = render(json: Finance::Statements.balance_sheet(as_of: as_of))
       def liabilities = render(json: Finance::Statements.liabilities(as_of: as_of))
       def equity = render(json: Finance::Statements.equity(as_of: as_of))
-      def as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current
+      def as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : today
 
       def ledger = render(json: Finance::Ledger.day(branch: current_branch, day: day_param))
       def reconciliation = render(json: Finance::Ledger.reconciliation(branch: current_branch, day: day_param))

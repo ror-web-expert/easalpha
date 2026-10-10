@@ -1008,3 +1008,15 @@ Permissions: RIDERS, RIDER_VIEW, RIDER_CREATE, RIDER_EDIT, RIDER_DELETE, DUMMY_R
 | GET | /api/v1/customers/insights?sort=; GET /customer_payments; POST /customers/:id/send_statement | customer screens |
 | GET, PATCH | /api/v1/website_config | the builder sections, slug, published |
 | GET | /api/v1/public/storefront/:slug; POST .../reviews | the public storefront |
+
+## Push notifications and WhatsApp by QR (11 Oct 2026)
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/push/public_key | VAPID public key |
+| GET, POST, DELETE | /api/v1/push/subscriptions | this member's browser subscriptions (app admin, pos, kitchen, rider) |
+| POST | /api/v1/push/test | a test push to the caller |
+| GET | /api/v1/whatsapp/connection | provider, status (disconnected, qr, connecting, connected, unavailable), qr image, phone |
+| POST | /api/v1/whatsapp/connection/start, /logout | begin pairing, unlink the phone |
+
+Environment: `WHATSAPP_GATEWAY_URL`, `WHATSAPP_GATEWAY_TOKEN` (the gateway in `servio-whatsapp/`), optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Setting `whatsapp.provider` chooses web (linked phone) or cloud (Meta).

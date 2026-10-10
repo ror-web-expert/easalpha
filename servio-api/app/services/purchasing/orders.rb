@@ -44,7 +44,8 @@ module Purchasing
     end
 
     # Receives the outstanding quantities (or the given per-line quantities) as a goods receipt.
-    def receive!(po, actor:, branch:, section:, lines: nil, invoice_ref: nil, received_on: Date.current, note: nil)
+    def receive!(po, actor:, branch:, section:, lines: nil, invoice_ref: nil, received_on: nil, note: nil)
+      received_on ||= branch.business_day_for(Time.current)
       raise Api::Errors::Conflict.new("purchase_order.status", "Order is #{po.status}") unless po.open? || po.draft?
       send!(po) if po.draft?
       by_id = po.lines.index_by(&:id)

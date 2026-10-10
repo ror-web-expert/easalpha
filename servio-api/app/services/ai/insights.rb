@@ -5,7 +5,9 @@ module Ai
   module Insights
     module_function
 
-    def pricing!(branch:, from: Date.current - 30, to: Date.current)
+    def pricing!(branch:, from: nil, to: nil)
+      to ||= branch.business_day_for(Time.current)
+      from ||= to - 30
       sales = Reports::Sales.new(branch: branch, from: from, to: to)
       items = sales.items(limit: 500)
       total_rev = items.sum { |r| r[:revenue_minor] }
@@ -46,7 +48,7 @@ module Ai
         r.merge(urgency: urgency, note: urgency == "critical" ? "Runs out within 2 days at the current pace" : (urgency == "soon" ? "Order before the forecast window ends" : "Covered for the window"))
       end
       payload = f.merge(rows: rows, summary: { items: rows.size, critical: rows.count { |r| r[:urgency] == "critical" }, soon: rows.count { |r| r[:urgency] == "soon" }, est_cost_minor: f[:total_cost_minor] })
-      AiInsight.create!(branch_id: branch.id, kind: "stock_forecast", from_date: Date.current - 30, to_date: Date.current + forecast_days, payload: payload, engine: "rules", generated_at: Time.current)
+      AiInsight.create!(branch_id: branch.id, kind: "stock_forecast", from_date: branch.business_day_for(Time.current) - 30, to_date: branch.business_day_for(Time.current) + forecast_days, payload: payload, engine: "rules", generated_at: Time.current)
     end
 
     def latest(kind, branch:) = AiInsight.where(kind: kind, branch_id: branch.id).order(generated_at: :desc).first

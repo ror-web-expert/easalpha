@@ -10,7 +10,7 @@ module Finance
       raise Api::Errors::BadRequest.new("fixed_asset.account", "Choose an account under Fixed Assets") unless asset_account.kind == "asset" && asset_account.code.start_with?("15") && asset_account.code != "1590"
       FixedAsset.transaction do
         asset = FixedAsset.create!(name: attrs[:name], gl_account: asset_account, accumulated_account: Chart.account("1590"), expense_account: Chart.account("5900"), cost_minor: attrs[:cost_minor].to_i,
-                                   salvage_minor: attrs[:salvage_minor].to_i, purchased_on: attrs[:purchased_on].presence || Date.current, useful_life_months: attrs[:useful_life_months].to_i,
+                                   salvage_minor: attrs[:salvage_minor].to_i, purchased_on: attrs[:purchased_on].presence || branch.business_day_for(Time.current), useful_life_months: attrs[:useful_life_months].to_i,
                                    note: attrs[:note], branch_id: branch.id)
         credit = case paid_from.to_s
         when "", "capital" then Chart.account("3010")
@@ -27,7 +27,8 @@ module Finance
     end
 
     # Posts depreciation for every full month up to the given date.
-    def depreciate!(asset, through: Date.current, actor: nil)
+    def depreciate!(asset, through: nil, actor: nil)
+      through ||= Journal.today
       raise Api::Errors::Conflict.new("fixed_asset.disposed", "#{asset.name} is disposed") unless asset.status == "active"
       from = asset.depreciated_through || asset.purchased_on
       months = (through.year * 12 + through.month) - (from.year * 12 + from.month)
@@ -43,7 +44,8 @@ module Finance
       asset
     end
 
-    def dispose!(asset, actor:, on: Date.current, proceeds_minor: 0, proceeds_account_id: nil)
+    def dispose!(asset, actor:, on: nil, proceeds_minor: 0, proceeds_account_id: nil)
+      on ||= Journal.today
       raise Api::Errors::Conflict.new("fixed_asset.disposed", "#{asset.name} is already disposed") unless asset.status == "active"
       FixedAsset.transaction do
         lines = [ { account: asset.accumulated_account, debit_minor: asset.accumulated_minor }, { account: asset.gl_account, credit_minor: asset.cost_minor } ]

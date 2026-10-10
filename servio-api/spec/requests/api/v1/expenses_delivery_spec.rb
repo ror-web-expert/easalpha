@@ -31,7 +31,7 @@ RSpec.describe "Expenses, overheads, delivery and riders", type: :request do
     expect(response).to have_http_status(:created)
     api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
     api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
-    get "/api/v1/expenses/summary?from=#{Date.current}&to=#{Date.current}", headers: headers
+    get "/api/v1/expenses/summary?from=#{today_for(biz)}&to=#{today_for(biz)}", headers: headers
     expect(json[:total_minor]).to eq(355_000)
     expect(json[:by_category].first[:category]).to eq("Utilities")
     expect(json[:paid_orders]).to eq(1)
@@ -41,7 +41,7 @@ RSpec.describe "Expenses, overheads, delivery and riders", type: :request do
     expect(response).to have_http_status(:ok)
     expect(json[:voided_at]).to be_present
     expect(cash_balance).to eq(-5_000 + 9_280)
-    get "/api/v1/expenses?from=#{Date.current}&to=#{Date.current}", headers: headers
+    get "/api/v1/expenses?from=#{today_for(biz)}&to=#{today_for(biz)}", headers: headers
     expect(json[:data].size).to eq(1)
   end
 

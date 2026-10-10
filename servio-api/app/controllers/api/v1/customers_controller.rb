@@ -20,8 +20,8 @@ module Api
 
       # GET /customers/insights?sort=spent|orders|balance|recent|name&from&to  (SPEC Customer Insights)
       def insights
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current - 90
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today - 90
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         customers = Customer.active.where(is_walk_in: false).to_a
         ids = customers.map(&:id)
         orders = Order.where(customer_id: ids, business_day: from..to, status: %w[paid closed refunded])

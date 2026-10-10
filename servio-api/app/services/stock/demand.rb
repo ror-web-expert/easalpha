@@ -10,7 +10,7 @@ module Stock
       items = items.where(category: category) if category.present?
       on_order = PurchaseOrderLine.joins(:purchase_order).where(purchase_orders: { status: %w[sent partial] }).group(:stock_item_id)
                                   .pluck(:stock_item_id, Arel.sql("SUM(base_quantity - received_base_qty)")).to_h
-      usage = StockLedgerEntry.where(branch_id: branch.id, kind: %w[sale packaging production_out], business_day: (Date.current - lookback_days)..Date.current)
+      usage = StockLedgerEntry.where(branch_id: branch.id, kind: %w[sale packaging production_out], business_day: (branch.business_day_for(Time.current) - lookback_days)..branch.business_day_for(Time.current))
                               .group(:stock_item_id).sum(:quantity).transform_values { |q| -q / lookback_days }
       rows = items.map do |i|
         levels = i.stock_levels.to_a

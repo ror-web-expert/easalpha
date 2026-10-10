@@ -122,7 +122,7 @@ RSpec.describe "Stock", type: :request do
       expect { conn.transaction(requires_new: true) { conn.execute("UPDATE stock_ledger_entries SET quantity = 1 WHERE id = #{conn.quote(original[:id])}") } }.to raise_error(ActiveRecord::StatementInvalid, /insert-only/)
       expect { conn.transaction(requires_new: true) { conn.execute("DELETE FROM stock_ledger_entries WHERE id = #{conn.quote(original[:id])}") } }.to raise_error(ActiveRecord::StatementInvalid, /insert-only/)
     end
-    api_patch "/api/v1/inventory_settings", { day_lock_date: Date.current.to_s }, headers: headers
+    api_patch "/api/v1/inventory_settings", { day_lock_date: today_for(biz).to_s }, headers: headers
     api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: s[:kitchen].id, post: true, lines: [ { stock_item_id: s[:buns].id, unit_id: s[:pcs].id, quantity: 1 } ] }, headers: headers
     expect(response).to have_http_status(:conflict)
     expect(json[:error][:code]).to eq("stock.day_locked")

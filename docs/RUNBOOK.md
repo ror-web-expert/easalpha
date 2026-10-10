@@ -70,3 +70,8 @@ cd servio-api && bundle exec brakeman -q      # security scan
 - Run `bin/jobs` as a separate process. Recurring jobs are in `config/recurring.yml` (tax queue sweep every 5 minutes, daily summaries at 23:00 Asia/Karachi). Add `BillingLifecycleJob` daily.
 - Set `CORS_ORIGINS` to the web app's origin(s). Set `RAILS_MASTER_KEY`.
 - Deploy by tag between 3 pm and 5 pm Pakistan time, as the blueprint says.
+
+## WhatsApp by QR and push notifications
+
+- Gateway: `cd servio-whatsapp && npm install && WHATSAPP_GATEWAY_TOKEN=<secret> npm start` (port 3010). Start the API with `WHATSAPP_GATEWAY_URL=http://localhost:3010 WHATSAPP_GATEWAY_TOKEN=<secret>`. In the admin panel open Settings, WhatsApp, Connect a phone, press Start and scan the QR with WhatsApp (Linked devices, Link a device). Sessions persist in `servio-whatsapp/sessions/`.
+- Push: nothing to configure for a single server (keys are generated and stored). For several API servers set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (mailto:). Users enable push per device from Settings, Notifications (admin), the POS shift page, the kitchen header or the rider app.

@@ -10,7 +10,7 @@ module Api
       # GET /finance/accounts?kind=&as_of=   every account with its balance as of the day
       def index
         Finance::Chart.seed! unless GlAccount.exists?
-        as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : Date.current
+        as_of = params[:as_of].present? ? Date.parse(params[:as_of]) : today
         balances = Finance::Statements.balances(as_of: as_of)
         scope = GlAccount.active.order(:code)
         scope = scope.where(kind: params[:kind]) if params[:kind].present?
@@ -24,14 +24,14 @@ module Api
 
       def show
         a = GlAccount.find(params[:id])
-        render json: FinanceSerializers.gl_account(a, balance: Finance::Statements.balances(as_of: Date.current)[a.id] || 0)
+        render json: FinanceSerializers.gl_account(a, balance: Finance::Statements.balances(as_of: today)[a.id] || 0)
       end
 
       # GET /finance/accounts/:id/ledger?from=&to=   one account's lines with a running balance (Combined Ledger drill-down)
       def ledger
         a = GlAccount.find(params[:id])
-        from = params[:from].present? ? Date.parse(params[:from]) : Date.current.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : Date.current
+        from = params[:from].present? ? Date.parse(params[:from]) : today.beginning_of_month
+        to = params[:to].present? ? Date.parse(params[:to]) : today
         render json: Finance::Statements.account_ledger(a, from: from, to: to)
       end
 

@@ -40,7 +40,7 @@ RSpec.describe "SPEC order flows", type: :request do
       expect(json[:data].size).to eq(1)
       get "/api/v1/orders?from=2020-01-01&to=2020-01-02", headers: headers
       expect(json[:data]).to be_empty
-      get "/api/v1/orders?from=#{Date.current - 1}&to=#{Date.current + 1}&sort=amount_desc", headers: headers
+      get "/api/v1/orders?from=#{today_for(biz) - 1}&to=#{today_for(biz) + 1}&sort=amount_desc", headers: headers
       expect(json[:data].size).to eq(1)
       get "/api/v1/orders?sort=upside_down", headers: headers
       expect(response).to have_http_status(:bad_request)
@@ -150,7 +150,7 @@ RSpec.describe "SPEC order flows", type: :request do
       pay(b[:id], b[:total_minor])
       within(biz) { Order.find(b[:id]).update_columns(status: "served") } # paid but never completed
       old = create_order([ { product_id: m[:chai].id } ])
-      within(biz) { Order.find(old[:id]).update_columns(business_day: Date.current - 3) }
+      within(biz) { Order.find(old[:id]).update_columns(business_day: today_for(biz) - 3) }
       get "/api/v1/orders/pending", headers: headers
       expect(json[:tiles]).to include(today: 2, previous_days: 1, all_time: 3)
       expect(json[:calendar].size).to eq(2)

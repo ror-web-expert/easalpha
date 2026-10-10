@@ -88,7 +88,9 @@ module Suppliers
       { as_of: as_of, rows: rows, totals: totals, suppliers_with_due: rows.size }
     end
 
-    def insights(supplier, from: Date.current - 90, to: Date.current)
+    def insights(supplier, from: nil, to: nil)
+      to ||= Finance::Journal.today
+      from ||= to - 90
       receipts = GoodsReceipt.where(supplier_id: supplier.id, status: "posted", received_on: from..to)
       items = GoodsReceiptLine.joins(:goods_receipt).where(goods_receipts: { id: receipts.select(:id) }).includes(:stock_item, :unit).group_by(&:stock_item_id).map do |_, ls|
         { item: StockSerializers.item(ls.first.stock_item), receipts: ls.size, quantity: ls.sum(&:base_quantity).to_s, value_minor: ls.sum(&:line_total_minor),

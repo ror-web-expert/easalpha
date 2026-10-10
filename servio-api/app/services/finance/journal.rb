@@ -25,14 +25,19 @@ module Finance
       end
     end
 
-    def reverse!(entry, actor:, business_day: Date.current, description: nil)
+    # The business day for a posting made now: the current branch's, else the first branch's, else the calendar date.
+    def today = (Current.branch || Branch.unscoped.order(:created_at).first)&.business_day_for(Time.current) || Date.current
+
+    def reverse!(entry, actor:, business_day: nil, description: nil)
+      business_day ||= today
       raise Api::Errors::Conflict.new("journal.reversed", "#{entry.label} is already reversed") if entry.reversed?
       post!(business_day: business_day, kind: "reversal", reverses: entry, actor: actor, description: description || "Reversal of #{entry.label}", branch_id: entry.branch_id,
             lines: entry.lines.map { |l| { account: l.gl_account, debit_minor: l.credit_minor, credit_minor: l.debit_minor, description: l.description } })
     end
 
     # Reverses whatever was posted for a record (a goods receipt that is cancelled, for example).
-    def reverse_for!(ref, actor: nil, business_day: Date.current)
+    def reverse_for!(ref, actor: nil, business_day: nil)
+      business_day ||= today
       JournalEntry.where(ref_table: ref.class.table_name, ref_id: ref.id, reversed_by_id: nil, kind: "auto").find_each { |e| reverse!(e, actor: actor, business_day: business_day) }
     end
 
@@ -75,13 +80,13 @@ module Finance
     # Goods received from a supplier: inventory against payables.
     def inventory_receipt!(grn)
       return if grn.total_minor.to_i.zero?
-      post!(business_day: grn.business_day || Date.current, description: "#{grn.label} from #{grn.supplier.name}", ref: grn, branch_id: grn.branch_id,
+      post!(business_day: grn.business_day || today, description: "#{grn.label} from #{grn.supplier.name}", ref: grn, branch_id: grn.branch_id,
             lines: [ { account: "1200", debit_minor: grn.total_minor }, { account: "2010", credit_minor: grn.total_minor } ])
     end
 
     def inventory_return!(ret)
       return if ret.amount_minor.to_i.zero?
-      post!(business_day: ret.business_day || Date.current, description: "#{ret.label} to #{ret.supplier.name}", ref: ret, branch_id: ret.branch_id,
+      post!(business_day: ret.business_day || today, description: "#{ret.label} to #{ret.supplier.name}", ref: ret, branch_id: ret.branch_id,
             lines: [ { account: "2010", debit_minor: ret.amount_minor }, { account: "1200", credit_minor: ret.amount_minor } ])
     end
 

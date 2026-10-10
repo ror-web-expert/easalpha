@@ -26,7 +26,8 @@ class PaymentAccount < ApplicationRecord
 
   def reverse!(entry, by: nil, description: nil)
     PaymentAccount.transaction do
-      rev = post!(kind: entry.kind, amount_minor: -entry.amount_minor, business_day: Date.current, description: description || "Reversal of #{entry.id}", by: by, branch_id: entry.branch_id)
+      day = Branch.unscoped.find_by(id: entry.branch_id || branch_id)&.business_day_for(Time.current) || Date.current
+      rev = post!(kind: entry.kind, amount_minor: -entry.amount_minor, business_day: day, description: description || "Reversal of #{entry.id}", by: by, branch_id: entry.branch_id)
       entry.update!(reversed_by_entry_id: rev.id)
       rev
     end

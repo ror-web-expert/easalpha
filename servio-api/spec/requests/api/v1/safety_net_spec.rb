@@ -37,7 +37,7 @@ RSpec.describe "Safety net, deduction health and balance rebuild", type: :reques
     o = paid_order
     expect(level(buns)).to eq(100)
     api_patch "/api/v1/inventory_settings", { deduct_stock_on_sale: true }, headers: headers
-    within(biz) { Order.find(o[:id]).update_columns(stock_deducted_at: nil, business_day: Date.current - 2) }
+    within(biz) { Order.find(o[:id]).update_columns(stock_deducted_at: nil, business_day: today_for(biz) - 2) }
     get "/api/v1/stock/deduction_health", headers: headers
     expect(json[:buckets][:pending]).to eq(1)
     expect(json[:safety_net][:last_run_at]).to be_nil
@@ -45,7 +45,7 @@ RSpec.describe "Safety net, deduction health and balance rebuild", type: :reques
     expect(response).to have_http_status(:ok)
     expect(json).to include(checked: 1, deducted: 1, errors: 0)
     expect(level(buns)).to eq(98)
-    within(biz) { expect(StockLedgerEntry.where(ref_table: "orders", ref_id: o[:id], kind: "sale").pluck(:business_day).uniq).to eq([ Date.current - 2 ]) }
+    within(biz) { expect(StockLedgerEntry.where(ref_table: "orders", ref_id: o[:id], kind: "sale").pluck(:business_day).uniq).to eq([ today_for(biz) - 2 ]) }
     api_post "/api/v1/stock/safety_net/run", {}, headers: headers
     expect(json).to include(checked: 0, deducted: 0)
     api_post "/api/v1/stock/deduction_health/#{o[:id]}/retry", {}, headers: headers
@@ -61,9 +61,9 @@ RSpec.describe "Safety net, deduction health and balance rebuild", type: :reques
     buns = seed!
     within(biz) do
       sec = StockSection.default_for(branch)
-      o = Order.create!(branch: branch, order_type: "walk_in", status: "paid", business_day: Date.current)
-      e = StockLedgerEntry.create!(branch: branch, stock_section: sec, stock_item: buns, kind: "sale", quantity: -1, before_qty: 100, after_qty: 99, ref_table: "orders", ref_id: o.id, business_day: Date.current, occurred_at: Time.current)
-      dup = StockLedgerEntry.new(branch: branch, stock_section: sec, stock_item: buns, kind: "sale", quantity: -1, before_qty: 99, after_qty: 98, ref_table: "orders", ref_id: o.id, business_day: Date.current, occurred_at: Time.current)
+      o = Order.create!(branch: branch, order_type: "walk_in", status: "paid", business_day: today_for(biz))
+      e = StockLedgerEntry.create!(branch: branch, stock_section: sec, stock_item: buns, kind: "sale", quantity: -1, before_qty: 100, after_qty: 99, ref_table: "orders", ref_id: o.id, business_day: today_for(biz), occurred_at: Time.current)
+      dup = StockLedgerEntry.new(branch: branch, stock_section: sec, stock_item: buns, kind: "sale", quantity: -1, before_qty: 99, after_qty: 98, ref_table: "orders", ref_id: o.id, business_day: today_for(biz), occurred_at: Time.current)
       expect { dup.save!(validate: false) }.to raise_error(ActiveRecord::RecordNotUnique)
       expect(e).to be_persisted
     end
