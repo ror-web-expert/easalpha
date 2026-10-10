@@ -34,7 +34,7 @@ interface Props {
 }
 
 export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride }: Props) {
-  const t = computeTotals(cart.lines, { orderType: cart.order_type, settings, staffMeal: cart.is_staff_meal });
+  const t = computeTotals(cart.lines, { orderType: cart.order_type, settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor });
   const empty = cart.lines.length === 0;
   return (
     <div className="flex h-full flex-col bg-card">
@@ -64,6 +64,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
                   {l.notes ? <div className="text-xs italic text-fg-secondary">“{l.notes}”</div> : null}
                   <div className="text-xs text-fg-muted">
                     {l.price_override_minor != null ? <span className="text-warning">override </span> : null}{formatMoney(l.price_override_minor ?? l.unit_price_minor, currency)}{lt.modifiers_minor ? ` + ${formatMoney(lt.modifiers_minor, currency)}` : ""} each
+                    {lt.line_discount_minor ? <span className="text-success"> · {l.discount_type === "percent" ? `${Number(l.discount_value)}% off` : "discount"} -{formatMoney(lt.line_discount_minor, currency)}</span> : null}
                   </div>
                 </button>
                 <div className="text-right font-semibold tabular">{formatMoney(lt.line_total_minor, currency)}</div>
@@ -83,6 +84,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
       <div className="border-t p-3">
         <div className="space-y-0.5 text-sm text-fg-secondary">
           <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(t.subtotal_minor, currency)}</span></div>
+          {t.discount_minor ? <div className="flex justify-between"><span>Discount</span><span className="tabular">-{formatMoney(t.discount_minor, currency)}</span></div> : null}
           {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {t.service_charge_percent}%</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
           {t.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(t.tax_minor, currency)}</span></div> : null}
         </div>

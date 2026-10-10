@@ -35,7 +35,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/products/catalog", label: "Catalog", icon: Package, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/deals", label: "Deals", icon: Gift, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/promotions", label: "Promotions", icon: Percent, perms: ["menu.view", "menu.edit"] },
-      { href: "/admin/products/quick-add", label: "Quick Add Menu", icon: Zap, perms: ["menu.view", "menu.edit"], soon: true },
+      { href: "/admin/products/quick-add", label: "Quick Add Menu", icon: Zap, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/categories", label: "Categories", icon: Layers, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/modifier-groups", label: "Modifier groups", icon: SlidersHorizontal, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/tax-rates", label: "Tax rates", icon: Tag },

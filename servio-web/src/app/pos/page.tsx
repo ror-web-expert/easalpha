@@ -6,12 +6,13 @@ import { useCartStore } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
 import { errorMessage } from "@/lib/api";
-import type { Deal, DiningTable, Order, PaymentInput, Product, Receipt } from "@/lib/types";
-import { repriceLines, taxFor, type CartLine } from "@/lib/pricing";
+import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt } from "@/lib/types";
+import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
 import { holdOrder, payOrder, saveOrder, loadOrderForEdit } from "@/lib/pos-actions";
 import { useApproval } from "@/components/approval";
 import { PosShell } from "@/components/pos/shell";
 import { ItemGrid } from "@/components/pos/item-grid";
+import { QuickAddBar } from "@/components/pos/quick-add-bar";
 import { ModifierSheet } from "@/components/pos/modifier-sheet";
 import { OrderPanel, OrderTypeSwitch } from "@/components/pos/order-panel";
 import { PaymentDialog } from "@/components/pos/payment-dialog";
@@ -34,6 +35,8 @@ function SellScreen() {
   const searchRef = useRef<HTMLInputElement>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [deal, setDeal] = useState<Deal | null>(null);
+  /** Variant a Quick Add item named, pre-selected when its product still needs the modifier sheet. */
+  const [quickVariant, setQuickVariant] = useState<string | null>(null);
   const [editing, setEditing] = useState<CartLine | null>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
@@ -47,13 +50,16 @@ function SellScreen() {
   const [notes, setNotes] = useState("");
   const settings = catalog?.business.settings;
   const currency = catalog?.business.currency;
+  const display = displaySettings(settings);
+  // Lines loaded from the server or an older cache carry no product discount; copy it from the catalog so totals match.
+  const loadCart = useCallback((c: Parameters<typeof load>[0]) => load({ ...c, lines: attachDiscounts(c.lines, useCatalogStore.getState().catalog) }), [load]);
 
   // ?order=<id> opens an existing order (from the orders tab / table picker)
   useEffect(() => {
     const id = params.get("order");
     if (!id) return;
-    loadOrderForEdit(id).then((c) => { load(c); router.replace("/pos"); }).catch((e) => toast.error("Could not open order", errorMessage(e)));
-  }, [params, load, router]);
+    loadOrderForEdit(id).then((c) => { loadCart(c); router.replace("/pos"); }).catch((e) => toast.error("Could not open order", errorMessage(e)));
+  }, [params, loadCart, router]);
   useEffect(() => { if (settings?.default_order_type) useCartStore.setState({ defaultType: settings.default_order_type }); }, [settings?.default_order_type]);
 
   const newOrder = useCallback(() => { reset(); setReceipt(null); setPayOpen(false); }, [reset]);
@@ -64,7 +70,18 @@ function SellScreen() {
     const tax = taxFor(p, catalog);
     const branchId = catalog?.branch?.id;
     const price = (p.prices ?? []).find((x) => !x.variant_id && x.order_type === cart.order_type && (x.branch_id === branchId || !x.branch_id))?.price_minor ?? p.base_price_minor;
-    addLine({ product_id: p.id, variant_id: null, name: p.name, unit_price_minor: price, quantity: 1, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id });
+    addLine({ product_id: p.id, variant_id: null, name: p.name, unit_price_minor: price, quantity: 1, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
+  };
+  // SPEC "Quick Add Menu": one tap adds the pinned product/variant with quantity 1. Only a required modifier group opens the sheet.
+  const quickAdd = (item: QuickAddItem) => {
+    if (!catalog) return;
+    const p = catalog.products.find((x) => x.id === item.product_id);
+    if (!p || !p.active || p.archived_at) { toast.error("Not on the menu", `${item.name} is no longer available.`); return; }
+    const variant = item.variant_id ? p.variants?.find((v) => v.id === item.variant_id) ?? null : null;
+    const needsChoice = (p.modifier_group_ids ?? []).some((id) => { const g = catalog.modifier_groups.find((x) => x.id === id); return !!g && (g.required || g.min_select > 0); });
+    if (needsChoice) { setEditing(null); setQuickVariant(variant?.id ?? null); setProduct(p); return; }
+    const tax = taxFor(p, catalog);
+    addLine({ product_id: p.id, variant_id: variant?.id ?? null, name: variant ? `${p.name} (${variant.name})` : p.name, unit_price_minor: priceFor(p, cart.order_type, variant, catalog.branch?.id), quantity: 1, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
   };
   const editLine = (l: CartLine) => {
     const p = l.product_id ? catalog?.products.find((x) => x.id === l.product_id) : null;
@@ -80,14 +97,14 @@ function SellScreen() {
     const lines: CartLine[] = (o.items ?? []).filter((i) => i.status !== "cancelled").map((i) => {
       const p = catalog?.products.find((x) => x.id === i.product_id) ?? null;
       const tax = taxFor(p, catalog);
-      return { key: crypto.randomUUID(), product_id: i.product_id ?? undefined, variant_id: i.variant_id, deal_id: i.deal_id ?? undefined, name: i.name, unit_price_minor: p ? (i.variant_id ? p.variants?.find((v) => v.id === i.variant_id)?.price_minor ?? p.base_price_minor : p.base_price_minor) : i.unit_price_minor, quantity: Number(i.quantity), notes: i.notes, modifiers: (i.modifiers ?? []).filter((m) => m.modifier_id).map((m) => ({ modifier_id: m.modifier_id!, name: m.name, price_minor: m.price_minor, quantity: Number(m.quantity) })), tax_rate: tax.rate, tax_inclusive: tax.inclusive, open_item: i.open_item ? { name: i.name, price_minor: i.unit_price_minor } : undefined };
+      return { key: crypto.randomUUID(), product_id: i.product_id ?? undefined, variant_id: i.variant_id, deal_id: i.deal_id ?? undefined, name: i.name, unit_price_minor: p ? (i.variant_id ? p.variants?.find((v) => v.id === i.variant_id)?.price_minor ?? p.base_price_minor : p.base_price_minor) : i.unit_price_minor, quantity: Number(i.quantity), notes: i.notes, modifiers: (i.modifiers ?? []).filter((m) => m.modifier_id).map((m) => ({ modifier_id: m.modifier_id!, name: m.name, price_minor: m.price_minor, quantity: Number(m.quantity) })), tax_rate: tax.rate, tax_inclusive: tax.inclusive, open_item: i.open_item ? { name: i.name, price_minor: i.unit_price_minor } : undefined, ...productDiscountFields(p) };
     });
     patch({ lines: repriceLines(lines, cart.order_type, catalog, catalog?.branch?.id), order_type: o.order_type });
     toast.success("Last order repeated");
   };
   const pickTable = async (t: DiningTable | null) => {
     if (t?.current_order_id && t.current_order_id !== cart.id) {
-      try { load(await loadOrderForEdit(t.current_order_id)); toast.info(`Opened the running order on ${t.code}`); } catch (e) { toast.error("Could not open table order", errorMessage(e)); }
+      try { loadCart(await loadOrderForEdit(t.current_order_id)); toast.info(`Opened the running order on ${t.code}`); } catch (e) { toast.error("Could not open table order", errorMessage(e)); }
       return;
     }
     patch({ table_id: t?.id ?? null, table_code: t?.code ?? null });
@@ -146,15 +163,18 @@ function SellScreen() {
       <div className="grid h-full grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
         <div className="flex min-h-0 flex-col">
           <div className="border-b bg-card p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} /></div>
-          <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} /></div>
+          <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} /></div>
         </div>
-        <div className="min-h-0 border-l">
-          <OrderPanel cart={cart} currency={currency} settings={settings} onQty={setQty} onEditLine={editLine} onOverride={setOverride} onRemove={removeLine}
-            onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? patch({ is_staff_meal: false, staff_meal_reason: "" }) : setStaffOpen(true))}
-            onHold={hold} onSend={send} onPay={() => setPayOpen(true)} onNew={newOrder} busy={busy} canOverride={true} />
+        <div className="flex min-h-0 flex-col border-l">
+          <QuickAddBar items={catalog.quick_add_items} currency={currency} showPrices={display.showPrices} onPick={quickAdd} />
+          <div className="min-h-0 flex-1">
+            <OrderPanel cart={cart} currency={currency} settings={settings} onQty={setQty} onEditLine={editLine} onOverride={setOverride} onRemove={removeLine}
+              onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? patch({ is_staff_meal: false, staff_meal_reason: "" }) : setStaffOpen(true))}
+              onHold={hold} onSend={send} onPay={() => setPayOpen(true)} onNew={newOrder} busy={busy} canOverride={true} />
+          </div>
         </div>
       </div>
-      <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} onClose={() => { setProduct(null); setDeal(null); setEditing(null); }} onAdd={onSheetAdd} />
+      <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} initialVariantId={quickVariant} onClose={() => { setProduct(null); setDeal(null); setEditing(null); setQuickVariant(null); }} onAdd={onSheetAdd} />
       <CustomerDialog open={customerOpen} onClose={() => setCustomerOpen(false)} onPick={(c) => patch({ customer: c })} onRepeat={repeatOrder} />
       <TablePicker open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} current={cart.table_id} onPick={pickTable} onRefresh={refreshTables} />
       <OpenItemDialog open={openItem} onClose={() => setOpenItem(false)} onAdd={(name, price) => { const tax = taxFor(null, catalog); addLine({ name, unit_price_minor: price, quantity: 1, modifiers: [], open_item: { name, price_minor: price }, tax_rate: tax.rate, tax_inclusive: tax.inclusive }); }} />

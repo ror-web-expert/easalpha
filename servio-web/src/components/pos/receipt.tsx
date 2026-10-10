@@ -4,8 +4,8 @@ import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 
-/** Receipt as printed on an 80 mm roll. Wrap in .print-area to print. */
-export function ReceiptView({ r }: { r: Receipt }) {
+/** Receipt as printed on an 80 mm roll. Wrap in .print-area to print. `branding` carries the SPEC receipt-branding settings (second phone, footer QR). */
+export function ReceiptView({ r, branding }: { r: Receipt; branding?: { secondaryPhone?: string | null; footerQrUrl?: string | null } }) {
   const c = r.business?.currency ?? "PKR";
   const m = (v: number | null | undefined) => formatMoney(v, c);
   const row = (l: string, v: string, bold = false) => (
@@ -19,6 +19,7 @@ export function ReceiptView({ r }: { r: Receipt }) {
         {r.branch?.name ? <div>{r.branch.name}</div> : null}
         {r.branch?.address ? <div>{r.branch.address}{r.branch.city ? `, ${r.branch.city}` : ""}</div> : null}
         {r.branch?.phone ? <div>{r.branch.phone}</div> : null}
+        {branding?.secondaryPhone && branding.secondaryPhone !== r.branch?.phone ? <div>{branding.secondaryPhone}</div> : null}
         {r.branch?.tax_registration?.ntn ? <div>NTN {r.branch.tax_registration.ntn}</div> : null}
         {r.header ? <div className="mt-1 whitespace-pre-line">{r.header}</div> : null}
       </div>
@@ -34,6 +35,7 @@ export function ReceiptView({ r }: { r: Receipt }) {
         <div key={i} className="mb-0.5">
           <div className="flex justify-between gap-2"><span>{l.quantity} x {l.name}</span><span className="tabular">{m(l.line_total_minor)}</span></div>
           {l.modifiers?.map((mo, j) => <div key={j} className="pl-3 text-[11px]">+ {mo.name}{mo.price_minor ? ` ${m(mo.price_minor)}` : ""}</div>)}
+          {l.discount_minor ? <div className="flex justify-between pl-3 text-[11px]"><span>Discount</span><span className="tabular">-{m(l.discount_minor)}</span></div> : null}
           {l.notes ? <div className="pl-3 text-[11px] italic">{l.notes}</div> : null}
         </div>
       ))}
@@ -62,6 +64,7 @@ export function ReceiptView({ r }: { r: Receipt }) {
       {r.tax_invoice?.qr ? <div className="mt-1 break-all text-center text-[9px]">{r.tax_invoice.qr}</div> : null}
       <div className="my-1 border-t border-dashed border-black" />
       {r.footer ? <div className="whitespace-pre-line text-center">{r.footer}</div> : null}
+      {branding?.footerQrUrl ? <div className="mt-1 break-all text-center text-[9px]">{branding.footerQrUrl}</div> : null}
       {r.feedback_whatsapp ? <div className="text-center text-[11px]">WhatsApp {r.feedback_whatsapp}</div> : null}
     </div>
   );

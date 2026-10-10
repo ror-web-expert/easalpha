@@ -127,7 +127,7 @@ export interface Menu {
 }
 export interface Category {
   id: ID; menu_id: ID; name: string; name_ur: string | null; image_key: string | null; sort_order: number; show_online: boolean;
-  station_id: ID | null; product_count: number | null; archived_at: string | null;
+  station_id: ID | null; product_count: number | null; archived_at: string | null; subtitle?: string | null;
 }
 export interface Variant { id: ID; product_id: ID; name: string; price_minor: number; sku: string | null; sort_order: number }
 export interface ProductPrice { id?: ID; variant_id: ID | null; branch_id: ID | null; order_type: string; price_minor: number }
@@ -136,14 +136,36 @@ export interface Product {
   base_price_minor: number; tax_rate_id: ID | null; is_favourite: boolean; show_online: boolean; active: boolean; sold_by_weight: boolean;
   weight_unit: string | null; allergens: string[] | null; dietary_tags: string[] | null; station_id: ID | null; sort_order: number;
   archived_at: string | null; updated_at: string; variants?: Variant[]; prices?: ProductPrice[]; modifier_group_ids?: ID[];
+  /** SPEC Basic Info: Discount with a %/Rs switch. discount_value is a decimal string ("10" or "50.00"); null type = no discount. */
+  discount_value?: string | null; discount_type?: DiscountType | null;
+  /** SPEC: PCT code for PRA e-IMS tax reporting. */
+  pct_code?: string | null;
 }
+export type DiscountType = "percent" | "amount";
 export interface Modifier { id: ID; name: string; name_ur: string | null; price_minor: number; sort_order: number; active: boolean }
 export interface ModifierGroup { id: ID; name: string; min_select: number; max_select: number | null; required: boolean; sort_order: number; modifiers: Modifier[] }
 export interface DealItem { id?: ID; product_id: ID; variant_id: ID | null; quantity: number; choice_group: string | null }
 export interface Deal {
   id: ID; name: string; description: string | null; image_key: string | null; price_minor: number; active: boolean; show_online: boolean;
-  valid_from: string | null; valid_to: string | null; tax_rate_id: ID | null; sort_order: number; items: DealItem[];
+  valid_from: string | null; valid_to: string | null; tax_rate_id: ID | null; sort_order: number; items: DealItem[]; is_favourite?: boolean;
 }
+
+// ---- SPEC "Menu and catalog": Order Inventory consumables, Quick Add Menu, Product Codes, Import JSON ----
+export type ConsumableOrderType = "dine_in" | "takeaway" | "delivery" | "walk_in" | "online";
+export interface OrderTypeConsumable {
+  id: ID; product_id: ID; variant_id: ID | null; variant_name: string | null; order_type: ConsumableOrderType | string; stock_item_id: ID; item_name: string;
+  quantity: string; unit_id: ID; unit_code: string;
+}
+export interface OrderTypeConsumableInput { variant_id?: ID | null; order_type: string; stock_item_id: ID; quantity: string | number; unit_id: ID }
+export interface QuickAddItem { id: ID; product_id: ID; variant_id: ID | null; position: number; name: string; variant_name: string | null; price_minor: number; image_key: string | null; active: boolean }
+export interface ProductCode { id: ID; name: string; category: string; sku: string | null; pct_code: string | null }
+export type MenuImportSource = "servio_json" | "arfapos_json" | "csv";
+export interface MenuImportRow { line: number; category: string | null; name: string | null; name_ur: string | null; price_minor: number | null; sku: string | null; description: string | null; image: string | null; error: string | null }
+export interface MenuImportPreview {
+  source: MenuImportSource; rows: MenuImportRow[]; row_count: number; valid_count: number; error_rows: { line: number; error: string; name: string | null }[];
+  categories: string[]; import_job_id: ID; parse_errors: string[];
+}
+export interface MenuImportResult { created: number; updated: number; skipped: number; menu_id: ID }
 export interface Promotion {
   id: ID; name: string; kind: string; value: number; coupon_code: string | null; applies_to: string | null; target_ids: ID[] | null; days: string[] | null;
   start_time: string | null; end_time: string | null; valid_from: string | null; valid_to: string | null; unit_limit: number | null; units_sold: number;
@@ -156,6 +178,7 @@ export interface Catalog {
   branch: Branch | null;
   tax_rates: TaxRate[]; stations: Station[]; menus: Menu[]; categories: Category[]; products: Product[];
   modifier_groups: ModifierGroup[]; deals: Deal[]; promotions: Promotion[]; since: string | null;
+  quick_add_items?: QuickAddItem[];
 }
 
 // ---- Orders ----
@@ -322,6 +345,7 @@ export interface SyncChanges {
   cursor: string; since: string | null; business: Business; branch: Branch; menus: Menu[]; categories: Category[]; products: Product[];
   modifier_groups: ModifierGroup[]; deals: Deal[]; promotions: Promotion[]; tax_rates: TaxRate[]; stations: Station[]; payment_methods: PaymentMethod[];
   floors: Floor[]; tables: DiningTable[]; customers: Customer[]; staff: unknown[]; settings: BusinessSettings; day_locked: boolean;
+  quick_add_items?: QuickAddItem[]; settings_version?: number;
 }
 
 // ---- Tax invoices ----

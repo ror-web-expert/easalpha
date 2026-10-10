@@ -1,0 +1,69 @@
+{
+  "name": "servio-desktop",
+  "version": "0.1.0",
+  "description": "Servio POS desktop shell: wraps the web POS and adds ESC/POS printing and the LAN print server",
+  "main": "dist/main.js",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "Servio",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "pnpm run build && electron .",
+    "test": "pnpm run build && node --test dist/*.test.js",
+    "dist": "pnpm run build && electron-builder",
+    "dist:win": "pnpm run build && electron-builder --win",
+    "dist:linux": "pnpm run build && electron-builder --linux",
+    "dist:dir": "pnpm run build && electron-builder --dir"
+  },
+  "build": {
+    "appId": "pk.servio.pos",
+    "productName": "Servio POS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.test.js",
+      "ui/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "icon": "build/icon.png",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Servio POS"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "maintainer": "Servio <support@servio.pk>"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {},
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

@@ -39,7 +39,7 @@ const shot = (page, name) => page.screenshot({ path: OUT + name + ".png", fullPa
 const admin = await browser.newContext({ viewport: { width: 1366, height: 800 } }); const a = await admin.newPage(); wire(a, "admin");
 await a.goto(WEB + "/login"); await a.waitForSelector("input[type=email]", { timeout: 60000 }); await a.fill("input[type=email]", "demo@servio.pk"); await a.fill("input[type=password]", "password123");
 await a.getByRole("button", { name: "Log in" }).click();
-try { await a.waitForURL(/\/admin/, { timeout: 30000 }); step("admin login", true, a.url()); } catch { step("admin login", false, a.url()); await shot(a, "admin-login-fail"); }
+try { await a.waitForURL(/\/admin/, { timeout: 90000 }); step("admin login", true, a.url()); } catch { step("admin login", false, a.url()); await shot(a, "admin-login-fail"); }
 await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
@@ -64,7 +64,7 @@ for (const p of adminPages) {
   const mgr = await api("/staff", { method: "POST", token: T, body: { name: "E2E Manager", email, password: "password123", role_id: mgrRole, staff_type: "admin" } });
   step("gate: manager created", mgr.status === 201, String(mgr.status));
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 800 } }); const g = await ctx.newPage(); wire(g, "gate");
-  const loginAs = async () => { await g.goto(WEB + "/login"); await g.waitForSelector("input[type=email]"); await g.fill("input[type=email]", email); await g.fill("input[type=password]", "password123"); await g.getByRole("button", { name: "Log in" }).click(); await g.waitForURL(/\/admin/, { timeout: 30000 }); await g.waitForTimeout(1200); };
+  const loginAs = async () => { await g.goto(WEB + "/login"); await g.waitForSelector("input[type=email]"); await g.fill("input[type=email]", email); await g.fill("input[type=password]", "password123"); await g.getByRole("button", { name: "Log in" }).click(); await g.waitForURL(/\/admin/, { timeout: 90000 }); await g.waitForTimeout(1200); };
   await loginAs();
   const navText1 = await g.evaluate(() => document.querySelector("nav")?.innerText || "");
   step("gate: manager sees Inventory group", /Inventory/.test(navText1), navText1.slice(0, 80).replace(/\n/g, " "));

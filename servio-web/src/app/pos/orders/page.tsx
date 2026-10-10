@@ -14,6 +14,7 @@ import type { Receipt } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/dates";
 import { cn, titleCase } from "@/lib/utils";
+import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { PosShell } from "@/components/pos/shell";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { ReasonDialog } from "@/components/pos/dialogs";
@@ -31,6 +32,7 @@ function OrdersScreen() {
   const can = usePosCan();
   const methods = useCatalogStore((s) => s.paymentMethods);
   const currency = useCatalogStore((s) => s.catalog?.business.currency);
+  const settings = useCatalogStore((s) => s.catalog?.business.settings);
   const status = useSyncStore((s) => s.status);
   const load = useCartStore((s) => s.load);
   const { run, dialog } = useApproval();
@@ -74,8 +76,15 @@ function OrdersScreen() {
     } catch (e) { toast.error("Could not open", errorMessage(e)); }
   };
   const print = async (o: LocalOrder, reprint: boolean) => {
-    try { setReceipt(await run((pin) => fetchReceipt(o.id, reprint).then((r) => { void pin; return r; }), "Reprint receipt")); }
-    catch (e) { toast.error("No receipt", errorMessage(e)); }
+    try {
+      const r = await run((pin) => fetchReceipt(o.id, reprint).then((x) => { void pin; return x; }), "Reprint receipt");
+      setReceipt(r);
+      // With the desktop app or a print server the duplicate goes straight to the printer; in a plain browser the dialog's Print button is the way.
+      if (hasPrinter(settings)) {
+        const res = await printJob({ role: "receipt", lines: receiptLines(r, { settings }) }, { settings });
+        if (!res.ok) toast.error("Could not print", res.error);
+      }
+    } catch (e) { toast.error("No receipt", errorMessage(e)); }
   };
 
   return (

@@ -10,6 +10,7 @@ import type { ZReport } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
+import { printJob, zReportLines } from "@/lib/print";
 import { PosShell } from "@/components/pos/shell";
 import { ZReportView } from "@/components/z-report";
 import { useApproval } from "@/components/approval";
@@ -21,6 +22,7 @@ const DENOMS = [5000, 1000, 500, 100, 50, 20, 10, 5, 2, 1];
 export default function ShiftPage() {
   const shift = useCatalogStore((s) => s.shift);
   const currency = useCatalogStore((s) => s.catalog?.business.currency);
+  const settings = useCatalogStore((s) => s.catalog?.business.settings);
   const session = useDeviceStore((s) => s.session);
   const status = useSyncStore((s) => s.status);
   const { run, dialog } = useApproval();
@@ -46,6 +48,11 @@ export default function ShiftPage() {
     try { const r = await run((pin) => cashMovement(shift, move.kind, move.amount, move.reason, pin), `${titleCase(move.kind)} ${formatMoney(move.amount, currency)}`); toast.success(r.offline ? "Recorded on till" : "Recorded"); setMove(null); }
     catch (e) { toast.error("Could not record", errorMessage(e)); }
     finally { setBusy(false); }
+  };
+  const printZ = async () => {
+    if (!z) return;
+    const r = await printJob({ role: "report", lines: zReportLines(z, { currency, settings }) }, { settings });
+    if (!r.ok) toast.error("Could not print", r.error);
   };
   const doClose = async () => {
     if (!shift) return;
@@ -98,7 +105,7 @@ export default function ShiftPage() {
         <div className="mt-3 flex items-baseline justify-between"><span className="font-semibold">Counted</span><span className="text-3xl font-bold tabular">{formatMoney(counted, currency)}</span></div>
         <Field label="Note" className="mt-3"><Textarea value={note} onChange={(e) => setNote(e.target.value)} /></Field>
       </Dialog>
-      <Dialog open={!!z} onClose={() => setZ(null)} title="Z report" description="Shift closed." size="md" footer={<><Button variant="secondary" onClick={() => window.print()}><Printer className="h-4 w-4" /> Print</Button><Button onClick={() => setZ(null)}>Done</Button></>}>
+      <Dialog open={!!z} onClose={() => setZ(null)} title="Z report" description="Shift closed." size="md" footer={<><Button variant="secondary" onClick={printZ}><Printer className="h-4 w-4" /> Print</Button><Button onClick={() => setZ(null)}>Done</Button></>}>
         <div className="print-area">{z ? <ZReportView z={z} currency={currency} /> : null}</div>
       </Dialog>
       {dialog}

@@ -2,14 +2,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import type { Catalog, Deal, Product, Variant } from "@/lib/types";
-import { priceFor, taxFor, type CartLine, type CartModifier } from "@/lib/pricing";
+import { priceFor, productDiscountFields, taxFor, type CartLine, type CartModifier } from "@/lib/pricing";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { Button, Field, Input, Sheet } from "@/components/ui";
 
-interface Props { product: Product | null; deal: Deal | null; catalog: Catalog; orderType: string; onClose: () => void; onAdd: (line: Omit<CartLine, "key">) => void; editing?: CartLine | null }
+interface Props { product: Product | null; deal: Deal | null; catalog: Catalog; orderType: string; onClose: () => void; onAdd: (line: Omit<CartLine, "key">) => void; editing?: CartLine | null; /** Pre-select this variant (Quick Add items name one). */ initialVariantId?: string | null }
 
-export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAdd, editing }: Props) {
+export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAdd, editing, initialVariantId }: Props) {
   const open = !!product || !!deal;
   const [variant, setVariant] = useState<Variant | null>(null);
   const [qty, setQty] = useState(1);
@@ -18,13 +18,14 @@ export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAd
   const groups = useMemo(() => (product?.modifier_group_ids ?? []).map((id) => catalog.modifier_groups.find((g) => g.id === id)).filter(Boolean) as Catalog["modifier_groups"], [product, catalog.modifier_groups]);
   useEffect(() => {
     if (!open) return;
-    setVariant(editing?.variant_id ? product?.variants?.find((v) => v.id === editing.variant_id) ?? null : product?.variants?.[0] ?? null);
+    const wanted = editing?.variant_id ?? initialVariantId;
+    setVariant((wanted ? product?.variants?.find((v) => v.id === wanted) : null) ?? product?.variants?.[0] ?? null);
     setQty(editing?.quantity ?? 1);
     setNotes(editing?.notes ?? "");
     const p: Record<string, number> = {};
     editing?.modifiers.forEach((m) => { p[m.modifier_id] = m.quantity; });
     setPicked(p);
-  }, [open, product, editing]);
+  }, [open, product, editing, initialVariantId]);
   const currency = catalog.business.currency;
   const unit = product ? priceFor(product, orderType, variant, catalog.branch?.id) : deal?.price_minor ?? 0;
   const mods: CartModifier[] = groups.flatMap((g) => g.modifiers.filter((m) => m.active && picked[m.id]).map((m) => ({ modifier_id: m.id, name: m.name, price_minor: m.price_minor, quantity: picked[m.id] })));
@@ -45,7 +46,7 @@ export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAd
   const add = () => {
     if (product) {
       const tax = taxFor(product, catalog);
-      onAdd({ id: editing?.id, product_id: product.id, variant_id: variant?.id ?? null, name: variant ? `${product.name} (${variant.name})` : product.name, unit_price_minor: unit, quantity: qty, notes: notes || null, modifiers: mods, tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: product.station_id, price_override_minor: editing?.price_override_minor ?? null, sent: editing?.sent });
+      onAdd({ id: editing?.id, product_id: product.id, variant_id: variant?.id ?? null, name: variant ? `${product.name} (${variant.name})` : product.name, unit_price_minor: unit, quantity: qty, notes: notes || null, modifiers: mods, tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: product.station_id, price_override_minor: editing?.price_override_minor ?? null, sent: editing?.sent, ...productDiscountFields(product) });
     } else if (deal) {
       const tax = taxFor(null, catalog);
       onAdd({ id: editing?.id, deal_id: deal.id, name: deal.name, unit_price_minor: deal.price_minor, quantity: qty, notes: notes || null, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive });

@@ -62,6 +62,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       promotions: upsert(cur.promotions, c.promotions ?? []),
       tax_rates: upsert(cur.tax_rates, c.tax_rates ?? []),
       stations: upsert(cur.stations, c.stations ?? []),
+      // SPEC "Quick Add Menu": the API always sends the whole (short) list, so the latest payload replaces it.
+      quick_add_items: c.quick_add_items ?? cur.quick_add_items ?? [],
     };
     const paymentMethods = upsert(get().paymentMethods, c.payment_methods ?? []);
     const tables = upsert(get().tables, c.tables ?? []);

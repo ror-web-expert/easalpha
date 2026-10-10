@@ -1,12 +1,14 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Lock, ShoppingCart, ListOrdered, Wallet, AlertTriangle, LayoutDashboard, QrCode, Bike } from "lucide-react";
-import { useDeviceStore } from "@/store/device";
+import { Lock, ShoppingCart, ListOrdered, Wallet, AlertTriangle, LayoutDashboard, QrCode, Bike, Printer } from "lucide-react";
+import { useDeviceStore, usePosCan } from "@/store/device";
 import { useCatalogStore } from "@/store/catalog";
 import { SyncBadge } from "./sync-badge";
 import { useTillLive } from "./live";
-import { ThemeToggle } from "@/components/ui";
+import { Button, Dialog, ThemeToggle } from "@/components/ui";
+import { desktopApp, printServer } from "@/lib/print";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -25,7 +27,16 @@ export function PosShell({ children, title }: { children: React.ReactNode; title
   const branch = useDeviceStore((s) => s.branch);
   const lock = useDeviceStore((s) => s.lock);
   const shift = useCatalogStore((s) => s.shift);
+  const settings = useCatalogStore((s) => s.catalog?.business.settings);
+  const can = usePosCan();
   const live = useTillLive();
+  // SPEC "Printing": printers are configured on the desktop POS behind PRINTERS; tablets only print through its print server.
+  const [printersOpen, setPrintersOpen] = useState(false);
+  const server = printServer(settings);
+  const openPrinters = () => {
+    const d = desktopApp();
+    if (d && typeof d.openPrinterSettings === "function") d.openPrinterSettings(); else setPrintersOpen(true);
+  };
   const qrCount = live.available ? live.pending.length + live.requests.length : 0;
   return (
     <div className="flex h-screen flex-col">
@@ -47,10 +58,19 @@ export function PosShell({ children, title }: { children: React.ReactNode; title
         <Link href="/pos/shift" className={cn("hidden h-8 items-center rounded-lg px-3 text-sm font-medium sm:flex", shift ? "bg-success-soft text-success-ink" : "bg-warning-soft text-warning-ink")}>{shift ? "Shift open" : "No shift"}</Link>
         <SyncBadge />
         {session?.permissions?.includes("app.admin") ? <Link href="/admin" className="hidden h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8 lg:grid" title="Admin"><LayoutDashboard className="h-5 w-5" /></Link> : null}
+        {can("PRINTERS", "settings.manage") ? <button onClick={openPrinters} className="grid h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8" title="Printers" aria-label="Printers"><Printer className="h-5 w-5" /></button> : null}
         <ThemeToggle />
         <button onClick={() => { lock(); router.replace("/pos/pin"); }} className="grid h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8" title="Lock" aria-label="Lock"><Lock className="h-5 w-5" /></button>
       </header>
       <div className="min-h-0 flex-1">{children}</div>
+      <Dialog open={printersOpen} onClose={() => setPrintersOpen(false)} title="Printers" size="sm" footer={<Button onClick={() => setPrintersOpen(false)}>Done</Button>}>
+        <p className="text-sm text-fg-secondary">
+          {server
+            ? `Printers are set up on the desktop POS. This device prints through the print server at ${server.ip}.`
+            : "Printers are set up on the desktop POS. No print server is saved for this store yet, so this device prints through the browser. Enter the desktop computer's IP under Settings, Point of Sale, Print Server in the admin panel."}
+        </p>
+        {server ? <p className="mt-2 text-xs text-fg-muted">Port {server.port}. Change the address under Settings, Point of Sale, Print Server in the admin panel.</p> : null}
+      </Dialog>
     </div>
   );
 }

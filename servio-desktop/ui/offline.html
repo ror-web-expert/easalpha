@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cannot reach the server</title>
+<style>
+  :root { color-scheme: light; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; align-items: center; justify-content: center; background: #f5f6f8; color: #1f2328;
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .card { background: #fff; border: 1px solid #d9dde3; border-radius: 10px; padding: 32px 40px; max-width: 520px; text-align: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { margin: 0 0 12px; color: #4b5563; }
+  code { background: #f0f2f5; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  button { margin-top: 12px; padding: 10px 22px; font: inherit; font-weight: 600; color: #fff; background: #1a5fd0; border: 0;
+           border-radius: 6px; cursor: pointer; }
+  button:hover { background: #164fb0; }
+  .hint { font-size: 14px; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Cannot reach the server</h1>
+    <p>Servio POS could not load <code id="url"></code>.</p>
+    <p>Check that the computer is on the network and the Servio server is running, then try again.</p>
+    <button id="retry">Retry</button>
+    <p class="hint">To change the server address, open Servio &gt; Printers from the menu and edit the Web app URL.</p>
+  </div>
+<script>
+  var params = new URLSearchParams(location.search);
+  var target = params.get("url") || "http://localhost:3000/pos";
+  document.getElementById("url").textContent = target;
+  document.getElementById("retry").addEventListener("click", function () {
+    var b = document.getElementById("retry");
+    b.disabled = true; b.textContent = "Connecting...";
+    location.href = target;
+  });
+</script>
+</body>
+</html>
