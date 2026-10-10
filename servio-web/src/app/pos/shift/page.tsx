@@ -1,20 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Wallet, ArrowDownToLine, ArrowUpFromLine, Lock, Printer } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Wallet, ArrowDownToLine, ArrowUpFromLine, Lock, Printer, Landmark } from "lucide-react";
+import { api } from "@/lib/api";
+import { usePosCan } from "@/store/device";
+import { methodChips, RIDER_PERMS } from "@/components/admin/riders-helpers";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
 import { useSyncStore } from "@/store/sync";
 import { cashMovement, closeShift, loadCurrentShift, openShift } from "@/lib/pos-actions";
 import { errorMessage } from "@/lib/api";
-import type { ZReport } from "@/lib/types";
+import type { MyTill, ZReport } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
-import { formatDateTime } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { printJob, zReportLines } from "@/lib/print";
 import { PosShell } from "@/components/pos/shell";
 import { ZReportView } from "@/components/z-report";
 import { useApproval } from "@/components/approval";
-import { Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyState, Field, Input, MoneyInput, Stat, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyState, Field, Input, MoneyInput, Stat, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 
 const DENOMS = [5000, 1000, 500, 100, 50, 20, 10, 5, 2, 1];
@@ -33,6 +37,10 @@ export default function ShiftPage() {
   const [note, setNote] = useState("");
   const [z, setZ] = useState<ZReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const posCan = usePosCan();
+  const canSeeTill = posCan(...RIDER_PERMS.myTill);
+  // SPEC My Till: the cashier's own till, what it holds and what was collected today. Online only; the till flow below works offline.
+  const myTill = useQuery({ queryKey: ["my_till", shift?.id ?? null], enabled: canSeeTill && !!session, refetchInterval: 60_000, queryFn: () => api<MyTill>("/shifts/my_till", { auth: "pos" }) });
   useEffect(() => { loadCurrentShift(); }, []);
   const counted = DENOMS.reduce((s, d) => s + (counts[d] || 0) * d * 100, 0);
 
@@ -68,6 +76,7 @@ export default function ShiftPage() {
   return (
     <PosShell title="Shift">
       <div className="mx-auto max-w-3xl space-y-4 p-4">
+        {canSeeTill && myTill.data ? <MyTillCard t={myTill.data} currency={currency} /> : null}
         {!shift ? (
           <EmptyState icon={Wallet} title="No open shift" hint={`Open a shift for ${session?.user?.name ?? "you"} to take cash payments.`} action={<Button size="xl" onClick={() => setOpening(0)}>Open shift</Button>} />
         ) : (
@@ -110,5 +119,30 @@ export default function ShiftPage() {
       </Dialog>
       {dialog}
     </PosShell>
+  );
+}
+
+function MyTillCard({ t, currency }: { t: MyTill; currency: string | undefined }) {
+  const methods = methodChips(t.by_method);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Landmark className="h-4 w-4 text-primary" /> My Till</CardTitle>
+        <span className="text-sm text-fg-secondary">Business day {formatDate(t.business_day)}</span>
+      </CardHeader>
+      <CardBody>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div><div className="text-xs text-fg-secondary">In my drawer</div><div className="mt-1 text-2xl font-semibold tabular">{formatMoney(t.drawer_balance_minor, currency)}</div><div className="text-xs text-fg-muted">Until Day-End clears it</div></div>
+          <div><div className="text-xs text-fg-secondary">Collected today</div><div className="mt-1 text-2xl font-semibold tabular">{formatMoney(t.collected_today_minor, currency)}</div><div className="text-xs text-fg-muted">{t.payments_today} payments</div></div>
+          <div><div className="text-xs text-fg-secondary">Orders taken today</div><div className="mt-1 text-2xl font-semibold tabular">{t.orders_taken_today}</div><div className="text-xs text-fg-muted">Rung up by me</div></div>
+          <div><div className="text-xs text-fg-secondary">Unsettled shifts</div><div className={`mt-1 text-2xl font-semibold tabular ${t.unsettled_shifts ? "text-warning" : ""}`}>{t.unsettled_shifts}</div><div className="text-xs text-fg-muted">Closed, waiting for Day-End</div></div>
+        </div>
+        {methods.length ? <div className="mt-3 flex flex-wrap gap-1">{methods.map((m) => <Badge key={m.code} variant="outline">{m.label} {formatMoney(m.minor, currency)}</Badge>)}</div> : null}
+        <p className="mt-3 text-xs text-fg-muted">
+          {t.last_settlement ? `Last Day-End Settlement: ${formatDate(t.last_settlement.business_day)}, ${t.last_settlement.shifts_count} shift(s), ${formatMoney(t.last_settlement.amount_minor, currency)} cleared.` : "No Day-End Settlement yet."}
+          {" "}Orders taken and money collected are different measures and do not reconcile.
+        </p>
+      </CardBody>
+    </Card>
   );
 }

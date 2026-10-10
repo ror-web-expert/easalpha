@@ -582,7 +582,11 @@ export type RiderStatus = "available" | "busy" | "offline" | string;
 export interface Rider {
   id: ID; branch_id: ID | null; membership_id: ID | null; name: string; phone: string | null; vehicle: string | null; vehicle_no: string | null; address: string | null; charge_per_delivery_minor: number;
   float_minor: number; status: RiderStatus; last_lat: number | null; last_lng: number | null; last_seen_at: string | null; active: boolean; archived_at: string | null; open_deliveries?: number;
+  /** SPEC temporary riders: throwaway records with a lifetime and their own permissions. */
+  temporary?: boolean; lifetime_kind?: RiderLifetimeKind | null; lifetime_value?: number | null; lifetime_label?: string | null; expires_at?: string | null;
+  orders_allowed?: number | null; orders_used?: number; expired?: boolean; permissions?: string[]; assigned_count?: number; completed_count?: number;
 }
+export type RiderLifetimeKind = "one_order" | "n_orders" | "rest_of_today" | "n_hours";
 export type DeliveryStatus = "unassigned" | "assigned" | "picked_up" | "on_the_way" | "arrived" | "delivered" | "failed";
 export interface Delivery {
   id: ID; order_id: ID; order_label: string; order_status: OrderStatus; order_total_minor: number; payment_status: string; customer_id: ID | null; guest_name: string | null;
@@ -809,3 +813,75 @@ export interface PriceHistoryRow {
   verdict: PriceVerdict; verdict_text: string; flagged: boolean;
 }
 export interface PriceHistoryReport { from: string; to: string; rows: PriceHistoryRow[]; summary: { items: number; flagged: number; spent_minor: number }; verdicts: Record<PriceVerdict, string> }
+
+// ---- Payroll group screens (Phase 6: SPEC "Staff, attendance and payroll"). Shapes from the attendance, employees and payroll controllers. ----
+export type AttendanceDayStatus = "present" | "late" | "half_day" | "absent" | "leave" | "holiday" | "weekly_off";
+export interface AttendanceDay extends Omit<Attendance, "status"> { status: AttendanceDayStatus; overtime_minutes: number; missing_punch: boolean; auto_closed: boolean }
+export interface AttendanceTodayCounters { scans: number; currently_in: number; checked_out: number; not_checked_in: number; late: number; half_day: number; absent: number }
+export interface AttendanceToday { business_day: string; counters: AttendanceTodayCounters; data: AttendanceDay[]; not_checked_in: { id: ID; name: string; designation: string | null }[] }
+export type ScanResult = "check_in" | "check_out" | "already_marked" | "rejected" | "unknown" | "manual_out" | "auto_close";
+export interface AttendanceScan { id: ID; employee_id: ID | null; employee_name: string | null; attendance_id: ID | null; device_id: ID | null; fingerprint_id: string | null; scanned_at: string; result: ScanResult; note: string | null }
+export interface ScanResponse { result: ScanResult; message: string; attendance: AttendanceDay; employee: { id: ID; name: string } }
+export interface EnrolledEmployee { id: ID; name: string; designation: string | null; fingerprint_enrolled: boolean; fingerprint_id: string | null; enrolled_at: string | null; revoked_at: string | null }
+export type PenaltyKind = "fine_only" | "lose_day" | "both" | "none";
+export type ChargeableStatus = "late" | "half_day" | "absent";
+export interface ChargeDetail { count: number; free: number; charged: number; penalty: PenaltyKind; fine_minor: number; lost_days: number }
+export interface AttendanceCharges { fines_minor: number; fines_before_cap_minor: number; fine_cap_minor: number | null; lost_days: number; detail: Record<ChargeableStatus, ChargeDetail>; rules_enabled: boolean }
+export interface AttendanceLedgerSummary extends AttendanceMonthSummary { late: number; weekly_off: number; overtime_minutes: number; missing_punches: number; lost_days: number; charges: AttendanceCharges }
+/** The full rules engine row (SPEC rules table). employee_id null is the business Defaults. */
+export interface AttendanceRuleSet extends AttendanceRule {
+  rules_enabled: boolean; late_after_minutes: number | null; half_day_after_minutes: number | null; absent_after_minutes: number | null; overtime_enabled: boolean; overtime_rate_minor_per_hour: number;
+  no_scan_counts_absent: boolean; free_lates: number; free_half_days: number; free_absents: number; late_penalty: PenaltyKind; half_day_penalty: PenaltyKind; absent_penalty: PenaltyKind;
+  half_day_fine_minor: number; absent_fine_minor: number; fine_cap_minor: number | null; checkout_gap_minutes: number; fixed_divisor: number;
+}
+export interface AttendanceLedger { employee: { id: ID; name: string }; month: string; days: AttendanceDay[]; summary: AttendanceLedgerSummary; rule: AttendanceRuleSet }
+export interface AttendanceReportRow { employee: { id: ID; name: string; designation: string | null; department: string | null }; summary: AttendanceLedgerSummary }
+export interface AttendanceReport { month: string; rows: AttendanceReportRow[]; totals: Record<string, number> }
+export interface EmployeeFull extends Employee { fingerprint_id: string | null; fingerprint_enrolled_at: string | null; fingerprint_revoked_at: string | null }
+export interface PayrollOverview {
+  month: string; employees: number; pending_advances: number; pending_advances_minor: number; month_generated: boolean; run: PayrollRun | null; outstanding_advances: number; outstanding_advances_minor: number;
+  last_paid_run: PayrollRun | null; departments: { id: ID; name: string; employees: number }[];
+}
+export interface PayslipDetailFull extends PayslipDetail { divisor?: number; daily_rate_minor?: number; lost_days?: number; overtime_minor?: number; charges?: AttendanceCharges; attendance?: AttendanceLedgerSummary; rule?: AttendanceRuleSet }
+export interface PayslipRow extends Omit<Payslip, "detail"> { detail: PayslipDetailFull }
+export interface PayrollSettingsSnapshot { salary_method?: AbsentRule; fixed_divisor?: number; rules_enabled?: boolean; defaults?: Partial<AttendanceRuleSet> }
+export interface PayrollRunDetail extends Omit<PayrollRun, "payslips"> { payslips: PayslipRow[]; settings_snapshot?: PayrollSettingsSnapshot | null }
+export interface PayrollLedgerRow extends PayslipRow { month: string; run_label: string; run_status: PayrollRunStatus }
+export interface PayrollLedger { data: PayrollLedgerRow[]; totals: { gross_minor: number; deductions_minor: number; net_minor: number } }
+export interface PayrollReportMonth { month: string; label: string; status: PayrollRunStatus; employees: number; gross_minor: number; deductions_minor: number; net_minor: number }
+export interface PayrollReportDepartment { department: string; employees: number; net_minor: number; fines_minor: number; absence_minor: number }
+export interface PayrollReport { from: string; to: string; by_month: PayrollReportMonth[]; by_department: PayrollReportDepartment[]; totals: { net_minor: number; gross_minor: number; fines_minor: number; absence_minor: number; advances_recovered_minor: number } }
+export type SalaryMethod = "calendar_days" | "fixed_divisor";
+export interface PayrollSettings {
+  salary_method: SalaryMethod; fixed_divisor: number; require_fingerprint_to_close_shift: boolean;
+  example: { salary_minor: number; february_day_minor: number; january_day_minor: number; fixed_day_minor: number }; defaults_rule: AttendanceRuleSet;
+}
+
+// ---- Riders: reports, vault and the rider app (Phase 6) ----
+export interface RiderReportRow {
+  rider: Rider; assigned: number; completed: number; failed: number; open: number; charges_minor: number; rider_pay_minor: number; cash_collected_minor: number;
+  order_value_minor: number; avg_minutes: number | null; float_minor: number; temporary: boolean;
+}
+export interface RiderReport {
+  from: string; to: string; rows: RiderReportRow[];
+  totals: { assigned: number; completed: number; failed: number; charges_minor: number; rider_pay_minor: number; cash_collected_minor: number; riders: number; temporary_riders: number };
+}
+/** GET /rider/float (rider app): the statement plus the settlement preview without its rider and deliveries. */
+export interface RiderFloat extends RiderStatement { settlement: { deliveries_count: number; cash_collected_minor: number; float_held_minor: number; expected_minor: number } }
+export interface RiderDeliveries { rider: Rider; data: Delivery[] }
+
+// ---- Cashier Till, Day-End Settlement and My Till (SPEC) ----
+export interface DayEndSettlement { id: ID; branch_id: ID; business_day: string; settled_by_membership_id: ID | null; shifts_count: number; amount_minor: number; detail: Record<string, unknown> | null; note: string | null; created_at: string }
+export interface CashierTillRow {
+  membership_id: ID; name: string; orders_taken: number; taken_minor: number; payments: number; collected_minor: number; collected_by_method: Record<string, number>;
+  in_tills_now_minor: number; shifts_settled: number; shifts_unsettled: number; shifts_open: number;
+}
+export interface CashierTillReport {
+  from: string; to: string; rows: CashierTillRow[];
+  totals: { orders_taken: number; taken_minor: number; collected_minor: number; in_tills_now_minor: number; shifts_unsettled: number };
+  settlements: DayEndSettlement[]; note: string;
+}
+export interface MyTill {
+  shift: Shift | null; drawer_balance_minor: number; business_day: string; collected_today_minor: number; payments_today: number; by_method: Record<string, number>;
+  orders_taken_today: number; unsettled_shifts: number; last_settlement: DayEndSettlement | null;
+}
