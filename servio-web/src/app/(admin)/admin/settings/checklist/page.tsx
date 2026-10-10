@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, Loading } from "@/components/ui";
 
-const LINKS: Record<string, string> = { business_info: "/admin/settings", branch_hours: "/admin/settings/branches", menu: "/admin/menu/products", tax: "/admin/menu/tax-rates", payment_methods: "/admin/settings/payment-methods", staff: "/admin/staff", tables: "/admin/tables", printer: "/admin/devices", devices: "/admin/devices" };
+const LINKS: Record<string, string> = { business_info: "/admin/settings/store", branch_hours: "/admin/settings/store/store-management", menu: "/admin/products/catalog", tax: "/admin/products/tax-rates", payment_methods: "/admin/settings/store/payment-methods", staff: "/admin/staff/admin-staff", tables: "/admin/tables", printer: "/admin/settings/devices", devices: "/admin/settings/devices" };
 
 export default function ChecklistPage() {
   const q = useQuery({ queryKey: ["setup_checklist"], queryFn: () => api<{ data: ChecklistItem[]; done: number; total: number }>("/setup_checklist") });

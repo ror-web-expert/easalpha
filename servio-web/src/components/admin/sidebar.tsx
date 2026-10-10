@@ -13,7 +13,9 @@ import { Button, ThemeToggle } from "@/components/ui";
 import { toast } from "@/store/toast";
 
 function isActive(it: NavItem, pathname: string) {
-  return it.href === "/admin" || it.exact ? pathname === it.href : pathname === it.href || pathname.startsWith(it.href + "/");
+  const base = it.href.split("#")[0];
+  if (it.href.includes("#")) return false; // report tabs: only the exact Business Overview entry highlights
+  return base === "/admin" || it.exact ? pathname === base : pathname === base || pathname.startsWith(base + "/");
 }
 
 /** Groups and items this user may see, in nav order. */
@@ -42,7 +44,7 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
   const current = useCurrent(groups);
   const activeGroup = current?.group.label;
   // Accordion: one group open at a time, following the current page, so the sidebar stays short.
-  const [open, setOpen] = useState<string | null>(activeGroup ?? "Sell");
+  const [open, setOpen] = useState<string | null>(activeGroup ?? null);
   useEffect(() => { if (activeGroup) setOpen(activeGroup); }, [activeGroup]);
 
   return (
@@ -51,6 +53,25 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
         const expanded = open === group.label;
         const hasActive = group.label === activeGroup;
         const allSoon = group.items.every((it) => it.soon);
+        if (group.flat) {
+          // SPEC standalone screens: top-level links with no group header.
+          return (
+            <ul key={group.label} className="mb-2 space-y-0.5">
+              {group.items.map((it) => {
+                const active = current?.item.href === it.href;
+                return (
+                  <li key={it.href}>
+                    <Link href={it.href} onClick={onNavigate} aria-current={active ? "page" : undefined}
+                      className={cn("flex h-10 items-center gap-3 rounded-full px-4 text-sm font-medium tracking-[0.1px] text-sidebar-text transition-colors hover:bg-fg/8", active && "bg-sidebar-active-bg text-sidebar-active hover:bg-sidebar-active-bg")}>
+                      <it.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                      <span className="truncate">{it.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        }
         return (
           <div key={group.label}>
             <button
@@ -72,7 +93,7 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
                   const active = current?.item.href === it.href || (isActive(it, pathname) && !current);
                   if (it.soon) {
                     return (
-                      <li key={it.href}>
+                      <li key={it.href + it.label}>
                         <span className="flex h-9 cursor-default items-center gap-2 rounded-full pl-12 pr-4 text-sm text-fg-muted" title="Not built yet">
                           <span className="truncate">{it.label}</span>
                           <span className="ml-auto rounded-full bg-muted px-2 text-[11px] font-medium tracking-[0.5px]">Soon</span>
@@ -81,7 +102,7 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
                     );
                   }
                   return (
-                    <li key={it.href}>
+                    <li key={it.href + it.label}>
                       <Link
                         href={it.href}
                         onClick={onNavigate}

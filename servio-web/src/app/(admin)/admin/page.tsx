@@ -25,7 +25,7 @@ export default function DashboardPage() {
     <>
       <PageHeader icon={LayoutDashboard} title={`Good day, ${business?.name ?? ""}`} description={`Business day ${formatDate(d.business_day)}${d.day_locked ? " · locked" : ""}`} />
       {d.checklist && checklistDone < d.checklist.length ? (
-        <Link href="/admin/settings/checklist" className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft/50 px-4 py-3 text-sm">
+        <Link href="/admin/settings/store/checklist" className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft/50 px-4 py-3 text-sm">
           <span>Setup checklist: {checklistDone} of {d.checklist.length} done.</span>
           <span className="font-medium text-primary">Continue setup</span>
         </Link>

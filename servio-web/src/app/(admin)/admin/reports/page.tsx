@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Printer } from "lucide-react";
 import { api } from "@/lib/api";
@@ -20,6 +20,14 @@ function useReport<T>(name: string, range: DateRange, enabled = true) {
 export default function ReportsPage() {
   const [range, setRange] = useState<DateRange>({ from: daysAgo(6), to: isoDay() });
   const [tab, setTab] = useState<Tab>("overview");
+  // The SPEC sidebar lists each report as its own entry; until the page is split, /admin/reports#items opens that tab.
+  useEffect(() => {
+    const apply = () => { const h = window.location.hash.slice(1) as Tab; if (h && tabs.some((t) => t.value === h)) setTab(h); };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const tabs: { value: Tab; label: string }[] = [
     { value: "overview", label: "Overview" }, { value: "items", label: "Items" }, { value: "categories", label: "Categories" }, { value: "cashiers", label: "Cashiers" },
     { value: "voids", label: "Voids" }, { value: "discounts", label: "Discounts" }, { value: "modified", label: "Modified" }, { value: "customers", label: "Customers" }, { value: "shifts", label: "Shifts" }, { value: "grand", label: "Grand report" },

@@ -38,7 +38,7 @@ export default function CustomersPage() {
         <SummaryCard label="Customers" value={s?.total_customers ?? 0} sub={`${s?.credit_customers ?? 0} on credit`} />
         <SummaryCard label="Khata outstanding" value={formatMoney(s?.total_outstanding_minor)} sub={`${s?.customers_with_due ?? 0} customers owe`} tone="warning" />
         <SummaryCard label="Collected this month" value={formatMoney(s?.collected_this_month_minor)} tone="success" />
-        <Link href="/admin/customers/aging"><SummaryCard label="Aging report" value="Open" sub="Who owes for how long" tone="neutral" className="h-full hover:border-primary" /></Link>
+        <Link href="/admin/customers/ar-aging"><SummaryCard label="Aging report" value="Open" sub="Who owes for how long" tone="neutral" className="h-full hover:border-primary" /></Link>
       </Cards>
       <FilterBar>
         <SearchInput value={q} onChange={setQ} placeholder="Name, phone, khata no" />
