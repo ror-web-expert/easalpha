@@ -17,6 +17,6 @@ module Reviews
     rated = scope.rated
     count = rated.count
     { total: scope.count, rated: count, pending: scope.pending.count, average: count.zero? ? nil : (rated.sum(:rating).to_f / count).round(2),
-      five_star: rated.where(rating: 5).count, one_star: rated.where(rating: 1).count, by_rating: (1..5).to_h { |r| [r, rated.where(rating: r).count] } }
+      five_star: rated.where(rating: 5).count, one_star: rated.where(rating: 1).count, by_rating: (1..5).to_h { |r| [ r, rated.where(rating: r).count ] } }
   end
 end

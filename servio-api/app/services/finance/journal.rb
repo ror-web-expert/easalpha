@@ -44,14 +44,14 @@ module Finance
       return if entry.kind.in?(%w[transfer_in transfer_out closing])
       counter = COUNTER[entry.kind] or return
       counter = case counter
-                when :expense then expense_account_for(entry)
-                when :adjustment then entry.amount_minor.positive? ? "4100" : "5190"
-                else counter
-                end
+      when :expense then expense_account_for(entry)
+      when :adjustment then entry.amount_minor.positive? ? "4100" : "5190"
+      else counter
+      end
       mirror = Chart.for_payment_account(entry.payment_account)
       amount = entry.amount_minor.abs
       return if amount.zero?
-      lines = entry.amount_minor.positive? ? [{ account: mirror, debit_minor: amount }, { account: counter, credit_minor: amount }] : [{ account: counter, debit_minor: amount }, { account: mirror, credit_minor: amount }]
+      lines = entry.amount_minor.positive? ? [ { account: mirror, debit_minor: amount }, { account: counter, credit_minor: amount } ] : [ { account: counter, debit_minor: amount }, { account: mirror, credit_minor: amount } ]
       post!(business_day: entry.business_day, lines: lines, description: entry.description, ref: entry, branch_id: entry.branch_id)
     end
 
@@ -63,31 +63,31 @@ module Finance
 
     def transfer!(from:, to:, amount_minor:, business_day:, actor: nil, note: nil, ref: nil)
       post!(business_day: business_day, description: "Transfer #{from.name} to #{to.name}#{note.present? ? ": #{note}" : ''}", actor: actor, ref: ref,
-            lines: [{ account: Chart.for_payment_account(to), debit_minor: amount_minor }, { account: Chart.for_payment_account(from), credit_minor: amount_minor }])
+            lines: [ { account: Chart.for_payment_account(to), debit_minor: amount_minor }, { account: Chart.for_payment_account(from), credit_minor: amount_minor } ])
     end
 
     # A sale settled to a customer account: receivable against sales.
     def khata_sale!(payment)
       post!(business_day: payment.business_day, description: "Order #{payment.order.label} on account", ref: payment, branch_id: payment.branch_id,
-            lines: [{ account: "1100", debit_minor: payment.amount_minor }, { account: "4000", credit_minor: payment.amount_minor }])
+            lines: [ { account: "1100", debit_minor: payment.amount_minor }, { account: "4000", credit_minor: payment.amount_minor } ])
     end
 
     # Goods received from a supplier: inventory against payables.
     def inventory_receipt!(grn)
       return if grn.total_minor.to_i.zero?
       post!(business_day: grn.business_day || Date.current, description: "#{grn.label} from #{grn.supplier.name}", ref: grn, branch_id: grn.branch_id,
-            lines: [{ account: "1200", debit_minor: grn.total_minor }, { account: "2010", credit_minor: grn.total_minor }])
+            lines: [ { account: "1200", debit_minor: grn.total_minor }, { account: "2010", credit_minor: grn.total_minor } ])
     end
 
     def inventory_return!(ret)
       return if ret.amount_minor.to_i.zero?
       post!(business_day: ret.business_day || Date.current, description: "#{ret.label} to #{ret.supplier.name}", ref: ret, branch_id: ret.branch_id,
-            lines: [{ account: "2010", debit_minor: ret.amount_minor }, { account: "1200", credit_minor: ret.amount_minor }])
+            lines: [ { account: "2010", debit_minor: ret.amount_minor }, { account: "1200", credit_minor: ret.amount_minor } ])
     end
 
     def supplier_adjustment!(adj)
       amount = adj.amount_minor.abs
-      lines = adj.amount_minor.positive? ? [{ account: "5190", debit_minor: amount }, { account: "2010", credit_minor: amount }] : [{ account: "2010", debit_minor: amount }, { account: "4100", credit_minor: amount }]
+      lines = adj.amount_minor.positive? ? [ { account: "5190", debit_minor: amount }, { account: "2010", credit_minor: amount } ] : [ { account: "2010", debit_minor: amount }, { account: "4100", credit_minor: amount } ]
       post!(business_day: adj.business_day, description: "Supplier adjustment #{adj.supplier.name}: #{adj.reason}", ref: adj, branch_id: adj.branch_id, lines: lines)
     end
 
@@ -104,7 +104,7 @@ module Finance
         value = es.sum { |e| e.value_minor.to_i }
         next [] if value.zero?
         # Stock leaving (negative value) debits the counter account and credits Inventory.
-        value.negative? ? [{ account: counter, debit_minor: -value }, { account: "1200", credit_minor: -value }] : [{ account: "1200", debit_minor: value }, { account: counter, credit_minor: value }]
+        value.negative? ? [ { account: counter, debit_minor: -value }, { account: "1200", credit_minor: -value } ] : [ { account: "1200", debit_minor: value }, { account: counter, credit_minor: value } ]
       end
       return if lines.empty?
       post!(business_day: business_day, description: description, ref: ref, lines: lines, branch_id: rows.first.branch_id)

@@ -51,7 +51,7 @@ module Aggregators
         phone = User.normalize_phone(data["customer"]["phone"])
         customer = Customer.active.find_by(phone: phone) || Customer.create!(name: data.dig("customer", "name").presence || "Foodpanda customer", phone: phone, source: "online")
       end
-      attrs = { order_type: "delivery", source: "foodpanda", customer_id: customer&.id, guest_name: data.dig("customer", "name"), notes: [data["notes"], data.dig("address", "text")].compact.join(" | ").presence,
+      attrs = { order_type: "delivery", source: "foodpanda", customer_id: customer&.id, guest_name: data.dig("customer", "name"), notes: [ data["notes"], data.dig("address", "text") ].compact.join(" | ").presence,
                 aggregator_ref: data["id"].to_s, delivery_charge_minor: (data["delivery_fee"].to_d * 100).round }
       builder = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch, approvals: { "items.open" => :system, "orders.create" => :system })
       order = builder.order

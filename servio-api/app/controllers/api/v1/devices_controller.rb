@@ -1,8 +1,8 @@
 module Api
   module V1
     class DevicesController < BaseController
-      before_action :authenticate!, only: [:index, :create, :update, :regenerate_code, :destroy]
-      before_action -> { require_permission!("devices.manage") }, only: [:create, :update, :regenerate_code, :destroy]
+      before_action :authenticate!, only: [ :index, :create, :update, :regenerate_code, :destroy ]
+      before_action -> { require_permission!("devices.manage") }, only: [ :create, :update, :regenerate_code, :destroy ]
 
       def index
         scope = Device.includes(:branch).order(:created_at)
@@ -65,10 +65,10 @@ module Api
         pin = params.require(:pin).to_s
         candidates = Membership.active.includes(:role, :user).where.not(pin_digest: nil).select { |m| m.branch_allowed?(current_device.branch_id) }
         app = case current_device.kind
-              when "kitchen" then "kitchen"
-              when "rider" then "rider" # SPEC rider app: the rider's phone is a paired device
-              else "pos"
-              end
+        when "kitchen" then "kitchen"
+        when "rider" then "rider" # SPEC rider app: the rider's phone is a paired device
+        else "pos"
+        end
         # Two people may share a PIN by accident; prefer the one who may use this device's app.
         matches = candidates.select { |m| m.pin_digest && BCrypt::Password.new(m.pin_digest) == pin && !m.pin_locked? }
         membership = matches.find { |m| m.can?("app.#{app}") } || matches.first

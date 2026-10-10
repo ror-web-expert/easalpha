@@ -29,14 +29,14 @@ module Ai
     end
 
     def suggest(price:, cost:, margin:, share:, discount:, revenue:)
-      return ["review_cost", "No recipe cost; margin unknown"] if cost.nil? && price.positive?
-      return ["review_cost", "Cost is above the price: selling at a loss"] if margin && margin.negative?
-      return ["raise_price", "High volume with a thin margin (#{margin}%): a small increase is low risk"] if margin && margin < 35 && share >= 3
+      return [ "review_cost", "No recipe cost; margin unknown" ] if cost.nil? && price.positive?
+      return [ "review_cost", "Cost is above the price: selling at a loss" ] if margin && margin.negative?
+      return [ "raise_price", "High volume with a thin margin (#{margin}%): a small increase is low risk" ] if margin && margin < 35 && share >= 3
       if revenue.positive? && discount * 100.0 / (revenue + discount) > 25 && share >= 3
-        return ["raise_price", "Popular item discounted #{(discount * 100.0 / (revenue + discount)).round}% of the time: demand supports the list price"]
+        return [ "raise_price", "Popular item discounted #{(discount * 100.0 / (revenue + discount)).round}% of the time: demand supports the list price" ]
       end
-      return ["promote", "Strong margin (#{margin}%) but little volume: a promotion or deal placement could lift it"] if margin && margin > 70 && share < 1
-      ["ok", nil]
+      return [ "promote", "Strong margin (#{margin}%) but little volume: a promotion or deal placement could lift it" ] if margin && margin > 70 && share < 1
+      [ "ok", nil ]
     end
 
     def stock_forecast!(branch:, forecast_days: 7)

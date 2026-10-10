@@ -90,9 +90,9 @@ if Rails.env.development? && (demo = Business.find_by(name: "Demo Cafe"))
       bakery = Supplier.create!(name: "Gourmet Bakers", contact_name: "Sana", phone: "+923217654321", payment_terms_days: 7)
       kg = Unit.find_by!(code: "kg")
       chicken, buns = %w[CHK BUN].map { |k| StockItem.find_by!(sku: k) }
-      po = Purchasing::Orders.create!({ supplier_id: metro.id, expected_on: Date.current + 2, note: "Weekly chicken" }, lines: [{ stock_item_id: chicken.id, unit_id: kg.id, quantity: 20, unit_cost_minor: 62_000 }], actor: owner, branch: Branch.first)
+      po = Purchasing::Orders.create!({ supplier_id: metro.id, expected_on: Date.current + 2, note: "Weekly chicken" }, lines: [ { stock_item_id: chicken.id, unit_id: kg.id, quantity: 20, unit_cost_minor: 62_000 } ], actor: owner, branch: Branch.first)
       Purchasing::Orders.send!(po)
-      Purchasing::Receipts.create!({ supplier_id: bakery.id, invoice_ref: "GB-1041", received_on: Date.current.to_s }, lines: [{ stock_item_id: buns.id, quantity: 100, unit_cost_minor: 2_500 }], actor: owner, branch: Branch.first, section: StockSection.default_for(Branch.first))
+      Purchasing::Receipts.create!({ supplier_id: bakery.id, invoice_ref: "GB-1041", received_on: Date.current.to_s }, lines: [ { stock_item_id: buns.id, quantity: 100, unit_cost_minor: 2_500 } ], actor: owner, branch: Branch.first, section: StockSection.default_for(Branch.first))
       puts "Demo purchasing: 2 suppliers, PO-#{po.number} sent to Metro, GRN-1 from Gourmet Bakers (balance Rs #{bakery.reload.balance_minor / 100})"
     end
   end

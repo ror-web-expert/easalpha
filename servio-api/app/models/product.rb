@@ -12,7 +12,7 @@ class Product < ApplicationRecord
   def discount_minor_for(line_subtotal_minor, quantity)
     return 0 if discount_value.to_d <= 0
     amount = discount_type == "percent" ? (line_subtotal_minor * discount_value / 100) : (discount_value * 100 * quantity)
-    [amount.round, line_subtotal_minor].min
+    [ amount.round, line_subtotal_minor ].min
   end
   belongs_to :category
   belongs_to :tax_rate, optional: true

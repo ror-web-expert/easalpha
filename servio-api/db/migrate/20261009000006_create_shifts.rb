@@ -22,8 +22,8 @@ class CreateShifts < ActiveRecord::Migration[8.0]
       t.datetime :client_created_at
       t.timestamps
     end
-    add_index :shifts, [:business_id, :branch_id, :business_day]
-    add_index :shifts, [:cashier_membership_id], unique: true, where: "status = 'open'", name: "idx_shifts_one_open_per_cashier"
+    add_index :shifts, [ :business_id, :branch_id, :business_day ]
+    add_index :shifts, [ :cashier_membership_id ], unique: true, where: "status = 'open'", name: "idx_shifts_one_open_per_cashier"
     add_check_constraint :shifts, "status in ('open','closed','force_closed')", name: "shifts_status_check"
     add_check_constraint :shifts, "settlement_status in ('pending','settled')", name: "shifts_settlement_check"
 
@@ -54,7 +54,7 @@ class CreateShifts < ActiveRecord::Migration[8.0]
       t.jsonb :summary, null: false, default: {}
       t.timestamps
     end
-    add_index :day_closes, [:branch_id, :business_day], unique: true
+    add_index :day_closes, [ :branch_id, :business_day ], unique: true
 
     add_foreign_key :orders, :shifts, column: :shift_id
     add_foreign_key :payments, :shifts, column: :shift_id

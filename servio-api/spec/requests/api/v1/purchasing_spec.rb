@@ -30,7 +30,7 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     api_post "/api/v1/suppliers", { name: "Metro Cash & Carry" }, headers: headers
     expect(response).to have_http_status(:unprocessable_content)
 
-    api_post "/api/v1/purchase_orders", { supplier_id: sup, expected_on: Date.current.to_s, lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 52_000 }, { stock_item_id: s[:buns].id, quantity: 200, unit_cost_minor: 2_200 }] }, headers: headers
+    api_post "/api/v1/purchase_orders", { supplier_id: sup, expected_on: Date.current.to_s, lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 52_000 }, { stock_item_id: s[:buns].id, quantity: 200, unit_cost_minor: 2_200 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     po = json
     expect(po[:label]).to eq("PO-1")
@@ -41,7 +41,7 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     expect(response).to have_http_status(:conflict)
 
     chicken_line = po[:lines].find { |l| l[:item_name] == "Chicken" }
-    api_post "/api/v1/purchase_orders/#{po[:id]}/receive", { invoice_ref: "INV-77", lines: [{ purchase_order_line_id: chicken_line[:id], quantity: 6, unit_cost_minor: 53_000 }] }, headers: headers
+    api_post "/api/v1/purchase_orders/#{po[:id]}/receive", { invoice_ref: "INV-77", lines: [ { purchase_order_line_id: chicken_line[:id], quantity: 6, unit_cost_minor: 53_000 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     expect(json[:receipt][:label]).to eq("GRN-1")
     expect(json[:receipt][:total_minor]).to eq(318_000)
@@ -84,20 +84,20 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     s = seed!
     api_post "/api/v1/suppliers", { name: "Local bakery" }, headers: headers
     sup = json[:id]
-    api_post "/api/v1/goods_receipts", { supplier_id: sup, invoice_ref: "B-1", lines: [{ stock_item_id: s[:buns].id, quantity: 100, unit_cost_minor: 2_000 }] }, headers: headers
+    api_post "/api/v1/goods_receipts", { supplier_id: sup, invoice_ref: "B-1", lines: [ { stock_item_id: s[:buns].id, quantity: 100, unit_cost_minor: 2_000 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     grn = json[:id]
     expect(level(s[:buns])).to eq(100)
     expect(balance(sup)).to eq(200_000)
 
-    api_post "/api/v1/purchase_returns", { supplier_id: sup, goods_receipt_id: grn, reason: "Stale", settlement: "credit_note", lines: [{ stock_item_id: s[:buns].id, quantity: 10 }] }, headers: headers
+    api_post "/api/v1/purchase_returns", { supplier_id: sup, goods_receipt_id: grn, reason: "Stale", settlement: "credit_note", lines: [ { stock_item_id: s[:buns].id, quantity: 10 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     expect(json[:label]).to eq("RET-1")
     expect(json[:amount_minor]).to eq(20_000)
     expect(level(s[:buns])).to eq(90)
     expect(balance(sup)).to eq(180_000)
 
-    api_post "/api/v1/purchase_returns", { supplier_id: sup, goods_receipt_id: grn, reason: "Damaged", settlement: "cash_refund", method_code: "cash", lines: [{ stock_item_id: s[:buns].id, quantity: 5 }] }, headers: headers
+    api_post "/api/v1/purchase_returns", { supplier_id: sup, goods_receipt_id: grn, reason: "Damaged", settlement: "cash_refund", method_code: "cash", lines: [ { stock_item_id: s[:buns].id, quantity: 5 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     expect(level(s[:buns])).to eq(85)
     expect(balance(sup)).to eq(180_000)
@@ -107,7 +107,7 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     api_post "/api/v1/goods_receipts/#{grn}/cancel", { reason: "Wrong invoice" }, headers: headers
     expect(response).to have_http_status(:conflict)
     expect(json[:error][:code]).to eq("goods_receipt.returned")
-    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [{ stock_item_id: s[:buns].id, quantity: 20, unit_cost_minor: 2_000 }] }, headers: headers
+    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [ { stock_item_id: s[:buns].id, quantity: 20, unit_cost_minor: 2_000 } ] }, headers: headers
     grn2 = json[:id]
     api_post "/api/v1/goods_receipts/#{grn2}/cancel", { reason: "Duplicate" }, headers: headers
     expect(response).to have_http_status(:ok)
@@ -123,7 +123,7 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     s = seed!
     api_post "/api/v1/suppliers", { name: "Farm" }, headers: headers
     sup = json[:id]
-    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 3, unit_cost_minor: 50_000 }] }, headers: headers
+    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 3, unit_cost_minor: 50_000 } ] }, headers: headers
     get "/api/v1/purchasing/suggestions", headers: headers
     row = json[:data].find { |r| r[:item][:sku] == "CHK" }
     expect(row[:suggested_qty]).to eq("10000.0")
@@ -148,7 +148,7 @@ RSpec.describe "Suppliers and purchasing", type: :request do
     api_post "/api/v1/suppliers/import", { csv: "name,contact,phone,terms,opening_balance\nFarm,Ali,0301 1111111,7,0\nDairy Co,Sana,,30,1500.50\n" }, headers: headers
     expect(json).to eq({ created: 1, updated: 1 })
     get "/api/v1/suppliers?with_balance=true", headers: headers
-    expect(json[:data].map { |x| x[:name] }).to eq(["Dairy Co", "Farm"])
+    expect(json[:data].map { |x| x[:name] }).to eq([ "Dairy Co", "Farm" ])
     expect(json[:data].first[:balance_minor]).to eq(150_050)
   end
 

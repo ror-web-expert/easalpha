@@ -16,7 +16,7 @@ class CreatePayments < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :payment_accounts, [:business_id, :kind]
+    add_index :payment_accounts, [ :business_id, :kind ]
     add_check_constraint :payment_accounts, "kind in ('cash','wallet','bank','drawer','custom')", name: "payment_accounts_kind_check"
     add_check_constraint :payment_accounts, "active or current_balance_minor = 0", name: "payment_accounts_inactive_zero_balance"
 
@@ -32,7 +32,7 @@ class CreatePayments < ActiveRecord::Migration[8.0]
       t.integer :sort_order, null: false, default: 0
       t.timestamps
     end
-    add_index :payment_methods, [:business_id, :code], unique: true
+    add_index :payment_methods, [ :business_id, :code ], unique: true
     add_check_constraint :payment_methods, "kind in ('cash','card','wallet','bank','khata','qr','custom')", name: "payment_methods_kind_check"
 
     create_table :account_entries, id: :uuid do |t|
@@ -53,8 +53,8 @@ class CreatePayments < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.timestamps
     end
-    add_index :account_entries, [:business_id, :payment_account_id, :business_day]
-    add_index :account_entries, [:business_id, :ref_table, :ref_id]
+    add_index :account_entries, [ :business_id, :payment_account_id, :business_day ]
+    add_index :account_entries, [ :business_id, :ref_table, :ref_id ]
     add_check_constraint :account_entries, "kind in ('order_payment','refund','expense','supplier_payment','customer_payment','customer_refund','transfer_in','transfer_out','deposit','withdrawal','adjustment','rider_float','opening','closing')", name: "account_entries_kind_check"
 
     create_table :payments, id: :uuid, default: nil do |t|
@@ -80,7 +80,7 @@ class CreatePayments < ActiveRecord::Migration[8.0]
       t.datetime :client_created_at
       t.timestamps
     end
-    add_index :payments, [:business_id, :business_day]
+    add_index :payments, [ :business_id, :business_day ]
     add_check_constraint :payments, "status in ('captured','voided','refunded')", name: "payments_status_check"
 
     create_table :refunds, id: :uuid, default: nil do |t|
@@ -116,7 +116,7 @@ class CreatePayments < ActiveRecord::Migration[8.0]
       t.datetime :received_at, null: false
       t.timestamps
     end
-    add_index :customer_payments, [:business_id, :number], unique: true
+    add_index :customer_payments, [ :business_id, :number ], unique: true
     add_check_constraint :customer_payments, "direction in ('received','paid')", name: "customer_payments_direction_check"
 
     create_table :whatsapp_messages, id: :uuid do |t|
@@ -136,7 +136,7 @@ class CreatePayments < ActiveRecord::Migration[8.0]
       t.boolean :counted_against_plan, null: false, default: true
       t.timestamps
     end
-    add_index :whatsapp_messages, [:business_id, :created_at]
+    add_index :whatsapp_messages, [ :business_id, :created_at ]
 
     create_table :receipt_events, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true

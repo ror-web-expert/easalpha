@@ -82,7 +82,7 @@ module Sync
     def apply_payment(id, payload, actor)
       return "duplicate" if Payment.exists?(id: id)
       order = Order.includes(items: :modifiers).find(need(payload, :order_id))
-      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: [payload.merge(id: id)], tip_minor: payload[:tip_minor].to_i)
+      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: [ payload.merge(id: id) ], tip_minor: payload[:tip_minor].to_i)
       "accepted"
     end
 

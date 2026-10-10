@@ -37,10 +37,10 @@ module Payments
           raise Api::Errors::BadRequest.new("payment.reference_required", "#{method.name} needs a reference") if method.needs_reference && l[:reference].blank? && l[:card_terminal_ref].blank?
           remaining = due - created.sum(&:amount_minor)
           raise Api::Errors::Conflict.new("payment.overpaid", "Payment exceeds the amount due") if amount > remaining && !method.cash?
-          applied = [amount, remaining].min
+          applied = [ amount, remaining ].min
           raise Api::Errors::Conflict.new("payment.overpaid", "Order is already paid") if applied <= 0
-          tendered = method.cash? ? [l[:tendered_minor].to_i, amount].max : nil
-          change = method.cash? ? [tendered - applied, 0].max : 0
+          tendered = method.cash? ? [ l[:tendered_minor].to_i, amount ].max : nil
+          change = method.cash? ? [ tendered - applied, 0 ].max : 0
           change_total += change
           payment = Payment.new(id: l[:id].presence, order: @order, branch_id: @order.branch_id, shift_id: @shift&.id, payment_method: method, payment_account: method.payment_account,
                                 method_code: method.code, amount_minor: applied, tendered_minor: tendered, change_minor: change, reference: l[:reference].presence,
@@ -100,7 +100,7 @@ module Payments
 
     def update_customer_stats!
       return if @order.customer_id.blank?
-      Customer.where(id: @order.customer_id).update_all(["orders_count = orders_count + 1, net_spent_minor = net_spent_minor + ?, last_order_at = ?", @order.total_minor, Time.current])
+      Customer.where(id: @order.customer_id).update_all([ "orders_count = orders_count + 1, net_spent_minor = net_spent_minor + ?, last_order_at = ?", @order.total_minor, Time.current ])
     end
   end
 end

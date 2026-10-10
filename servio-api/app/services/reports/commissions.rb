@@ -9,7 +9,7 @@ module Reports
       people = {}
       add = lambda do |membership_id, role, order|
         next unless membership_id
-        p = people[[membership_id, role]] ||= { membership_id: membership_id, applies_to: role, orders: 0, items: 0, sales_minor: 0 }
+        p = people[[ membership_id, role ]] ||= { membership_id: membership_id, applies_to: role, orders: 0, items: 0, sales_minor: 0 }
         p[:orders] += 1
         p[:items] += order.items.count { |i| i.status != "cancelled" }
         p[:sales_minor] += order.total_minor

@@ -16,7 +16,7 @@ class CreateTaxAndSync < ActiveRecord::Migration[8.0]
       t.datetime :sent_at
       t.timestamps
     end
-    add_index :tax_invoices, [:business_id, :status]
+    add_index :tax_invoices, [ :business_id, :status ]
     add_check_constraint :tax_invoices, "status in ('queued','sent','accepted','failed','skipped')", name: "tax_invoices_status_check"
 
     create_table :sync_batches, id: :uuid do |t|
@@ -35,7 +35,7 @@ class CreateTaxAndSync < ActiveRecord::Migration[8.0]
       t.text :error
       t.timestamps
     end
-    add_index :sync_batches, [:business_id, :device_id, :started_at]
+    add_index :sync_batches, [ :business_id, :device_id, :started_at ]
 
     create_table :sync_rejections, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -52,7 +52,7 @@ class CreateTaxAndSync < ActiveRecord::Migration[8.0]
       t.string :resolution
       t.timestamps
     end
-    add_index :sync_rejections, [:business_id, :resolved_at]
+    add_index :sync_rejections, [ :business_id, :resolved_at ]
 
     Servio::Rls.apply!(%w[tax_invoices sync_batches sync_rejections])
   end

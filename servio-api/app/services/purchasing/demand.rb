@@ -6,7 +6,7 @@ module Purchasing
     def suggestions(branch:)
       StockItem.active.includes(:base_unit, :purchase_unit, :stock_levels).select(&:below_minimum?).map do |i|
         on_hand = i.total_quantity
-        qty = [i.reorder_qty.positive? ? i.reorder_qty : (i.minimum_qty * 2 - on_hand), i.minimum_qty - on_hand].max
+        qty = [ i.reorder_qty.positive? ? i.reorder_qty : (i.minimum_qty * 2 - on_hand), i.minimum_qty - on_hand ].max
         price = last_price(i)
         { item: StockSerializers.item(i), on_hand: on_hand.to_s, minimum: i.minimum_qty.to_s, suggested_qty: qty.round(3).to_s, unit_code: i.base_unit.code,
           supplier: price && SupplierSerializers.supplier(price.supplier), est_cost_minor: ((price&.base_unit_cost_minor || i.avg_cost_minor_per_base) * qty).round }
@@ -24,7 +24,7 @@ module Purchasing
         daily = used / lookback_days
         need = daily * forecast_days * (1 + safety_percent.to_d / 100)
         on_hand = i.total_quantity
-        order_qty = [need - on_hand, 0].max.round(3)
+        order_qty = [ need - on_hand, 0 ].max.round(3)
         price = last_price(i)
         cost_per_base = price&.base_unit_cost_minor || i.avg_cost_minor_per_base
         { item: StockSerializers.item(i), daily_usage: daily.round(3).to_s, on_hand: on_hand.to_s, days_left: daily.positive? ? (on_hand / daily).floor : nil, needed: need.round(3).to_s,

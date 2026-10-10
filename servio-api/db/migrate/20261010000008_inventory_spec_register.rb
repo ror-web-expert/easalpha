@@ -8,7 +8,7 @@ class InventorySpecRegister < ActiveRecord::Migration[8.0]
     add_column :stock_sections, :is_system, :boolean, null: false, default: false
     add_column :stock_sections, :cogs_primary, :boolean, null: false, default: false
     add_column :stock_sections, :slug, :string
-    add_index :stock_sections, [:branch_id, :slug], unique: true, where: "archived_at IS NULL"
+    add_index :stock_sections, [ :branch_id, :slug ], unique: true, where: "archived_at IS NULL"
 
     add_column :stock_items, :active, :boolean, null: false, default: true
 
@@ -19,7 +19,7 @@ class InventorySpecRegister < ActiveRecord::Migration[8.0]
       t.decimal :factor, precision: 18, scale: 9, null: false
       t.timestamps
     end
-    add_index :unit_conversions, [:from_unit_id, :to_unit_id], unique: true
+    add_index :unit_conversions, [ :from_unit_id, :to_unit_id ], unique: true
 
     remove_check_constraint :stock_documents, name: "stock_documents_kind_check"
     add_check_constraint :stock_documents, "kind IN ('receive', 'po_receipt', 'transfer', 'waste', 'adjustment', 'count', 'opening_balance', 'production', 'supplier_return')", name: "stock_documents_kind_check"
@@ -52,7 +52,7 @@ class InventorySpecRegister < ActiveRecord::Migration[8.0]
     remove_column :stock_documents, :dispatched_at
     remove_column :stock_documents, :approved_by_membership_id
     remove_column :stock_items, :active
-    remove_index :stock_sections, [:branch_id, :slug]
+    remove_index :stock_sections, [ :branch_id, :slug ]
     remove_column :stock_sections, :slug
     remove_column :stock_sections, :cogs_primary
     remove_column :stock_sections, :is_system

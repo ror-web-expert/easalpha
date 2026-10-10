@@ -31,10 +31,10 @@ RSpec.describe "Catalog SPEC fields", type: :request do
       api_patch "/api/v1/products/#{m[:chai].id}", { discount_value: 10, discount_type: "percent", pct_code: "98.21.00" }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json).to include(discount_value: "10.0", discount_type: "percent", pct_code: "98.21.00")
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id, quantity: 2 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id, quantity: 2 } ] }, headers: headers
       expect(json[:items].first[:line_discount_minor]).to eq(1_600) # 10% of 2 × Rs 80
       api_patch "/api/v1/products/#{m[:chai].id}", { discount_value: 5, discount_type: "amount" }, headers: headers
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id, quantity: 2 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id, quantity: 2 } ] }, headers: headers
       expect(json[:items].first[:line_discount_minor]).to eq(1_000) # Rs 5 × 2
       api_patch "/api/v1/products/#{m[:chai].id}", { discount_value: 120, discount_type: "percent" }, headers: headers
       expect(response).to have_http_status(:unprocessable_content)
@@ -73,16 +73,16 @@ RSpec.describe "Catalog SPEC fields", type: :request do
   describe "order inventory consumables" do
     it "sets consumables per order type and variant, copies to all order types, and deducts them with the sale" do
       s = seed_stock!
-      api_put "/api/v1/products/#{m[:burger].id}/consumables", { rows: [{ order_type: "takeaway", stock_item_id: s[:box].id, quantity: 1, unit_id: s[:pcs].id },
-                                                                       { order_type: "takeaway", variant_id: m[:double].id, stock_item_id: s[:bag].id, quantity: 2, unit_id: s[:pcs].id }] }, headers: headers
+      api_put "/api/v1/products/#{m[:burger].id}/consumables", { rows: [ { order_type: "takeaway", stock_item_id: s[:box].id, quantity: 1, unit_id: s[:pcs].id },
+                                                                       { order_type: "takeaway", variant_id: m[:double].id, stock_item_id: s[:bag].id, quantity: 2, unit_id: s[:pcs].id } ] }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:data].size).to eq(2)
-      api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:burger].id, variant_id: m[:double].id, quantity: 1 }, { product_id: m[:burger].id, quantity: 3 }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:burger].id, variant_id: m[:double].id, quantity: 1 }, { product_id: m[:burger].id, quantity: 3 } ], place: true }, headers: headers
       expect(response).to have_http_status(:created)
-      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: json[:total_minor], tendered_minor: json[:total_minor] }] }, headers: headers
+      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: json[:total_minor], tendered_minor: json[:total_minor] } ] }, headers: headers
       expect(level(s[:bag])).to eq(98)  # the Double variant's own rows apply to it
       expect(level(s[:box])).to eq(97)  # product-level rows apply to the plain lines
-      api_put "/api/v1/products/#{m[:burger].id}/consumables", { rows: [{ order_type: "delivery", stock_item_id: s[:box].id, quantity: 1, unit_id: s[:pcs].id }], copy_all_order_types: true }, headers: headers
+      api_put "/api/v1/products/#{m[:burger].id}/consumables", { rows: [ { order_type: "delivery", stock_item_id: s[:box].id, quantity: 1, unit_id: s[:pcs].id } ], copy_all_order_types: true }, headers: headers
       expect(json[:data].map { |c| c[:order_type] }).to match_array(Product::ORDER_TYPES)
     end
 
@@ -94,9 +94,9 @@ RSpec.describe "Catalog SPEC fields", type: :request do
 
   describe "quick add menu" do
     it "stores an ordered list and sends it to the till in the catalog and the sync" do
-      api_put "/api/v1/quick_add_items", { items: [{ product_id: m[:chai].id }, { product_id: m[:burger].id, variant_id: m[:double].id }] }, headers: headers
+      api_put "/api/v1/quick_add_items", { items: [ { product_id: m[:chai].id }, { product_id: m[:burger].id, variant_id: m[:double].id } ] }, headers: headers
       expect(response).to have_http_status(:ok)
-      expect(json[:data].map { |q| q[:name] }).to eq(["Chai", "Zinger Burger"])
+      expect(json[:data].map { |q| q[:name] }).to eq([ "Chai", "Zinger Burger" ])
       expect(json[:data].last).to include(variant_name: "Double", price_minor: 65_000)
       get "/api/v1/catalog", headers: auth_headers(cashier, app: "pos")
       expect(json[:quick_add_items].size).to eq(2)
@@ -126,7 +126,7 @@ RSpec.describe "Catalog SPEC fields", type: :request do
       m
       get "/api/v1/products/codes", headers: headers
       row = json[:data].find { |r| r[:name] == "Chai" }
-      api_put "/api/v1/products/codes", { rows: [{ id: row[:id], sku: "CHAI-01", pct_code: "98.21.00" }] }, headers: headers
+      api_put "/api/v1/products/codes", { rows: [ { id: row[:id], sku: "CHAI-01", pct_code: "98.21.00" } ] }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:data].find { |r| r[:id] == row[:id] }).to include(sku: "CHAI-01", pct_code: "98.21.00")
     end

@@ -34,12 +34,12 @@ module Api
             balance_minor: c.balance_minor, loyalty_points: c.loyalty_points, last_order_on: last[c.id] }
         end
         rows = case params[:sort].to_s
-               when "orders" then rows.sort_by { |r| -r[:orders] }
-               when "balance" then rows.sort_by { |r| -r[:balance_minor] }
-               when "recent" then rows.sort_by { |r| r[:last_order_on] ? -r[:last_order_on].jd : 0 }
-               when "name" then rows.sort_by { |r| r[:customer][:name].downcase }
-               else rows.sort_by { |r| -r[:spent_minor] }
-               end
+        when "orders" then rows.sort_by { |r| -r[:orders] }
+        when "balance" then rows.sort_by { |r| -r[:balance_minor] }
+        when "recent" then rows.sort_by { |r| r[:last_order_on] ? -r[:last_order_on].jd : 0 }
+        when "name" then rows.sort_by { |r| r[:customer][:name].downcase }
+        else rows.sort_by { |r| -r[:spent_minor] }
+        end
         render json: { from: from, to: to, sort: params[:sort].presence || "spent", rows: rows.first((params[:limit].presence || 200).to_i),
                        totals: { customers: rows.size, spent_minor: rows.sum { |r| r[:spent_minor] }, orders: rows.sum { |r| r[:orders] }, balance_minor: rows.sum { |r| r[:balance_minor] }, with_balance: rows.count { |r| r[:balance_minor].positive? },
                                  by_status: Customer.active.group(:status).count, by_source: Customer.active.group(:source).count } }

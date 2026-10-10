@@ -37,7 +37,7 @@ class Phase7CustomersReports < ActiveRecord::Migration[8.0]
       t.timestamps
     end
     add_check_constraint :voucher_batches, "kind IN ('personal','public') AND value_kind IN ('fixed','percent')", name: "voucher_batches_kind_check"
-    add_index :voucher_batches, [:business_id, :public_code], unique: true, where: "public_code IS NOT NULL"
+    add_index :voucher_batches, [ :business_id, :public_code ], unique: true, where: "public_code IS NOT NULL"
 
     create_table :vouchers, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -51,7 +51,7 @@ class Phase7CustomersReports < ActiveRecord::Migration[8.0]
       t.string :status, null: false, default: "issued"
       t.timestamps
     end
-    add_index :vouchers, [:business_id, :code], unique: true
+    add_index :vouchers, [ :business_id, :code ], unique: true
     add_index :vouchers, :voucher_batch_id
     add_index :vouchers, :customer_id
     add_check_constraint :vouchers, "status IN ('issued','redeemed','void')", name: "vouchers_status_check"
@@ -70,7 +70,7 @@ class Phase7CustomersReports < ActiveRecord::Migration[8.0]
       t.timestamps
     end
     add_index :reviews, :order_id
-    add_index :reviews, [:business_id, :created_at]
+    add_index :reviews, [ :business_id, :created_at ]
     add_check_constraint :reviews, "rating IS NULL OR (rating >= 1 AND rating <= 5)", name: "reviews_rating_check"
     add_check_constraint :reviews, "source IN ('tablet','website','pos','qr')", name: "reviews_source_check"
 
@@ -99,7 +99,7 @@ class Phase7CustomersReports < ActiveRecord::Migration[8.0]
       t.datetime :generated_at, null: false
       t.timestamps
     end
-    add_index :ai_insights, [:business_id, :kind, :generated_at]
+    add_index :ai_insights, [ :business_id, :kind, :generated_at ]
     add_check_constraint :ai_insights, "kind IN ('pricing','stock_forecast')", name: "ai_insights_kind_check"
 
     create_table :website_configs, id: :uuid do |t|

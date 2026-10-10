@@ -39,9 +39,9 @@ class ReportSchedule < ApplicationRecord
   # The period the report covers at run time: yesterday, last 7 days, or last month.
   def period(as_of = Date.current)
     case cadence
-    when "weekly" then [as_of - 7, as_of - 1]
-    when "monthly" then [(as_of - 1).beginning_of_month, as_of - 1]
-    else [as_of - 1, as_of - 1]
+    when "weekly" then [ as_of - 7, as_of - 1 ]
+    when "monthly" then [ (as_of - 1).beginning_of_month, as_of - 1 ]
+    else [ as_of - 1, as_of - 1 ]
     end
   end
 end

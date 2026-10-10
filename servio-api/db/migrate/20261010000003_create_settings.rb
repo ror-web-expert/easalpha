@@ -9,7 +9,7 @@ class CreateSettings < ActiveRecord::Migration[8.0]
       t.uuid :updated_by_user_id
       t.timestamps
     end
-    add_index :settings, [:business_id, :branch_id, :key], unique: true, nulls_not_distinct: true
+    add_index :settings, [ :business_id, :branch_id, :key ], unique: true, nulls_not_distinct: true
     add_column :businesses, :settings_version, :bigint, null: false, default: 0
     Servio::Rls.apply!(%w[settings])
   end

@@ -31,7 +31,7 @@ class Promotion < ApplicationRecord
     return 0 if amount_minor < min_order_minor
     case kind
     when "percent", "happy_hour", "coupon" then (amount_minor * value / 100).round
-    when "fixed" then [amount_minor, (value * 100).to_i].min
+    when "fixed" then [ amount_minor, (value * 100).to_i ].min
     else 0
     end
   end

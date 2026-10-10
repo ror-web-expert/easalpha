@@ -13,9 +13,9 @@ RSpec.describe "Finance double entry", type: :request do
   before { within(biz) { PaymentMethod.seed_defaults!(biz) unless PaymentMethod.exists? } }
 
   def sell!(product, method: "cash", order_type: "takeaway", extra: {})
-    api_post "/api/v1/orders", { order_type: order_type, lines: [{ product_id: product.id, quantity: 1 }], place: true }.merge(extra), headers: headers
+    api_post "/api/v1/orders", { order_type: order_type, lines: [ { product_id: product.id, quantity: 1 } ], place: true }.merge(extra), headers: headers
     o = json
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: method, amount_minor: o[:total_minor], tendered_minor: o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: method, amount_minor: o[:total_minor], tendered_minor: o[:total_minor] } ] }, headers: headers
     o
   end
 
@@ -38,7 +38,7 @@ RSpec.describe "Finance double entry", type: :request do
       api_post "/api/v1/finance/accounts", { code: "5170", name: "Staff meals", kind: "expense", parent_id: json[:id] }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json).to include(code: "5170", is_system: false, normal_side: "debit")
-      api_post "/api/v1/finance/journal", { description: "bad", lines: [{ code: "1000", debit_minor: 100 }, { code: "4000", credit_minor: 100 }] }, headers: headers
+      api_post "/api/v1/finance/journal", { description: "bad", lines: [ { code: "1000", debit_minor: 100 }, { code: "4000", credit_minor: 100 } ] }, headers: headers
       expect(response).to have_http_status(:bad_request)
       expect(json[:error][:code]).to eq("journal.header")
     end
@@ -100,7 +100,7 @@ RSpec.describe "Finance double entry", type: :request do
       end
       api_post "/api/v1/suppliers", { name: "Dawn Bread" }, headers: headers
       sup = json[:id]
-      api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [{ stock_item_id: @buns.id, quantity: 100, unit_cost_minor: 2_000 }] }, headers: headers
+      api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [ { stock_item_id: @buns.id, quantity: 100, unit_cost_minor: 2_000 } ] }, headers: headers
       expect(response).to have_http_status(:created)
       expect(balance("1200")).to eq(200_000)
       expect(balance("2010")).to eq(200_000)
@@ -116,10 +116,10 @@ RSpec.describe "Finance double entry", type: :request do
 
   describe "journal voucher" do
     it "posts a balanced manual voucher, numbers it, rejects an unbalanced one and a cashier, and reverses" do
-      api_post "/api/v1/finance/journal", { description: "Owner puts in cash", lines: [{ code: "1010", debit_minor: 100_000 }, { code: "3010", credit_minor: 90_000 }] }, headers: headers
+      api_post "/api/v1/finance/journal", { description: "Owner puts in cash", lines: [ { code: "1010", debit_minor: 100_000 }, { code: "3010", credit_minor: 90_000 } ] }, headers: headers
       expect(response).to have_http_status(:bad_request)
       expect(json[:error][:code]).to eq("journal.unbalanced")
-      api_post "/api/v1/finance/journal", { description: "Owner puts in cash", lines: [{ code: "1010", debit_minor: 100_000 }, { code: "3010", credit_minor: 100_000 }] }, headers: headers
+      api_post "/api/v1/finance/journal", { description: "Owner puts in cash", lines: [ { code: "1010", debit_minor: 100_000 }, { code: "3010", credit_minor: 100_000 } ] }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json[:label]).to match(/\AJV-\d{6}\z/)
       expect(json[:kind]).to eq("manual")
@@ -198,7 +198,7 @@ RSpec.describe "Finance double entry", type: :request do
       expect(response).to have_http_status(:created)
       expect(json[:payment_account_id]).to eq(cash[:id])
       rate_id = json[:id]
-      api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:burger].id, quantity: 1 }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:burger].id, quantity: 1 } ], place: true }, headers: headers
       o = json
       expect(o[:tax_minor]).to be > 0
       api_post "/api/v1/orders/#{o[:id]}/tax_choice", { none: true }, headers: headers
@@ -212,16 +212,16 @@ RSpec.describe "Finance double entry", type: :request do
       api_patch "/api/v1/settings", { values: { "charges.service_charge.mode" => "fixed", "charges.service_charge.value" => 150, "charges.service_charge.order_types" => %w[dine_in],
                                                 "charges.delivery_charge.mode" => "percent", "charges.delivery_charge.value" => 10 } }, headers: headers
       expect(response).to have_http_status(:ok)
-      api_post "/api/v1/orders", { order_type: "dine_in", lines: [{ product_id: m[:burger].id, quantity: 1 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "dine_in", lines: [ { product_id: m[:burger].id, quantity: 1 } ] }, headers: headers
       expect(json[:service_charge_minor]).to eq(15_000)
       expect(json[:service_charge_fixed_minor]).to eq(15_000)
       api_patch "/api/v1/orders/#{json[:id]}", { service_charge_fixed_minor: 0, service_charge_percent: 0 }, headers: headers
       expect(json[:service_charge_minor]).to eq(0) # the cashier removed it
-      api_post "/api/v1/orders", { order_type: "delivery", lines: [{ product_id: m[:burger].id, quantity: 1 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "delivery", lines: [ { product_id: m[:burger].id, quantity: 1 } ] }, headers: headers
       net = json[:subtotal_minor] - json[:discount_minor]
       expect(json[:delivery_charge_percent]).to eq(10.0)
       expect(json[:delivery_charge_minor]).to eq((net * 0.10).round)
-      api_post "/api/v1/orders", { order_type: "delivery", delivery_charge_minor: 5_000, delivery_charge_percent: 0, lines: [{ product_id: m[:burger].id, quantity: 1 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "delivery", delivery_charge_minor: 5_000, delivery_charge_percent: 0, lines: [ { product_id: m[:burger].id, quantity: 1 } ] }, headers: headers
       expect(json[:delivery_charge_minor]).to eq(5_000)
     end
   end

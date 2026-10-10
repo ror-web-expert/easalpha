@@ -8,10 +8,10 @@ RSpec.describe "SPEC dashboard", type: :request do
   let(:m) { build_menu!(biz) }
 
   it "returns the cards, charts, top sellers and pills for today, and accepts other periods" do
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id, quantity: 2 }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id, quantity: 2 } ], place: true }, headers: headers
     paid = json
-    api_post "/api/v1/orders/#{paid[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: paid[:total_minor], tendered_minor: paid[:total_minor] }] }, headers: headers
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:burger].id }], place: true }, headers: headers
+    api_post "/api/v1/orders/#{paid[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: paid[:total_minor], tendered_minor: paid[:total_minor] } ] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
     open = json
     get "/api/v1/reports/dashboard/spec", headers: headers
     expect(response).to have_http_status(:ok)

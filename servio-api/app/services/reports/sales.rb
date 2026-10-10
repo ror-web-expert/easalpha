@@ -62,14 +62,14 @@ module Reports
 
     def voids
       rows = Void.joins(:order).where(orders: { branch_id: branch.id, business_day: from..to }).includes(:order).order(voided_at: :desc)
-      names = Membership.unscoped.includes(:user).where(id: rows.map { |v| [v.by_membership_id, v.approved_by_membership_id] }.flatten.compact.uniq).index_by(&:id)
+      names = Membership.unscoped.includes(:user).where(id: rows.map { |v| [ v.by_membership_id, v.approved_by_membership_id ] }.flatten.compact.uniq).index_by(&:id)
       { count: rows.count, amount_minor: rows.sum(:amount_minor),
         rows: rows.map { |v| { order_id: v.order_id, label: v.order.label, amount_minor: v.amount_minor, reason: v.reason, stock_action: v.stock_action, by: names[v.by_membership_id]&.user&.name, approved_by: names[v.approved_by_membership_id]&.user&.name, at: v.voided_at } } }
     end
 
     def discounts
       rows = DiscountApplied.joins(:order).where(orders: { branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded] }).includes(:order).order(created_at: :desc)
-      names = Membership.unscoped.includes(:user).where(id: rows.map { |d| [d.applied_by_membership_id, d.approved_by_membership_id] }.flatten.compact.uniq).index_by(&:id)
+      names = Membership.unscoped.includes(:user).where(id: rows.map { |d| [ d.applied_by_membership_id, d.approved_by_membership_id ] }.flatten.compact.uniq).index_by(&:id)
       { count: rows.count, amount_minor: rows.sum(:amount_minor), by_reason: rows.reorder(nil).group(:reason).sum(:amount_minor),
         rows: rows.first(200).map { |d| { order_id: d.order_id, label: d.order.label, kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, reason: d.reason, by: names[d.applied_by_membership_id]&.user&.name, approved_by: names[d.approved_by_membership_id]&.user&.name, at: d.created_at } } }
     end

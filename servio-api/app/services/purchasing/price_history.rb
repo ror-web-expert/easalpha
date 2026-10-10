@@ -25,7 +25,7 @@ module Purchasing
           last_price: last_price, avg_cost_minor_per_base: avg_cost.round(4).to_s("F"), difference_percent: diff&.to_f, verdict: verdict, verdict_text: VERDICTS[verdict], flagged: verdict != :ok }
       end.compact
       rows = rows.select { |r| r[:flagged] } if flagged_only
-      rows.sort_by { |r| [r[:flagged] ? 0 : 1, -r[:spent_minor]] }
+      rows.sort_by { |r| [ r[:flagged] ? 0 : 1, -r[:spent_minor] ] }
     end
 
     # A single purchase priced 20x off the others means the unit on that line is wrong; a steady gap means the

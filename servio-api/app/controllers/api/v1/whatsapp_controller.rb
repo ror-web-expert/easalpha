@@ -4,7 +4,7 @@ module Api
       before_action -> { require_permission!("settings.manage") }
 
       def templates
-        render json: { data: WhatsappTemplate.where(business_id: [nil, current_business.id]).order(:name, :language).map { |t| { id: t.id, name: t.name, language: t.language, category: t.category, body: t.body, variables: t.variables, approval_status: t.approval_status, shared: t.business_id.nil? } } }
+        render json: { data: WhatsappTemplate.where(business_id: [ nil, current_business.id ]).order(:name, :language).map { |t| { id: t.id, name: t.name, language: t.language, category: t.category, body: t.body, variables: t.variables, approval_status: t.approval_status, shared: t.business_id.nil? } } }
       end
 
       # SPEC Templates: built from the account variables; a business template with the same name overrides the shared one.

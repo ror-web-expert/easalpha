@@ -36,13 +36,13 @@ module Reports
     def spec(branch, period: "today", from: nil, to: nil)
       today = branch.business_day_for(Time.current)
       from, to = case period.to_s
-                 when "yesterday" then [today - 1, today - 1]
-                 when "7d" then [today - 6, today]
-                 when "30d" then [today - 29, today]
-                 when "month" then [today.beginning_of_month, today]
-                 when "custom" then [Date.parse(from.to_s), Date.parse(to.to_s)]
-                 else [today, today]
-                 end
+      when "yesterday" then [ today - 1, today - 1 ]
+      when "7d" then [ today - 6, today ]
+      when "30d" then [ today - 29, today ]
+      when "month" then [ today.beginning_of_month, today ]
+      when "custom" then [ Date.parse(from.to_s), Date.parse(to.to_s) ]
+      else [ today, today ]
+      end
       orders = Order.where(branch_id: branch.id, business_day: from..to).where.not(status: %w[draft held])
       completed = orders.where(status: %w[paid closed])
       open = orders.open

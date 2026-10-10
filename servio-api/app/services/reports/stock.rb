@@ -75,7 +75,7 @@ module Reports
       items = StockItem.where(id: item_ids).includes(:base_unit).index_by(&:id)
       rows = item_ids.filter_map do |id|
         item = items[id] or next
-        cols = SHEET_COLUMNS.transform_values { |kinds| kinds.sum { |k| today[[id, k]] || 0 } }
+        cols = SHEET_COLUMNS.transform_values { |kinds| kinds.sum { |k| today[[ id, k ]] || 0 } }
         open = opening[id] || 0
         close = open + cols.values.sum
         { item: StockSerializers.item(item), opening: fmt(open), in: fmt(cols["in"]), out: fmt(cols["out"]), waste: fmt(cols["waste"]), sale: fmt(cols["sale"]), adjusted: fmt(cols["adjusted"]),

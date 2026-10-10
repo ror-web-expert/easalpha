@@ -2,7 +2,7 @@
 class Setting < ApplicationRecord
   include Tenanted
   belongs_to :branch, optional: true
-  validates :key, presence: true, inclusion: { in: ->(_) { Settings::Registry.keys } }, uniqueness: { scope: [:business_id, :branch_id] }
+  validates :key, presence: true, inclusion: { in: ->(_) { Settings::Registry.keys } }, uniqueness: { scope: [ :business_id, :branch_id ] }
 
   # Effective values for a business: stored rows over registry defaults, with the legacy jsonb as a fallback in between.
   def self.effective(business, branch: nil)

@@ -8,8 +8,8 @@ module Reports
     def run(branch:, from:, to:)
       orders = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded])
       payments = Payment.where(branch_id: branch.id, business_day: from..to, status: "captured")
-      taken = orders.group(:taken_by_membership_id).pluck(Arel.sql("taken_by_membership_id, count(*), sum(total_minor)")).to_h { |m, c, t| [m, { orders: c, amount_minor: t.to_i }] }
-      collected = payments.group(:received_by_membership_id).pluck(Arel.sql("received_by_membership_id, count(*), sum(amount_minor)")).to_h { |m, c, t| [m, { payments: c, amount_minor: t.to_i }] }
+      taken = orders.group(:taken_by_membership_id).pluck(Arel.sql("taken_by_membership_id, count(*), sum(total_minor)")).to_h { |m, c, t| [ m, { orders: c, amount_minor: t.to_i } ] }
+      collected = payments.group(:received_by_membership_id).pluck(Arel.sql("received_by_membership_id, count(*), sum(amount_minor)")).to_h { |m, c, t| [ m, { payments: c, amount_minor: t.to_i } ] }
       by_method = payments.group(:received_by_membership_id, :method_code).sum(:amount_minor).each_with_object(Hash.new { |h, k| h[k] = {} }) { |((m, code), v), h| h[m][code] = v }
       drawers = PaymentAccount.active.where(kind: "drawer").where.not(cashier_membership_id: nil).group(:cashier_membership_id).sum(:current_balance_minor)
       shifts = Shift.where(branch_id: branch.id, business_day: from..to)

@@ -77,7 +77,7 @@ module Api
           from.release!
           to.occupy!(order)
         end
-        audit!("update", record: order, after: { moved_table: [from.code, to.code] })
+        audit!("update", record: order, after: { moved_table: [ from.code, to.code ] })
         render json: CustomerSerializers.table(to.reload, order: order)
       end
 

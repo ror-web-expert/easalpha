@@ -12,7 +12,7 @@ class CreateLoyaltyCampaignsReservations < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.datetime :created_at, null: false
     end
-    add_index :loyalty_transactions, [:customer_id, :occurred_at]
+    add_index :loyalty_transactions, [ :customer_id, :occurred_at ]
     add_check_constraint :loyalty_transactions, "kind in ('earn','redeem','adjust','expire','refund')", name: "loyalty_transactions_kind_check"
 
     create_table :campaigns, id: :uuid do |t|
@@ -56,7 +56,7 @@ class CreateLoyaltyCampaignsReservations < ActiveRecord::Migration[8.0]
       t.uuid :by_membership_id
       t.timestamps
     end
-    add_index :reservations, [:branch_id, :starts_at]
+    add_index :reservations, [ :branch_id, :starts_at ]
     add_check_constraint :reservations, "status in ('booked','confirmed','seated','completed','no_show','cancelled')", name: "reservations_status_check"
 
     create_table :commission_rules, id: :uuid do |t|
@@ -81,7 +81,7 @@ class CreateLoyaltyCampaignsReservations < ActiveRecord::Migration[8.0]
       t.boolean :required_for_shift, null: false, default: false
       t.timestamps
     end
-    add_index :checklist_templates, [:business_id, :branch_id, :kind], unique: true
+    add_index :checklist_templates, [ :business_id, :branch_id, :kind ], unique: true
     add_check_constraint :checklist_templates, "kind in ('opening','closing')", name: "checklist_templates_kind_check"
 
     create_table :checklist_runs, id: :uuid do |t|
@@ -98,7 +98,7 @@ class CreateLoyaltyCampaignsReservations < ActiveRecord::Migration[8.0]
       t.uuid :completed_by_membership_id
       t.timestamps
     end
-    add_index :checklist_runs, [:branch_id, :business_day, :kind], unique: true
+    add_index :checklist_runs, [ :branch_id, :business_day, :kind ], unique: true
 
     Servio::Rls.apply!(%w[loyalty_transactions campaigns reservations commission_rules checklist_templates checklist_runs])
   end

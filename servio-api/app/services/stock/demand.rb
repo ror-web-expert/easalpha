@@ -19,27 +19,27 @@ module Stock
         min = i.minimum_qty.to_d
         daily = (usage[i.id] || 0).to_d
         b = if in_section <= 0 then "out"
-            elsif min.positive? && in_section < min / 2 then "critical"
-            elsif min.positive? && in_section < min then "low"
-            else "ok"
-            end
+        elsif min.positive? && in_section < min / 2 then "critical"
+        elsif min.positive? && in_section < min then "low"
+        else "ok"
+        end
         next if bucket == "all_needing" && b == "ok"
         next if bucket.in?(%w[low critical out]) && b != bucket
         next if bucket == "everything" && daily.zero? && b == "ok"
-        target = [min * 2, (daily * 7).ceil.to_d].max
-        need = [target - in_section - on_order[i.id].to_d, 0.to_d].max
+        target = [ min * 2, (daily * 7).ceil.to_d ].max
+        need = [ target - in_section - on_order[i.id].to_d, 0.to_d ].max
         # Transfer when another section holds more than it needs; buy the rest.
-        elsewhere = section_id.present? ? [total - in_section, 0.to_d].max : 0.to_d
-        transfer = [elsewhere, need].min
+        elsewhere = section_id.present? ? [ total - in_section, 0.to_d ].max : 0.to_d
+        transfer = [ elsewhere, need ].min
         buy = need - transfer
         { item: StockSerializers.item(i), bucket: b, on_hand: in_section.to_s("F"), total_on_hand: total.to_s("F"), minimum: min.to_s("F"), daily_usage: daily.round(3).to_s("F"),
           days_left: daily.positive? ? (in_section / daily).floor : nil, on_order: on_order[i.id].to_d.to_s("F"), transfer_qty: transfer.to_s("F"), buy_qty: buy.to_s("F"),
           unit_code: i.base_unit.code, est_cost_minor: (buy * i.avg_cost_minor_per_base).round }
       end.compact
       order = { "out" => 0, "critical" => 1, "low" => 2, "ok" => 3 }
-      rows = rows.sort_by { |r| [order[r[:bucket]], -r[:est_cost_minor]] }
+      rows = rows.sort_by { |r| [ order[r[:bucket]], -r[:est_cost_minor] ] }
       { bucket: bucket, section_id: section_id, lookback_days: lookback_days, rows: rows,
-        counts: %w[low critical out].to_h { |k| [k, rows.count { |r| r[:bucket] == k }] }, transfer_count: rows.count { |r| r[:transfer_qty].to_d.positive? }, buy_cost_minor: rows.sum { |r| r[:est_cost_minor] } }
+        counts: %w[low critical out].to_h { |k| [ k, rows.count { |r| r[:bucket] == k } ] }, transfer_count: rows.count { |r| r[:transfer_qty].to_d.positive? }, buy_cost_minor: rows.sum { |r| r[:est_cost_minor] } }
     end
   end
 end

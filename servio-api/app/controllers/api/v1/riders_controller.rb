@@ -34,7 +34,7 @@ module Api
           end
           if ActiveModel::Type::Boolean.new.cast(params[:create_login]) && attrs[:membership_id].blank?
             user = User.find_by(phone: User.normalize_phone(attrs[:phone])) || User.create!(name: attrs[:name], phone: attrs[:phone])
-            m = Membership.create!(user: user, role: Role.find_by!(system_key: "rider"), status: "active", all_branches: false, branch_ids: [current_branch.id])
+            m = Membership.create!(user: user, role: Role.find_by!(system_key: "rider"), status: "active", all_branches: false, branch_ids: [ current_branch.id ])
             m.set_pin!(params[:pin]) if params[:pin].present?
             attrs[:membership_id] = m.id
           end

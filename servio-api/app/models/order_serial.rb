@@ -8,6 +8,6 @@ class OrderSerial < ApplicationRecord
       ON CONFLICT (branch_id, business_day) DO UPDATE SET last_serial = order_serials.last_serial + 1
       RETURNING last_serial
     SQL
-    connection.exec_query(sql, "OrderSerial.next", [branch_id, business_day]).first["last_serial"]
+    connection.exec_query(sql, "OrderSerial.next", [ branch_id, business_day ]).first["last_serial"]
   end
 end

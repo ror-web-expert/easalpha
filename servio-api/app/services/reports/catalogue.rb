@@ -32,7 +32,7 @@ module Reports
       scope = scope.where(order_type: order_type) if order_type.present?
       scope = scope.where(source: source) if source.present?
       rows, next_cursor = Paginator.call(scope, cursor: cursor, limit: limit || 100, order_column: :created_at)
-      names = Membership.unscoped.includes(:user).where(id: rows.map { |o| [o.taken_by_membership_id, o.completed_by_membership_id] }.flatten.compact.uniq).index_by(&:id)
+      names = Membership.unscoped.includes(:user).where(id: rows.map { |o| [ o.taken_by_membership_id, o.completed_by_membership_id ] }.flatten.compact.uniq).index_by(&:id)
       { data: rows.map { |o| { id: o.id, label: o.label, business_day: o.business_day, placed_at: o.placed_at, order_type: o.order_type, source: o.source, status: o.spec_status, payment_status: o.spec_payment_status,
                                  customer: o.customer&.name, taken_by: names[o.taken_by_membership_id]&.user&.name, completed_by: names[o.completed_by_membership_id]&.user&.name, items: o.items.count { |i| !i.cancelled? },
                                  subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, tax_minor: o.tax_minor, service_charge_minor: o.service_charge_minor, delivery_charge_minor: o.delivery_charge_minor,
@@ -44,7 +44,7 @@ module Reports
     def calendar(branch:, month:)
       from, to = month.beginning_of_month, month.end_of_month
       paid = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded])
-      by_day = paid.group(:business_day).pluck(Arel.sql("business_day, count(*), sum(total_minor)")).to_h { |d, c, t| [d, { orders: c, revenue_minor: t.to_i }] }
+      by_day = paid.group(:business_day).pluck(Arel.sql("business_day, count(*), sum(total_minor)")).to_h { |d, c, t| [ d, { orders: c, revenue_minor: t.to_i } ] }
       days = (from..to).map { |d| { date: d, wday: d.wday, orders: by_day.dig(d, :orders) || 0, revenue_minor: by_day.dig(d, :revenue_minor) || 0 } }
       best = days.max_by { |d| d[:revenue_minor] }
       { month: from, days: days, totals: { orders: days.sum { |d| d[:orders] }, revenue_minor: days.sum { |d| d[:revenue_minor] }, average_day_minor: days.count { |d| d[:orders].positive? }.then { |n| n.zero? ? 0 : days.sum { |d| d[:revenue_minor] } / n },

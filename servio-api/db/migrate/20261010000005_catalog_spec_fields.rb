@@ -19,7 +19,7 @@ class CatalogSpecFields < ActiveRecord::Migration[8.0]
       t.uuid :unit_id, null: false
       t.timestamps
     end
-    add_index :order_type_consumables, [:product_id, :variant_id, :order_type, :stock_item_id], unique: true, nulls_not_distinct: true, name: "index_consumables_unique"
+    add_index :order_type_consumables, [ :product_id, :variant_id, :order_type, :stock_item_id ], unique: true, nulls_not_distinct: true, name: "index_consumables_unique"
 
     create_table :quick_add_items, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -28,7 +28,7 @@ class CatalogSpecFields < ActiveRecord::Migration[8.0]
       t.integer :position, null: false, default: 0
       t.timestamps
     end
-    add_index :quick_add_items, [:business_id, :product_id, :variant_id], unique: true, nulls_not_distinct: true
+    add_index :quick_add_items, [ :business_id, :product_id, :variant_id ], unique: true, nulls_not_distinct: true
 
     Servio::Rls.apply!(%w[order_type_consumables quick_add_items])
   end

@@ -57,7 +57,7 @@ module Api
       end
 
       def categories
-        render json: { data: StockItem.active.where.not(category: [nil, ""]).distinct.order(:category).pluck(:category) }
+        render json: { data: StockItem.active.where.not(category: [ nil, "" ]).distinct.order(:category).pluck(:category) }
       end
 
       # POST /stock_items/import/preview  { csv }    POST /stock_items/import { csv }

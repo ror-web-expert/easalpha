@@ -5,7 +5,7 @@ module SupplierSerializers
   def supplier(s, counts: nil)
     h = { id: s.id, name: s.name, contact_name: s.contact_name, phone: s.phone, email: s.email, address: s.address, ntn: s.ntn, opening_balance_minor: s.opening_balance_minor, balance_minor: s.balance_minor,
           balance_label: balance_label(s.balance_minor), payment_terms_days: s.payment_terms_days, notes: s.notes, active: s.active, archived_at: s.archived_at, created_at: s.created_at }
-    c = counts ? counts[s.id] : supplier_counts([s.id])[s.id]
+    c = counts ? counts[s.id] : supplier_counts([ s.id ])[s.id]
     h.merge(items_count: c&.dig(:items_count) || 0, purchases_count: c&.dig(:purchases_count) || 0)
   end
 

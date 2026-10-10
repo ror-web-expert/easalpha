@@ -19,7 +19,7 @@ RSpec.describe "Customers and tables", type: :request do
     end
 
     it "creates customers with sequential khata numbers, normalised phones and addresses, and rejects a duplicate phone" do
-      api_post "/api/v1/customers", { name: "Faisal Raza", phone: "0301 0754854", addresses: [{ line1: "Room 26", area: "Boys hostel", is_default: true }] }, headers: headers
+      api_post "/api/v1/customers", { name: "Faisal Raza", phone: "0301 0754854", addresses: [ { line1: "Room 26", area: "Boys hostel", is_default: true } ] }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json[:khata_no]).to eq(2)
       expect(json[:phone]).to eq("+923010754854")
@@ -35,10 +35,10 @@ RSpec.describe "Customers and tables", type: :request do
       api_post "/api/v1/customers", { name: "Hanzla Rehman", phone: "03101665453", company: "PRC" }, headers: headers
       cid = json[:id]
       m = build_menu!(biz)
-      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cid, lines: [{ product_id: m[:chai].id, quantity: 2 }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cid, lines: [ { product_id: m[:chai].id, quantity: 2 } ], place: true }, headers: headers
       expect(response).to have_http_status(:created)
       get "/api/v1/customers?q=%232", headers: headers
-      expect(json[:data].map { |c| c[:name] }).to eq(["Hanzla Rehman"])
+      expect(json[:data].map { |c| c[:name] }).to eq([ "Hanzla Rehman" ])
       get "/api/v1/customers?q=1665453", headers: headers
       expect(json[:data].size).to eq(1)
       get "/api/v1/customers?q=hanz", headers: headers
@@ -56,12 +56,12 @@ RSpec.describe "Customers and tables", type: :request do
     it "blocks orders for pending or deactivated customers" do
       c = within(biz) { Customer.create!(name: "Pending Online", phone: "+923001112223", source: "online", status: "pending_approval") }
       m = build_menu!(biz)
-      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: c.id, lines: [{ product_id: m[:chai].id }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: c.id, lines: [ { product_id: m[:chai].id } ] }, headers: headers
       expect(response).to have_http_status(:conflict)
       expect(json[:error][:code]).to eq("customer.pending")
       api_post "/api/v1/customers/#{c.id}/approve", {}, headers: headers
       expect(json[:status]).to eq("active")
-      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: c.id, lines: [{ product_id: m[:chai].id }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: c.id, lines: [ { product_id: m[:chai].id } ] }, headers: headers
       expect(response).to have_http_status(:created)
     end
 
@@ -75,7 +75,7 @@ RSpec.describe "Customers and tables", type: :request do
       api_post "/api/v1/customers/import", { data: "name,phone\nAbbas Renamed,03140062759\n" }, headers: headers
       expect(json[:updated]).to eq(1)
       get "/api/v1/customer_groups", headers: headers
-      expect(json[:data].map { |g| [g[:name], g[:customer_count]] }).to include(["Hostel", 1], ["Office", 1])
+      expect(json[:data].map { |g| [ g[:name], g[:customer_count] ] }).to include([ "Hostel", 1 ], [ "Office", 1 ])
     end
 
     it "requires customers.manage to create and isolates tenants" do
@@ -109,9 +109,9 @@ RSpec.describe "Customers and tables", type: :request do
       t2 = json[:id]
       api_post "/api/v1/tables", { code: "R1-1" }, headers: headers
       expect(response).to have_http_status(:unprocessable_content)
-      api_put "/api/v1/tables/layout", { tables: [{ id: t1, position: { x: 10, y: 20, w: 80, h: 80 } }] }, headers: headers
+      api_put "/api/v1/tables/layout", { tables: [ { id: t1, position: { x: 10, y: 20, w: 80, h: 80 } } ] }, headers: headers
       expect(response).to have_http_status(:ok)
-      api_post "/api/v1/orders", { order_type: "dine_in", table_id: t1, lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "dine_in", table_id: t1, lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
       get "/api/v1/tables", headers: headers
       row = json[:data].find { |t| t[:id] == t1 }
       expect(row[:status]).to eq("occupied")
@@ -130,7 +130,7 @@ RSpec.describe "Customers and tables", type: :request do
       t1 = within(biz) { DiningTable.create!(branch: Branch.first, code: "T1") }
       t2 = within(biz) { DiningTable.create!(branch: Branch.first, code: "T2") }
       t3 = within(biz) { DiningTable.create!(branch: Branch.first, code: "T3") }
-      api_post "/api/v1/orders", { order_type: "dine_in", table_id: t1.id, lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "dine_in", table_id: t1.id, lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
       o1 = json[:id]
       api_post "/api/v1/tables/#{t1.id}/move", { to_table_id: t2.id }, headers: headers
       expect(response).to have_http_status(:ok)
@@ -138,7 +138,7 @@ RSpec.describe "Customers and tables", type: :request do
       expect(json[:current_order][:id]).to eq(o1)
       within(biz) { expect(t1.reload.status).to eq("available") }
 
-      api_post "/api/v1/orders", { order_type: "dine_in", table_id: t3.id, lines: [{ product_id: m[:burger].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "dine_in", table_id: t3.id, lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
       api_post "/api/v1/tables/#{t3.id}/merge", { into_table_id: t2.id }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:current_order][:item_count]).to eq(2)

@@ -32,7 +32,7 @@ class CreateBilling < ActiveRecord::Migration[8.0]
       t.uuid :confirmed_by_user_id
       t.timestamps
     end
-    add_index :invoices, [:business_id, :status]
+    add_index :invoices, [ :business_id, :status ]
     change_table :subscriptions do |t|
       t.datetime :cancelled_at
       t.string :cancel_reason
@@ -57,7 +57,7 @@ class CreateBilling < ActiveRecord::Migration[8.0]
       t.string :approval_status, null: false, default: "draft"
       t.timestamps
     end
-    add_index :whatsapp_templates, [:business_id, :name, :language], unique: true
+    add_index :whatsapp_templates, [ :business_id, :name, :language ], unique: true
 
     create_table :support_sessions, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -70,7 +70,7 @@ class CreateBilling < ActiveRecord::Migration[8.0]
       t.datetime :ended_at
       t.timestamps
     end
-    add_index :support_sessions, [:business_id, :status]
+    add_index :support_sessions, [ :business_id, :status ]
 
     Servio::Rls.apply!(%w[invoices payments_received support_sessions])
   end

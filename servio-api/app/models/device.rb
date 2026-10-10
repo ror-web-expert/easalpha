@@ -4,7 +4,7 @@ class Device < ApplicationRecord
   belongs_to :branch
   validates :name, :code, presence: true
   validates :kind, inclusion: { in: KINDS }
-  validates :code, uniqueness: { scope: [:business_id, :branch_id] }
+  validates :code, uniqueness: { scope: [ :business_id, :branch_id ] }
   scope :active, -> { where(revoked_at: nil) }
 
   before_validation { self.code ||= next_code }

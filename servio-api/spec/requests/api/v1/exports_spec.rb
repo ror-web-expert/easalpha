@@ -7,8 +7,8 @@ RSpec.describe "Exports", type: :request do
   let(:headers) { auth_headers(owner) }
 
   it "exports menu, orders and customers as CSV and logs the export" do
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
-    api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: 9_280 }] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+    api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
     get "/api/v1/exports/menu.csv", headers: headers
     expect(response).to have_http_status(:ok)
     expect(response.content_type).to include("text/csv")

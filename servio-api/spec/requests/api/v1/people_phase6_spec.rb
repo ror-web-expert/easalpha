@@ -22,7 +22,7 @@ RSpec.describe "People phase 6", type: :request do
     it "decides the status on the first scan, logs every tap, applies the checkout gap, overtime and auto-close, and prices the month with allowances, penalties and the cap" do
       api_put "/api/v1/employees/rules", { shift_start: "10:00", shift_end: "18:00", rules_enabled: true, late_after_minutes: 15, half_day_after_minutes: 120, absent_after_minutes: 300, overtime_enabled: true, overtime_rate_minor_per_hour: 20_000,
                                            free_lates: 1, late_penalty: "fine_only", late_fine_minor: 50_000, half_day_penalty: "lose_day", absent_penalty: "both", absent_fine_minor: 10_000, fine_cap_minor: 60_000,
-                                           checkout_gap_minutes: 10, working_days: [1, 2, 3, 4, 5, 6], absent_rule: "fixed_26", fixed_divisor: 26 }, headers: headers
+                                           checkout_gap_minutes: 10, working_days: [ 1, 2, 3, 4, 5, 6 ], absent_rule: "fixed_26", fixed_divisor: 26 }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json).to include(rules_enabled: true, late_after_minutes: 15, late_penalty: "fine_only", fine_cap_minor: 60_000)
       api_post "/api/v1/employees", { name: "Asif", designation: "Cook", base_salary_minor: 2_600_000, joined_on: "2026-01-01" }, headers: headers
@@ -131,7 +131,7 @@ RSpec.describe "People phase 6", type: :request do
       cust = within(biz) { Customer.create!(name: "Ali", phone: "+923001234567") }
       addr = within(biz) { CustomerAddress.create!(customer: cust, line1: "House 1", area: "Clifton", city: "Karachi") }
       2.times do
-        api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust.id, address_id: addr.id, lines: [{ product_id: m[:burger].id, quantity: 1 }], place: true }, headers: headers
+        api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust.id, address_id: addr.id, lines: [ { product_id: m[:burger].id, quantity: 1 } ], place: true }, headers: headers
         o = json
         api_post "/api/v1/orders/#{o[:id]}/delivery/assign", { rider_id: temp[:id] }, headers: headers
         if response.status == 200
@@ -166,9 +166,9 @@ RSpec.describe "People phase 6", type: :request do
       api_post "/api/v1/shifts", { opening_cash_minor: 100_000 }, headers: ch
       expect(response).to have_http_status(:created)
       shift = json
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:burger].id, quantity: 1 }], place: true }, headers: headers # taken by the owner
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:burger].id, quantity: 1 } ], place: true }, headers: headers # taken by the owner
       o = json
-      api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: o[:total_minor], tendered_minor: o[:total_minor] }] }, headers: ch # collected by the cashier
+      api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor], tendered_minor: o[:total_minor] } ] }, headers: ch # collected by the cashier
       expect(response).to have_http_status(:created)
       get "/api/v1/shifts/my_till", headers: ch
       expect(json[:drawer_balance_minor]).to eq(100_000 + o[:total_minor])

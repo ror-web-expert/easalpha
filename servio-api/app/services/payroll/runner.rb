@@ -8,7 +8,7 @@ module Payroll
       month = month.beginning_of_month
       raise Api::Errors::Conflict.new("payroll.exists", "Payroll for #{month.strftime('%B %Y')} already exists") if PayrollRun.where(branch_id: branch&.id, month: month).where.not(status: "cancelled").exists?
       from, to = month, month.end_of_month
-      Attendance.fill_absences!(from: from, to: [to, Date.current].min)
+      Attendance.fill_absences!(from: from, to: [ to, Date.current ].min)
       defaults = AttendanceRule.find_by(employee_id: nil) || AttendanceRule.new
       # SPEC: the run snapshots the divisor, the fines and the allowances it used, so later rule changes never move a paid month.
       run = PayrollRun.create!(branch: branch, month: month, notes: notes, generated_by_membership_id: actor&.id,
@@ -37,10 +37,10 @@ module Payroll
         tips = tip_sharers.any? && e.shares_tips ? tips_total / tip_sharers.size : 0
         gross = base + earnings + commission + tips + overtime
         advances = Advance.where(employee_id: e.id, status: "paid").where("outstanding_minor > 0").order(:requested_on)
-        recoverable = [gross - deductions - absence - att[:fines_minor], 0].max
+        recoverable = [ gross - deductions - absence - att[:fines_minor], 0 ].max
         recovered = 0
         adv_detail = advances.map do |a|
-          take = [a.installment_minor || a.outstanding_minor, a.outstanding_minor, recoverable - recovered].min
+          take = [ a.installment_minor || a.outstanding_minor, a.outstanding_minor, recoverable - recovered ].min
           recovered += take
           { advance: a.label, taken_minor: take, outstanding_after_minor: a.outstanding_minor - take }
         end

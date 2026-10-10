@@ -32,7 +32,7 @@ module Orders
     # The story block for the order detail: the three names the SPEC shows, the counts, and the timeline.
     def for(order)
       events = order.story_events.to_a
-      names = Membership.where(id: [order.taken_by_membership_id, order.completed_by_membership_id].compact).includes(:user).index_by(&:id)
+      names = Membership.where(id: [ order.taken_by_membership_id, order.completed_by_membership_id ].compact).includes(:user).index_by(&:id)
       collected = order.payments.where(status: "captured").order(:created_at).last
       collector = collected && Membership.where(id: collected.received_by_membership_id).includes(:user).first
       {

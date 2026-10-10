@@ -110,7 +110,7 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
     owner.user.update!(phone: "+923001234567")
     within(biz) { biz.update!(settings: { "big_void_alert_minor" => 1_000 }) }
     m = build_menu!(biz)
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:burger].id }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
     api_post "/api/v1/orders/#{json[:id]}/void", { reason: "Wrong order" }, headers: headers
     within(biz) do
       expect(Notification.where(kind: "big_void").count).to eq(1)

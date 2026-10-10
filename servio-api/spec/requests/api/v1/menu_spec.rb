@@ -18,21 +18,21 @@ RSpec.describe "Menu", type: :request do
   it "builds a menu with categories, a product with variants, order-type prices and modifiers" do
     menu_id = create_menu
     cat_id = create_category(menu_id)
-    api_post "/api/v1/modifier_groups", { name: "Spice", min_select: 1, max_select: 1, required: true, modifiers: [{ name: "Mild", price_minor: 0 }, { name: "Extra hot", price_minor: 2000 }] }, headers: headers
+    api_post "/api/v1/modifier_groups", { name: "Spice", min_select: 1, max_select: 1, required: true, modifiers: [ { name: "Mild", price_minor: 0 }, { name: "Extra hot", price_minor: 2000 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     group_id = json[:id]
     expect(json[:modifiers].size).to eq(2)
 
     api_post "/api/v1/products", {
-      category_id: cat_id, name: "Zinger Burger", sku: "ZB-1", base_price_minor: 45_000, allergens: ["gluten"],
-      variants: [{ name: "Single", price_minor: 45_000 }, { name: "Double", price_minor: 65_000 }],
-      prices: [{ order_type: "delivery", price_minor: 50_000 }],
-      modifier_group_ids: [group_id]
+      category_id: cat_id, name: "Zinger Burger", sku: "ZB-1", base_price_minor: 45_000, allergens: [ "gluten" ],
+      variants: [ { name: "Single", price_minor: 45_000 }, { name: "Double", price_minor: 65_000 } ],
+      prices: [ { order_type: "delivery", price_minor: 50_000 } ],
+      modifier_group_ids: [ group_id ]
     }, headers: headers
     expect(response).to have_http_status(:created)
     expect(json[:variants].size).to eq(2)
     expect(json[:prices].first[:order_type]).to eq("delivery")
-    expect(json[:modifier_group_ids]).to eq([group_id])
+    expect(json[:modifier_group_ids]).to eq([ group_id ])
 
     within(biz) do
       p = Product.includes(:product_prices, :variants).find(json[:id])
@@ -66,7 +66,7 @@ RSpec.describe "Menu", type: :request do
 
   it "keeps a menu hidden online and the last menu undeletable" do
     menu_id = create_menu
-    api_patch "/api/v1/menus/#{menu_id}", { show_online: false, time_rules: { days: [1, 2, 3, 4, 5], start: "06:00", end: "11:00" } }, headers: headers
+    api_patch "/api/v1/menus/#{menu_id}", { show_online: false, time_rules: { days: [ 1, 2, 3, 4, 5 ], start: "06:00", end: "11:00" } }, headers: headers
     expect(json[:show_online]).to be false
     delete "/api/v1/menus/#{menu_id}", headers: headers
     expect(response).to have_http_status(:conflict)
@@ -82,7 +82,7 @@ RSpec.describe "Menu", type: :request do
     cat_id = create_category(create_menu)
     api_post "/api/v1/products", { category_id: cat_id, name: "Biryani", base_price_minor: 30_000 }, headers: headers
     biryani = json[:id]
-    api_post "/api/v1/deals", { name: "Lunch Box", price_minor: 50_000, items: [{ product_id: biryani, quantity: 1 }, { product_id: biryani, quantity: 2, choice_group: "drink" }] }, headers: headers
+    api_post "/api/v1/deals", { name: "Lunch Box", price_minor: 50_000, items: [ { product_id: biryani, quantity: 1 }, { product_id: biryani, quantity: 2, choice_group: "drink" } ] }, headers: headers
     expect(response).to have_http_status(:created)
     expect(json[:items].size).to eq(2)
     api_post "/api/v1/deals", { name: "Empty", price_minor: 1, items: [] }, headers: headers
@@ -135,12 +135,12 @@ RSpec.describe "Menu", type: :request do
   end
 
   it "imports the ArfaPOS JSON shape and updates existing products by SKU" do
-    doc = { menus: [{ name: "Default", categories: [{ name: "Pizza", products: [{ name: "Sky Special", selling_price: "1,200", code: "PZ-1" }] }] }] }
+    doc = { menus: [ { name: "Default", categories: [ { name: "Pizza", products: [ { name: "Sky Special", selling_price: "1,200", code: "PZ-1" } ] } ] } ] }
     api_post "/api/v1/menu/import/preview", { source: "arfapos_json", data: doc }, headers: headers
     expect(json[:valid_count]).to eq(1)
     api_post "/api/v1/menu/import/apply", { import_job_id: json[:import_job_id] }, headers: headers
     expect(json[:created]).to eq(1)
-    doc2 = { menus: [{ name: "Default", categories: [{ name: "Pizza", products: [{ name: "Sky Special", selling_price: "1,300", code: "PZ-1" }] }] }] }
+    doc2 = { menus: [ { name: "Default", categories: [ { name: "Pizza", products: [ { name: "Sky Special", selling_price: "1,300", code: "PZ-1" } ] } ] } ] }
     api_post "/api/v1/menu/import/preview", { source: "arfapos_json", data: doc2 }, headers: headers
     api_post "/api/v1/menu/import/apply", { import_job_id: json[:import_job_id] }, headers: headers
     expect(json[:updated]).to eq(1)

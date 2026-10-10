@@ -29,9 +29,9 @@ module Api
           # SPEC sorts other than newest use page and limit rather than a cursor.
           order_by = { "oldest" => "orders.created_at ASC", "serial_asc" => "orders.serial ASC NULLS LAST", "serial_desc" => "orders.serial DESC NULLS LAST",
                        "amount_desc" => "orders.total_minor DESC", "amount_asc" => "orders.total_minor ASC" }.fetch(params[:sort]) { raise Api::Errors::BadRequest.new("sort.unknown", "Unknown sort #{params[:sort]}") }
-          limit = [[params[:limit].to_i, 1].max, 200].min
+          limit = [ [ params[:limit].to_i, 1 ].max, 200 ].min
           limit = 50 if params[:limit].blank?
-          page = [params[:page].to_i, 1].max
+          page = [ params[:page].to_i, 1 ].max
           rows = scope.reorder(Arel.sql(order_by)).offset((page - 1) * limit).limit(limit + 1).to_a
           more = rows.size > limit
           return render json: { data: rows.first(limit).map { |o| OrderSerializers.summary(o) }, next_cursor: nil, next_page: more ? page + 1 : nil }

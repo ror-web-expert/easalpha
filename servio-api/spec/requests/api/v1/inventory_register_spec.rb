@@ -17,8 +17,8 @@ RSpec.describe "Inventory register", type: :request do
   describe "sections" do
     it "seeds Kitchen and Warehouse as system sections, Warehouse as COGS Primary, with slugs, and refuses to remove them" do
       get "/api/v1/stock_sections", headers: headers
-      names = json[:data].map { |s| [s[:name], s[:slug], s[:is_system], s[:cogs_primary]] }
-      expect(names).to include(["Kitchen", "kitchen", true, false], ["Warehouse", "warehouse", true, true])
+      names = json[:data].map { |s| [ s[:name], s[:slug], s[:is_system], s[:cogs_primary] ] }
+      expect(names).to include([ "Kitchen", "kitchen", true, false ], [ "Warehouse", "warehouse", true, true ])
       wh = json[:data].find { |s| s[:slug] == "warehouse" }
       delete "/api/v1/stock_sections/#{wh[:id]}", headers: headers
       expect(response).to have_http_status(:conflict)
@@ -44,9 +44,9 @@ RSpec.describe "Inventory register", type: :request do
       btl = json
       api_post "/api/v1/unit_conversions", { from_unit_id: pet[:id], to_unit_id: btl[:id], factor: 12 }, headers: headers
       expect(response).to have_http_status(:ok)
-      expect(json[:data].map { |c| [c[:from_code], c[:to_code], c[:factor].to_f] }).to contain_exactly(["pet12", "btl", 12.0], ["btl", "pet12", (1.0 / 12).round(9)])
+      expect(json[:data].map { |c| [ c[:from_code], c[:to_code], c[:factor].to_f ] }).to contain_exactly([ "pet12", "btl", 12.0 ], [ "btl", "pet12", (1.0 / 12).round(9) ])
       get "/api/v1/unit_conversions", headers: headers
-      expect(json[:data].map { |c| [c[:from_code], c[:to_code]] }).to include(["kg", "g"], ["g", "kg"], ["pet12", "btl"])
+      expect(json[:data].map { |c| [ c[:from_code], c[:to_code] ] }).to include([ "kg", "g" ], [ "g", "kg" ], [ "pet12", "btl" ])
       within(biz) { expect(Unit.find(pet[:id]).convert(2, to: Unit.find(btl[:id]))).to eq(24) }
     end
   end
@@ -57,21 +57,21 @@ RSpec.describe "Inventory register", type: :request do
       item = within(biz) { StockItem.create!(name: "Box", base_unit: u[:pcs]) }
       sections = within(biz) { StockSection.ensure_system!(branch) }
       kitchen, warehouse = sections
-      api_post "/api/v1/stock_documents", { kind: "opening_balance", to_section_id: warehouse.id, posting_date: Date.current - 1, lines: [{ stock_item_id: item.id, quantity: 50, unit_cost_minor: 1_000 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "opening_balance", to_section_id: warehouse.id, posting_date: Date.current - 1, lines: [ { stock_item_id: item.id, quantity: 50, unit_cost_minor: 1_000 } ], post: true }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json[:label]).to eq("OPB-000001")
       expect(json[:status]).to eq("posted")
       expect(json[:posting_date]).to eq((Date.current - 1).iso8601)
-      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, lines: [{ stock_item_id: item.id, quantity: 10, unit_cost_minor: 1_000 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, lines: [ { stock_item_id: item.id, quantity: 10, unit_cost_minor: 1_000 } ], post: true }, headers: headers
       expect(json[:label]).to eq("GRN-000001")
-      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, posting_date: Date.current + 1, lines: [{ stock_item_id: item.id, quantity: 1 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, posting_date: Date.current + 1, lines: [ { stock_item_id: item.id, quantity: 1 } ], post: true }, headers: headers
       expect(response).to have_http_status(:conflict)
       expect(json[:error][:code]).to eq("stock.future_date")
 
       # A transfer drafted and submitted by a cashier waits for approval, then goes in transit, then is received.
       within(biz) { cashier.set_permissions!(%w[SALES_WALKIN PURCHASE_ORDERS]) }
       ch = auth_headers(cashier.reload)
-      api_post "/api/v1/stock_documents", { kind: "transfer", from_section_id: warehouse.id, to_section_id: kitchen.id, lines: [{ stock_item_id: item.id, quantity: 20 }], submit: true }, headers: ch
+      api_post "/api/v1/stock_documents", { kind: "transfer", from_section_id: warehouse.id, to_section_id: kitchen.id, lines: [ { stock_item_id: item.id, quantity: 20 } ], submit: true }, headers: ch
       expect(response).to have_http_status(:created)
       expect(json[:status]).to eq("awaiting_approval")
       doc_id = json[:id]
@@ -100,8 +100,8 @@ RSpec.describe "Inventory register", type: :request do
       kitchen, warehouse = within(biz) { StockSection.ensure_system!(branch) }
       low = within(biz) { StockItem.create!(name: "Lemons", base_unit: u[:pcs], minimum_qty: 20) }
       out = within(biz) { StockItem.create!(name: "Mint", base_unit: u[:pcs], minimum_qty: 5) }
-      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, lines: [{ stock_item_id: low.id, quantity: 30, unit_cost_minor: 500 }], post: true }, headers: headers
-      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: kitchen.id, lines: [{ stock_item_id: low.id, quantity: 5, unit_cost_minor: 500 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: warehouse.id, lines: [ { stock_item_id: low.id, quantity: 30, unit_cost_minor: 500 } ], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: kitchen.id, lines: [ { stock_item_id: low.id, quantity: 5, unit_cost_minor: 500 } ], post: true }, headers: headers
       get "/api/v1/stock/demand?section_id=#{kitchen.id}", headers: headers
       expect(response).to have_http_status(:ok)
       rows = json[:rows].index_by { |r| r[:item][:name] }
@@ -110,16 +110,16 @@ RSpec.describe "Inventory register", type: :request do
       expect(rows["Mint"][:bucket]).to eq("out")
       expect(json[:counts]).to include(critical: 1, out: 1)
       get "/api/v1/stock/demand?bucket=out", headers: headers
-      expect(json[:rows].map { |r| r[:item][:name] }).to eq(["Mint"])
+      expect(json[:rows].map { |r| r[:item][:name] }).to eq([ "Mint" ])
 
       api_patch "/api/v1/settings", { values: { "inventory.stock_alerts.low_stock" => true } }, headers: headers
-      api_post "/api/v1/stock_documents", { kind: "waste", from_section_id: warehouse.id, reason: "rotten", lines: [{ stock_item_id: low.id, quantity: 15 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "waste", from_section_id: warehouse.id, reason: "rotten", lines: [ { stock_item_id: low.id, quantity: 15 } ], post: true }, headers: headers
       within(biz) { expect(Notification.where(kind: "low_stock").count).to eq(1) }
 
-      api_post "/api/v1/stock_documents", { kind: "count", from_section_id: warehouse.id, lines: [{ stock_item_id: low.id, counted_qty: 12 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "count", from_section_id: warehouse.id, lines: [ { stock_item_id: low.id, counted_qty: 12 } ], post: true }, headers: headers
       expect(response).to have_http_status(:conflict) # counting is closed
       api_post "/api/v1/inventory_settings/counting", { open: true }, headers: headers
-      api_post "/api/v1/stock_documents", { kind: "count", from_section_id: warehouse.id, lines: [{ stock_item_id: low.id, counted_qty: 12 }], post: true }, headers: headers
+      api_post "/api/v1/stock_documents", { kind: "count", from_section_id: warehouse.id, lines: [ { stock_item_id: low.id, counted_qty: 12 } ], post: true }, headers: headers
       expect(response).to have_http_status(:created)
       get "/api/v1/stock/actual_vs_theoretical?section_id=#{warehouse.id}", headers: headers
       row = json[:rows].find { |r| r[:item][:name] == "Lemons" }

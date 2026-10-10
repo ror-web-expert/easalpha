@@ -70,7 +70,7 @@ RSpec.describe "Devices and PIN login", type: :request do
     second = within(owner.business) { Branch.create!(name: "DHA", code: "B2") }
     device = within(owner.business) { Device.create!(branch: second, name: "DHA till", kind: "till", paired_at: Time.current) }
     cashier = within(owner.business) do
-      m = Membership.create!(user: create(:user), role: Role.find_by!(system_key: "cashier"), status: "active", all_branches: false, branch_ids: [Branch.find_by!(is_main: true).id])
+      m = Membership.create!(user: create(:user), role: Role.find_by!(system_key: "cashier"), status: "active", all_branches: false, branch_ids: [ Branch.find_by!(is_main: true).id ])
       m.set_pin!("5555"); m
     end
     api_post "/api/v1/devices/pin_login", { pin: "5555" }, headers: device_headers(device)

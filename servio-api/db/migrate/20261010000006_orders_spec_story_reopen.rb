@@ -16,7 +16,7 @@ class OrdersSpecStoryReopen < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.timestamps
     end
-    add_index :order_events, [:order_id, :occurred_at]
+    add_index :order_events, [ :order_id, :occurred_at ]
 
     add_column :orders, :reopened_at, :datetime
     add_column :orders, :reopen_count, :integer, null: false, default: 0

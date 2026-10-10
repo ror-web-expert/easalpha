@@ -2,7 +2,7 @@ module Api
   module V1
     class StaffController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("staff.manage") }, except: [:index, :show, :permissions, :sessions]
+      before_action -> { require_permission!("staff.manage") }, except: [ :index, :show, :permissions, :sessions ]
 
       def index
         scope = Membership.includes(:user, :role).order(:created_at)
@@ -110,9 +110,9 @@ module Api
           m.reset_permissions_to_role!
         else
           codes = if ActiveModel::Type::Boolean.new.cast(params[:select_all]) then Permission.spec_codes
-                  elsif params[:preset].present? then PermissionPreset.codes_for(params[:preset])
-                  else Array(params.require(:codes))
-                  end
+          elsif params[:preset].present? then PermissionPreset.codes_for(params[:preset])
+          else Array(params.require(:codes))
+          end
           m.set_permissions!(codes, granted_by: current_user)
         end
         after = permissions_payload(m.reload)

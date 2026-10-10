@@ -4,7 +4,7 @@ module Campaigns
     module_function
 
     def customers(segment)
-      scope = Customer.active.where(is_walk_in: false).where.not(phone: [nil, ""])
+      scope = Customer.active.where(is_walk_in: false).where.not(phone: [ nil, "" ])
       p = segment.with_indifferent_access
       case p[:kind].to_s
       when "group" then scope = scope.where(group_id: p[:group_id])

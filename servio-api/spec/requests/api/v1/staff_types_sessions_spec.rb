@@ -15,9 +15,9 @@ RSpec.describe "Staff types, user sessions and the business day", type: :request
       api_post "/api/v1/staff", { name: "Wasim", email: "w@x.com", role_id: waiter_role.id }, headers: headers
       expect(json[:staff_type]).to eq("order_taker")
       get "/api/v1/staff?staff_type=cashier", headers: headers
-      expect(json[:data].map { |m| m[:user][:name] }).to eq(["Haroon"])
+      expect(json[:data].map { |m| m[:user][:name] }).to eq([ "Haroon" ])
       get "/api/v1/staff?staff_type=admin", headers: headers
-      expect(json[:data].map { |m| m[:user][:name] }).to eq([owner.user.name])
+      expect(json[:data].map { |m| m[:user][:name] }).to eq([ owner.user.name ])
     end
 
     it "lets a cashier be a Supervisor or Kitchen Display, and refuses an unknown type" do

@@ -25,10 +25,10 @@ class AuditLog < ApplicationRecord
     record(action: action, record: model, before: before, after: after, business_id: model.business_id)
   end
 
-  def self.seen?(table, id, action) = (Current.audited || []).include?([table.to_s, id.to_s, action.to_s])
+  def self.seen?(table, id, action) = (Current.audited || []).include?([ table.to_s, id.to_s, action.to_s ])
   def self.remember(table, id, action)
     return unless id
-    (Current.audited ||= []) << [table.to_s, id.to_s, action.to_s]
+    (Current.audited ||= []) << [ table.to_s, id.to_s, action.to_s ]
   end
 
   def readonly? = persisted?

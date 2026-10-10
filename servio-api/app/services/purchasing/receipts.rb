@@ -47,7 +47,7 @@ module Purchasing
         Finance::Journal.reverse_for!(grn, actor: actor)
         grn.lines.each do |l|
           if l.purchase_order_line_id && (pl = PurchaseOrderLine.find_by(id: l.purchase_order_line_id))
-            pl.update!(received_base_qty: [pl.received_base_qty - l.base_quantity, 0].max)
+            pl.update!(received_base_qty: [ pl.received_base_qty - l.base_quantity, 0 ].max)
           end
         end
         SupplierPriceHistory.where(goods_receipt_id: grn.id).delete_all

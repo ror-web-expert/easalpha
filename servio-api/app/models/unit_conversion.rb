@@ -15,7 +15,7 @@ class UnitConversion < ApplicationRecord
       a.update!(factor: factor)
       b = find_or_initialize_by(from_unit_id: to.id, to_unit_id: from.id)
       b.update!(factor: 1 / factor)
-      [a, b]
+      [ a, b ]
     end
   end
 

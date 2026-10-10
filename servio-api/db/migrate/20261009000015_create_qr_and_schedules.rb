@@ -3,7 +3,7 @@ class CreateQrAndSchedules < ActiveRecord::Migration[8.0]
     add_column :branches, :qr_settings, :jsonb, null: false, default: {}
     add_column :orders, :qr_status, :string
     add_column :orders, :qr_guest_token, :string
-    add_index :orders, [:branch_id, :qr_status], where: "qr_status is not null"
+    add_index :orders, [ :branch_id, :qr_status ], where: "qr_status is not null"
     add_check_constraint :orders, "qr_status is null or qr_status in ('pending','accepted','rejected')", name: "orders_qr_status_check"
 
     create_table :table_requests, id: :uuid do |t|
@@ -18,7 +18,7 @@ class CreateQrAndSchedules < ActiveRecord::Migration[8.0]
       t.datetime :handled_at
       t.timestamps
     end
-    add_index :table_requests, [:branch_id, :handled_at]
+    add_index :table_requests, [ :branch_id, :handled_at ]
     add_check_constraint :table_requests, "kind in ('call_waiter','ask_bill')", name: "table_requests_kind_check"
 
     create_table :report_schedules, id: :uuid do |t|
@@ -39,7 +39,7 @@ class CreateQrAndSchedules < ActiveRecord::Migration[8.0]
       t.uuid :created_by_membership_id
       t.timestamps
     end
-    add_index :report_schedules, [:active, :next_run_at]
+    add_index :report_schedules, [ :active, :next_run_at ]
     add_check_constraint :report_schedules, "kind in ('daily_summary','sales','items','cashiers','grand','stock_sheet','expenses','payables','khata')", name: "report_schedules_kind_check"
     add_check_constraint :report_schedules, "cadence in ('daily','weekly','monthly')", name: "report_schedules_cadence_check"
     add_check_constraint :report_schedules, "channel in ('whatsapp','email','both')", name: "report_schedules_channel_check"
@@ -50,7 +50,7 @@ class CreateQrAndSchedules < ActiveRecord::Migration[8.0]
   def down
     drop_table :report_schedules
     drop_table :table_requests
-    remove_index :orders, [:branch_id, :qr_status]
+    remove_index :orders, [ :branch_id, :qr_status ]
     remove_check_constraint :orders, name: "orders_qr_status_check"
     remove_column :orders, :qr_guest_token
     remove_column :orders, :qr_status

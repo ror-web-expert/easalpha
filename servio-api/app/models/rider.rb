@@ -12,7 +12,7 @@ class Rider < ApplicationRecord
   scope :active, -> { where(active: true, archived_at: nil) }
 
   def move_float!(delta)
-    Rider.where(id: id).update_all(["float_minor = float_minor + ?", delta])
+    Rider.where(id: id).update_all([ "float_minor = float_minor + ?", delta ])
     reload
   end
 
@@ -27,9 +27,9 @@ class Rider < ApplicationRecord
   def self.lifetime_for(kind, value, branch:)
     case kind
     when "one_order" then { orders_allowed: 1, expires_at: nil }
-    when "n_orders" then { orders_allowed: [value.to_i, 1].max, expires_at: nil }
+    when "n_orders" then { orders_allowed: [ value.to_i, 1 ].max, expires_at: nil }
     when "rest_of_today" then { orders_allowed: nil, expires_at: branch.business_day_end_at(branch.business_day_for(Time.current)) }
-    when "n_hours" then { orders_allowed: nil, expires_at: Time.current + [value.to_i, 1].max.hours }
+    when "n_hours" then { orders_allowed: nil, expires_at: Time.current + [ value.to_i, 1 ].max.hours }
     end
   end
 

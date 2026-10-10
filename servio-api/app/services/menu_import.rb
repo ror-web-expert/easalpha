@@ -60,7 +60,7 @@ class MenuImport
     doc = @data.is_a?(String) ? JSON.parse(@data) : @data
     doc = doc.deep_stringify_keys if doc.respond_to?(:deep_stringify_keys)
     line = 0
-    menus = doc["menus"] || [doc]
+    menus = doc["menus"] || [ doc ]
     menus.each do |m|
       categories = m["categories"] || []
       categories.each do |c|

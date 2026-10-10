@@ -13,7 +13,7 @@ class StockSection < ApplicationRecord
     warehouse = system_row!(branch, "Warehouse", "warehouse", sort_order: 1)
     # Warehouse is COGS Primary unless the branch already chose another section.
     warehouse.update_columns(cogs_primary: true) if !warehouse.cogs_primary && cogs_primary_for(branch).nil?
-    [kitchen, warehouse]
+    [ kitchen, warehouse ]
   end
 
   # Finds the branch's section by slug, then by name (rows created before slugs existed), else creates it; marks it system.

@@ -22,7 +22,7 @@ module Stock
           # SPEC Order Inventory: consumables set per order type and variant on the product, charged with the sale.
           if item.product_id && packaging
             OrderTypeConsumable.for_line(product_id: item.product_id, variant_id: item.variant_id, order_type: order.order_type).each do |c|
-              next if already.include?([item.id, c.stock_item_id, section_default.id, "packaging"])
+              next if already.include?([ item.id, c.stock_item_id, section_default.id, "packaging" ])
               r = Ledger.apply!(section: section_default, item: c.stock_item, kind: "packaging", quantity: -(c.base_quantity * item.quantity), actor: actor, ref: order, ref_line_id: item.id,
                                 business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot} consumables")
               entries << r.entry
@@ -34,7 +34,7 @@ module Stock
             next
           end
           merge_moves(moves, section_default).each do |m|
-            next if already.include?([item.id, m[:stock_item].id, m[:section].id, "sale"]) # SPEC: never twice
+            next if already.include?([ item.id, m[:stock_item].id, m[:section].id, "sale" ]) # SPEC: never twice
             r = Ledger.apply!(section: m[:section], item: m[:stock_item], kind: "sale", quantity: -m[:quantity], actor: actor, ref: order, ref_line_id: item.id,
                               business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot}")
             entries << r.entry
@@ -45,7 +45,7 @@ module Stock
         end
         if packaging
           PackagingRule.for(branch_id: order.branch_id, order_type: order.order_type).each do |rule|
-            next if already.include?([nil, rule.stock_item_id, section_default.id, "packaging"])
+            next if already.include?([ nil, rule.stock_item_id, section_default.id, "packaging" ])
             r = Ledger.apply!(section: section_default, item: rule.stock_item, kind: "packaging", quantity: -rule.quantity, actor: actor, ref: order, business_day: order.business_day, allow_negative: true, reason: "#{order.label} packaging")
             entries << r.entry
           end
@@ -118,7 +118,7 @@ module Stock
 
     # One movement per item and section, so a recipe that lists an ingredient twice still writes one unique row.
     def merge_moves(moves, section_default)
-      moves.group_by { |m| [m[:stock_item].id, (m[:section] || section_default).id] }.map do |_, ms|
+      moves.group_by { |m| [ m[:stock_item].id, (m[:section] || section_default).id ] }.map do |_, ms|
         { stock_item: ms.first[:stock_item], section: ms.first[:section] || section_default, quantity: ms.sum { |m| m[:quantity] } }
       end
     end

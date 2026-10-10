@@ -14,6 +14,6 @@ class VoucherBatch < ApplicationRecord
   def exhausted? = kind == "public" && usage_limit.present? && redeemed_count >= usage_limit
   def discount_for(amount_minor)
     return 0 if amount_minor < min_spend_minor
-    value_kind == "percent" ? (amount_minor * value / 100).round : [amount_minor, (value * 100).to_i].min
+    value_kind == "percent" ? (amount_minor * value / 100).round : [ amount_minor, (value * 100).to_i ].min
   end
 end

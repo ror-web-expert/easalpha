@@ -6,7 +6,7 @@ class OtpCode < ApplicationRecord
     code = Rails.env.production? ? format("%06d", SecureRandom.random_number(1_000_000)) : "123456"
     where(phone: phone, purpose: purpose, consumed_at: nil).update_all(consumed_at: Time.current)
     record = create!(phone: phone, purpose: purpose, code_digest: BCrypt::Password.create(code), expires_at: TTL.from_now)
-    [record, code]
+    [ record, code ]
   end
 
   def self.verify!(phone:, purpose: "login", code:)

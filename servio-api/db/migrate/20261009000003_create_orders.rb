@@ -26,7 +26,7 @@ class CreateOrders < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :dining_tables, [:branch_id, :code], unique: true, where: "archived_at is null"
+    add_index :dining_tables, [ :branch_id, :code ], unique: true, where: "archived_at is null"
     add_index :dining_tables, :qr_token, unique: true
     add_check_constraint :dining_tables, "status in ('available','occupied','reserved','bill_requested')", name: "dining_tables_status_check"
 
@@ -35,7 +35,7 @@ class CreateOrders < ActiveRecord::Migration[8.0]
       t.date :business_day, null: false
       t.integer :last_serial, null: false, default: 0
     end
-    add_index :order_serials, [:branch_id, :business_day], unique: true
+    add_index :order_serials, [ :branch_id, :business_day ], unique: true
 
     create_table :orders, id: :uuid, default: nil do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -84,10 +84,10 @@ class CreateOrders < ActiveRecord::Migration[8.0]
       t.datetime :client_created_at
       t.timestamps
     end
-    add_index :orders, [:business_id, :branch_id, :business_day]
-    add_index :orders, [:business_id, :status]
-    add_index :orders, [:business_id, :customer_id]
-    add_index :orders, [:branch_id, :business_day, :serial], unique: true, where: "serial is not null"
+    add_index :orders, [ :business_id, :branch_id, :business_day ]
+    add_index :orders, [ :business_id, :status ]
+    add_index :orders, [ :business_id, :customer_id ]
+    add_index :orders, [ :branch_id, :business_day, :serial ], unique: true, where: "serial is not null"
     add_check_constraint :orders, "order_type in ('dine_in','takeaway','delivery','walk_in')", name: "orders_order_type_check"
     add_check_constraint :orders, "source in ('till','qr','online','phone','foodpanda','kiosk')", name: "orders_source_check"
     add_check_constraint :orders, "status in ('draft','held','placed','preparing','ready','served','dispatched','paid','closed','voided','refunded')", name: "orders_status_check"
@@ -125,8 +125,8 @@ class CreateOrders < ActiveRecord::Migration[8.0]
       t.integer :sort_order, null: false, default: 0
       t.timestamps
     end
-    add_index :order_items, [:order_id, :sort_order]
-    add_index :order_items, [:business_id, :station_id, :status]
+    add_index :order_items, [ :order_id, :sort_order ]
+    add_index :order_items, [ :business_id, :station_id, :status ]
     add_check_constraint :order_items, "status in ('pending','sent','preparing','ready','served','cancelled')", name: "order_items_status_check"
 
     create_table :order_item_modifiers, id: :uuid do |t|
@@ -150,7 +150,7 @@ class CreateOrders < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.timestamps
     end
-    add_index :order_status_events, [:order_id, :occurred_at]
+    add_index :order_status_events, [ :order_id, :occurred_at ]
 
     create_table :discounts_applied, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -193,7 +193,7 @@ class CreateOrders < ActiveRecord::Migration[8.0]
       t.datetime :acknowledged_at
       t.timestamps
     end
-    add_index :kitchen_tickets, [:business_id, :branch_id, :station_id, :created_at]
+    add_index :kitchen_tickets, [ :business_id, :branch_id, :station_id, :created_at ]
     add_check_constraint :kitchen_tickets, "kind in ('new','changed','cancelled','reprint')", name: "kitchen_tickets_kind_check"
 
     Servio::Rls.apply!(%w[floors dining_tables orders order_items order_item_modifiers order_status_events discounts_applied voids kitchen_tickets])

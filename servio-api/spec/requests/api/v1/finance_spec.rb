@@ -10,9 +10,9 @@ RSpec.describe "Finance, Foodpanda and multi-branch", type: :request do
   before { within(biz) { PaymentMethod.seed_defaults!(biz) unless PaymentMethod.exists? } }
 
   def sell!(product, qty: 1, method: "cash")
-    api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: product.id, quantity: qty }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: product.id, quantity: qty } ], place: true }, headers: headers
     o = json
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: method, amount_minor: o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: method, amount_minor: o[:total_minor] } ] }, headers: headers
     o
   end
 
@@ -22,7 +22,7 @@ RSpec.describe "Finance, Foodpanda and multi-branch", type: :request do
       Unit.seed_defaults!
       pcs = Unit.find_by!(code: "pcs")
       buns = StockItem.create!(name: "Bun", sku: "BUN", base_unit: pcs)
-      doc = Stock::Posting.create!({ kind: "receive", to_section_id: StockSection.default_for(branch).id }, lines: [{ stock_item_id: buns.id, quantity: 100, unit_cost_minor: 2_000 }], actor: owner, branch: branch)
+      doc = Stock::Posting.create!({ kind: "receive", to_section_id: StockSection.default_for(branch).id }, lines: [ { stock_item_id: buns.id, quantity: 100, unit_cost_minor: 2_000 } ], actor: owner, branch: branch)
       Stock::Posting.post!(doc, actor: owner)
       r = Recipe.create!(product: m[:burger], name: "Burger")
       r.lines.create!(stock_item: buns, unit: pcs, quantity: 1)
@@ -74,7 +74,7 @@ RSpec.describe "Finance, Foodpanda and multi-branch", type: :request do
     get "/api/v1/integrations/foodpanda", headers: headers
     expect(json[:webhook_url]).to eq("/api/v1/webhooks/foodpanda/#{biz.slug}")
     payload = { event: "order.new", order: { id: "FP-1001", customer: { name: "Zain", phone: "03004445566" }, address: { text: "House 5, Model Town" }, delivery_fee: 50,
-                                              items: [{ sku: nil, name: "Zinger Burger", quantity: 2 }, { name: "Mystery combo", quantity: 1, price: 300 }] } }.to_json
+                                              items: [ { sku: nil, name: "Zinger Burger", quantity: 2 }, { name: "Mystery combo", quantity: 1, price: 300 } ] } }.to_json
     sig = "sha256=" + OpenSSL::HMAC.hexdigest("SHA256", secret, payload)
     post "/api/v1/webhooks/foodpanda/#{biz.slug}", params: payload, headers: { "Content-Type" => "application/json", "X-Signature" => "sha256=bad" }
     expect(response).to have_http_status(:unauthorized)
@@ -95,7 +95,7 @@ RSpec.describe "Finance, Foodpanda and multi-branch", type: :request do
     expect(o[:delivery_charge_minor]).to eq(5_000)
     expect(within(biz) { Order.find(order_id).aggregator_commission_minor }).to eq((o[:total_minor] * 0.25).round)
     expect(within(biz) { Customer.find_by(phone: "+923004445566") }).to be_present
-    api_post "/api/v1/orders/#{order_id}/payments", { payments: [{ method_code: "cash", amount_minor: o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{order_id}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor] } ] }, headers: headers
     get "/api/v1/reports/foodpanda", headers: headers
     expect(json[:paid_orders]).to eq(1)
     expect(json[:commission_minor]).to eq((o[:total_minor] * 0.25).round)
@@ -103,7 +103,7 @@ RSpec.describe "Finance, Foodpanda and multi-branch", type: :request do
     cancel = { event: "order.cancelled", order: { id: "FP-1001" } }.to_json
     post "/api/v1/webhooks/foodpanda/#{biz.slug}", params: cancel, headers: { "Content-Type" => "application/json", "X-Signature" => "sha256=" + OpenSSL::HMAC.hexdigest("SHA256", secret, cancel) }
     expect(response).to have_http_status(:ok)
-    payload2 = { event: "order.new", order: { id: "FP-1002", items: [{ name: "Chai", quantity: 1 }] } }.to_json
+    payload2 = { event: "order.new", order: { id: "FP-1002", items: [ { name: "Chai", quantity: 1 } ] } }.to_json
     post "/api/v1/webhooks/foodpanda/#{biz.slug}", params: payload2, headers: { "Content-Type" => "application/json", "X-Signature" => "sha256=" + OpenSSL::HMAC.hexdigest("SHA256", secret, payload2) }
     oid2 = json[:order_id]
     cancel2 = { event: "order.cancelled", order: { id: "FP-1002" } }.to_json
@@ -116,9 +116,9 @@ RSpec.describe "Finance, Foodpanda and multi-branch", type: :request do
     m
     b2 = within(biz) { Branch.create!(name: "Gulberg", code: "GUL").id }
     sell!(m[:burger])
-    api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers.merge("X-Branch-Id" => b2)
+    api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers.merge("X-Branch-Id" => b2)
     o = json
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: o[:total_minor] }] }, headers: headers.merge("X-Branch-Id" => b2)
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor] } ] }, headers: headers.merge("X-Branch-Id" => b2)
     get "/api/v1/reports/branches", headers: headers
     expect(json[:rows].size).to eq(2)
     main = json[:rows].find { |r| r[:branch][:is_main] }

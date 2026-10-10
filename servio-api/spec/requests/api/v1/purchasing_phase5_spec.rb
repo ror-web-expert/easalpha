@@ -32,7 +32,7 @@ RSpec.describe "Purchasing phase 5", type: :request do
     sup = json
     expect(sup).to include(balance_label: "to_pay", items_count: 0, purchases_count: 0)
 
-    api_post "/api/v1/purchase_orders", { supplier_id: sup[:id], lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 50_000 }, { stock_item_id: s[:buns].id, quantity: 100, unit_cost_minor: 2_000 }], send: true }, headers: headers
+    api_post "/api/v1/purchase_orders", { supplier_id: sup[:id], lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 50_000 }, { stock_item_id: s[:buns].id, quantity: 100, unit_cost_minor: 2_000 } ], send: true }, headers: headers
     po = json
     expect(po).to include(payment_status: "unpaid", paid_minor: 0, total_minor: 700_000)
     api_post "/api/v1/purchase_orders/#{po[:id]}/receive", {}, headers: headers
@@ -85,7 +85,7 @@ RSpec.describe "Purchasing phase 5", type: :request do
     api_post "/api/v1/suppliers", { name: "Metro" }, headers: headers
     sup = json[:id]
     ch = grant!(%w[PURCHASE_ORDERS PO_CREATE])
-    api_post "/api/v1/purchase_orders", { supplier_id: sup, lines: [{ stock_item_id: s[:buns].id, quantity: 10, unit_cost_minor: 2_000 }], send: true }, headers: ch
+    api_post "/api/v1/purchase_orders", { supplier_id: sup, lines: [ { stock_item_id: s[:buns].id, quantity: 10, unit_cost_minor: 2_000 } ], send: true }, headers: ch
     expect(response).to have_http_status(:created)
     po = json[:id]
     api_post "/api/v1/purchase_orders/#{po}/receive", {}, headers: ch
@@ -118,9 +118,9 @@ RSpec.describe "Purchasing phase 5", type: :request do
     api_post "/api/v1/suppliers", { name: "Metro" }, headers: headers
     sup = json[:id]
     # 10 kg at Rs 500/kg, then one line typed in grams at the kg price: 20x off.
-    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 50_000 }] }, headers: headers
-    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:g].id, quantity: 1_000, unit_cost_minor: 50_000 }] }, headers: headers
-    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [{ stock_item_id: s[:buns].id, quantity: 100, unit_cost_minor: 2_000 }] }, headers: headers
+    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 50_000 } ] }, headers: headers
+    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:g].id, quantity: 1_000, unit_cost_minor: 50_000 } ] }, headers: headers
+    api_post "/api/v1/goods_receipts", { supplier_id: sup, lines: [ { stock_item_id: s[:buns].id, quantity: 100, unit_cost_minor: 2_000 } ] }, headers: headers
     get "/api/v1/purchasing/price_history", headers: headers
     expect(response).to have_http_status(:ok)
     rows = json[:rows].index_by { |r| r[:item][:name] }
@@ -129,7 +129,7 @@ RSpec.describe "Purchasing phase 5", type: :request do
     expect(rows["Bun"]).to include(flagged: false, purchases: 1, spent_minor: 200_000)
     expect(json[:summary]).to include(items: 2, flagged: 1)
     get "/api/v1/purchasing/price_history?flagged=true", headers: headers
-    expect(json[:rows].map { |r| r[:item][:name] }).to eq(["Chicken"])
+    expect(json[:rows].map { |r| r[:item][:name] }).to eq([ "Chicken" ])
     get "/api/v1/purchasing/price_history", headers: grant!(%w[SALES_WALKIN])
     expect(response).to have_http_status(:forbidden)
 

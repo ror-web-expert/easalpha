@@ -7,7 +7,7 @@ module Deliveries
       return nil unless order.order_type == "delivery"
       Delivery.find_by(order_id: order.id) || begin
         address = order.address_id && CustomerAddress.find_by(id: order.address_id)
-        zone = address && DeliveryZone.for_address(branch_id: order.branch_id, text: [address.area, address.city, address.line1].compact.join(" "))
+        zone = address && DeliveryZone.for_address(branch_id: order.branch_id, text: [ address.area, address.city, address.line1 ].compact.join(" "))
         Delivery.create!(branch_id: order.branch_id, order: order, rider_id: order.rider_id, zone: zone, address_id: order.address_id, charge_minor: order.delivery_charge_minor,
                          status: order.rider_id ? "assigned" : "unassigned", assigned_at: order.rider_id && Time.current)
       end

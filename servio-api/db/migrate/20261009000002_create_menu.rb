@@ -45,7 +45,7 @@ class CreateMenu < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :categories, [:menu_id, :sort_order]
+    add_index :categories, [ :menu_id, :sort_order ]
 
     create_table :products, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -69,8 +69,8 @@ class CreateMenu < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :products, [:business_id, :sku], unique: true, where: "sku is not null and archived_at is null"
-    add_index :products, [:category_id, :sort_order]
+    add_index :products, [ :business_id, :sku ], unique: true, where: "sku is not null and archived_at is null"
+    add_index :products, [ :category_id, :sort_order ]
 
     create_table :product_variants, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -92,7 +92,7 @@ class CreateMenu < ActiveRecord::Migration[8.0]
       t.bigint :price_minor, null: false
       t.timestamps
     end
-    add_index :product_prices, [:product_id, :variant_id, :branch_id, :order_type], unique: true, name: "idx_product_prices_unique"
+    add_index :product_prices, [ :product_id, :variant_id, :branch_id, :order_type ], unique: true, name: "idx_product_prices_unique"
     add_check_constraint :product_prices, "order_type in ('dine_in','takeaway','delivery','walk_in','online')", name: "product_prices_order_type_check"
 
     create_table :modifier_groups, id: :uuid do |t|
@@ -126,7 +126,7 @@ class CreateMenu < ActiveRecord::Migration[8.0]
       t.integer :sort_order, null: false, default: 0
       t.timestamps
     end
-    add_index :product_modifier_groups, [:product_id, :modifier_group_id], unique: true
+    add_index :product_modifier_groups, [ :product_id, :modifier_group_id ], unique: true
 
     create_table :deals, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -174,7 +174,7 @@ class CreateMenu < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :promotions, [:business_id, :coupon_code], unique: true, where: "coupon_code is not null and archived_at is null"
+    add_index :promotions, [ :business_id, :coupon_code ], unique: true, where: "coupon_code is not null and archived_at is null"
     add_check_constraint :promotions, "kind in ('percent','fixed','happy_hour','coupon')", name: "promotions_kind_check"
 
     create_table :import_jobs, id: :uuid do |t|

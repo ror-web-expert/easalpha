@@ -39,7 +39,7 @@ RSpec.describe "Staff and roles", type: :request do
     api_post "/api/v1/roles", { name: "Senior Cashier", copy_from_role_id: cashier_role.id }, headers: headers
     expect(response).to have_http_status(:created)
     role_id = json[:id]
-    perms = json[:permissions].map { |p| { code: p[:code], limit: p[:code] == "discounts.apply" ? 20 : p[:limit] } } + [{ code: "orders.void" }]
+    perms = json[:permissions].map { |p| { code: p[:code], limit: p[:code] == "discounts.apply" ? 20 : p[:limit] } } + [ { code: "orders.void" } ]
     api_put "/api/v1/roles/#{role_id}", { permissions: perms }, headers: headers
     expect(response).to have_http_status(:ok)
     expect(json[:permissions].find { |p| p[:code] == "discounts.apply" }[:limit].to_f).to eq(20.0)
@@ -47,10 +47,10 @@ RSpec.describe "Staff and roles", type: :request do
   end
 
   it "rejects an unknown permission code and protects the owner role" do
-    api_put "/api/v1/roles/#{cashier_role.id}", { permissions: [{ code: "orders.teleport" }] }, headers: headers
+    api_put "/api/v1/roles/#{cashier_role.id}", { permissions: [ { code: "orders.teleport" } ] }, headers: headers
     expect(response).to have_http_status(:bad_request)
     owner_role = within(owner.business) { Role.find_by!(system_key: "owner") }
-    api_put "/api/v1/roles/#{owner_role.id}", { permissions: [{ code: "menu.view" }] }, headers: headers
+    api_put "/api/v1/roles/#{owner_role.id}", { permissions: [ { code: "menu.view" } ] }, headers: headers
     expect(response).to have_http_status(:bad_request)
   end
 

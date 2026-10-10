@@ -8,7 +8,7 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :expense_categories, [:business_id, :parent_id, :name], unique: true, where: "archived_at is null"
+    add_index :expense_categories, [ :business_id, :parent_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :expenses, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -32,9 +32,9 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.string :void_reason
       t.timestamps
     end
-    add_index :expenses, [:business_id, :number], unique: true
-    add_index :expenses, [:business_id, :client_id], unique: true, where: "client_id is not null"
-    add_index :expenses, [:branch_id, :business_day]
+    add_index :expenses, [ :business_id, :number ], unique: true
+    add_index :expenses, [ :business_id, :client_id ], unique: true, where: "client_id is not null"
+    add_index :expenses, [ :branch_id, :business_day ]
     add_check_constraint :expenses, "source in ('admin','till','payroll_sync','rider_float')", name: "expenses_source_check"
 
     create_table :overheads, id: :uuid do |t|
@@ -63,7 +63,7 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :delivery_zones, [:branch_id, :name], unique: true, where: "archived_at is null"
+    add_index :delivery_zones, [ :branch_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :riders, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -84,7 +84,7 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :riders, [:business_id, :membership_id], unique: true, where: "membership_id is not null"
+    add_index :riders, [ :business_id, :membership_id ], unique: true, where: "membership_id is not null"
 
     create_table :deliveries, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -104,7 +104,7 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.datetime :settled_at
       t.timestamps
     end
-    add_index :deliveries, [:rider_id, :status]
+    add_index :deliveries, [ :rider_id, :status ]
     add_check_constraint :deliveries, "status in ('unassigned','assigned','picked_up','on_the_way','arrived','delivered','failed')", name: "deliveries_status_check"
 
     create_table :delivery_status_events, id: :uuid do |t|
@@ -135,7 +135,7 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.datetime :created_at, null: false
     end
-    add_index :rider_cash_movements, [:rider_id, :occurred_at]
+    add_index :rider_cash_movements, [ :rider_id, :occurred_at ]
     add_check_constraint :rider_cash_movements, "kind in ('issue','return','spend','adjust','settle')", name: "rider_cash_movements_kind_check"
 
     create_table :rider_settlements, id: :uuid do |t|
@@ -156,7 +156,7 @@ class CreateExpensesAndDelivery < ActiveRecord::Migration[8.0]
       t.datetime :settled_at, null: false
       t.timestamps
     end
-    add_index :rider_settlements, [:business_id, :number], unique: true
+    add_index :rider_settlements, [ :business_id, :number ], unique: true
 
     add_foreign_key :orders, :riders, column: :rider_id
     Servio::Rls.apply!(%w[expense_categories expenses overheads delivery_zones riders deliveries delivery_status_events rider_cash_movements rider_settlements])

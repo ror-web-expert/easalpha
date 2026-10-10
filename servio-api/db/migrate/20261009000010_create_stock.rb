@@ -10,7 +10,7 @@ class CreateStock < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :units, [:business_id, :code], unique: true
+    add_index :units, [ :business_id, :code ], unique: true
     add_check_constraint :units, "kind in ('weight','volume','count')", name: "units_kind_check"
 
     create_table :stock_sections, id: :uuid do |t|
@@ -22,7 +22,7 @@ class CreateStock < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :stock_sections, [:branch_id, :name], unique: true, where: "archived_at is null"
+    add_index :stock_sections, [ :branch_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :stock_items, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -41,8 +41,8 @@ class CreateStock < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :stock_items, [:business_id, :sku], unique: true, where: "sku is not null and archived_at is null"
-    add_index :stock_items, [:business_id, :name]
+    add_index :stock_items, [ :business_id, :sku ], unique: true, where: "sku is not null and archived_at is null"
+    add_index :stock_items, [ :business_id, :name ]
 
     create_table :stock_levels, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -52,14 +52,14 @@ class CreateStock < ActiveRecord::Migration[8.0]
       t.bigint :value_minor, null: false, default: 0
       t.timestamps
     end
-    add_index :stock_levels, [:stock_section_id, :stock_item_id], unique: true
+    add_index :stock_levels, [ :stock_section_id, :stock_item_id ], unique: true
 
     create_table :document_counters, id: false do |t|
       t.uuid :business_id, null: false
       t.string :kind, null: false
       t.integer :last_number, null: false, default: 0
     end
-    add_index :document_counters, [:business_id, :kind], unique: true
+    add_index :document_counters, [ :business_id, :kind ], unique: true
 
     create_table :stock_documents, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -82,9 +82,9 @@ class CreateStock < ActiveRecord::Migration[8.0]
       t.uuid :posted_by_membership_id
       t.timestamps
     end
-    add_index :stock_documents, [:business_id, :number], unique: true
-    add_index :stock_documents, [:business_id, :client_id], unique: true, where: "client_id is not null"
-    add_index :stock_documents, [:branch_id, :business_day, :kind]
+    add_index :stock_documents, [ :business_id, :number ], unique: true
+    add_index :stock_documents, [ :business_id, :client_id ], unique: true, where: "client_id is not null"
+    add_index :stock_documents, [ :branch_id, :business_day, :kind ]
     add_check_constraint :stock_documents, "kind in ('receive','transfer','waste','adjustment','count','production','supplier_return')", name: "stock_documents_kind_check"
     add_check_constraint :stock_documents, "status in ('draft','posted','cancelled')", name: "stock_documents_status_check"
 
@@ -126,9 +126,9 @@ class CreateStock < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.datetime :created_at, null: false
     end
-    add_index :stock_ledger_entries, [:business_id, :stock_item_id, :occurred_at]
-    add_index :stock_ledger_entries, [:business_id, :ref_id]
-    add_index :stock_ledger_entries, [:stock_section_id, :business_day]
+    add_index :stock_ledger_entries, [ :business_id, :stock_item_id, :occurred_at ]
+    add_index :stock_ledger_entries, [ :business_id, :ref_id ]
+    add_index :stock_ledger_entries, [ :stock_section_id, :business_day ]
     add_check_constraint :stock_ledger_entries, "kind in ('sale','sale_return','receive','transfer_in','transfer_out','waste','adjustment','count','production_in','production_out','supplier_return','packaging','opening')", name: "stock_ledger_kind_check"
     Servio::Triggers.apply!(connection)
 

@@ -20,10 +20,10 @@ module Customers
       rows
     end
 
-    BUCKETS = [[0, 30], [31, 60], [61, 90], [91, nil]].freeze
+    BUCKETS = [ [ 0, 30 ], [ 31, 60 ], [ 61, 90 ], [ 91, nil ] ].freeze
 
     def aging(customer, as_of: Date.current)
-      charges = Payment.where(customer_id: customer.id, method_code: "khata", status: "captured").order(:received_at).map { |p| [p.received_at.to_date, p.amount_minor] }
+      charges = Payment.where(customer_id: customer.id, method_code: "khata", status: "captured").order(:received_at).map { |p| [ p.received_at.to_date, p.amount_minor ] }
       credits = CustomerPayment.where(customer_id: customer.id, direction: "received").sum(:amount_minor) +
                 Refund.joins(:payment_method).where(order_id: Order.where(customer_id: customer.id).select(:id), payment_methods: { kind: "khata" }).sum(:amount_minor) -
                 CustomerPayment.where(customer_id: customer.id, direction: "paid").sum(:amount_minor)

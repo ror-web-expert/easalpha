@@ -44,7 +44,7 @@ module Marketing
       raise Api::Errors::Conflict.new("voucher.inactive", "This voucher batch is switched off") unless batch.active && batch.archived_at.nil?
       raise Api::Errors::Conflict.new("voucher.expired", "This voucher expired on #{batch.expires_on}") if batch.expired?
       raise Api::Errors::Conflict.new("voucher.exhausted", "This voucher has reached its usage limit") if batch.exhausted?
-      [batch, v]
+      [ batch, v ]
     end
 
     def redeem!(order, code:, actor:)

@@ -15,11 +15,11 @@ RSpec.describe "Payroll and attendance", type: :request do
     rent = json[:id]
     api_post "/api/v1/employees/components", { name: "EOBI", kind: "deduction", is_percent: true, percent: 1 }, headers: headers
     eobi = json[:id]
-    api_put "/api/v1/employees/rules", { shift_start: "10:00", shift_end: "22:00", grace_minutes: 15, late_fine_minor: 20_000, late_fine_after_minutes: 30, absent_rule: "calendar_days", working_days: [1, 2, 3, 4, 5, 6] }, headers: headers
+    api_put "/api/v1/employees/rules", { shift_start: "10:00", shift_end: "22:00", grace_minutes: 15, late_fine_minor: 20_000, late_fine_after_minutes: 30, absent_rule: "calendar_days", working_days: [ 1, 2, 3, 4, 5, 6 ] }, headers: headers
     expect(response).to have_http_status(:ok)
     cashier = add_member!(biz, "cashier", pin: "1234")
     api_post "/api/v1/employees", { name: "Ali Raza", cnic: "35202-1234567-1", designation: "Cook", department_id: dept, membership_id: cashier.id, base_salary_minor: 5_200_000, joined_on: "2026-01-01", shares_tips: true,
-                                    components: [{ salary_component_id: rent }, { salary_component_id: eobi }] }, headers: headers
+                                    components: [ { salary_component_id: rent }, { salary_component_id: eobi } ] }, headers: headers
     expect(response).to have_http_status(:created)
     emp = json
     expect(emp[:components].size).to eq(2)
@@ -62,7 +62,7 @@ RSpec.describe "Payroll and attendance", type: :request do
     allowance = json[:id]
     api_put "/api/v1/employees/rules", { absent_rule: "fixed_26", late_fine_minor: 10_000, late_fine_after_minutes: 0, grace_minutes: 0 }, headers: headers
     cashier = add_member!(biz, "cashier", pin: "2468")
-    api_post "/api/v1/employees", { name: "Sana", base_salary_minor: 2_600_000, joined_on: "2026-01-01", membership_id: cashier.id, shares_tips: true, components: [{ salary_component_id: allowance }] }, headers: headers
+    api_post "/api/v1/employees", { name: "Sana", base_salary_minor: 2_600_000, joined_on: "2026-01-01", membership_id: cashier.id, shares_tips: true, components: [ { salary_component_id: allowance } ] }, headers: headers
     sana = json
     expect(response).to have_http_status(:created), response.body
     api_post "/api/v1/employees", { name: "Newbie", base_salary_minor: 3_000_000, joined_on: "2026-09-16" }, headers: headers
@@ -87,9 +87,9 @@ RSpec.describe "Payroll and attendance", type: :request do
 
     m = build_menu!(biz)
     travel_to Time.zone.parse("2026-09-10 13:00 +0500") do
-      api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:chai].id }], place: true }, headers: auth_headers(cashier, app: "pos")
+      api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:chai].id } ], place: true }, headers: auth_headers(cashier, app: "pos")
       o = json
-      api_post "/api/v1/orders/#{o[:id]}/payments", { tip_minor: 5_000, payments: [{ method_code: "cash", amount_minor: o[:total_minor] + 5_000 }] }, headers: auth_headers(cashier, app: "pos")
+      api_post "/api/v1/orders/#{o[:id]}/payments", { tip_minor: 5_000, payments: [ { method_code: "cash", amount_minor: o[:total_minor] + 5_000 } ] }, headers: auth_headers(cashier, app: "pos")
       expect(response).to have_http_status(:created)
     end
     api_post "/api/v1/commission_rules", { name: "Rs 5 per order", applies_to: "order_taker", basis: "per_order", value: 5 }, headers: headers

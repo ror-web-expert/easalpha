@@ -38,7 +38,7 @@ module Payments
           order.payment_status = "partial"
         end
         order.save!
-        Customer.where(id: order.customer_id).update_all(["net_spent_minor = net_spent_minor - ?", amount_minor]) if order.customer_id
+        Customer.where(id: order.customer_id).update_all([ "net_spent_minor = net_spent_minor - ?", amount_minor ]) if order.customer_id
         AuditLog.record(action: "refund", record: order, after: { amount_minor: amount_minor, method: method.code, reason: reason, full: full }, approved_by: approver&.user)
       end
       Realtime.order_changed(order)

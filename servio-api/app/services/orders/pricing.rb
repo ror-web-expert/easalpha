@@ -17,11 +17,11 @@ module Orders
       order.discounts.each do |d|
         if d.order_item_id
           line = items.find { |i| i.id == d.order_item_id } or next
-          d.amount_minor = [discount_amount(d, line.line_subtotal_minor), line.line_subtotal_minor - line.line_discount_minor].min
+          d.amount_minor = [ discount_amount(d, line.line_subtotal_minor), line.line_subtotal_minor - line.line_discount_minor ].min
           line.line_discount_minor += d.amount_minor
         else
           base = subtotal - items.sum(&:line_discount_minor)
-          d.amount_minor = [discount_amount(d, base), base].min
+          d.amount_minor = [ discount_amount(d, base), base ].min
           allocate(d.amount_minor, items)
         end
       end
@@ -67,11 +67,11 @@ module Orders
 
     # Largest-remainder allocation so the parts sum exactly to the total.
     def allocate(amount, items)
-      pool = items.map { |i| [i, i.line_subtotal_minor - i.line_discount_minor] }.reject { |_, v| v <= 0 }
+      pool = items.map { |i| [ i, i.line_subtotal_minor - i.line_discount_minor ] }.reject { |_, v| v <= 0 }
       total = pool.sum { |_, v| v }
       return if total <= 0 || amount <= 0
-      shares = pool.map { |i, v| [i, amount * v / total.to_f] }
-      floors = shares.map { |i, s| [i, s.floor] }
+      shares = pool.map { |i, v| [ i, amount * v / total.to_f ] }
+      floors = shares.map { |i, s| [ i, s.floor ] }
       remainder = amount - floors.sum { |_, f| f }
       shares.zip(floors).sort_by { |(_, s), (_, f)| -(s - f) }.first(remainder).each { |_, pair| pair[1] += 1 }
       floors.each { |i, f| i.line_discount_minor += f }

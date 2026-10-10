@@ -54,7 +54,7 @@ module ServioApi
     config.active_job.queue_adapter = :solid_queue
     config.i18n.available_locales = %i[en ur]
     config.i18n.default_locale = :en
-    config.i18n.fallbacks = [:en]
+    config.i18n.fallbacks = [ :en ]
     config.action_cable.mount_path = "/cable"
   end
 end

@@ -15,9 +15,9 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
     expect(json[:loyalty_enabled]).to be true
     api_post "/api/v1/customers", { name: "Sara", phone: "03001230000", birthday: Date.current.to_s, whatsapp_opt_in: true }, headers: headers
     cust = json
-    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust[:id], lines: [{ product_id: m[:burger].id, quantity: 2 }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust[:id], lines: [ { product_id: m[:burger].id, quantity: 2 } ], place: true }, headers: headers
     o = json
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor] } ] }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/customers/#{cust[:id]}/loyalty", headers: headers
     expect(json[:points]).to eq(o[:total_minor] / 100 / 100) # Rs 1,044 -> 10 points
@@ -25,7 +25,7 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
     api_post "/api/v1/customers/#{cust[:id]}/loyalty/adjust", { points: 90, note: "Welcome bonus" }, headers: headers
     expect(json[:points]).to eq(100)
 
-    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust[:id], lines: [{ product_id: m[:chai].id, quantity: 2 }] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust[:id], lines: [ { product_id: m[:chai].id, quantity: 2 } ] }, headers: headers
     o2 = json
     api_post "/api/v1/orders/#{o2[:id]}/redeem_points", { points: 100 }, headers: headers
     expect(response).to have_http_status(:conflict) # Rs 100 is more than 50% of Rs 160
@@ -49,7 +49,7 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
     promo = within(biz) { Promotion.find_by!(kind: "coupon", unit_limit: 1) }
     expect(promo.coupon_code).to start_with("BDAY")
     expect(within(biz) { WhatsappMessage.where(template_name: "birthday_offer").count }).to eq(1)
-    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust[:id], lines: [{ product_id: m[:chai].id }] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust[:id], lines: [ { product_id: m[:chai].id } ] }, headers: headers
     api_post "/api/v1/orders/#{json[:id]}/discounts", { coupon_code: promo.coupon_code }, headers: headers
     expect(response).to have_http_status(:ok)
     expect(json[:discount_minor]).to eq(800)
@@ -97,7 +97,7 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
     api_post "/api/v1/reservations", { table_id: t1.id, guest_name: "Clash", party_size: 2, starts_at: (starts + 30.minutes).iso8601 }, headers: headers
     expect(response).to have_http_status(:conflict)
     get "/api/v1/reservations/availability?starts_at=#{CGI.escape(starts.iso8601)}&party_size=2", headers: headers
-    expect(json[:tables].map { |t| t[:code] }).to eq(["T2"])
+    expect(json[:tables].map { |t| t[:code] }).to eq([ "T2" ])
     api_post "/api/v1/reservations", { table_id: t2.id, guest_name: "Later", party_size: 2, starts_at: (starts + 2.hours).iso8601 }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/reservations?upcoming=true", headers: headers
@@ -126,10 +126,10 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
     api_post "/api/v1/commission_rules", { name: "Waiter 2%", applies_to: "waiter", role_key: "waiter", basis: "percent_of_sales", value: 2 }, headers: headers
     expect(response).to have_http_status(:created)
     api_post "/api/v1/commission_rules", { name: "Order taker Rs 5", applies_to: "order_taker", basis: "per_order", value: 5 }, headers: headers
-    api_post "/api/v1/orders", { order_type: "dine_in", lines: [{ product_id: m[:burger].id, quantity: 2 }], place: true }, headers: auth_headers(waiter, app: "pos")
+    api_post "/api/v1/orders", { order_type: "dine_in", lines: [ { product_id: m[:burger].id, quantity: 2 } ], place: true }, headers: auth_headers(waiter, app: "pos")
     o = json
     within(biz) { Order.find(o[:id]).update_columns(waiter_membership_id: waiter.id) }
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor] } ] }, headers: headers
     get "/api/v1/reports/commissions", headers: headers
     rows = json[:rows]
     w = rows.find { |r| r[:applies_to] == "waiter" }
@@ -140,7 +140,7 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
 
     get "/api/v1/checklists/templates", headers: headers
     expect(json[:data].map { |t| t[:kind] }).to eq(%w[opening closing])
-    api_put "/api/v1/checklists/templates/opening", { items: [{ label: "Count float" }, { label: "Check gas" }], required_for_shift: true }, headers: headers
+    api_put "/api/v1/checklists/templates/opening", { items: [ { label: "Count float" }, { label: "Check gas" } ], required_for_shift: true }, headers: headers
     expect(json[:items].size).to eq(2)
     get "/api/v1/checklists/today?kind=opening", headers: headers
     run = json

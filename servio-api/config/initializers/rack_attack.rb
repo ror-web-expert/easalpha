@@ -9,7 +9,7 @@ class Rack::Attack
   throttle("public/ip", limit: 120, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/v1/public/") }
   throttle("api/ip", limit: 600, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/") }
   self.throttled_responder = lambda do |_req|
-    [429, { "Content-Type" => "application/json" }, [{ error: { code: "rate_limited", message: "Too many requests" } }.to_json]]
+    [ 429, { "Content-Type" => "application/json" }, [ { error: { code: "rate_limited", message: "Too many requests" } }.to_json ] ]
   end
 end
 Rails.application.config.middleware.use Rack::Attack unless Rails.env.test?

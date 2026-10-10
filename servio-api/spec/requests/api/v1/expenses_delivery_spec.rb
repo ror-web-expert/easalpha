@@ -29,8 +29,8 @@ RSpec.describe "Expenses, overheads, delivery and riders", type: :request do
     api_post "/api/v1/overheads", { name: "Rent", kind: "rent", amount_minor: 3_000_000, basis: "per_month" }, headers: headers
     api_post "/api/v1/overheads", { name: "Labour", kind: "labor", amount_minor: 5_000, basis: "per_order" }, headers: headers
     expect(response).to have_http_status(:created)
-    api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
-    api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: 9_280 }] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+    api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
     get "/api/v1/expenses/summary?from=#{Date.current}&to=#{Date.current}", headers: headers
     expect(json[:total_minor]).to eq(355_000)
     expect(json[:by_category].first[:category]).to eq("Utilities")
@@ -46,17 +46,17 @@ RSpec.describe "Expenses, overheads, delivery and riders", type: :request do
   end
 
   it "creates a delivery with the zone charge, assigns a rider, walks the status chips, and delivered never closes the order" do
-    api_post "/api/v1/delivery_zones", { name: "DHA", areas: ["DHA", "Phase 5"], charge_minor: 15_000, min_order_minor: 50_000, eta_minutes: 40 }, headers: headers
+    api_post "/api/v1/delivery_zones", { name: "DHA", areas: [ "DHA", "Phase 5" ], charge_minor: 15_000, min_order_minor: 50_000, eta_minutes: 40 }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/delivery_zones/quote?text=House 12, Phase 5, DHA Lahore", headers: headers
     expect(json[:charge_minor]).to eq(15_000)
-    api_post "/api/v1/customers", { name: "Hira", phone: "03005556677", addresses: [{ line1: "House 12", area: "Phase 5 DHA", is_default: true }] }, headers: headers
+    api_post "/api/v1/customers", { name: "Hira", phone: "03005556677", addresses: [ { line1: "House 12", area: "Phase 5 DHA", is_default: true } ] }, headers: headers
     cust = json
     api_post "/api/v1/riders", { name: "Bilal", phone: "03111111111", vehicle: "bike", create_login: true, pin: "4321" }, headers: headers
     expect(response).to have_http_status(:created)
     rider = json
     expect(rider[:membership_id]).to be_present
-    api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust[:id], address_id: cust[:addresses].first[:id], delivery_charge_minor: 15_000, lines: [{ product_id: m[:burger].id }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust[:id], address_id: cust[:addresses].first[:id], delivery_charge_minor: 15_000, lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
     expect(response).to have_http_status(:created)
     order = json
     get "/api/v1/orders/#{order[:id]}/delivery", headers: headers
@@ -112,11 +112,11 @@ RSpec.describe "Expenses, overheads, delivery and riders", type: :request do
     expect(json[:rider][:float_minor]).to eq(150_000)
     expect(cash_balance).to eq(-180_000)
     get "/api/v1/riders/#{rider[:id]}/statement", headers: headers
-    expect(json[:rows].map { |r| r[:balance_minor] }).to eq([200_000, 170_000, 150_000])
+    expect(json[:rows].map { |r| r[:balance_minor] }).to eq([ 200_000, 170_000, 150_000 ])
 
-    api_post "/api/v1/customers", { name: "Omar", phone: "03009998877", addresses: [{ line1: "Flat 3", area: "Gulberg" }] }, headers: headers
+    api_post "/api/v1/customers", { name: "Omar", phone: "03009998877", addresses: [ { line1: "Flat 3", area: "Gulberg" } ] }, headers: headers
     cust = json
-    api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust[:id], address_id: cust[:addresses].first[:id], lines: [{ product_id: m[:chai].id, quantity: 2 }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust[:id], address_id: cust[:addresses].first[:id], lines: [ { product_id: m[:chai].id, quantity: 2 } ], place: true }, headers: headers
     order = json
     api_post "/api/v1/orders/#{order[:id]}/delivery/assign", { rider_id: rider[:id] }, headers: headers
     api_post "/api/v1/orders/#{order[:id]}/delivery/status", { status: "picked_up" }, headers: headers

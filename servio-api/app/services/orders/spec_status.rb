@@ -19,7 +19,7 @@ module Orders
       v = value.to_s
       return STATUS_MAP[v] if STATUS_MAP.key?(v)
       return Order::OPEN_STATUSES if v == "open"
-      [v]
+      [ v ]
     end
 
     def payment_of(order)

@@ -6,7 +6,7 @@ class AddStaffTypesAndBusinessDayWindow < ActiveRecord::Migration[8.0]
     add_column :memberships, :cashier_role, :string
     add_check_constraint :memberships, "staff_type IN ('admin', 'cashier', 'order_taker', 'rider')", name: "memberships_staff_type_check"
     add_check_constraint :memberships, "cashier_role IS NULL OR cashier_role IN ('cashier', 'supervisor', 'kitchen_display')", name: "memberships_cashier_role_check"
-    add_index :memberships, [:business_id, :staff_type]
+    add_index :memberships, [ :business_id, :staff_type ]
 
     # Existing members get the type their role suggests.
     execute <<~SQL
@@ -24,7 +24,7 @@ class AddStaffTypesAndBusinessDayWindow < ActiveRecord::Migration[8.0]
   def down
     change_column_default :branches, :day_end_time, from: "02:01", to: "04:00"
     remove_column :branches, :business_day_start
-    remove_index :memberships, [:business_id, :staff_type]
+    remove_index :memberships, [ :business_id, :staff_type ]
     remove_check_constraint :memberships, name: "memberships_cashier_role_check"
     remove_check_constraint :memberships, name: "memberships_staff_type_check"
     remove_column :memberships, :cashier_role

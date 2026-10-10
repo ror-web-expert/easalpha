@@ -18,7 +18,7 @@ module Api
       def export
         csv = CSV.generate do |out|
           out << %w[number spent_on category amount method source paid_to note voided]
-          filtered.find_each { |e| out << [e.label, e.spent_on, e.category.full_name, e.amount_minor / 100.0, e.payment_method&.code, e.source, e.paid_to, e.note, e.voided? ? "yes" : ""] }
+          filtered.find_each { |e| out << [ e.label, e.spent_on, e.category.full_name, e.amount_minor / 100.0, e.payment_method&.code, e.source, e.paid_to, e.note, e.voided? ? "yes" : "" ] }
         end
         send_data csv, filename: "expenses-#{range.begin}-#{range.end}.csv", type: "text/csv"
       end
@@ -52,7 +52,7 @@ module Api
       def categories
         ExpenseCategory.seed_defaults! unless ExpenseCategory.exists?
         roots = ExpenseCategory.active.where(parent_id: nil).order(:sort_order, :name).includes(:children)
-        render json: { data: roots.map { |c| DeliverySerializers.expense_category(c, children: c.children.select { |x| x.archived_at.nil? }.sort_by { |x| [x.sort_order, x.name] }) } }
+        render json: { data: roots.map { |c| DeliverySerializers.expense_category(c, children: c.children.select { |x| x.archived_at.nil? }.sort_by { |x| [ x.sort_order, x.name ] }) } }
       end
 
       def create_category
@@ -68,8 +68,8 @@ module Api
 
       def destroy_category
         c = ExpenseCategory.active.find(params[:id])
-        raise Api::Errors::Conflict.new("expense_category.in_use", "Move its expenses first") if Expense.where(category_id: [c.id] + c.children.pluck(:id)).exists?
-        ExpenseCategory.where(id: [c.id] + c.children.pluck(:id)).update_all(archived_at: Time.current)
+        raise Api::Errors::Conflict.new("expense_category.in_use", "Move its expenses first") if Expense.where(category_id: [ c.id ] + c.children.pluck(:id)).exists?
+        ExpenseCategory.where(id: [ c.id ] + c.children.pluck(:id)).update_all(archived_at: Time.current)
         head :no_content
       end
 

@@ -17,7 +17,7 @@ class Business < ApplicationRecord
 
   def read_only? = status.in?(%w[read_only deleted])
   def trial? = status == "trial"
-  def trial_days_left = trial_ends_on ? [(trial_ends_on - Date.current).to_i, 0].max : 0
+  def trial_days_left = trial_ends_on ? [ (trial_ends_on - Date.current).to_i, 0 ].max : 0
   def main_branch = branches.where(is_main: true).first || branches.first
 
   def self.generate_slug(name)
@@ -29,7 +29,7 @@ class Business < ApplicationRecord
   end
 
   DEFAULT_SETTINGS = {
-    "service_charge_percent" => 0, "service_charge_order_types" => ["dine_in"], "cash_rounding" => 0,
+    "service_charge_percent" => 0, "service_charge_order_types" => [ "dine_in" ], "cash_rounding" => 0,
     "staff_meal_requires_approval" => true, "discount_requires_reason" => true, "kitchen_ticket_print" => true,
     "default_order_type" => "walk_in", "receipt" => { "header" => "", "footer" => "Thank you", "show_logo" => true, "language" => "en", "paper" => "80" }
   }.freeze

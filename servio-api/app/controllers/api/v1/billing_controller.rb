@@ -17,7 +17,7 @@ module Api
       def choose_plan
         plan = Plan.active.find_by!(code: params.require(:plan_code))
         cycle = params[:cycle].presence_in(%w[monthly yearly]) || "monthly"
-        tills = [params[:tills].to_i, 1].max
+        tills = [ params[:tills].to_i, 1 ].max
         sub = Subscription.order(created_at: :desc).first || Subscription.create!(business: current_business, plan: plan, status: "trialing")
         sub.update!(plan: plan, billing_cycle: cycle, tills: tills)
         current_business.update!(plan: plan) if current_business.trial?

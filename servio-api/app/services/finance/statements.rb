@@ -29,12 +29,12 @@ module Finance
       inside = movements(from..to)
       rows = accounts.reject(&:is_header).map do |a|
         ob = a.opening_balance_minor + (a.normal_side == "debit" ? 1 : -1) * 0
-        open_d, open_c = before[a.id] || [0, 0]
+        open_d, open_c = before[a.id] || [ 0, 0 ]
         opening = (a.normal_side == "debit" ? ob : -ob) + open_d - open_c # positive = debit balance
-        d, c = inside[a.id] || [0, 0]
+        d, c = inside[a.id] || [ 0, 0 ]
         closing = opening + d - c
-        { account: FinanceSerializers.gl_account(a), opening_debit_minor: [opening, 0].max, opening_credit_minor: [-opening, 0].max, debit_minor: d, credit_minor: c,
-          closing_debit_minor: [closing, 0].max, closing_credit_minor: [-closing, 0].max }
+        { account: FinanceSerializers.gl_account(a), opening_debit_minor: [ opening, 0 ].max, opening_credit_minor: [ -opening, 0 ].max, debit_minor: d, credit_minor: c,
+          closing_debit_minor: [ closing, 0 ].max, closing_credit_minor: [ -closing, 0 ].max }
       end.reject { |r| r.values_at(:opening_debit_minor, :opening_credit_minor, :debit_minor, :credit_minor).all?(&:zero?) }
       totals = %i[opening_debit_minor opening_credit_minor debit_minor credit_minor closing_debit_minor closing_credit_minor].index_with { |k| rows.sum { |r| r[k] } }
       { from: from, to: to, rows: rows, totals: totals, balanced: totals[:debit_minor] == totals[:credit_minor] }
@@ -80,18 +80,18 @@ module Finance
     def balances(as_of:)
       mv = movements(..as_of)
       GlAccount.active.to_a.to_h do |a|
-        d, c = mv[a.id] || [0, 0]
-        [a.id, a.opening_balance_minor + GlAccount.signed(a.normal_side, d, c)]
+        d, c = mv[a.id] || [ 0, 0 ]
+        [ a.id, a.opening_balance_minor + GlAccount.signed(a.normal_side, d, c) ]
       end
     end
 
     def movements(range)
       JournalLine.joins(:journal_entry).where(journal_entries: { business_day: range }).group(:gl_account_id).pluck(:gl_account_id, Arel.sql("SUM(debit_minor)"), Arel.sql("SUM(credit_minor)"))
-                 .to_h { |id, d, c| [id, [d.to_i, c.to_i]] }
+                 .to_h { |id, d, c| [ id, [ d.to_i, c.to_i ] ] }
     end
 
     def account_ledger(account, from:, to:)
-      opening = account.opening_balance_minor + GlAccount.signed(account.normal_side, *(movements(..(from - 1))[account.id] || [0, 0]))
+      opening = account.opening_balance_minor + GlAccount.signed(account.normal_side, *(movements(..(from - 1))[account.id] || [ 0, 0 ]))
       lines = JournalLine.joins(:journal_entry).where(gl_account_id: account.id, journal_entries: { business_day: from..to }).includes(:journal_entry).order("journal_entries.business_day, journal_entries.number")
       balance = opening
       rows = lines.map do |l|

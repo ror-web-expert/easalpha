@@ -16,7 +16,7 @@ class CreatePurchasing < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :suppliers, [:business_id, :name], unique: true, where: "archived_at is null"
+    add_index :suppliers, [ :business_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :purchase_orders, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -33,7 +33,7 @@ class CreatePurchasing < ActiveRecord::Migration[8.0]
       t.datetime :cancelled_at
       t.timestamps
     end
-    add_index :purchase_orders, [:business_id, :number], unique: true
+    add_index :purchase_orders, [ :business_id, :number ], unique: true
     add_check_constraint :purchase_orders, "status in ('draft','sent','partial','received','cancelled')", name: "purchase_orders_status_check"
 
     create_table :purchase_order_lines, id: :uuid do |t|
@@ -68,7 +68,7 @@ class CreatePurchasing < ActiveRecord::Migration[8.0]
       t.datetime :cancelled_at
       t.timestamps
     end
-    add_index :goods_receipts, [:business_id, :number], unique: true
+    add_index :goods_receipts, [ :business_id, :number ], unique: true
 
     create_table :goods_receipt_lines, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -103,7 +103,7 @@ class CreatePurchasing < ActiveRecord::Migration[8.0]
       t.uuid :by_membership_id
       t.timestamps
     end
-    add_index :purchase_returns, [:business_id, :number], unique: true
+    add_index :purchase_returns, [ :business_id, :number ], unique: true
     add_check_constraint :purchase_returns, "settlement in ('credit_note','cash_refund')", name: "purchase_returns_settlement_check"
 
     create_table :purchase_return_lines, id: :uuid do |t|
@@ -135,7 +135,7 @@ class CreatePurchasing < ActiveRecord::Migration[8.0]
       t.uuid :shift_id
       t.timestamps
     end
-    add_index :supplier_payments, [:business_id, :number], unique: true
+    add_index :supplier_payments, [ :business_id, :number ], unique: true
     add_check_constraint :supplier_payments, "direction in ('paid','received')", name: "supplier_payments_direction_check"
 
     create_table :supplier_price_history, id: :uuid do |t|
@@ -149,7 +149,7 @@ class CreatePurchasing < ActiveRecord::Migration[8.0]
       t.date :observed_on, null: false
       t.timestamps
     end
-    add_index :supplier_price_history, [:business_id, :stock_item_id, :observed_on]
+    add_index :supplier_price_history, [ :business_id, :stock_item_id, :observed_on ]
 
     add_foreign_key :stock_documents, :suppliers, column: :supplier_id
     Servio::Rls.apply!(%w[suppliers purchase_orders purchase_order_lines goods_receipts goods_receipt_lines purchase_returns purchase_return_lines supplier_payments supplier_price_history])

@@ -7,7 +7,7 @@ class CreateCustomersAndTables < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :customer_groups, [:business_id, :name], unique: true, where: "archived_at is null"
+    add_index :customer_groups, [ :business_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :customers, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -35,9 +35,9 @@ class CreateCustomersAndTables < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :customers, [:business_id, :khata_no], unique: true
-    add_index :customers, [:business_id, :phone], unique: true, where: "phone is not null and archived_at is null"
-    add_index :customers, [:business_id], unique: true, where: "is_walk_in", name: "idx_customers_one_walk_in"
+    add_index :customers, [ :business_id, :khata_no ], unique: true
+    add_index :customers, [ :business_id, :phone ], unique: true, where: "phone is not null and archived_at is null"
+    add_index :customers, [ :business_id ], unique: true, where: "is_walk_in", name: "idx_customers_one_walk_in"
     add_check_constraint :customers, "source in ('in_store','online','qr','phone','import')", name: "customers_source_check"
     add_check_constraint :customers, "status in ('active','pending_approval','deactivated')", name: "customers_status_check"
 

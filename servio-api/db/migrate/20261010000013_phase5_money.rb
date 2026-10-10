@@ -41,7 +41,7 @@ class Phase5Money < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :gl_accounts, [:business_id, :code], unique: true
+    add_index :gl_accounts, [ :business_id, :code ], unique: true
     add_index :gl_accounts, :payment_account_id
     add_check_constraint :gl_accounts, "kind IN ('asset', 'liability', 'equity', 'income', 'expense')", name: "gl_accounts_kind_check"
     add_check_constraint :gl_accounts, "normal_side IN ('debit', 'credit')", name: "gl_accounts_side_check"
@@ -61,9 +61,9 @@ class Phase5Money < ActiveRecord::Migration[8.0]
       t.datetime :posted_at, null: false
       t.timestamps
     end
-    add_index :journal_entries, [:business_id, :number], unique: true
-    add_index :journal_entries, [:ref_table, :ref_id]
-    add_index :journal_entries, [:business_id, :business_day]
+    add_index :journal_entries, [ :business_id, :number ], unique: true
+    add_index :journal_entries, [ :ref_table, :ref_id ]
+    add_index :journal_entries, [ :business_id, :business_day ]
 
     create_table :journal_lines, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true

@@ -16,7 +16,7 @@ module Purchasing
                                      payment_account: account, reference: reference, note: note, goods_receipt_id: goods_receipt_id, purchase_order_id: po&.id, paid_on: paid_on || Date.current, business_day: day,
                                      by_membership_id: actor&.id, shift_id: shift&.id)
         supplier.move_balance!(direction == "paid" ? -amount_minor : amount_minor)
-        PurchaseOrder.where(id: po.id).update_all(["paid_minor = paid_minor + ?", direction == "paid" ? amount_minor : -amount_minor]) if po
+        PurchaseOrder.where(id: po.id).update_all([ "paid_minor = paid_minor + ?", direction == "paid" ? amount_minor : -amount_minor ]) if po
         account&.post!(kind: "supplier_payment", amount_minor: direction == "paid" ? -amount_minor : amount_minor, business_day: day, ref: sp,
                        description: "#{direction == 'paid' ? 'Paid to' : 'Received from'} #{supplier.name} #{sp.label}", by: actor, shift_id: shift&.id, branch_id: branch.id)
         AuditLog.record(action: "supplier_payment", record: sp, after: { supplier: supplier.name, amount_minor: amount_minor, direction: direction, method: method.code })

@@ -6,7 +6,7 @@ module Billing
     def price_for(plan, cycle:, currency:, tills: 1)
       base = currency == "PKR" ? plan.price_pkr_minor : plan.price_usd_minor
       extra_till = currency == "PKR" ? 1_000_00 : 9_00
-      monthly = base + [tills - (plan.limits["tills"] || 1), 0].max * extra_till
+      monthly = base + [ tills - (plan.limits["tills"] || 1), 0 ].max * extra_till
       cycle == "yearly" ? monthly * 10 : monthly
     end
 
@@ -15,7 +15,7 @@ module Billing
       amount = price_for(plan, cycle: cycle, currency: currency, tills: tills)
       label = cycle == "yearly" ? "#{plan.name} yearly" : "#{plan.name} #{Date.current.strftime('%B %Y')}"
       inv = Invoice.create!(business: business, subscription: subscription, amount_minor: amount, currency: currency, due_on: due_on, status: "open", period_label: label,
-                            lines: [{ description: label, amount_minor: amount }, ({ description: "Extra tills x#{tills - (plan.limits['tills'] || 1)}", amount_minor: 0 } if tills > (plan.limits["tills"] || 1))].compact)
+                            lines: [ { description: label, amount_minor: amount }, ({ description: "Extra tills x#{tills - (plan.limits['tills'] || 1)}", amount_minor: 0 } if tills > (plan.limits["tills"] || 1)) ].compact)
       Lifecycle.notify_owners(business, "invoice_due", { business_name: business.name, number: inv.number, amount: amount / 100, due_on: due_on.to_s }, title: "Invoice #{inv.number} due #{due_on}", link: "/settings/billing")
       inv
     end

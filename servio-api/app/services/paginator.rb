@@ -6,7 +6,7 @@ class Paginator
   def self.call(scope, cursor:, limit:, order_column: :created_at)
     limit = limit.to_i
     limit = DEFAULT if limit <= 0
-    limit = [limit, MAX].min
+    limit = [ limit, MAX ].min
     conn = scope.connection
     table = conn.quote_table_name(scope.table_name)
     column = conn.quote_column_name(order_column)
@@ -19,7 +19,7 @@ class Paginator
     more = rows.size > limit
     rows = rows.first(limit)
     next_cursor = more && rows.last ? Base64.urlsafe_encode64("#{rows.last.public_send(order_column).iso8601(6)}|#{rows.last.id}") : nil
-    [rows, next_cursor]
+    [ rows, next_cursor ]
   rescue ArgumentError
     raise Api::Errors::BadRequest.new("invalid_cursor", "Cursor is not valid")
   end

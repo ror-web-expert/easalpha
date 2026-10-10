@@ -8,7 +8,7 @@ class CreateUserPermissions < ActiveRecord::Migration[8.0]
       t.uuid :granted_by_user_id
       t.timestamps
     end
-    add_index :user_permissions, [:membership_id, :permission_code], unique: true
+    add_index :user_permissions, [ :membership_id, :permission_code ], unique: true
 
     # "role": codes come from the role (as before). "custom": user_permissions is the whole truth.
     add_column :memberships, :permissions_mode, :string, null: false, default: "role"

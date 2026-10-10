@@ -9,12 +9,12 @@ module Riders
       Rider.transaction do
         account = shift&.drawer_account || PaymentMethod.active.find_by(kind: "cash")&.payment_account
         delta = case kind
-                when "issue" then amount_minor
-                when "return" then -amount_minor
-                when "spend" then -amount_minor
-                when "adjust" then amount_minor
-                else raise Api::Errors::BadRequest.new("float.kind", "Unknown movement #{kind}")
-                end
+        when "issue" then amount_minor
+        when "return" then -amount_minor
+        when "spend" then -amount_minor
+        when "adjust" then amount_minor
+        else raise Api::Errors::BadRequest.new("float.kind", "Unknown movement #{kind}")
+        end
         raise Api::Errors::Conflict.new("float.insufficient", "#{rider.name} holds only Rs #{rider.float_minor / 100}") if kind.in?(%w[return spend]) && rider.float_minor < amount_minor
         expense = nil
         if kind == "spend"

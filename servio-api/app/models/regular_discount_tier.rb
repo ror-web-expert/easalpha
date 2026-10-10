@@ -15,6 +15,6 @@ class RegularDiscountTier < ApplicationRecord
 
   def discount_for(amount_minor)
     return 0 if amount_minor < min_order_minor
-    kind == "percent" ? (amount_minor * value / 100).round : [amount_minor, (value * 100).to_i].min
+    kind == "percent" ? (amount_minor * value / 100).round : [ amount_minor, (value * 100).to_i ].min
   end
 end

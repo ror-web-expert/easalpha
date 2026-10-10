@@ -11,7 +11,7 @@ class Supplier < ApplicationRecord
 
   # Positive balance: we owe the supplier. Negative: the supplier owes us.
   def move_balance!(delta)
-    Supplier.where(id: id).update_all(["balance_minor = balance_minor + ?", delta])
+    Supplier.where(id: id).update_all([ "balance_minor = balance_minor + ?", delta ])
     reload
   end
 end

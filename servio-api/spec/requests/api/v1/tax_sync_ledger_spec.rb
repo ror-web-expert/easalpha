@@ -13,9 +13,9 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
     before { within(biz) { Branch.first.update!(tax_registration: { "authority" => "pra", "ntn" => "1234567-8", "pos_id" => "POS-1" }) } }
 
     it "queues an invoice when an order is paid, the job submits it through the sandbox, and the receipt carries the number" do
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
       oid = json[:id]
-      api_post "/api/v1/orders/#{oid}/payments", { payments: [{ method_code: "cash", amount_minor: 9_280 }] }, headers: headers
+      api_post "/api/v1/orders/#{oid}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
       expect(json[:receipt][:tax_invoice][:status]).to eq("queued")
       expect(enqueued_jobs.map { |j| j["job_class"] }).to include("TaxInvoiceSyncJob")
       perform_enqueued_jobs
@@ -30,9 +30,9 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
     end
 
     it "marks a failed submission with backoff and lets a manager retry" do
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
       oid = json[:id]
-      api_post "/api/v1/orders/#{oid}/payments", { payments: [{ method_code: "cash", amount_minor: 9_280 }] }, headers: headers
+      api_post "/api/v1/orders/#{oid}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
       inv = within(biz) { TaxInvoice.find_by!(order_id: oid) }
       within(biz) { inv.update!(request_payload: inv.request_payload.merge("force_failure" => true)) }
       perform_enqueued_jobs
@@ -48,8 +48,8 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
 
     it "skips invoices when the branch is not registered" do
       within(biz) { Branch.first.update!(tax_registration: {}) }
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
-      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: 9_280 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
       expect(json[:receipt][:tax_invoice][:status]).to eq("not_registered")
       within(biz) { expect(TaxInvoice.count).to eq(0) }
     end
@@ -64,9 +64,9 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
       records = [
         { type: "shift_open", id: shift_id, membership_id: cashier.id, payload: { opening_cash_minor: 100_000, client_created_at: 3.hours.ago.iso8601 } },
         { type: "order", id: order_id, membership_id: cashier.id, payload: { order_type: "takeaway", till_serial: "T1-007", client_created_at: 2.hours.ago.iso8601, status: "placed",
-                                                                                lines: [{ product_id: m[:burger].id, quantity: 1, modifiers: [{ modifier_id: m[:hot].id }] }],
-                                                                                payments: [{ id: pay_id, method_code: "cash", amount_minor: 54_520, tendered_minor: 60_000 }] } },
-        { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", lines: [{ product_id: SecureRandom.uuid }] } },
+                                                                                lines: [ { product_id: m[:burger].id, quantity: 1, modifiers: [ { modifier_id: m[:hot].id } ] } ],
+                                                                                payments: [ { id: pay_id, method_code: "cash", amount_minor: 54_520, tendered_minor: 60_000 } ] } },
+        { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", lines: [ { product_id: SecureRandom.uuid } ] } },
         { type: "cash_movement", id: SecureRandom.uuid, membership_id: cashier.id, payload: { shift_id: shift_id, kind: "cash_out", amount_minor: 500, reason: "Tea" } },
         { type: "shift_close", id: shift_id, membership_id: cashier.id, payload: { counted_cash_minor: 154_020 } }
       ]
@@ -108,7 +108,7 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
       expect(json[:products]).to be_empty
       within(biz) { m[:chai].update!(base_price_minor: 9_000) }
       get "/api/v1/sync/changes?since=#{cursor}", headers: device_headers(device)
-      expect(json[:products].map { |p| p[:name] }).to eq(["Chai"])
+      expect(json[:products].map { |p| p[:name] }).to eq([ "Chai" ])
       get "/api/v1/sync/changes", headers: headers
       expect(json[:staff].first[:pin_digest]).to be_nil
       api_post "/api/v1/sync/push", { records: [] }, headers: headers
@@ -118,7 +118,7 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
     it "rejects records from a member who was deactivated before the action and locks a day" do
       cashier
       within(biz) { cashier.deactivate! }
-      records = [{ type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", client_created_at: 1.minute.from_now.iso8601, lines: [{ product_id: m[:chai].id }] } }]
+      records = [ { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", client_created_at: 1.minute.from_now.iso8601, lines: [ { product_id: m[:chai].id } ] } } ]
       api_post "/api/v1/sync/push", { records: records }, headers: device_headers(device)
       expect(json[:results].first).to include(status: "rejected", code: "sync.member")
     end
@@ -128,10 +128,10 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
     it "lists charges and payments with a running balance and ages open charges FIFO" do
       api_post "/api/v1/customers", { name: "Rao Bilal", phone: "03491234567" }, headers: headers
       cust = json[:id]
-      [100.days.ago, 70.days.ago, 10.days.ago].each do |when_|
-        api_post "/api/v1/orders", { order_type: "walk_in", customer_id: cust, client_created_at: when_.iso8601, lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      [ 100.days.ago, 70.days.ago, 10.days.ago ].each do |when_|
+        api_post "/api/v1/orders", { order_type: "walk_in", customer_id: cust, client_created_at: when_.iso8601, lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
         oid = json[:id]
-        api_post "/api/v1/orders/#{oid}/payments", { payments: [{ method_code: "khata", amount_minor: 9_280 }] }, headers: headers
+        api_post "/api/v1/orders/#{oid}/payments", { payments: [ { method_code: "khata", amount_minor: 9_280 } ] }, headers: headers
         within(biz) { Payment.where(order_id: oid).update_all(received_at: when_) }
       end
       api_post "/api/v1/customers/#{cust}/payments", { amount_minor: 10_000, method_code: "cash" }, headers: headers
@@ -152,8 +152,8 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
   describe "daily summary" do
     it "writes a notification and a WhatsApp message to the owner" do
       owner.user.update!(phone: "+923001234567")
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
-      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: 9_280 }] }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 9_280 } ] }, headers: headers
       day = within(biz) { Branch.first.business_day_for(Time.current) }
       DailySummaryJob.perform_now(biz.id, day.to_s)
       within(biz) do

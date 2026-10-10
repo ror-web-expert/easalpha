@@ -17,7 +17,7 @@ module Whatsapp
     def variables_for(customer, order: nil, previous_balance_minor: nil)
       biz = customer.business
       v = { customer_name: customer.name, khata_no: customer.khata_no, business_name: biz.name, new_balance: customer.balance_minor / 100, previous_balance: (previous_balance_minor || customer.balance_minor) / 100,
-            loyalty_points: customer.loyalty_points, due_amount: [customer.balance_minor, 0].max / 100 }
+            loyalty_points: customer.loyalty_points, due_amount: [ customer.balance_minor, 0 ].max / 100 }
       if order
         v.merge!(order_number: order.label, order_total: order.total_minor / 100, discount: order.discount_minor / 100, service_charge: order.service_charge_minor / 100,
                  order_items: order.items.reject(&:cancelled?).map { |i| "#{i.quantity.to_i}x #{i.name_snapshot}" }.join(", "))
@@ -72,10 +72,10 @@ module Whatsapp
     end
 
     ACCOUNT_TEMPLATES = [
-      ["account_statement", "{business_name}: {customer_name} (Khata {khata_no}), your account balance is Rs {new_balance}. Thank you."],
-      ["account_payment_received", "{business_name} received Rs {order_total} from {customer_name}. Previous balance Rs {previous_balance}, new balance Rs {new_balance}."],
-      ["account_receipt", "{business_name}: order {order_number} for Rs {order_total} was put on your account. Items: {order_items}. New balance Rs {new_balance}."],
-      ["voucher", "{customer_name}, here is your voucher {code} worth {value} at {business_name}. Minimum spend Rs {min_spend}, valid until {expires_on}."]
+      [ "account_statement", "{business_name}: {customer_name} (Khata {khata_no}), your account balance is Rs {new_balance}. Thank you." ],
+      [ "account_payment_received", "{business_name} received Rs {order_total} from {customer_name}. Previous balance Rs {previous_balance}, new balance Rs {new_balance}." ],
+      [ "account_receipt", "{business_name}: order {order_number} for Rs {order_total} was put on your account. Items: {order_items}. New balance Rs {new_balance}." ],
+      [ "voucher", "{customer_name}, here is your voucher {code} worth {value} at {business_name}. Minimum spend Rs {min_spend}, valid until {expires_on}." ]
     ].freeze
 
     def seed_account_templates!

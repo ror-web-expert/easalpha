@@ -48,7 +48,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :branches, [:business_id, :code], unique: true
+    add_index :branches, [ :business_id, :code ], unique: true
 
     create_table :users, id: :uuid do |t|
       t.string :phone
@@ -73,7 +73,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :roles, [:business_id, :name], unique: true, where: "archived_at is null"
+    add_index :roles, [ :business_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :role_permissions, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -82,7 +82,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.decimal :limit_value, precision: 10, scale: 2
       t.timestamps
     end
-    add_index :role_permissions, [:role_id, :permission_code], unique: true
+    add_index :role_permissions, [ :role_id, :permission_code ], unique: true
 
     create_table :memberships, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -98,7 +98,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :deactivated_at
       t.timestamps
     end
-    add_index :memberships, [:business_id, :user_id], unique: true
+    add_index :memberships, [ :business_id, :user_id ], unique: true
     add_check_constraint :memberships, "status in ('invited','active','deactivated')", name: "memberships_status_check"
 
     create_table :devices, id: :uuid do |t|
@@ -119,7 +119,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :revoked_at
       t.timestamps
     end
-    add_index :devices, [:business_id, :branch_id, :code], unique: true
+    add_index :devices, [ :business_id, :branch_id, :code ], unique: true
     add_index :devices, :pairing_code, unique: true, where: "pairing_code is not null"
     add_check_constraint :devices, "kind in ('till','tablet','kitchen','customer_display','token_screen','kiosk')", name: "devices_kind_check"
 
@@ -146,7 +146,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :consumed_at
       t.timestamps
     end
-    add_index :otp_codes, [:phone, :purpose]
+    add_index :otp_codes, [ :phone, :purpose ]
 
     create_table :subscriptions, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -176,8 +176,8 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :occurred_at, null: false
       t.timestamps
     end
-    add_index :audit_logs, [:business_id, :table_name, :record_id]
-    add_index :audit_logs, [:business_id, :occurred_at]
+    add_index :audit_logs, [ :business_id, :table_name, :record_id ]
+    add_index :audit_logs, [ :business_id, :occurred_at ]
 
     create_table :super_admins, id: :uuid do |t|
       t.string :email, null: false
@@ -197,7 +197,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.integer :sort_order, null: false, default: 0
       t.timestamps
     end
-    add_index :setup_checklist_items, [:business_id, :key], unique: true
+    add_index :setup_checklist_items, [ :business_id, :key ], unique: true
 
     create_table :feature_flags, id: :uuid do |t|
       t.string :key, null: false
@@ -205,7 +205,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.boolean :enabled, null: false, default: false
       t.timestamps
     end
-    add_index :feature_flags, [:key, :business_id], unique: true
+    add_index :feature_flags, [ :key, :business_id ], unique: true
 
     create_table :notifications, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -217,7 +217,7 @@ class CreatePlatform < ActiveRecord::Migration[8.0]
       t.datetime :read_at
       t.timestamps
     end
-    add_index :notifications, [:business_id, :user_id, :read_at]
+    add_index :notifications, [ :business_id, :user_id, :read_at ]
 
     Servio::Rls.apply!(%w[branches roles role_permissions memberships devices subscriptions setup_checklist_items notifications])
   end

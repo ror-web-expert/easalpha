@@ -13,12 +13,12 @@ module Finance
                                    salvage_minor: attrs[:salvage_minor].to_i, purchased_on: attrs[:purchased_on].presence || Date.current, useful_life_months: attrs[:useful_life_months].to_i,
                                    note: attrs[:note], branch_id: branch.id)
         credit = case paid_from.to_s
-                 when "", "capital" then Chart.account("3010")
-                 when "payable" then Chart.account("2010")
-                 else Chart.for_payment_account(PaymentAccount.active.find(paid_from))
-                 end
+        when "", "capital" then Chart.account("3010")
+        when "payable" then Chart.account("2010")
+        else Chart.for_payment_account(PaymentAccount.active.find(paid_from))
+        end
         Journal.post!(business_day: asset.purchased_on, description: "Asset #{asset.name}", ref: asset, actor: actor, branch_id: branch.id,
-                      lines: [{ account: asset_account, debit_minor: asset.cost_minor }, { account: credit, credit_minor: asset.cost_minor }])
+                      lines: [ { account: asset_account, debit_minor: asset.cost_minor }, { account: credit, credit_minor: asset.cost_minor } ])
         if credit.payment_account
           credit.payment_account.post!(kind: "withdrawal", amount_minor: -asset.cost_minor, business_day: asset.purchased_on, ref: asset, description: "Asset #{asset.name}", by: actor, branch_id: branch.id, skip_journal: true)
         end
@@ -33,11 +33,11 @@ module Finance
       months = (through.year * 12 + through.month) - (from.year * 12 + from.month)
       months -= 1 if asset.depreciated_through.nil? && through.day < asset.purchased_on.day
       return asset if months <= 0
-      amount = [asset.monthly_minor * months, asset.depreciable_minor - asset.accumulated_minor].min
+      amount = [ asset.monthly_minor * months, asset.depreciable_minor - asset.accumulated_minor ].min
       return asset if amount <= 0
       FixedAsset.transaction do
         Journal.post!(business_day: through, description: "Depreciation #{asset.name} (#{months} months)", ref: asset, actor: actor, branch_id: asset.branch_id,
-                      lines: [{ account: asset.expense_account, debit_minor: amount }, { account: asset.accumulated_account, credit_minor: amount }])
+                      lines: [ { account: asset.expense_account, debit_minor: amount }, { account: asset.accumulated_account, credit_minor: amount } ])
         asset.update!(accumulated_minor: asset.accumulated_minor + amount, depreciated_through: through)
       end
       asset
@@ -46,7 +46,7 @@ module Finance
     def dispose!(asset, actor:, on: Date.current, proceeds_minor: 0, proceeds_account_id: nil)
       raise Api::Errors::Conflict.new("fixed_asset.disposed", "#{asset.name} is already disposed") unless asset.status == "active"
       FixedAsset.transaction do
-        lines = [{ account: asset.accumulated_account, debit_minor: asset.accumulated_minor }, { account: asset.gl_account, credit_minor: asset.cost_minor }]
+        lines = [ { account: asset.accumulated_account, debit_minor: asset.accumulated_minor }, { account: asset.gl_account, credit_minor: asset.cost_minor } ]
         book = asset.book_value_minor
         if proceeds_minor.to_i.positive? && proceeds_account_id
           pa = PaymentAccount.active.find(proceeds_account_id)

@@ -34,7 +34,7 @@ module Payroll
       local = at.in_time_zone(b.time_zone)
       day = b.business_day_for(at)
       start = shift_start_for(rule, b, local)
-      minutes_late = [((local - start) / 60).floor, 0].max
+      minutes_late = [ ((local - start) / 60).floor, 0 ].max
       status = status_for(rule, minutes_late)
       late = status == "present" ? 0 : minutes_late
       # The row records the day's own fine for the screens; payroll re-prices the month so allowances and the cap apply once.
@@ -57,7 +57,7 @@ module Payroll
       if rule.overtime_enabled
         shift_end = a.checked_in_at.in_time_zone(b.time_zone).change(hour: rule.shift_end.hour, min: rule.shift_end.min)
         shift_end += 1.day if shift_end < a.checked_in_at
-        overtime = [((at - shift_end) / 60).floor, 0].max
+        overtime = [ ((at - shift_end) / 60).floor, 0 ].max
       end
       a.update!(checked_out_at: at, worked_minutes: ((at - a.checked_in_at) / 60).floor, overtime_minutes: overtime, missing_punch: false, auto_closed: false, marked_by_membership_id: by&.id || a.marked_by_membership_id)
       log!(employee, a, manual ? "manual_out" : "check_out", at: at, device: device)
@@ -76,7 +76,7 @@ module Payroll
       if open && open.business_day < b.business_day_for(at)
         # Yesterday's record never got its check-out: close it at the end of that business day as a missing punch.
         end_at = b.business_day_end_at(open.business_day)
-        open.update!(checked_out_at: end_at, worked_minutes: [((end_at - open.checked_in_at) / 60).floor, 0].max, overtime_minutes: 0, missing_punch: true, auto_closed: true)
+        open.update!(checked_out_at: end_at, worked_minutes: [ ((end_at - open.checked_in_at) / 60).floor, 0 ].max, overtime_minutes: 0, missing_punch: true, auto_closed: true)
         log!(employee, open, "auto_close", at: end_at, device: device, note: "no check-out; closed at the end of the business day")
         open = nil
       end
@@ -115,7 +115,7 @@ module Payroll
       end_at = branch.business_day_end_at(day)
       count = 0
       ::Attendance.where(branch_id: branch.id, business_day: ..day).where.not(checked_in_at: nil).where(checked_out_at: nil).includes(:employee).find_each do |a|
-        a.update!(checked_out_at: end_at, worked_minutes: [((end_at - a.checked_in_at) / 60).floor, 0].max, overtime_minutes: 0, missing_punch: true, auto_closed: true)
+        a.update!(checked_out_at: end_at, worked_minutes: [ ((end_at - a.checked_in_at) / 60).floor, 0 ].max, overtime_minutes: 0, missing_punch: true, auto_closed: true)
         log!(a.employee, a, "auto_close", at: end_at, note: "no check-out; closed at the end of the business day")
         count += 1
       end
@@ -134,11 +134,11 @@ module Payroll
           next unless e.active_on?(d)
           next if ::Attendance.exists?(employee_id: e.id, business_day: d)
           status = if hols.include?(d) then "holiday"
-                   elsif leaves.any? { |l| l.covers?(d) } then "leave"
-                   elsif rule.weekly_off?(d) then "weekly_off"
-                   elsif rule.rules_enabled && !rule.no_scan_counts_absent then next
-                   else "absent"
-                   end
+          elsif leaves.any? { |l| l.covers?(d) } then "leave"
+          elsif rule.weekly_off?(d) then "weekly_off"
+          elsif rule.rules_enabled && !rule.no_scan_counts_absent then next
+          else "absent"
+          end
           ::Attendance.create!(employee: e, branch_id: e.branch_id, business_day: d, status: status, source: "manual")
           count += 1
         end
@@ -149,7 +149,7 @@ module Payroll
     def month_summary(employee, month)
       from, to = month.beginning_of_month, month.end_of_month
       rows = ::Attendance.where(employee_id: employee.id, business_day: from..to)
-      unpaid_leave_days = LeaveRequest.where(employee_id: employee.id, status: "approved", kind: "unpaid").sum { |l| ([l.from_date, from].max..[l.to_date, to].min).count }
+      unpaid_leave_days = LeaveRequest.where(employee_id: employee.id, status: "approved", kind: "unpaid").sum { |l| ([ l.from_date, from ].max..[ l.to_date, to ].min).count }
       c = charges(employee, month, rows: rows)
       { present: rows.where(status: %w[present late half_day]).count, late: rows.where(status: "late").count, half_days: rows.where(status: "half_day").count, absent: rows.where(status: "absent").count,
         leave: rows.where(status: "leave").count, unpaid_leave: unpaid_leave_days, holiday: rows.where(status: "holiday").count, weekly_off: rows.where(status: "weekly_off").count,
@@ -168,7 +168,7 @@ module Payroll
       detail = {}
       ::Attendance::CHARGEABLE.each do |status|
         n = rows.where(status: status).count
-        charged = [n - rule.free_for(status), 0].max
+        charged = [ n - rule.free_for(status), 0 ].max
         penalty = rule.rules_enabled ? rule.penalty_for(status) : "none"
         penalty = "lose_day" if status == "absent" && !rule.rules_enabled # an absence is always a lost day
         fine = penalty.in?(%w[fine_only both]) ? rule.fine_for(status) * charged : 0

@@ -6,7 +6,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :departments, [:business_id, :name], unique: true, where: "archived_at is null"
+    add_index :departments, [ :business_id, :name ], unique: true, where: "archived_at is null"
 
     create_table :employees, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -27,7 +27,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.datetime :archived_at
       t.timestamps
     end
-    add_index :employees, [:business_id, :membership_id], unique: true, where: "membership_id is not null"
+    add_index :employees, [ :business_id, :membership_id ], unique: true, where: "membership_id is not null"
 
     create_table :salary_components, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -49,7 +49,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.decimal :percent, precision: 6, scale: 2
       t.timestamps
     end
-    add_index :employee_salary_components, [:employee_id, :salary_component_id], unique: true, name: "idx_employee_components_unique"
+    add_index :employee_salary_components, [ :employee_id, :salary_component_id ], unique: true, name: "idx_employee_components_unique"
 
     create_table :attendance_rules, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -60,11 +60,11 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.bigint :late_fine_minor, null: false, default: 0
       t.integer :late_fine_after_minutes, null: false, default: 30
       t.string :absent_rule, null: false, default: "calendar_days"
-      t.integer :working_days, array: true, null: false, default: [1, 2, 3, 4, 5, 6]
+      t.integer :working_days, array: true, null: false, default: [ 1, 2, 3, 4, 5, 6 ]
       t.boolean :require_fingerprint_to_close_shift, null: false, default: false
       t.timestamps
     end
-    add_index :attendance_rules, [:business_id, :employee_id], unique: true, name: "idx_attendance_rules_unique", where: "employee_id is not null"
+    add_index :attendance_rules, [ :business_id, :employee_id ], unique: true, name: "idx_attendance_rules_unique", where: "employee_id is not null"
     add_check_constraint :attendance_rules, "absent_rule in ('calendar_days','fixed_26')", name: "attendance_rules_absent_check"
 
     create_table :attendances, id: :uuid do |t|
@@ -84,7 +84,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.uuid :marked_by_membership_id
       t.timestamps
     end
-    add_index :attendances, [:employee_id, :business_day], unique: true
+    add_index :attendances, [ :employee_id, :business_day ], unique: true
     add_check_constraint :attendances, "source in ('fingerprint','selfie','manual','pin')", name: "attendances_source_check"
     add_check_constraint :attendances, "status in ('present','absent','leave','holiday','half_day')", name: "attendances_status_check"
 
@@ -111,7 +111,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.boolean :paid, null: false, default: true
       t.timestamps
     end
-    add_index :holidays, [:business_id, :on_date, :branch_id], unique: true
+    add_index :holidays, [ :business_id, :on_date, :branch_id ], unique: true
 
     create_table :advances, id: :uuid do |t|
       t.references :business, type: :uuid, null: false, foreign_key: true
@@ -129,7 +129,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.datetime :paid_at
       t.timestamps
     end
-    add_index :advances, [:business_id, :number], unique: true
+    add_index :advances, [ :business_id, :number ], unique: true
     add_check_constraint :advances, "status in ('pending','approved','rejected','paid','repaid')", name: "advances_status_check"
 
     create_table :payroll_runs, id: :uuid do |t|
@@ -148,7 +148,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.datetime :paid_at
       t.timestamps
     end
-    add_index :payroll_runs, [:business_id, :branch_id, :month], unique: true
+    add_index :payroll_runs, [ :business_id, :branch_id, :month ], unique: true
     add_check_constraint :payroll_runs, "status in ('generated','approved','paid','cancelled')", name: "payroll_runs_status_check"
 
     create_table :payslips, id: :uuid do |t|
@@ -173,7 +173,7 @@ class CreatePayroll < ActiveRecord::Migration[8.0]
       t.uuid :expense_id
       t.timestamps
     end
-    add_index :payslips, [:payroll_run_id, :employee_id], unique: true
+    add_index :payslips, [ :payroll_run_id, :employee_id ], unique: true
 
     Servio::Rls.apply!(%w[departments employees salary_components employee_salary_components attendance_rules attendances leave_requests holidays advances payroll_runs payslips])
   end

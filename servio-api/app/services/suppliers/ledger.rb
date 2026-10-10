@@ -21,7 +21,7 @@ module Suppliers
       end
       SupplierPayment.where(supplier_id: supplier.id).includes(:payment_method, :purchase_order).each do |p|
         rows << row(at: p.created_at, type: "Payment", kind: p.direction == "paid" ? "payment" : "received", amount: p.direction == "paid" ? -p.amount_minor : p.amount_minor, number: p.label, ref: p.id,
-                    business_day: p.business_day, description: [p.payment_method&.code, p.reference].compact.join(" "), method: p.payment_method&.code, po_id: p.purchase_order_id, po_label: p.purchase_order&.label)
+                    business_day: p.business_day, description: [ p.payment_method&.code, p.reference ].compact.join(" "), method: p.payment_method&.code, po_id: p.purchase_order_id, po_label: p.purchase_order&.label)
       end
       SupplierAdjustment.where(supplier_id: supplier.id).each do |a|
         rows << row(at: a.created_at, type: "Adjustment", kind: "adjustment", amount: a.amount_minor, ref: a.id, business_day: a.business_day, description: a.reason)
@@ -58,13 +58,13 @@ module Suppliers
     end
 
     def aging(supplier, as_of: Date.current)
-      charges = GoodsReceipt.where(supplier_id: supplier.id, status: "posted").order(:received_on, :created_at).map { |g| [g.received_on, g.total_minor] }
-      charges.unshift([supplier.created_at.to_date, supplier.opening_balance_minor]) if supplier.opening_balance_minor.positive?
-      SupplierAdjustment.where(supplier_id: supplier.id).where("amount_minor > 0").order(:business_day).each { |a| charges << [a.business_day, a.amount_minor] }
+      charges = GoodsReceipt.where(supplier_id: supplier.id, status: "posted").order(:received_on, :created_at).map { |g| [ g.received_on, g.total_minor ] }
+      charges.unshift([ supplier.created_at.to_date, supplier.opening_balance_minor ]) if supplier.opening_balance_minor.positive?
+      SupplierAdjustment.where(supplier_id: supplier.id).where("amount_minor > 0").order(:business_day).each { |a| charges << [ a.business_day, a.amount_minor ] }
       charges.sort_by!(&:first)
       credits = SupplierPayment.where(supplier_id: supplier.id, direction: "paid").sum(:amount_minor) - SupplierPayment.where(supplier_id: supplier.id, direction: "received").sum(:amount_minor) +
                 PurchaseReturn.where(supplier_id: supplier.id, status: "posted", settlement: "credit_note").sum(:amount_minor) - SupplierAdjustment.where(supplier_id: supplier.id).where("amount_minor < 0").sum(:amount_minor)
-      remaining = [credits, 0].max
+      remaining = [ credits, 0 ].max
       buckets = { "current" => 0, "31_60" => 0, "61_90" => 0, "over_90" => 0 }
       charges.each do |day, amount|
         if remaining >= amount
@@ -115,11 +115,11 @@ module Suppliers
         { supplier: SupplierSerializers.supplier(s, counts: counts), purchased_minor: purchased[s.id] || 0, paid_minor: paid[s.id] || 0, outstanding_minor: s.balance_minor, po_count: pos[s.id] || 0, last_purchase_on: last[s.id] }
       end
       rows = case sort.to_s
-             when "paid" then rows.sort_by { |r| -r[:paid_minor] }
-             when "outstanding" then rows.sort_by { |r| -r[:outstanding_minor] }
-             when "name" then rows.sort_by { |r| r[:supplier][:name].downcase }
-             else rows.sort_by { |r| -r[:purchased_minor] }
-             end
+      when "paid" then rows.sort_by { |r| -r[:paid_minor] }
+      when "outstanding" then rows.sort_by { |r| -r[:outstanding_minor] }
+      when "name" then rows.sort_by { |r| r[:supplier][:name].downcase }
+      else rows.sort_by { |r| -r[:purchased_minor] }
+      end
       { sort: sort, from: from, to: to, rows: rows, totals: { purchased_minor: rows.sum { |r| r[:purchased_minor] }, paid_minor: rows.sum { |r| r[:paid_minor] }, outstanding_minor: rows.sum { |r| r[:outstanding_minor] } } }
     end
 

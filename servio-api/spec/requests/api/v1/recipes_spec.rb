@@ -32,7 +32,7 @@ RSpec.describe "Recipes and stock deduction", type: :request do
   it "costs a sub-recipe, produces it in a batch, and costs the product recipe with food cost percent" do
     s = seed_stock!
     api_post "/api/v1/recipes", { output_stock_item_id: s[:marinade].id, name: "Marinated chicken", yield_qty: 1, yield_unit_id: s[:kg].id,
-                                  lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 1 }, { stock_item_id: s[:oil].id, unit_id: s[:ml].id, quantity: 100, waste_percent: 10 }] }, headers: headers
+                                  lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 1 }, { stock_item_id: s[:oil].id, unit_id: s[:ml].id, quantity: 100, waste_percent: 10 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     sub = json
     expect(sub[:is_sub_recipe]).to be true
@@ -47,7 +47,7 @@ RSpec.describe "Recipes and stock deduction", type: :request do
     expect(within(biz) { s[:marinade].reload.avg_cost_minor_per_base }).to eq(BigDecimal("54.4"))
 
     api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Zinger Burger", yield_qty: 1,
-                                  lines: [{ stock_item_id: s[:marinade].id, unit_id: s[:g].id, quantity: 150 }, { stock_item_id: s[:buns].id, quantity: 1 }] }, headers: headers
+                                  lines: [ { stock_item_id: s[:marinade].id, unit_id: s[:g].id, quantity: 150 }, { stock_item_id: s[:buns].id, quantity: 1 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     expect(json[:cost_minor]).to eq(8_160 + 2_500)
     expect(json[:food_cost][:percent]).to eq(23.7) # 10,660 of 45,000
@@ -56,20 +56,20 @@ RSpec.describe "Recipes and stock deduction", type: :request do
     expect(json[:data].size).to eq(1)
     get "/api/v1/recipes/coverage", headers: headers
     expect(json[:with_recipe]).to eq(1)
-    expect(json[:missing].map { |p| p[:name] }).to eq(["Chai"])
+    expect(json[:missing].map { |p| p[:name] }).to eq([ "Chai" ])
   end
 
   def pay!(order)
-    api_post "/api/v1/orders/#{order[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: order[:total_minor], tendered_minor: order[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{order[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: order[:total_minor], tendered_minor: order[:total_minor] } ] }, headers: headers
     expect(response).to have_http_status(:ok).or have_http_status(:created)
   end
 
   it "deducts stock when an order is completed (not when placed), snapshots recipe cost, deducts packaging, and returns stock on a refund" do
     s = seed_stock!
-    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Zinger Burger", lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:g].id, quantity: 150 }, { stock_item_id: s[:buns].id, quantity: 1 }] }, headers: headers
+    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Zinger Burger", lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:g].id, quantity: 150 }, { stock_item_id: s[:buns].id, quantity: 1 } ] }, headers: headers
     api_post "/api/v1/packaging_rules", { order_type: "takeaway", stock_item_id: s[:box].id, quantity: 1 }, headers: headers
     expect(response).to have_http_status(:created)
-    api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:burger].id, quantity: 2 }, { product_id: m[:chai].id, quantity: 1 }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", lines: [ { product_id: m[:burger].id, quantity: 2 }, { product_id: m[:chai].id, quantity: 1 } ], place: true }, headers: headers
     expect(response).to have_http_status(:created)
     order_id = json[:id]
     placed = json
@@ -82,7 +82,7 @@ RSpec.describe "Recipes and stock deduction", type: :request do
     expect(json[:items].find { |i| i[:name] == "Zinger Burger" }[:recipe_cost_minor_snapshot]).to eq(2 * (7_500 + 2_500))
     get "/api/v1/stock/deduction_audits", headers: headers
     expect(json[:data].first[:status]).to eq("partial")
-    expect(json[:data].first[:detail][:missing]).to eq(["Chai"])
+    expect(json[:data].first[:detail][:missing]).to eq([ "Chai" ])
     get "/api/v1/stock/consumption", headers: headers
     expect(json[:rows].map { |r| r[:item][:sku] }).to contain_exactly("CHK", "BUN", "BOX")
     expect(json[:total_value_minor]).to eq(15_000 + 5_000 + 1_500)
@@ -98,12 +98,12 @@ RSpec.describe "Recipes and stock deduction", type: :request do
 
   it "records waste on a refund when returns are off, re-deducts an edit after completion, and skips when deduction is off" do
     s = seed_stock!
-    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Zinger Burger", lines: [{ stock_item_id: s[:buns].id, quantity: 1 }] }, headers: headers
-    api_post "/api/v1/orders", { order_type: "dine_in", lines: [{ product_id: m[:burger].id, quantity: 3 }], place: true }, headers: headers
+    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Zinger Burger", lines: [ { stock_item_id: s[:buns].id, quantity: 1 } ] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "dine_in", lines: [ { product_id: m[:burger].id, quantity: 3 } ], place: true }, headers: headers
     o = json
     expect(level(s[:buns])).to eq(100)
     burger_line = o[:items].first
-    api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: burger_line[:id], product_id: m[:burger].id, quantity: 3 }, { product_id: m[:burger].id, quantity: 1 }] }, headers: headers
+    api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: burger_line[:id], product_id: m[:burger].id, quantity: 3 }, { product_id: m[:burger].id, quantity: 1 } ] }, headers: headers
     expect(response).to have_http_status(:ok)
     expect(level(s[:buns])).to eq(100) # edits before completion move nothing
     api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", {}, headers: headers
@@ -118,7 +118,7 @@ RSpec.describe "Recipes and stock deduction", type: :request do
     expect(json[:data].size).to eq(1)
 
     api_patch "/api/v1/inventory_settings", { deduct_stock_on_sale: false }, headers: headers
-    api_post "/api/v1/orders", { order_type: "dine_in", lines: [{ product_id: m[:burger].id, quantity: 1 }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "dine_in", lines: [ { product_id: m[:burger].id, quantity: 1 } ], place: true }, headers: headers
     pay!(json)
     expect(level(s[:buns])).to eq(96)
     get "/api/v1/stock/deduction_audits?status=skipped", headers: headers
@@ -127,13 +127,13 @@ RSpec.describe "Recipes and stock deduction", type: :request do
 
   it "flags a probable wrong-unit recipe line and enforces one recipe per product" do
     s = seed_stock!
-    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Burger", lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:g].id, quantity: 150 }] }, headers: headers
-    api_post "/api/v1/recipes", { product_id: m[:chai].id, name: "Chai", lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 5 }] }, headers: headers
+    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Burger", lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:g].id, quantity: 150 } ] }, headers: headers
+    api_post "/api/v1/recipes", { product_id: m[:chai].id, name: "Chai", lines: [ { stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 5 } ] }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/recipes/flags", headers: headers
     expect(json[:data].size).to eq(1)
     expect(json[:data].first[:recipe]).to eq("Chai")
-    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Burger again", lines: [{ stock_item_id: s[:buns].id, quantity: 1 }] }, headers: headers
+    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Burger again", lines: [ { stock_item_id: s[:buns].id, quantity: 1 } ] }, headers: headers
     expect(response).to have_http_status(:unprocessable_content)
   end
 end

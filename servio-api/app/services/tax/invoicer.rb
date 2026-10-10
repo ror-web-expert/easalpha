@@ -42,7 +42,7 @@ module Tax
       invoice
     rescue Tax::Adapter::Error, SocketError, Timeout::Error, Errno::ECONNREFUSED => e
       attempts = invoice.attempts + 1
-      wait = [60 * (2**[attempts - 1, 6].min), 3600].min
+      wait = [ 60 * (2**[ attempts - 1, 6 ].min), 3600 ].min
       invoice.update!(status: "failed", attempts: attempts, last_error: e.message, next_attempt_at: wait.seconds.from_now)
       invoice
     end

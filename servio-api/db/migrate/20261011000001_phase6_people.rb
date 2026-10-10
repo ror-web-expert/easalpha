@@ -45,14 +45,14 @@ class Phase6People < ActiveRecord::Migration[8.0]
       t.string :note
       t.timestamps
     end
-    add_index :attendance_scans, [:business_id, :scanned_at]
+    add_index :attendance_scans, [ :business_id, :scanned_at ]
     add_index :attendance_scans, :employee_id
     add_check_constraint :attendance_scans, "result IN ('check_in','check_out','already_marked','rejected','unknown','manual_out','auto_close')", name: "attendance_scans_result_check"
 
     add_column :employees, :fingerprint_id, :string
     add_column :employees, :fingerprint_enrolled_at, :datetime
     add_column :employees, :fingerprint_revoked_at, :datetime
-    add_index :employees, [:business_id, :fingerprint_id], unique: true, where: "fingerprint_id IS NOT NULL"
+    add_index :employees, [ :business_id, :fingerprint_id ], unique: true, where: "fingerprint_id IS NOT NULL"
 
     change_table :riders do |t|
       t.boolean :temporary, null: false, default: false
@@ -79,7 +79,7 @@ class Phase6People < ActiveRecord::Migration[8.0]
       t.text :note
       t.timestamps
     end
-    add_index :day_end_settlements, [:business_id, :branch_id, :business_day]
+    add_index :day_end_settlements, [ :business_id, :branch_id, :business_day ]
 
     Servio::Rls.apply!(%w[attendance_scans day_end_settlements])
   end
@@ -88,7 +88,7 @@ class Phase6People < ActiveRecord::Migration[8.0]
     drop_table :day_end_settlements
     remove_column :payroll_runs, :settings_snapshot
     %i[temporary lifetime_kind lifetime_value expires_at orders_allowed orders_used permissions created_by_membership_id].each { |c| remove_column :riders, c }
-    remove_index :employees, [:business_id, :fingerprint_id]
+    remove_index :employees, [ :business_id, :fingerprint_id ]
     %i[fingerprint_id fingerprint_enrolled_at fingerprint_revoked_at].each { |c| remove_column :employees, c }
     drop_table :attendance_scans
     %i[overtime_minutes missing_punch auto_closed lost_day].each { |c| remove_column :attendances, c }

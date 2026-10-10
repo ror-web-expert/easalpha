@@ -13,7 +13,7 @@ class CreateAggregatorEvents < ActiveRecord::Migration[8.0]
       t.datetime :received_at, null: false
       t.timestamps
     end
-    add_index :aggregator_events, [:business_id, :provider, :external_id, :event], unique: true, name: "idx_aggregator_events_unique"
+    add_index :aggregator_events, [ :business_id, :provider, :external_id, :event ], unique: true, name: "idx_aggregator_events_unique"
     Servio::Rls.apply!(%w[aggregator_events])
   end
 

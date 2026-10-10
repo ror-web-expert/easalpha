@@ -27,7 +27,7 @@ module Receipts
     end
 
     def tax_lines(order)
-      order.active_items.group_by { |i| [i.tax_rate_snapshot.to_f, i.tax_inclusive_snapshot] }.map do |(rate, inclusive), items|
+      order.active_items.group_by { |i| [ i.tax_rate_snapshot.to_f, i.tax_inclusive_snapshot ] }.map do |(rate, inclusive), items|
         { rate: rate, inclusive: inclusive, taxable_minor: items.sum { |i| i.line_subtotal_minor - i.line_discount_minor }, tax_minor: items.sum(&:line_tax_minor) }
       end.reject { |t| t[:rate].zero? }
     end

@@ -8,6 +8,6 @@ class DocumentCounter < ApplicationRecord
       ON CONFLICT (business_id, kind) DO UPDATE SET last_number = document_counters.last_number + 1
       RETURNING last_number
     SQL
-    connection.exec_query(sql, "DocumentCounter.next", [business_id, kind]).first["last_number"]
+    connection.exec_query(sql, "DocumentCounter.next", [ business_id, kind ]).first["last_number"]
   end
 end

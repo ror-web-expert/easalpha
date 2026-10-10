@@ -15,7 +15,7 @@ module Api
           device: current_device && Serializers.device(current_device),
           businesses: Membership.all_for_user(current_user.id).map { |m| { id: m.business.id, name: m.business.name, slug: m.business.slug, role: m.role.name } },
           checklist: SetupChecklistItem.order(:sort_order).map { |i| Serializers.checklist_item(i) },
-          unread_notifications: Notification.unread.where(user_id: [nil, current_user.id]).count,
+          unread_notifications: Notification.unread.where(user_id: [ nil, current_user.id ]).count,
           pills: current_branch ? Reports::Dashboard.pills(current_branch) : nil
         }
       end

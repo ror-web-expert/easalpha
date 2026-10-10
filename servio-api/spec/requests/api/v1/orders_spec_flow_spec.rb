@@ -18,14 +18,14 @@ RSpec.describe "SPEC order flows", type: :request do
   end
 
   def pay(id, amount, h = headers)
-    api_post "/api/v1/orders/#{id}/payments", { payments: [{ method_code: "cash", amount_minor: amount, tendered_minor: amount }] }, headers: h
+    api_post "/api/v1/orders/#{id}/payments", { payments: [ { method_code: "cash", amount_minor: amount, tendered_minor: amount } ] }, headers: h
     expect(response).to have_http_status(:ok).or have_http_status(:created)
     json
   end
 
   describe "SPEC statuses and filters" do
     it "maps internal states to the SPEC names and filters by them, by payment method and by date range" do
-      o = create_order([{ product_id: m[:chai].id }])
+      o = create_order([ { product_id: m[:chai].id } ])
       expect(o[:spec_status]).to eq("pending")
       expect(o[:spec_payment_status]).to eq("unpaid")
       pay(o[:id], o[:total_minor])
@@ -47,7 +47,7 @@ RSpec.describe "SPEC order flows", type: :request do
     end
 
     it "accepts the Mobile App source and a Maintenance table status" do
-      create_order([{ product_id: m[:chai].id }], headers, { source: "app" })
+      create_order([ { product_id: m[:chai].id } ], headers, { source: "app" })
       expect(json[:source]).to eq("app")
       within(biz) { expect(DiningTable.create!(branch: branch, code: "T7", seats: 2, status: "maintenance").status).to eq("maintenance") }
     end
@@ -55,14 +55,14 @@ RSpec.describe "SPEC order flows", type: :request do
 
   describe "order story and reopen" do
     it "records punched, edited, completed, reopened with the item and money diff, and counts reopens" do
-      o = create_order([{ product_id: m[:chai].id, quantity: 1 }])
+      o = create_order([ { product_id: m[:chai].id, quantity: 1 } ])
       pay(o[:id], o[:total_minor])
       api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:reopen_count]).to eq(1)
       expect(json[:spec_status]).to eq("ready")
       line = json[:items].first
-      api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: line[:id], quantity: 1 }, { product_id: m[:burger].id, quantity: 1 }] }, headers: headers
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: line[:id], quantity: 1 }, { product_id: m[:burger].id, quantity: 1 } ] }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:edit_count]).to eq(1)
       story = json[:story]
@@ -82,7 +82,7 @@ RSpec.describe "SPEC order flows", type: :request do
     end
 
     it "needs REOPEN_ORDER, and DELETE_ORDER_ITEM or MODIFY_REOPEN_DECREASE_QTY to shrink a reopened order" do
-      o = create_order([{ product_id: m[:chai].id, quantity: 2 }, { product_id: m[:burger].id, quantity: 1 }])
+      o = create_order([ { product_id: m[:chai].id, quantity: 2 }, { product_id: m[:burger].id, quantity: 1 } ])
       pay(o[:id], o[:total_minor])
       api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: auth_headers(cashier)
       expect(response).to have_http_status(:forbidden)
@@ -91,38 +91,38 @@ RSpec.describe "SPEC order flows", type: :request do
       api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: ch
       expect(response).to have_http_status(:ok)
       chai, burger = json[:items]
-      api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: chai[:id], quantity: 1 }, { id: burger[:id], quantity: 1 }] }, headers: ch
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: chai[:id], quantity: 1 }, { id: burger[:id], quantity: 1 } ] }, headers: ch
       expect(response).to have_http_status(:forbidden)
       expect(json[:error][:message]).to include("MODIFY_REOPEN_DECREASE_QTY")
-      api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: chai[:id], quantity: 2 }] }, headers: ch
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: chai[:id], quantity: 2 } ] }, headers: ch
       expect(response).to have_http_status(:forbidden)
       expect(json[:error][:message]).to include("DELETE_ORDER_ITEM")
       within(biz) { cashier.set_permissions!(%w[SALES_WALKIN ORDERS REOPEN_ORDER DELETE_ORDER_ITEM MODIFY_REOPEN_DECREASE_QTY]) }
       ch = auth_headers(cashier.reload)
-      api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: chai[:id], quantity: 1 }] }, headers: ch
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: chai[:id], quantity: 1 } ] }, headers: ch
       expect(response).to have_http_status(:ok)
       expect(json[:story][:events].last[:diff][:removed].first[:name]).to eq("Zinger Burger")
       expect(json[:story][:events].last[:diff][:changed].first).to include(from: "2.0", to: "1.0")
     end
 
     it "demands the order-update PIN when the restriction is ticked" do
-      o = create_order([{ product_id: m[:chai].id }])
+      o = create_order([ { product_id: m[:chai].id } ])
       pay(o[:id], o[:total_minor])
       within(biz) { cashier.set_permissions!(%w[SALES_WALKIN ORDERS REOPEN_ORDER DELETE_ORDER_ITEM MODIFY_REOPEN_DECREASE_QTY REQUIRE_PIN_FOR_ORDER_UPDATE]) }
       ch = auth_headers(cashier.reload)
       api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: ch
       line = json[:items].first
-      api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: line[:id], quantity: 2 }] }, headers: ch
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: line[:id], quantity: 2 } ] }, headers: ch
       expect(response).to have_http_status(:forbidden)
       expect(json[:error][:code]).to eq("pin.required")
-      api_patch "/api/v1/orders/#{o[:id]}", { lines: [{ id: line[:id], quantity: 2 }], pin: "1111" }, headers: ch
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: line[:id], quantity: 2 } ], pin: "1111" }, headers: ch
       expect(response).to have_http_status(:ok)
     end
   end
 
   describe "complete, place and complete, direct unpaid" do
     it "completes a paid order, refuses an unpaid one, and allows unpaid only with the setting and the permission" do
-      o = create_order([{ product_id: m[:chai].id }])
+      o = create_order([ { product_id: m[:chai].id } ])
       api_post "/api/v1/orders/#{o[:id]}/complete", {}, headers: headers
       expect(response).to have_http_status(:conflict)
       api_patch "/api/v1/settings", { values: { "pos.order_behavior.direct_unpaid_orders" => true } }, headers: headers
@@ -133,11 +133,11 @@ RSpec.describe "SPEC order flows", type: :request do
       expect(json[:unpaid_direct]).to be true
       within(biz) { cashier.set_permissions!(%w[SALES_WALKIN ORDERS COMPLETE_ORDER PLACE_AND_COMPLETE_ORDER]) }
       ch = auth_headers(cashier.reload)
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], complete: true }, headers: ch
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], complete: true }, headers: ch
       expect(response).to have_http_status(:conflict)
       within(biz) { cashier.set_permissions!(%w[SALES_WALKIN ORDERS COMPLETE_ORDER PLACE_AND_COMPLETE_ORDER PLACE_UNPAID_DIRECT]) }
       ch = auth_headers(cashier.reload)
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], complete: true }, headers: ch
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], complete: true }, headers: ch
       expect(response).to have_http_status(:created)
       expect(json[:spec_status]).to eq("completed")
     end
@@ -145,11 +145,11 @@ RSpec.describe "SPEC order flows", type: :request do
 
   describe "pending orders and bulk actions" do
     it "lists open orders across days with tiles, marks all paid ones completed, and syncs complimentary orders" do
-      a = create_order([{ product_id: m[:chai].id }])
-      b = create_order([{ product_id: m[:chai].id }])
+      a = create_order([ { product_id: m[:chai].id } ])
+      b = create_order([ { product_id: m[:chai].id } ])
       pay(b[:id], b[:total_minor])
       within(biz) { Order.find(b[:id]).update_columns(status: "served") } # paid but never completed
-      old = create_order([{ product_id: m[:chai].id }])
+      old = create_order([ { product_id: m[:chai].id } ])
       within(biz) { Order.find(old[:id]).update_columns(business_day: Date.current - 3) }
       get "/api/v1/orders/pending", headers: headers
       expect(json[:tiles]).to include(today: 2, previous_days: 1, all_time: 3)
@@ -158,7 +158,7 @@ RSpec.describe "SPEC order flows", type: :request do
       expect(json).to include(completed: 1, skipped_unpaid: 1)
       get "/api/v1/orders/#{a[:id]}", headers: headers
       expect(json[:spec_status]).to eq("pending")
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true, is_staff_meal: true, staff_meal_reason: "lunch" }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true, is_staff_meal: true, staff_meal_reason: "lunch" }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json[:spec_payment_status]).to eq("complimentary")
       api_post "/api/v1/orders/sync_complimentary", {}, headers: headers
@@ -168,7 +168,7 @@ RSpec.describe "SPEC order flows", type: :request do
 
   describe "cost analysis and customer required" do
     it "returns revenue, cost and margin for one order" do
-      o = create_order([{ product_id: m[:chai].id }])
+      o = create_order([ { product_id: m[:chai].id } ])
       get "/api/v1/orders/#{o[:id]}/cost_analysis", headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:revenue_minor]).to eq(o[:total_minor] - o[:tax_minor])
@@ -179,18 +179,18 @@ RSpec.describe "SPEC order flows", type: :request do
 
     it "refuses to place a delivery order without a customer when the setting says so" do
       api_patch "/api/v1/settings", { values: { "pos.customer_required.walk_in" => true } }, headers: headers
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
       expect(response).to have_http_status(:unprocessable_content)
       expect(json[:error][:code]).to eq("customer.required")
       api_patch "/api/v1/settings", { values: { "pos.customer_required.walk_in" => false } }, headers: headers
-      api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: headers
+      api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
       expect(response).to have_http_status(:created)
     end
   end
 
   describe "receipt payments and table maintenance" do
     it "names who collected each payment and lets a table be put in maintenance" do
-      o = create_order([{ product_id: m[:chai].id }])
+      o = create_order([ { product_id: m[:chai].id } ])
       pay(o[:id], o[:total_minor])
       get "/api/v1/orders/#{o[:id]}/receipt", headers: headers
       expect(json[:payments].first).to include(method: "cash", received_by: owner.user.name)

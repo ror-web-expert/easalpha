@@ -8,10 +8,10 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
   let(:cashier) { add_member!(biz, "cashier", pin: "1111") }
   let(:manager) { add_member!(biz, "manager", pin: "9999") }
 
-  def sell_cash(as:, amount: 9_280, tendered: nil, lines: [{ product_id: m[:chai].id }])
+  def sell_cash(as:, amount: 9_280, tendered: nil, lines: [ { product_id: m[:chai].id } ])
     api_post "/api/v1/orders", { order_type: "walk_in", lines: lines, place: true }, headers: as
     oid = json[:id]
-    api_post "/api/v1/orders/#{oid}/payments", { payments: [{ method_code: "cash", amount_minor: amount, tendered_minor: tendered || amount }] }, headers: as
+    api_post "/api/v1/orders/#{oid}/payments", { payments: [ { method_code: "cash", amount_minor: amount, tendered_minor: tendered || amount } ] }, headers: as
     expect(response).to have_http_status(:created)
     oid
   end
@@ -66,13 +66,13 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
   it "refuses to close with open orders unless forced by a manager, and alerts the owner when short" do
     api_post "/api/v1/shifts", { opening_cash_minor: 0 }, headers: auth_headers(cashier)
     shift = json
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: auth_headers(cashier)
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: auth_headers(cashier)
     api_post "/api/v1/shifts/#{shift[:id]}/close", { counted_cash_minor: 0 }, headers: auth_headers(cashier)
     expect(response).to have_http_status(:conflict)
     expect(json[:error][:code]).to eq("shift.open_orders")
     within(biz) { biz.update!(settings: { "cash_short_alert_minor" => 100 }) }
     sell_cash(as: auth_headers(cashier), amount: 9_280)
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }], place: true }, headers: auth_headers(cashier)
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: auth_headers(cashier)
     api_post "/api/v1/shifts/#{shift[:id]}/close", { counted_cash_minor: 0, force: true }, headers: headers
     expect(response).to have_http_status(:ok)
     expect(json[:status]).to eq("force_closed")
@@ -108,7 +108,7 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
     expect(response).to have_http_status(:ok)
     expect(json[:locked]).to be true
     expect(json[:summary][:net_sales_minor]).to eq(9_280)
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ] }, headers: headers
     expect(response).to have_http_status(:conflict)
     expect(json[:error][:code]).to eq("day.locked")
     api_post "/api/v1/shifts", { opening_cash_minor: 0 }, headers: auth_headers(cashier)
@@ -117,7 +117,7 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
     expect(response).to have_http_status(:bad_request)
     api_post "/api/v1/day_close/reopen", { business_day: day, reason: "Forgot an order" }, headers: headers
     expect(json[:locked]).to be false
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:chai].id }] }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ] }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/audit_logs?table_name=day_closes", headers: headers
     # The two rows the controller writes plus the create the Audited concern writes for the day_closes record.

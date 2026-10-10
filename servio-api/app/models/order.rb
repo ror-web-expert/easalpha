@@ -40,7 +40,7 @@ class Order < ApplicationRecord
   def paid? = payment_status == "paid"
   def editable? = status.in?(%w[draft held placed preparing ready served])
   def active_items = items.reject { |i| i.status == "cancelled" }
-  def due_minor = [total_minor - paid_minor, 0].max
+  def due_minor = [ total_minor - paid_minor, 0 ].max
   def label = serial ? "##{serial}" : (till_serial || "draft")
   def completed? = status.in?(%w[paid closed])
   def reopened? = reopened_at.present?

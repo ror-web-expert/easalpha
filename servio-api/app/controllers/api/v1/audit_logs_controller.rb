@@ -6,7 +6,7 @@ module Api
 
       def index
         rows, cursor = Paginator.call(filtered, cursor: params[:cursor], limit: params[:limit], order_column: :occurred_at)
-        names = User.where(id: rows.flat_map { |a| [a.user_id, a.approved_by_user_id] }.compact.uniq).pluck(:id, :name).to_h
+        names = User.where(id: rows.flat_map { |a| [ a.user_id, a.approved_by_user_id ] }.compact.uniq).pluck(:id, :name).to_h
         render_page(rows, cursor) { |a| Serializers.audit_log(a, names: names) }
       end
 

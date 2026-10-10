@@ -8,7 +8,7 @@ module Reports
       branch = schedule.branch || Branch.active.order(is_main: :desc).first
       business = branch.business
       range = from == to ? from.to_s : "#{from} to #{to}"
-      lines = ["#{business.name}, #{branch.name}: #{schedule.name} (#{range})"]
+      lines = [ "#{business.name}, #{branch.name}: #{schedule.name} (#{range})" ]
       case schedule.kind
       when "daily_summary", "sales", "grand"
         o = Reports::Sales.new(branch: branch, from: from, to: to).overview

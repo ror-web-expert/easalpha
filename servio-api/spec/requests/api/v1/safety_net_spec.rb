@@ -15,7 +15,7 @@ RSpec.describe "Safety net, deduction health and balance rebuild", type: :reques
       kitchen = StockSection.default_for(branch)
       pcs = Unit.find_by!(code: "pcs")
       buns = StockItem.create!(name: "Bun", sku: "BUN", base_unit: pcs)
-      doc = Stock::Posting.create!({ kind: "receive", to_section_id: kitchen.id }, lines: [{ stock_item_id: buns.id, quantity: 100, unit_cost_minor: 2_500 }], actor: owner, branch: branch)
+      doc = Stock::Posting.create!({ kind: "receive", to_section_id: kitchen.id }, lines: [ { stock_item_id: buns.id, quantity: 100, unit_cost_minor: 2_500 } ], actor: owner, branch: branch)
       Stock::Posting.post!(doc, actor: owner)
       buns
     end
@@ -23,15 +23,15 @@ RSpec.describe "Safety net, deduction health and balance rebuild", type: :reques
   def level(item) = within(biz) { StockLevel.where(stock_item_id: item.id).sum(:quantity) }
 
   def paid_order
-    api_post "/api/v1/orders", { order_type: "walk_in", lines: [{ product_id: m[:burger].id, quantity: 2 }], place: true }, headers: headers
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:burger].id, quantity: 2 } ], place: true }, headers: headers
     o = json
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: o[:total_minor], tendered_minor: o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor], tendered_minor: o[:total_minor] } ] }, headers: headers
     o
   end
 
   it "re-deducts a completed order whose deduction was lost, dated to the sale day, and never twice" do
     buns = seed!
-    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Burger", lines: [{ stock_item_id: buns.id, quantity: 1 }] }, headers: headers
+    api_post "/api/v1/recipes", { product_id: m[:burger].id, name: "Burger", lines: [ { stock_item_id: buns.id, quantity: 1 } ] }, headers: headers
     # A lost deduction: the order completes while deduction is off, then the setting comes back on.
     api_patch "/api/v1/inventory_settings", { deduct_stock_on_sale: false }, headers: headers
     o = paid_order
@@ -45,7 +45,7 @@ RSpec.describe "Safety net, deduction health and balance rebuild", type: :reques
     expect(response).to have_http_status(:ok)
     expect(json).to include(checked: 1, deducted: 1, errors: 0)
     expect(level(buns)).to eq(98)
-    within(biz) { expect(StockLedgerEntry.where(ref_table: "orders", ref_id: o[:id], kind: "sale").pluck(:business_day).uniq).to eq([Date.current - 2]) }
+    within(biz) { expect(StockLedgerEntry.where(ref_table: "orders", ref_id: o[:id], kind: "sale").pluck(:business_day).uniq).to eq([ Date.current - 2 ]) }
     api_post "/api/v1/stock/safety_net/run", {}, headers: headers
     expect(json).to include(checked: 0, deducted: 0)
     api_post "/api/v1/stock/deduction_health/#{o[:id]}/retry", {}, headers: headers

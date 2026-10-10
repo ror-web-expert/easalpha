@@ -50,7 +50,6 @@ module Api
       rescue Api::Errors::ApiError => e
         render json: { error: { code: e.code, message: e.message } }, status: e.status
       end
-
     end
   end
 end

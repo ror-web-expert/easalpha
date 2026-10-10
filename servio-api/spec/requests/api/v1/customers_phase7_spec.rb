@@ -14,12 +14,12 @@ RSpec.describe "Customers phase 7", type: :request do
   before { within(biz) { PaymentMethod.seed_defaults!(biz) unless PaymentMethod.exists? } }
 
   def place!(product, customer_id: nil, extra: {})
-    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: customer_id, lines: [{ product_id: product.id, quantity: 1 }], place: true }.merge(extra), headers: headers
+    api_post "/api/v1/orders", { order_type: "takeaway", customer_id: customer_id, lines: [ { product_id: product.id, quantity: 1 } ], place: true }.merge(extra), headers: headers
     json
   end
 
   def pay!(o, method: "cash", amount: nil)
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [{ method_code: method, amount_minor: amount || o[:total_minor], tendered_minor: amount || o[:total_minor] }] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: method, amount_minor: amount || o[:total_minor], tendered_minor: amount || o[:total_minor] } ] }, headers: headers
     json
   end
 
@@ -29,7 +29,7 @@ RSpec.describe "Customers phase 7", type: :request do
       cust = within(biz) { Customer.create!(name: "Ali", phone: "+923001234567", credit_limit_minor: 10_000_000) }
       o1 = place!(m[:burger]); pay!(o1)
       o2 = place!(m[:burger]); pay!(o2, method: "card") if false
-      api_post "/api/v1/orders/#{o2[:id]}/payments", { payments: [{ method_code: "card", amount_minor: o2[:total_minor], reference: "T1" }] }, headers: headers
+      api_post "/api/v1/orders/#{o2[:id]}/payments", { payments: [ { method_code: "card", amount_minor: o2[:total_minor], reference: "T1" } ] }, headers: headers
       o3 = place!(m[:burger], customer_id: cust.id); pay!(o3, method: "khata")
       api_post "/api/v1/customers/#{cust.id}/payments", { amount_minor: 10_000, method_code: "cash" }, headers: headers
       expect(response).to have_http_status(:created)
@@ -83,7 +83,7 @@ RSpec.describe "Customers phase 7", type: :request do
       expect(reg[:amount_minor]).to eq((o[:subtotal_minor] * 0.20).round)
       o_new = place!(m[:burger], customer_id: never.id)
       expect(o_new[:discounts].none? { |d| d[:kind] == "regular" }).to be true # never ordered: nothing
-      api_patch "/api/v1/settings", { values: { "marketing.regular_discounts.blocked_customer_ids" => [cust.id] } }, headers: headers
+      api_patch "/api/v1/settings", { values: { "marketing.regular_discounts.blocked_customer_ids" => [ cust.id ] } }, headers: headers
       o_blocked = place!(m[:burger], customer_id: cust.id)
       expect(o_blocked[:discounts].none? { |d| d[:kind] == "regular" }).to be true
       api_patch "/api/v1/settings", { values: { "marketing.regular_discounts.blocked_customer_ids" => [] } }, headers: headers
@@ -93,7 +93,7 @@ RSpec.describe "Customers phase 7", type: :request do
       api_post "/api/v1/voucher_batches", { name: "Eid gift", kind: "personal", value_kind: "fixed", value: 200, min_spend_minor: 10_000, expires_on: (Date.current + 30).to_s }, headers: headers
       expect(response).to have_http_status(:created)
       batch = json
-      api_post "/api/v1/voucher_batches/#{batch[:id]}/issue", { customer_ids: [cust.id, never.id], send: true }, headers: headers
+      api_post "/api/v1/voucher_batches/#{batch[:id]}/issue", { customer_ids: [ cust.id, never.id ], send: true }, headers: headers
       expect(response).to have_http_status(:created)
       expect(json[:issued]).to eq(2)
       code = json[:data].find { |v| v[:customer_id] == cust.id }[:code]

@@ -9,9 +9,9 @@ module Api
         raise Api::Errors::Conflict.new("menu.exists", "This business already has products") if Product.where(archived_at: nil).exists?
         menu = Menu.find_or_create_by!(name: "Main menu") { |m| m.is_default = true }
         tax = TaxRate.find_or_create_by!(name: "Sales tax 16%") { |t| t.rate = 16; t.authority = "pra"; t.is_default = true }
-        sample = { "Burgers" => [["Zinger Burger", 450], ["Chicken Patty Burger", 250], ["Beef Burger", 550]], "BBQ" => [["Chicken Tikka", 480], ["Malai Boti (6 pcs)", 650], ["Seekh Kabab (4 pcs)", 400]],
-                   "Karahi" => [["Chicken Karahi (half)", 1200], ["Chicken Karahi (full)", 2300]], "Rice" => [["Chicken Biryani", 350], ["Plain Rice", 150]],
-                   "Drinks" => [["Chai", 80], ["Mineral Water 500ml", 60], ["Cold Drink 345ml", 100]] }
+        sample = { "Burgers" => [ [ "Zinger Burger", 450 ], [ "Chicken Patty Burger", 250 ], [ "Beef Burger", 550 ] ], "BBQ" => [ [ "Chicken Tikka", 480 ], [ "Malai Boti (6 pcs)", 650 ], [ "Seekh Kabab (4 pcs)", 400 ] ],
+                   "Karahi" => [ [ "Chicken Karahi (half)", 1200 ], [ "Chicken Karahi (full)", 2300 ] ], "Rice" => [ [ "Chicken Biryani", 350 ], [ "Plain Rice", 150 ] ],
+                   "Drinks" => [ [ "Chai", 80 ], [ "Mineral Water 500ml", 60 ], [ "Cold Drink 345ml", 100 ] ] }
         sample.each do |cat_name, items|
           cat = Category.create!(menu: menu, name: cat_name)
           items.each { |name, price| Product.create!(category: cat, name: name, base_price_minor: price * 100, tax_rate: tax) }

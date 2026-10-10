@@ -47,13 +47,13 @@ module Loyalty
   def redeem_option!(order, option:, actor:)
     raise Api::Errors::Conflict.new("loyalty.option_inactive", "#{option.name} is switched off") unless option.active && option.archived_at.nil?
     value_minor = case option.kind
-                  when "fixed" then (option.value * 100).round
-                  when "percent" then (order.subtotal_minor * option.value / 100).round
-                  when "free_item"
+    when "fixed" then (option.value * 100).round
+    when "percent" then (order.subtotal_minor * option.value / 100).round
+    when "free_item"
                     line = order.items.reject(&:cancelled?).find { |i| i.product_id == option.product_id }
                     raise Api::Errors::Conflict.new("loyalty.item_missing", "Add #{option.product&.name} to the order first") unless line
                     line.unit_price_minor
-                  end
+    end
     customer = order.customer_id && Customer.find_by(id: order.customer_id)
     raise Api::Errors::Conflict.new("loyalty.no_customer", "Attach a customer to redeem points") if customer.nil? || customer.is_walk_in
     raise Api::Errors::Conflict.new("loyalty.insufficient", "#{customer.name} has #{customer.loyalty_points} points; #{option.name} needs #{option.points}") if customer.loyalty_points < option.points

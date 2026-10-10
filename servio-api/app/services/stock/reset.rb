@@ -5,7 +5,7 @@ module Stock
     module_function
 
     def call!(branch:, actor:, section: nil, reason: "Stock reset")
-      sections = section ? [section] : StockSection.active.where(branch_id: branch.id).to_a
+      sections = section ? [ section ] : StockSection.active.where(branch_id: branch.id).to_a
       docs = sections.filter_map do |s|
         levels = StockLevel.where(stock_section_id: s.id).where.not(quantity: 0).includes(stock_item: :base_unit)
         next if levels.empty?
