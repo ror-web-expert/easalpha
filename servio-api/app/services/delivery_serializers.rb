@@ -15,11 +15,20 @@ module DeliverySerializers
 
   def zone(z) = { id: z.id, branch_id: z.branch_id, name: z.name, areas: z.areas, polygon: z.polygon, charge_minor: z.charge_minor, min_order_minor: z.min_order_minor, eta_minutes: z.eta_minutes, active: z.active, archived_at: z.archived_at }
 
-  def rider(r)
+  # counts: { rider_id => { assigned:, completed: } } preloaded by the list endpoints (see rider_counts)
+  def rider_counts(ids)
+    assigned = Delivery.where(rider_id: ids).where.not(status: "unassigned").group(:rider_id).count
+    completed = Delivery.where(rider_id: ids, status: "delivered").group(:rider_id).count
+    open = Delivery.where(rider_id: ids, status: %w[assigned picked_up on_the_way arrived]).group(:rider_id).count
+    ids.index_with { |id| { assigned: assigned[id] || 0, completed: completed[id] || 0, open: open[id] || 0 } }
+  end
+
+  def rider(r, counts: nil)
+    c = counts&.dig(r.id)
     { id: r.id, branch_id: r.branch_id, membership_id: r.membership_id, name: r.name, phone: r.phone, vehicle: r.vehicle, vehicle_no: r.vehicle_no, address: r.address, charge_per_delivery_minor: r.charge_per_delivery_minor,
       float_minor: r.float_minor, status: r.status, last_lat: r.last_lat&.to_f, last_lng: r.last_lng&.to_f, last_seen_at: r.last_seen_at, active: r.active, archived_at: r.archived_at,
       temporary: r.temporary, lifetime_kind: r.lifetime_kind, lifetime_value: r.lifetime_value, lifetime_label: r.lifetime_label, expires_at: r.expires_at, orders_allowed: r.orders_allowed, orders_used: r.orders_used,
-      expired: r.expired?, permissions: r.permissions, assigned_count: r.assigned_count, completed_count: r.completed_count }
+      expired: r.expired?, permissions: r.permissions, assigned_count: c ? c[:assigned] : r.assigned_count, completed_count: c ? c[:completed] : r.completed_count }
   end
 
   def delivery(d, full: false)

@@ -17,7 +17,9 @@ module Api
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(temporary: params[:temporary] == "true") if params[:temporary].present?
         scope = scope.where(temporary: false) unless current_membership.can?("DUMMY_RIDER_VIEW") || current_membership.can?("RIDERS") || current_membership.can?("riders.manage")
-        render json: { data: scope.map { |r| DeliverySerializers.rider(r).merge(open_deliveries: Delivery.where(rider_id: r.id, status: %w[assigned picked_up on_the_way arrived]).count) } }
+        rows = scope.to_a
+        counts = DeliverySerializers.rider_counts(rows.map(&:id))
+        render json: { data: rows.map { |r| DeliverySerializers.rider(r, counts: counts).merge(open_deliveries: counts[r.id][:open]) } }
       end
 
       def show = render(json: DeliverySerializers.rider(Rider.find(params[:id])))

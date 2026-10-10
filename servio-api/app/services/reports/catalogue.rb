@@ -28,7 +28,7 @@ module Reports
 
     # Sales: the detail table, one row per order.
     def sales_detail(branch:, from:, to:, cursor: nil, limit: nil, order_type: nil, source: nil)
-      scope = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded]).includes(:customer).order(placed_at: :desc, created_at: :desc)
+      scope = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded]).includes(:customer, :items).order(placed_at: :desc, created_at: :desc)
       scope = scope.where(order_type: order_type) if order_type.present?
       scope = scope.where(source: source) if source.present?
       rows, next_cursor = Paginator.call(scope, cursor: cursor, limit: limit || 100, order_column: :created_at)

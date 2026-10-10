@@ -81,7 +81,9 @@ module Suppliers
     end
 
     def aging_report(as_of: Date.current)
-      rows = Supplier.active.where("balance_minor > 0").order(balance_minor: :desc).map { |s| { supplier: SupplierSerializers.supplier(s), aging: aging(s, as_of: as_of) } }
+      due = Supplier.active.where("balance_minor > 0").order(balance_minor: :desc).to_a
+      counts = SupplierSerializers.supplier_counts(due.map(&:id))
+      rows = due.map { |s| { supplier: SupplierSerializers.supplier(s, counts: counts), aging: aging(s, as_of: as_of) } }
       totals = %w[current 31_60 61_90 over_90 total].index_with { |k| rows.sum { |r| r[:aging][k] } }
       { as_of: as_of, rows: rows, totals: totals, suppliers_with_due: rows.size }
     end
