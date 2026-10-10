@@ -1,12 +1,13 @@
 // SPEC: PDF export on purchase orders, expenses and every report. Built in the browser from the same rows the screen
 // shows; the API serves CSV. One helper so every screen exports the same way.
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+// jspdf and jspdf-autotable (about 160 kB together) are imported inside exportTablePdf, so a page only downloads them
+// the first time someone clicks the PDF button rather than on first load.
 
 export type PdfColumn = { header: string; key: string; align?: "left" | "right" | "center" };
 export type PdfOptions = { title: string; subtitle?: string; columns: PdfColumn[]; rows: Record<string, unknown>[]; footer?: string[]; filename?: string; landscape?: boolean };
 
-export function exportTablePdf({ title, subtitle, columns, rows, footer, filename, landscape }: PdfOptions) {
+export async function exportTablePdf({ title, subtitle, columns, rows, footer, filename, landscape }: PdfOptions): Promise<void> {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
   const doc = new jsPDF({ orientation: landscape ? "landscape" : "portrait", unit: "pt", format: "a4" });
   doc.setFontSize(14);
   doc.text(title, 40, 40);
