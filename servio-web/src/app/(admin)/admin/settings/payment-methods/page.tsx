@@ -3,11 +3,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CreditCard, Plus, Pencil } from "lucide-react";
 import { api } from "@/lib/api";
-import type { PaymentAccount, PaymentMethod } from "@/lib/types";
+import type { PaymentAccount, PaymentMethod, PaymentMethodCatalogueEntry } from "@/lib/types";
 import { titleCase } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/page";
-import { useList, useSave } from "@/components/admin/crud";
-import { Badge, Button, Checkbox, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { useAction, useList, useSave } from "@/components/admin/crud";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 interface Form { id?: string; code: string; name: string; kind: string; payment_account_id: string; active: boolean; works_offline: boolean; needs_reference: boolean; sort_order: number }
 const blank: Form = { code: "", name: "", kind: "wallet", payment_account_id: "", active: true, works_offline: false, needs_reference: true, sort_order: 10 };
@@ -17,9 +17,13 @@ export default function PaymentMethodsPage() {
   const accounts = useQuery({ queryKey: ["payment_accounts"], queryFn: () => api<{ data: PaymentAccount[] }>("/payment_accounts"), select: (r) => r.data });
   const save = useSave<Form>(["payment_methods"], (f) => (f.id ? `/payment_methods/${f.id}` : "/payment_methods"), { onSuccess: () => setForm(null) });
   const [form, setForm] = useState<Form | null>(null);
+  // SPEC: a catalogue of Pakistani wallets and banks; adding one creates the matching finance account and syncs to every active cashier.
+  const catalogue = useQuery({ queryKey: ["payment_methods_catalogue"], queryFn: () => api<{ data: PaymentMethodCatalogueEntry[] }>("/payment_methods/catalogue"), select: (r) => r.data });
+  const addFromCatalogue = useAction<string>(["payment_methods", "payment_methods_catalogue", "payment_accounts", "gl_accounts"], (catalogue_code) => api("/payment_methods", { method: "POST", body: { catalogue_code } }), "Method and finance account added");
+  const [adding, setAdding] = useState<string | null>(null);
   return (
     <>
-      <PageHeader icon={CreditCard} title="Payment methods" description="Cash, cards, EasyPaisa, JazzCash, bank transfer, khata. Wallets usually need a reference." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New method</Button>} />
+      <PageHeader icon={CreditCard} title="Payment methods" description="Cash, EasyPaisa, JazzCash and Bank ship with every account. Every method is also a finance account with a running balance; a method with transaction history cannot be deleted." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New method</Button>} />
       {list.isLoading ? <Loading /> : (
         <Table>
           <THead><tr><TH>Method</TH><TH>Kind</TH><TH>Account</TH><TH>Offline</TH><TH>Reference</TH><TH>Status</TH><TH right></TH></tr></THead>
@@ -38,6 +42,20 @@ export default function PaymentMethodsPage() {
           </TBody>
         </Table>
       )}
+      <Card className="mt-6">
+        <CardHeader>
+          <div><CardTitle>Add from catalogue</CardTitle><p className="mt-0.5 text-sm text-fg-secondary">Pakistani wallets and banks. Adding one creates the matching finance account in the chart and syncs the method to every active cashier on next connection.</p></div>
+        </CardHeader>
+        <CardBody className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {catalogue.isLoading ? <Loading /> : (catalogue.data ?? []).map((c) => (
+            <div key={c.code} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+              <span><span className="font-medium">{c.name}</span><span className="block text-xs text-fg-muted">{titleCase(c.kind)} · <span className="font-mono">{c.code}</span></span></span>
+              {c.added ? <Button variant="secondary" size="sm" disabled>Added</Button> : <Button variant="soft" size="sm" loading={addFromCatalogue.isPending && adding === c.code} onClick={() => { setAdding(c.code); addFromCatalogue.mutate(c.code, { onSettled: () => setAdding(null) }); }}><Plus className="h-4 w-4" /> Add</Button>}
+            </div>
+          ))}
+          {!catalogue.isLoading && !catalogue.data?.length ? <p className="text-sm text-fg-muted">Catalogue unavailable.</p> : null}
+        </CardBody>
+      </Card>
       <Dialog open={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit method" : "New method"} size="sm"
         footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!form?.name || !form?.code} onClick={() => form && save.mutate({ ...form, payment_account_id: form.payment_account_id || (null as unknown as string) })}>Save</Button></>}>
         {form ? (

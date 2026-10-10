@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { CartLine } from "@/lib/pricing";
-import type { Address, OrderType } from "@/lib/types";
+import type { Address, OrderType, TaxChoice } from "@/lib/types";
 import { uuid } from "@/lib/utils";
 
 export interface CartCustomer { id: string; name: string; phone: string | null; balance_minor?: number; credit_limit_minor?: number | null; addresses?: Address[] }
@@ -39,6 +39,13 @@ export interface Cart {
   paid_minor?: number;
   /** "cash:4500,khata:2000" from the server; a reopened order pre-selects its original method from it. */
   payment_method_summary?: string | null;
+  /** SPEC Charges: the cashier's per-order service / delivery charge. Undefined means the settings default applies; zero removes it. */
+  service_charge_percent?: number | null;
+  service_charge_fixed_minor?: number | null;
+  delivery_charge_percent?: number | null;
+  /** SPEC Tax: the No Tax / linked-rate choice made on the payment page (server-side; never queued offline). */
+  tax_choice?: TaxChoice | null;
+  tax_rate_id?: string | null;
 }
 
 const fresh = (orderType: OrderType = "walk_in"): Cart => ({

@@ -8,7 +8,7 @@ import { useDeviceStore, usePosCan } from "@/store/device";
 import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt } from "@/lib/types";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid } from "@/lib/pos-actions";
+import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice } from "@/lib/pos-actions";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
@@ -19,7 +19,7 @@ import { ItemGrid } from "@/components/pos/item-grid";
 import { QuickAddBar } from "@/components/pos/quick-add-bar";
 import { ModifierSheet } from "@/components/pos/modifier-sheet";
 import { OrderPanel, OrderTypeSwitch } from "@/components/pos/order-panel";
-import { PaymentDialog } from "@/components/pos/payment-dialog";
+import { PaymentDialog, type TaxChoiceInput } from "@/components/pos/payment-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { CustomerDialog, OpenItemDialog, PriceOverrideDialog, StaffMealDialog, TablePicker } from "@/components/pos/dialogs";
 import { Button, Dialog, EmptyState, Field, PinDialog, Textarea } from "@/components/ui";
@@ -119,7 +119,8 @@ function SellScreen() {
   const onSheetAdd = (line: Omit<CartLine, "key">) => {
     if (editing) { updateLine(editing.key, line); setEditing(null); } else addLine(line);
   };
-  const changeType = (t: typeof cart.order_type) => patch({ order_type: t, lines: repriceLines(cart.lines, t, catalog, catalog?.branch?.id), table_id: t === "dine_in" ? cart.table_id : null, table_code: t === "dine_in" ? cart.table_code : null });
+  // A new type takes the charge defaults of that type again (SPEC Charges: the service charge is per order type).
+  const changeType = (t: typeof cart.order_type) => patch({ order_type: t, lines: repriceLines(cart.lines, t, catalog, catalog?.branch?.id), table_id: t === "dine_in" ? cart.table_id : null, table_code: t === "dine_in" ? cart.table_code : null, service_charge_percent: undefined, service_charge_fixed_minor: undefined, delivery_charge_percent: undefined, delivery_charge_minor: t === "delivery" ? cart.delivery_charge_minor : undefined });
   const repeatOrder = (o: Order) => {
     const lines: CartLine[] = (o.items ?? []).filter((i) => i.status !== "cancelled").map((i) => {
       const p = catalog?.products.find((x) => x.id === i.product_id) ?? null;
@@ -208,6 +209,30 @@ function SellScreen() {
     const res = await printJob({ role: "receipt", lines: receiptLines(r, { settings }) }, { settings });
     if (!res.ok) toast.error("Could not print", res.error);
   };
+  /**
+   * SPEC Charges: the cashier changed or removed the service / delivery charge on the payment page. The cart takes the
+   * values at once (the total updates locally); a saved order is PATCHed too, or queued while offline.
+   */
+  const updateCharges = async (fields: Partial<Cart>) => {
+    const next = { ...cart, ...fields };
+    patch(fields);
+    if (!cart.saved) return;
+    setBusy(true);
+    try {
+      const r = await withOrderPin((o) => saveOrder(next, o), "Update charges");
+      if (r) patch({ service_charge_percent: r.cart.service_charge_percent, service_charge_fixed_minor: r.cart.service_charge_fixed_minor, delivery_charge_percent: r.cart.delivery_charge_percent, delivery_charge_minor: r.cart.delivery_charge_minor, label: r.cart.label });
+    } catch (e) { toast.error("Could not update the charge", errorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  /** SPEC Tax: No Tax / linked rate, re-priced by the server. Shown only while online. */
+  const chooseTax = async (choice: TaxChoiceInput) => {
+    setBusy(true);
+    try {
+      const r = await withOrderPin((o) => applyTaxChoice(cart, choice, o), "Tax choice");
+      if (r) loadCart(r);
+    } catch (e) { toast.error("Could not set the tax choice", errorMessage(e)); }
+    finally { setBusy(false); }
+  };
   const pay = async (payments: PaymentInput[], tip: number) => {
     setBusy(true);
     try {
@@ -293,7 +318,7 @@ function SellScreen() {
       <Dialog open={notesOpen} onClose={() => setNotesOpen(false)} title={editing ? `Notes for ${editing.name}` : "Order notes"} size="sm" footer={<><Button variant="secondary" onClick={() => setNotesOpen(false)}>Cancel</Button><Button onClick={() => { if (editing) updateLine(editing.key, { notes: notes || null }); else patch({ notes }); setNotesOpen(false); setEditing(null); }}>Save</Button></>}>
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
-      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} />
+      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} onCharges={updateCharges} onTaxChoice={chooseTax} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />

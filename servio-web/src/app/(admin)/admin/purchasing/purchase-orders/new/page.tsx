@@ -3,18 +3,20 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Plus, ShoppingCart } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
-import type { Page, PurchaseOrder, SupplierPrice, Unit } from "@/lib/types";
+import type { Page, PurchaseOrder, StockItem, Supplier, SupplierPrice, Unit } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
+import { useCan } from "@/store/auth";
 import { PageHeader } from "@/components/admin/page";
-import { useUnits } from "@/components/admin/stock";
-import { newPurchaseLine, PurchaseLineEditor, purchaseLinesToInput, purchaseLinesTotal, SupplierSelect, useAllSuppliers, type PurchaseLine } from "@/components/admin/purchasing";
+import { StockItemDialog, useUnits } from "@/components/admin/stock";
+import { newPurchaseLine, PurchaseLineEditor, purchaseLinesToInput, purchaseLinesTotal, SupplierDialog, SupplierSelect, useAllSuppliers, type PurchaseLine } from "@/components/admin/purchasing";
+import { PO_PERMS } from "@/components/admin/purchasing-helpers";
 import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 
-const PO_KEYS = ["purchase_orders", "purchase_order", "purchasing_summary", "supplier_insights"];
+const PO_KEYS = ["purchase_orders", "purchase_order", "purchase_orders_summary", "purchasing_summary", "supplier_insights"];
 
 /** Last price this supplier charged for the item, shown under a line; the API uses the same price when the cost is left blank. */
 function LastPrice({ supplierId, itemId, unit, onUse }: { supplierId: string; itemId: string; unit: Unit | undefined; onUse: (minor: number) => void }) {
@@ -30,6 +32,7 @@ function LastPrice({ supplierId, itemId, unit, onUse }: { supplierId: string; it
 function NewOrder() {
   const router = useRouter();
   const qc = useQueryClient();
+  const can = useCan();
   const params = useSearchParams();
   const units = useUnits();
   const suppliers = useAllSuppliers();
@@ -38,6 +41,8 @@ function NewOrder() {
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<PurchaseLine[]>([newPurchaseLine()]);
   const [busy, setBusy] = useState<"draft" | "send" | null>(null);
+  const [newSupplier, setNewSupplier] = useState(false);
+  const [newItem, setNewItem] = useState(false);
   useEffect(() => { const sid = params.get("supplier_id"); if (sid) setSupplierId(sid); }, [params]);
   const supplier = suppliers.data?.find((s) => s.id === supplierId);
   const total = purchaseLinesTotal(lines);
@@ -49,6 +54,16 @@ function NewOrder() {
     filled.forEach((l) => { if (!(Number(l.quantity) > 0)) p.push(`${l.item!.name}: enter a quantity.`); });
     return p;
   }, [supplierId, lines]);
+  const supplierCreated = (s: Supplier) => setSupplierId(s.id);
+  /** A freshly created item goes straight onto the first empty line (or a new one), in its purchase unit. */
+  const itemCreated = (item: StockItem) => {
+    const unit = item.purchase_unit ?? item.base_unit;
+    setLines((ls) => {
+      const empty = ls.findIndex((l) => !l.item);
+      const line = newPurchaseLine({ item, unit_id: unit.id });
+      return empty >= 0 ? ls.map((l, i) => (i === empty ? { ...line, key: l.key } : l)) : [...ls, line];
+    });
+  };
   const submit = async (send: boolean) => {
     setBusy(send ? "send" : "draft");
     try {
@@ -65,7 +80,12 @@ function NewOrder() {
         <Card>
           <CardHeader><CardTitle>Details</CardTitle></CardHeader>
           <CardBody className="space-y-3">
-            <Field label="Supplier" hint={supplier?.balance_minor ? `Current balance ${formatMoney(supplier.balance_minor)}` : undefined}><SupplierSelect value={supplierId} onChange={(id) => setSupplierId(id)} autoFocus={!supplierId} /></Field>
+            <Field label="Supplier" hint={supplier?.balance_minor ? `Current balance ${formatMoney(supplier.balance_minor)}` : undefined}>
+              <div className="flex gap-2">
+                <SupplierSelect className="min-w-0 flex-1" value={supplierId} onChange={(id) => setSupplierId(id)} autoFocus={!supplierId} />
+                {can(...PO_PERMS.addSupplier) ? <Button variant="secondary" onClick={() => setNewSupplier(true)} title="Create a supplier without leaving the order"><Plus className="h-4 w-4" /> New supplier</Button> : null}
+              </div>
+            </Field>
             <Field label="Expected delivery"><Input type="date" value={expectedOn} onChange={(e) => setExpectedOn(e.target.value)} /></Field>
             <Field label="Note"><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Delivery instructions, PO terms…" /></Field>
             <div className="flex items-center justify-between border-t pt-3 text-sm"><span className="text-fg-secondary">Order total</span><span className="font-semibold tabular">{formatMoney(total)}</span></div>
@@ -73,7 +93,7 @@ function NewOrder() {
           </CardBody>
         </Card>
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Lines</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Lines</CardTitle>{can(...PO_PERMS.addItem) ? <Button size="sm" variant="secondary" onClick={() => setNewItem(true)}><Plus className="h-4 w-4" /> New item</Button> : null}</CardHeader>
           <CardBody>
             <PurchaseLineEditor lines={lines} onChange={setLines} units={units.data} onPickItem={(l) => ({ unit_cost_minor: l.cost_touched ? l.unit_cost_minor : 0 })}
               costHint={(l, unit) => (l.item ? <LastPrice supplierId={supplierId} itemId={l.item.id} unit={unit} onUse={(minor) => setLines((ls) => ls.map((x) => (x.key === l.key ? { ...x, unit_cost_minor: minor, cost_touched: true } : x)))} /> : null)} />
@@ -87,6 +107,8 @@ function NewOrder() {
           <Button onClick={() => submit(true)} loading={busy === "send"} disabled={!!busy || problems.length > 0}>Send to supplier</Button>
         </div>
       </div>
+      <SupplierDialog supplier={newSupplier ? "new" : null} onClose={() => setNewSupplier(false)} onSaved={supplierCreated} />
+      <StockItemDialog item={newItem ? "new" : null} onClose={() => setNewItem(false)} onSaved={itemCreated} />
     </>
   );
 }

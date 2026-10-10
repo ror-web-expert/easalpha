@@ -3,7 +3,8 @@
 import { api, ApiError } from "@/lib/api";
 import { db, kvGet, kvSet, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, patchQueued, processQueue } from "@/lib/sync";
-import { computeTotals, cashRounding, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
+import { cashRounding, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
+import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
 import { businessDayFor } from "@/lib/business-day";
 import { uuid } from "@/lib/utils";
 import { useCartStore, type Cart } from "@/store/cart";
@@ -33,7 +34,7 @@ async function nextTillSerial(): Promise<string> {
 
 export function cartToLocal(cart: Cart, status: string, extra: Partial<LocalOrder> = {}): LocalOrder {
   const { settings, membershipId, cashier, branch } = ctx();
-  const t = computeTotals(cart.lines, { orderType: cart.order_type, settings, staffMeal: cart.is_staff_meal, tip_minor: extra.tip_minor, rounding_minor: extra.rounding_minor, discount_minor: cart.discount_minor, delivery_charge_minor: cart.order_type === "delivery" ? cart.delivery_charge_minor : 0 });
+  const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: extra.tip_minor, rounding_minor: extra.rounding_minor, discount_minor: cart.discount_minor });
   const now = new Date().toISOString();
   return {
     id: cart.id, serial: null, till_serial: null, label: cart.label ?? "draft", status, payment_status: "unpaid", order_type: cart.order_type, table_id: cart.table_id, table_code: cart.table_code,
@@ -43,6 +44,7 @@ export function cartToLocal(cart: Cart, status: string, extra: Partial<LocalOrde
     paid_minor: 0, payments: [], receipt_number: null, void_reason: null, membership_id: membershipId, cashier_name: cashier, business_day: businessDayFor(branch?.day_end_time),
     client_created_at: cart.client_created_at, created_at: now, updated_at: now, local_only: true, open: OPEN_STATUSES.includes(status as never) ? 1 : 0,
     delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null,
+    ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null,
     ...extra,
   };
 }
@@ -62,6 +64,8 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     void_reason: o.void_reason, membership_id: o.taken_by_membership_id, cashier_name: prev?.cashier_name ?? null, business_day: o.business_day, client_created_at: o.client_created_at ?? o.created_at,
     created_at: o.created_at, updated_at: o.updated_at, local_only: false, open: OPEN_STATUSES.includes(o.status) ? 1 : 0,
     delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: prev?.address_id ?? null,
+    service_charge_percent: o.service_charge_percent ?? null, service_charge_fixed_minor: o.service_charge_fixed_minor ?? 0, delivery_charge_percent: o.delivery_charge_percent ?? 0,
+    tax_choice: o.tax_choice ?? null, tax_rate_id: o.tax_rate_id ?? null,
   };
 }
 
@@ -72,7 +76,22 @@ export function localToCart(o: LocalOrder): Cart {
     guest_name: o.guest_name ?? "", covers: o.covers, notes: o.notes ?? "", is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? "", label: o.label, client_created_at: o.client_created_at,
     discount_minor: o.discount_minor || undefined, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
     paid_minor: o.paid_minor || undefined,
+    service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
+    tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
   };
+}
+
+/**
+ * SPEC Charges: the order fields for the charges in force. Service charge keys are sent only when the cashier changed
+ * them (so a new order takes the server default); the delivery charge always travels, pre-filled from the synced
+ * settings or the zone quote, which keeps the till's total equal to the server's.
+ */
+function chargeFields(cart: Cart): Pick<OrderInput, "service_charge_percent" | "service_charge_fixed_minor" | "delivery_charge_percent" | "delivery_charge_minor"> {
+  const { settings } = ctx();
+  const overridden = cart.service_charge_percent != null || cart.service_charge_fixed_minor != null;
+  const service = overridden ? serviceChargeFields(resolveServiceCharge(cart, settings)) : {};
+  const delivery = resolveDeliveryCharge(cart, settings);
+  return { ...service, ...(delivery ? deliveryChargeFields(delivery) : { delivery_charge_minor: 0, delivery_charge_percent: 0 }) };
 }
 
 async function saveLocal(o: LocalOrder) {
@@ -90,7 +109,7 @@ function orderInput(cart: Cart, place: boolean, approver_pin?: string): OrderInp
     id: cart.id, order_type: cart.order_type, source: "till", table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null,
     notes: cart.notes || null, client_created_at: cart.client_created_at, lines: cart.lines.map(toLineInput), place, is_staff_meal: cart.is_staff_meal || undefined,
     staff_meal_reason: cart.is_staff_meal ? cart.staff_meal_reason : undefined, approver_pin,
-    delivery_charge_minor: cart.order_type === "delivery" ? cart.delivery_charge_minor ?? 0 : 0, address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null,
+    address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null, ...chargeFields(cart),
   };
 }
 
@@ -136,7 +155,7 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
     const prev = await db.orders.get(cart.id);
     const local = cartToLocal(cart, place ? "placed" : cart.status, { till_serial: prev?.till_serial ?? null, label: prev?.label ?? cart.label ?? "draft", serial: prev?.serial ?? null, created_at: prev?.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0, local_only: false });
     await saveLocal(local);
-    await enqueue({ type: "order_update", id: cart.id, membership_id: membershipId ?? undefined, payload: { order_type: cart.order_type, table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, notes: cart.notes || null, lines: cart.lines.map(toLineInput), client_seq: Date.now(), delivery_charge_minor: cart.order_type === "delivery" ? cart.delivery_charge_minor ?? 0 : 0, address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null } });
+    await enqueue({ type: "order_update", id: cart.id, membership_id: membershipId ?? undefined, payload: { order_type: cart.order_type, table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, notes: cart.notes || null, lines: cart.lines.map(toLineInput), client_seq: Date.now(), address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null, ...chargeFields(cart) } });
     return { cart: { ...cart, saved: true, status: local.status }, local, offline: true };
   }
   const till_serial = await nextTillSerial();
@@ -177,7 +196,7 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   const prev = (await db.orders.get(current.id)) ?? cartToLocal(current, "placed");
   const hasCash = payments.some((p) => p.method_code === "cash");
   const rounding = prev.paid_minor === 0 && hasCash ? cashRounding(prev.total_minor - prev.rounding_minor, settings) : prev.rounding_minor;
-  const totals = computeTotals(prev.lines, { orderType: prev.order_type, settings, staffMeal: prev.is_staff_meal, tip_minor: prev.tip_minor + tip_minor, rounding_minor: rounding });
+  const totals = totalsWithCharges(prev.lines, prev, { settings, staffMeal: prev.is_staff_meal, tip_minor: prev.tip_minor + tip_minor, rounding_minor: rounding, discount_minor: prev.discount_minor });
   let due = totals.total_minor - prev.paid_minor;
   let change = 0;
   const now = new Date().toISOString();
@@ -252,6 +271,23 @@ export async function resumeOrder(id: string): Promise<Cart> {
   }
   if (!prev) throw new ApiError("not_found", "Order not found on this till", 404);
   return localToCart(prev);
+}
+
+/**
+ * SPEC Tax: the cashier's No Tax / linked-rate choice. The server re-prices the order (POST /orders/:id/tax_choice),
+ * so this is online only and never queued; an order not yet on the server is saved as a draft first.
+ */
+export async function applyTaxChoice(cart: Cart, choice: { none: true } | { tax_rate_id: string }, opts: { approver_pin?: string; pin?: string } = {}): Promise<Cart> {
+  if (!isOnline()) throw new ApiError("offline", "The tax choice needs the internet", 0);
+  let current = cart;
+  if (!current.saved || current.local_only) {
+    const saved = await saveOrder(current, opts);
+    if (saved.offline) throw new ApiError("offline", "The tax choice needs the internet", 0);
+    current = saved.cart;
+  }
+  const order = await api<Order>(`/orders/${current.id}/tax_choice`, { method: "POST", auth: "pos", body: { ...choice, pin: opts.pin, approver_pin: opts.approver_pin } });
+  const local = await storeServerOrder(order);
+  return { ...localToCart(local), customer: current.customer, address_text: current.address_text, zone_name: current.zone_name, lines: local.lines.filter((l) => l.status !== "cancelled"), ...reopenFields(order) };
 }
 
 export async function loadOrderForEdit(id: string): Promise<Cart> {

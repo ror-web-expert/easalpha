@@ -2,7 +2,8 @@
 import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent, Receipt } from "lucide-react";
 import type { Cart } from "@/store/cart";
 import type { OrderType } from "@/lib/types";
-import { computeTotals, lineTotals, type CartLine } from "@/lib/pricing";
+import { lineTotals, type CartLine } from "@/lib/pricing";
+import { chargeDisplay, resolveServiceCharge, totalsWithCharges } from "@/lib/pos-charges";
 import { SALES_PERMISSION } from "@/lib/pos-rules";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,8 @@ interface Props {
 }
 
 export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride, canRemove = true, canDecrease = true, onPlaceUnpaid, unpaidLabel }: Props) {
-  const t = computeTotals(cart.lines, { orderType: cart.order_type, settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor });
+  // SPEC Charges: the same totals as the payment page, with the charges in force on this order.
+  const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor });
   const empty = cart.lines.length === 0;
   const paid = cart.paid_minor ?? 0;
   const due = Math.max(0, t.total_minor - paid);
@@ -103,7 +105,8 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
         <div className="space-y-0.5 text-sm text-fg-secondary">
           <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(t.subtotal_minor, currency)}</span></div>
           {t.discount_minor ? <div className="flex justify-between"><span>Discount</span><span className="tabular">-{formatMoney(t.discount_minor, currency)}</span></div> : null}
-          {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {t.service_charge_percent}%</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
+          {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(resolveServiceCharge(cart, settings), currency)}</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
+          {t.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery</span><span className="tabular">{formatMoney(t.delivery_charge_minor, currency)}</span></div> : null}
           {t.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(t.tax_minor, currency)}</span></div> : null}
           {paid ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(t.total_minor, currency)}</span></div> : null}
           {paid ? <div className="flex justify-between"><span>Paid</span><span className="tabular">-{formatMoney(paid, currency)}</span></div> : null}

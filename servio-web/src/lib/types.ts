@@ -121,7 +121,7 @@ export interface Session {
 }
 
 // ---- Menu ----
-export interface TaxRate { id: ID; name: string; rate: number; inclusive: boolean; authority: string | null; active: boolean; is_default: boolean }
+export interface TaxRate { id: ID; name: string; rate: number; inclusive: boolean; authority: string | null; active: boolean; is_default: boolean; payment_account_id?: ID | null }
 export interface Station { id: ID; branch_id: ID; name: string; printer_name: string | null; display_device_id: ID | null; sort_order: number }
 export interface Menu {
   id: ID; name: string; show_online: boolean; time_rules: Record<string, unknown> | null; sort_order: number; is_default: boolean;
@@ -239,6 +239,8 @@ export interface Order extends OrderSummary {
   events: { from: string | null; to: string; membership_id: ID | null; device_id: ID | null; reason: string | null; at: string }[];
   voids: { id: ID; reason: string; stock_action: string | null; amount_minor: number; by_membership_id: ID | null; approved_by_membership_id: ID | null; at: string }[];
   service_charge_percent: number; staff_meal_reason: string | null;
+  // SPEC Charges and Tax: the per-order charge settings and the cashier's No Tax / rate choice.
+  service_charge_fixed_minor?: number; delivery_charge_percent?: number; tax_choice?: TaxChoice | null; tax_rate_id?: ID | null;
   story?: OrderStory;
 }
 export interface KitchenOrder extends OrderSummary { items: OrderItem[]; elapsed_seconds: number }
@@ -257,7 +259,9 @@ export interface OrderInput {
   id?: ID; order_type: OrderType; source?: string; table_id?: ID | null; guest_name?: string | null; covers?: number | null; customer_id?: ID | null;
   notes?: string | null; client_created_at?: string; till_serial?: string | null; lines?: OrderLineInput[]; place?: boolean;
   is_staff_meal?: boolean; staff_meal_reason?: string | null; approver_pin?: string; delivery_charge_minor?: number; address_id?: ID | null;
+  service_charge_percent?: number; service_charge_fixed_minor?: number; delivery_charge_percent?: number;
 }
+export type TaxChoice = "none" | "rate";
 
 export interface OrdersSummary {
   business_day: string; orders: number; paid_orders: number; open_orders: number; voided_orders: number; revenue_minor: number; open_minor: number;
@@ -567,6 +571,7 @@ export type OverheadBasis = "per_order" | "per_month" | "per_day";
 export interface Overhead { id: ID; branch_id: ID | null; name: string; kind: OverheadKind; amount_minor: number; basis: OverheadBasis; active: boolean }
 export interface ExpenseSummary {
   from: string; to: string; days: number; paid_orders: number; total_minor: number; count: number;
+  average_minor?: number; category_count?: number; subcategory_count?: number;
   by_category: { category: string; count: number; amount_minor: number }[]; by_subcategory: { category: string; count: number; amount_minor: number }[];
   by_method: { method: string; count: number; amount_minor: number }[]; by_source: Record<string, number>;
   overheads: (Overhead & { allocated_minor: number })[]; overheads_minor: number; cost_per_order_minor: number | null;
@@ -737,3 +742,70 @@ export interface ValuationCogsReport {
   from: string; to: string; valuation: StockValuationRow[]; stock_value_minor: number; cogs_minor: number; revenue_minor: number; gross_margin_percent: number | null;
   cogs_by_category: { category: string; cogs_minor: number }[]; cogs_by_item: { item: StockItem; cogs_minor: number }[];
 }
+
+// ---- Finance: double-entry ledger (SPEC "Payments, charges, tax and the finance ledger") ----
+export type GlAccountKind = "asset" | "liability" | "equity" | "income" | "expense";
+export type NormalSide = "debit" | "credit";
+export interface GlAccount {
+  id: ID; code: string; name: string; kind: GlAccountKind; normal_side: NormalSide; parent_id: ID | null; is_header: boolean; is_system: boolean;
+  opening_balance_minor: number; payment_account_id: ID | null; description: string | null; archived_at?: string | null; balance_minor?: number; rollup_minor?: number;
+}
+export type JournalKind = "manual" | "auto" | "reversal";
+export interface JournalLine { id?: ID; gl_account_id: ID; code: string; account: string; debit_minor: number; credit_minor: number; description: string | null }
+export interface JournalEntry {
+  id: ID; number: number; label: string; kind: JournalKind; business_day: string; description: string | null; ref_table: string | null; ref_id: ID | null;
+  reversed_by_id: ID | null; reverses_id: ID | null; by_membership_id?: ID | null; posted_at: string; debit_minor: number; lines: JournalLine[];
+}
+export interface AccountLedgerRow { id?: ID; business_day: string; voucher: string; journal_entry_id: ID; kind: JournalKind; description: string | null; debit_minor: number; credit_minor: number; balance_minor: number }
+export interface AccountLedger { account: GlAccount; from: string; to: string; opening_minor: number; rows: AccountLedgerRow[]; closing_minor: number }
+export interface FinanceDashboard {
+  business_day: string; total_balance_minor: number; today_in_minor: number; today_out_minor: number;
+  counts: { orders: number; expenses: number; supplier_payments: number; transfers: number };
+  accounts: { id: ID; name: string; kind: string; balance_minor: number }[];
+  recent: { id: ID; at: string; business_day: string; account: string; kind: string; amount_minor: number; description: string | null; balance_after_minor: number }[];
+}
+export interface TrialBalanceRow { account: GlAccount; opening_debit_minor: number; opening_credit_minor: number; debit_minor: number; credit_minor: number; closing_debit_minor: number; closing_credit_minor: number }
+export interface TrialBalance { from: string; to: string; rows: TrialBalanceRow[]; totals: Omit<TrialBalanceRow, "account">; balanced: boolean }
+export interface BalanceLine { account: GlAccount; balance_minor: number }
+export interface BalanceSheet {
+  as_of: string; assets: BalanceLine[]; liabilities: BalanceLine[]; equity: BalanceLine[]; current_earnings_minor: number; income_minor: number; expenses_minor: number;
+  total_assets_minor: number; total_liabilities_minor: number; total_equity_minor: number; balanced: boolean;
+}
+export interface KindStatement { as_of: string; rows: BalanceLine[]; total_minor: number; current_earnings_minor?: number; total_with_earnings_minor?: number }
+export type FixedAssetStatus = "active" | "disposed";
+export interface FixedAsset {
+  id: ID; name: string; gl_account_id: ID; account: string; cost_minor: number; salvage_minor: number; purchased_on: string; useful_life_months: number; method: string;
+  monthly_minor: number; accumulated_minor: number; book_value_minor: number; depreciated_through: string | null; status: FixedAssetStatus; disposed_at: string | null; note: string | null;
+}
+export interface FixedAssetsResponse { data: FixedAsset[]; totals: { cost_minor: number; accumulated_minor: number; book_value_minor: number } }
+export interface PaymentMethodCatalogueEntry { code: string; name: string; kind: string; added: boolean }
+
+// ---- Purchasing and supplier screens (Phase 5: SPEC "Purchasing, suppliers and expenses") ----
+/** Direction of a supplier balance: positive = we owe them (To Pay), negative = they owe us (To Receive). */
+export type SupplierBalanceLabel = "to_pay" | "to_receive" | "settled";
+export interface SupplierRow extends Supplier { balance_label: SupplierBalanceLabel; items_count: number; purchases_count: number }
+export type PoPaymentStatus = "unpaid" | "partial" | "paid";
+export interface PurchaseOrderRow extends PurchaseOrder { paid_minor: number; payment_status: PoPaymentStatus }
+export interface PurchaseOrdersSummary { total: number; drafts: number; open: number; received: number; cancelled: number; total_value_minor: number; paid_minor: number; by_status: Record<string, number> }
+export type SupplierRankingSort = "purchased" | "paid" | "outstanding" | "name";
+export interface SupplierRankingRow { supplier: SupplierRow; purchased_minor: number; paid_minor: number; outstanding_minor: number; po_count: number; last_purchase_on: string | null }
+export interface SupplierRanking { sort: SupplierRankingSort; from: string | null; to: string | null; rows: SupplierRankingRow[]; totals: { purchased_minor: number; paid_minor: number; outstanding_minor: number } }
+export type SupplierLedgerType = "Opening" | "Purchase" | "Payment" | "Return" | "Adjustment";
+export interface SupplierLedgerLine {
+  at: string; type: SupplierLedgerType; kind: string; amount_minor: number; debit_minor: number; credit_minor: number; number: string | null; ref: ID | null; business_day: string | null;
+  description: string | null; method: string | null; purchase_order_id: ID | null; purchase_order_label: string | null; balance_minor: number;
+}
+export interface SupplierLedgerTiles {
+  opening_minor: number; purchases_minor: number; payments_minor: number; returns_minor: number; received_minor: number; adjustments_minor: number; balance_minor: number; cached_balance_minor: number; ties_out: boolean;
+}
+export interface SupplierLedgerReport { supplier: SupplierRow; tiles: SupplierLedgerTiles; entries: SupplierLedgerLine[]; aging: Aging }
+export interface SupplierAdjustment { id: ID; supplier_id: ID; amount_minor: number; reason: string; business_day: string; by_membership_id: ID | null; created_at: string }
+export interface SupplierPaymentRow extends SupplierPayment { supplier_name: string; purchase_order_id: ID | null; purchase_order_label: string | null }
+export interface SupplierPaymentsPage { data: SupplierPaymentRow[]; next_cursor: string | null; totals: { paid_minor: number; received_minor: number; count: number } }
+export type PriceVerdict = "ok" | "wrong_unit" | "below" | "above" | "no_cost";
+export interface PriceHistoryRow {
+  item: StockItem; unit_code: string; bought_qty: string; purchases: number; spent_minor: number; paid_avg_minor_per_base: string;
+  last_price: { unit_cost_minor: number; unit_code: string | null; on: string; supplier?: string | null }; avg_cost_minor_per_base: string; difference_percent: number | null;
+  verdict: PriceVerdict; verdict_text: string; flagged: boolean;
+}
+export interface PriceHistoryReport { from: string; to: string; rows: PriceHistoryRow[]; summary: { items: number; flagged: number; spent_minor: number }; verdicts: Record<PriceVerdict, string> }

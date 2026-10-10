@@ -1,33 +1,43 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Ban, PackageCheck, Send, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Ban, FileDown, HandCoins, PackageCheck, Pencil, Send, ShoppingCart, Trash2 } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
-import type { GoodsReceipt, PurchaseOrder, PurchaseOrderLine } from "@/lib/types";
+import type { GoodsReceipt, PurchaseOrderLine, PurchaseOrderRow } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime, isoDay } from "@/lib/dates";
 import { formatBaseQty, fromBase } from "@/lib/units";
 import { titleCase } from "@/lib/utils";
+import { exportTablePdf } from "@/lib/pdf";
+import { useCan } from "@/store/auth";
 import { PageHeader } from "@/components/admin/page";
 import { useSections, useUnits } from "@/components/admin/stock";
 import { poStatusVariant, postedStatusVariant } from "@/components/admin/purchasing";
-import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, Field, Input, KeyValue, Loading, MoneyInput, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { PayOrderDialog } from "@/components/admin/purchasing-dialogs";
+import { outstandingOnOrder, poActions, poPaymentLabel } from "@/components/admin/purchasing-helpers";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Dialog, EmptyRow, Field, Input, KeyValue, Loading, MoneyInput, Select, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 
-const KEYS = ["purchase_orders", "purchase_order", "goods_receipts", "purchasing_summary", "purchasing_aging", "suppliers", "suppliers_all", "supplier", "supplier_ledger", "stock_levels", "stock_items", "stock_item", "stock_documents", "supplier_prices"];
+const KEYS = ["purchase_orders", "purchase_order", "purchase_orders_summary", "goods_receipts", "purchasing_summary", "purchasing_aging", "suppliers", "suppliers_all", "supplier", "supplier_ledger", "stock_levels", "stock_items", "stock_item", "stock_documents", "supplier_prices", "supplier_ranking"];
 interface ReceiveLine { line: PurchaseOrderLine; include: boolean; quantity: string; unit_cost_minor: number; batch_no: string; expires_on: string }
 
 export default function PurchaseOrderPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const qc = useQueryClient();
-  const order = useQuery({ queryKey: ["purchase_order", id], queryFn: () => api<PurchaseOrder>(`/purchase_orders/${id}`) });
+  const can = useCan();
+  const order = useQuery({ queryKey: ["purchase_order", id], queryFn: () => api<PurchaseOrderRow>(`/purchase_orders/${id}`) });
   const units = useUnits();
   const sections = useSections();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [edit, setEdit] = useState({ expected_on: "", note: "" });
   const [rx, setRx] = useState<ReceiveLine[]>([]);
   const [rxMeta, setRxMeta] = useState({ invoice_ref: "", received_on: isoDay(), section_id: "", note: "" });
   const [busy, setBusy] = useState<string | null>(null);
@@ -42,7 +52,11 @@ export default function PurchaseOrderPage() {
     }));
     setRxMeta({ invoice_ref: "", received_on: isoDay(), section_id: "", note: "" });
   }, [receiveOpen, po, units.data]);
+  useEffect(() => { if (editOpen && po) setEdit({ expected_on: po.expected_on ?? "", note: po.note ?? "" }); }, [editOpen, po]);
   if (order.isLoading || !po) return <Loading />;
+  const allowed = poActions(po.status, can, po.payment_status);
+  const pay = poPaymentLabel(po.payment_status);
+  const due = outstandingOnOrder(po.total_minor, po.paid_minor);
   const act = async (what: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(what);
     try { await fn(); invalidate(); toast.success(ok); return true; }
@@ -51,35 +65,47 @@ export default function PurchaseOrderPage() {
   };
   const send = () => act("send", () => api(`/purchase_orders/${po.id}/send`, { method: "POST" }), `${po.label} sent`);
   const cancel = async () => { if (await act("cancel", () => api(`/purchase_orders/${po.id}/cancel`, { method: "POST", body: { reason: cancelReason || undefined } }), `${po.label} cancelled`)) setCancelOpen(false); };
+  const remove = async () => { if (await act("delete", () => api(`/purchase_orders/${po.id}`, { method: "DELETE" }), `${po.label} deleted`)) router.replace("/admin/purchasing/purchase-orders"); };
+  const saveEdit = async () => { if (await act("edit", () => api(`/purchase_orders/${po.id}`, { method: "PATCH", body: { expected_on: edit.expected_on || null, note: edit.note || null } }), `${po.label} updated`)) setEditOpen(false); };
   const receive = async () => {
     const chosen = rx.filter((r) => r.include && Number(r.quantity) > 0);
-    const ok = await act("receive", async () => {
-      const res = await api<{ receipt: GoodsReceipt; purchase_order: PurchaseOrder }>(`/purchase_orders/${po.id}/receive`, { method: "POST", body: {
-        invoice_ref: rxMeta.invoice_ref || undefined, received_on: rxMeta.received_on || undefined, section_id: rxMeta.section_id || undefined, note: rxMeta.note || undefined,
-        lines: chosen.map((r) => ({ purchase_order_line_id: r.line.id, quantity: r.quantity, unit_cost_minor: r.unit_cost_minor, batch_no: r.batch_no || null, expires_on: r.expires_on || null })),
-      } });
-      return res;
-    }, "Goods received");
+    const ok = await act("receive", () => api<{ receipt: GoodsReceipt; purchase_order: PurchaseOrderRow }>(`/purchase_orders/${po.id}/receive`, { method: "POST", body: {
+      invoice_ref: rxMeta.invoice_ref || undefined, received_on: rxMeta.received_on || undefined, section_id: rxMeta.section_id || undefined, note: rxMeta.note || undefined,
+      lines: chosen.map((r) => ({ purchase_order_line_id: r.line.id, quantity: r.quantity, unit_cost_minor: r.unit_cost_minor, batch_no: r.batch_no || null, expires_on: r.expires_on || null })),
+    } }), "Goods received");
     if (ok) setReceiveOpen(false);
   };
-  const canReceive = po.status === "sent" || po.status === "partial" || po.status === "draft";
+  const downloadPdf = () => exportTablePdf({
+    title: `Purchase order ${po.label}`,
+    subtitle: `${po.supplier_name} | ${titleCase(po.status)} | Created ${formatDate(po.created_at)}${po.expected_on ? ` | Expected ${formatDate(po.expected_on)}` : ""}`,
+    columns: [{ header: "Item", key: "item" }, { header: "Ordered", key: "ordered", align: "right" }, { header: "Cost per unit", key: "cost", align: "right" }, { header: "Line total", key: "total", align: "right" }, { header: "Received", key: "received", align: "right" }, { header: "Outstanding", key: "outstanding", align: "right" }],
+    rows: (po.lines ?? []).map((l) => ({ item: l.item_name, ordered: `${Number(l.quantity).toLocaleString("en-US", { maximumFractionDigits: 3 })} ${l.unit_code}`, cost: formatMoney(l.unit_cost_minor), total: formatMoney(l.line_total_minor), received: formatBaseQty(l.received_base_qty, l.base_unit_code), outstanding: formatBaseQty(l.outstanding_base_qty, l.base_unit_code) })),
+    footer: [`Total ${formatMoney(po.total_minor)} · Paid ${formatMoney(po.paid_minor)} · Outstanding ${formatMoney(due)} (${pay.text})`, ...(po.note ? [`Note: ${po.note}`] : [])],
+    filename: `${po.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`,
+  });
   const rxTotal = rx.filter((r) => r.include).reduce((a, r) => a + Math.round(r.unit_cost_minor * (Number(r.quantity) || 0)), 0);
   return (
     <>
       <PageHeader icon={ShoppingCart} title={po.label} description={`${po.supplier_name} · created ${formatDateTime(po.created_at)}`} actions={<>
         <Link href="/admin/purchasing/purchase-orders"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Orders</Button></Link>
-        {po.status === "draft" ? <Button variant="secondary" onClick={send} loading={busy === "send"} disabled={!po.lines?.length}><Send className="h-4 w-4" /> Send</Button> : null}
-        {po.status === "draft" || po.status === "sent" ? <Button variant="destructive" onClick={() => setCancelOpen(true)}><Ban className="h-4 w-4" /> Cancel</Button> : null}
-        {canReceive ? <Button onClick={() => setReceiveOpen(true)}><PackageCheck className="h-4 w-4" /> Receive</Button> : null}
+        <Button variant="secondary" onClick={downloadPdf} disabled={!po.lines?.length}><FileDown className="h-4 w-4" /> Download PDF</Button>
+        {allowed.edit ? <Button variant="secondary" onClick={() => setEditOpen(true)}><Pencil className="h-4 w-4" /> Edit</Button> : null}
+        {allowed.send ? <Button variant="secondary" onClick={send} loading={busy === "send"} disabled={!po.lines?.length}><Send className="h-4 w-4" /> Send</Button> : null}
+        {allowed.delete ? <Button variant="ghost" onClick={() => setDeleteOpen(true)}><Trash2 className="h-4 w-4 text-danger" /> Delete</Button> : null}
+        {allowed.cancel ? <Button variant="destructive" onClick={() => setCancelOpen(true)}><Ban className="h-4 w-4" /> Cancel</Button> : null}
+        {allowed.receive ? <Button variant={allowed.pay ? "secondary" : "primary"} onClick={() => setReceiveOpen(true)}><PackageCheck className="h-4 w-4" /> Receive</Button> : null}
+        {allowed.pay ? <Button onClick={() => setPayOpen(true)}><HandCoins className="h-4 w-4" /> Pay {formatMoney(due)}</Button> : null}
       </>} />
       <div className="mb-4 grid gap-4 lg:grid-cols-3">
         <Card>
-          <CardHeader><CardTitle>Details</CardTitle><Badge variant={poStatusVariant(po.status)}>{titleCase(po.status)}</Badge></CardHeader>
+          <CardHeader><CardTitle>Details</CardTitle><span className="flex gap-2"><Badge variant={poStatusVariant(po.status)}>{titleCase(po.status)}</Badge><Badge variant={pay.variant}>{pay.text}</Badge></span></CardHeader>
           <CardBody>
             <KeyValue items={[
               { label: "Supplier", value: <Link href={`/admin/suppliers/${po.supplier_id}`} className="text-primary hover:underline">{po.supplier_name}</Link> },
               { label: "Expected", value: po.expected_on ? formatDate(po.expected_on) : "-" },
               { label: "Total", value: formatMoney(po.total_minor) },
+              { label: "Paid", value: <span className={po.paid_minor ? "text-success" : ""}>{formatMoney(po.paid_minor)}</span> },
+              { label: "Outstanding", value: <span className={due ? "text-danger" : ""}>{formatMoney(due)}</span> },
               { label: "Lines", value: po.line_count },
               ...(po.sent_at ? [{ label: "Sent", value: formatDateTime(po.sent_at) }] : []),
               ...(po.received_at ? [{ label: "Fully received", value: formatDateTime(po.received_at) }] : []),
@@ -87,6 +113,8 @@ export default function PurchaseOrderPage() {
             ]} />
             {po.note ? <p className="mt-3 border-t pt-3 text-sm text-fg-secondary">{po.note}</p> : null}
             {po.status === "partial" ? <p className="mt-3 text-xs text-fg-muted">Partly received. A partial order cannot be cancelled; receive the rest when it arrives.</p> : null}
+            {po.status === "draft" ? <p className="mt-3 text-xs text-fg-muted">A draft can be paid only after it is sent or received.</p> : null}
+            <p className="mt-3 text-xs text-fg-muted">Payments show on the <Link href={`/admin/suppliers/ledger?supplier_id=${po.supplier_id}`} className="text-primary hover:underline">supplier ledger</Link>.</p>
           </CardBody>
         </Card>
         <Card className="lg:col-span-2">
@@ -148,6 +176,15 @@ export default function PurchaseOrderPage() {
         footer={<><Button variant="secondary" onClick={() => setCancelOpen(false)}>Keep</Button><Button variant="destructive" onClick={cancel} loading={busy === "cancel"}>Cancel order</Button></>}>
         <Field label="Reason"><Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Supplier out of stock, ordered twice…" autoFocus /></Field>
       </Dialog>
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} title={`Edit ${po.label}`} description="Only drafts can be edited. To change the lines, cancel this draft and create a new order." size="sm"
+        footer={<><Button variant="secondary" onClick={() => setEditOpen(false)}>Cancel</Button><Button onClick={saveEdit} loading={busy === "edit"}>Save</Button></>}>
+        <div className="space-y-3">
+          <Field label="Expected delivery"><Input type="date" value={edit.expected_on} onChange={(e) => setEdit({ ...edit, expected_on: e.target.value })} autoFocus /></Field>
+          <Field label="Note"><Textarea value={edit.note} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></Field>
+        </div>
+      </Dialog>
+      <ConfirmDialog open={deleteOpen} onClose={() => setDeleteOpen(false)} onConfirm={remove} title={`Delete ${po.label}?`} description="Only a draft can be deleted. It was never sent, so nothing else is affected." confirmLabel="Delete draft" destructive loading={busy === "delete"} />
+      <PayOrderDialog po={po} open={payOpen} onClose={() => setPayOpen(false)} />
     </>
   );
 }

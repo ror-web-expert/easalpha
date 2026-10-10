@@ -3,15 +3,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, Trash2 } from "lucide-react";
 import type { PaymentInput, PaymentMethod } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
-import { cashRounding, computeTotals } from "@/lib/pricing";
+import { cashRounding } from "@/lib/pricing";
 import { defaultPaymentMethod } from "@/lib/pos-rules";
+import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, totalsWithCharges, type ChargeState } from "@/lib/pos-charges";
 import type { Cart } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useSyncStore } from "@/store/sync";
-import { Button, Dialog, Field, Input, MoneyInput } from "@/components/ui";
+import { Button, Dialog, Field, Input, MoneyInput, Tabs } from "@/components/ui";
 import { cn, titleCase } from "@/lib/utils";
 
-interface Props { open: boolean; onClose: () => void; cart: Cart; onPay: (payments: PaymentInput[], tip_minor: number) => Promise<void>; busy: boolean }
+export type TaxChoiceInput = { none: true } | { tax_rate_id: string };
+
+interface Props {
+  open: boolean; onClose: () => void; cart: Cart; onPay: (payments: PaymentInput[], tip_minor: number) => Promise<void>; busy: boolean;
+  /** SPEC Charges: the cashier changed or removed the service / delivery charge; the page saves the order and shows the new total. */
+  onCharges?: (fields: Partial<Cart>) => Promise<void>;
+  /** SPEC Tax: No Tax / linked rate. Online only; the page re-prices through the server. */
+  onTaxChoice?: (choice: TaxChoiceInput) => Promise<void>;
+}
 
 interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: number; reference: string }
 
@@ -19,8 +28,11 @@ interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: n
  * SPEC "Order payment behaviour": the screen pre-selects the store's default method (a reopened order opens on its
  * original one); the cashier may switch. The amount defaults to what is due and may be lowered for a part payment,
  * after which the order stays open with payment status Pending and the remaining due shown on the panel.
+ * SPEC "Charges": service charge (and delivery charge on delivery orders) pre-fill from settings as a percent or a
+ * fixed amount and can be changed or removed here. SPEC "Tax": a No Tax / rate choice appears only when the selected
+ * method's finance account is linked to a tax rate.
  */
-export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
+export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onTaxChoice }: Props) {
   const methods = useCatalogStore((s) => s.paymentMethods);
   const catalog = useCatalogStore((s) => s.catalog);
   const status = useSyncStore((s) => s.status);
@@ -30,7 +42,10 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
   const [splits, setSplits] = useState<Split[]>([]);
   const [draft, setDraft] = useState<{ method: PaymentMethod | null; amount: number; tendered: number; reference: string }>({ method: null, amount: 0, tendered: 0, reference: "" });
   const active = useMemo(() => methods.filter((m) => m.active).sort((a, b) => a.sort_order - b.sort_order), [methods]);
-  const base = computeTotals(cart.lines, { orderType: cart.order_type, settings, staffMeal: cart.is_staff_meal, tip_minor: tip });
+  const service = resolveServiceCharge(cart, settings);
+  const delivery = resolveDeliveryCharge(cart, settings);
+  const base = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: tip, discount_minor: cart.discount_minor });
+  const net = base.subtotal_minor - base.discount_minor;
   const anyCash = splits.some((s) => s.method.kind === "cash") || draft.method?.kind === "cash";
   const rounding = anyCash ? cashRounding(base.total_minor, settings) : 0;
   const total = base.total_minor + rounding;
@@ -42,6 +57,10 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
   // Read only when the dialog opens, so edits to the cart while it is open do not reset the splits.
   const latest = useRef({ settings, cart, status });
   latest.current = { settings, cart, status };
+  // SPEC Tax: the choice is server-side, so it is hidden offline and when the method has no linked rate.
+  const online = status !== "offline";
+  const linked = online && onTaxChoice ? linkedTaxRate(draft.method, catalog?.tax_rates) : null;
+  const taxValue = cart.tax_choice === "none" ? "none" : linked && cart.tax_rate_id === linked.id ? "rate" : "";
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +97,8 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
   const draftOk = !!draft.method && remaining > 0 && draft.amount > 0 && !needsRef && !khataBlocked && !offlineBlocked && (draft.method.kind !== "cash" || draft.tendered >= draftAmount);
   const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0);
   const payLabel = remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
+  // Charges cannot change once money has been taken against the order; the total they feed is already partly settled.
+  const chargesLocked = !onCharges || paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
 
   return (
     <Dialog open={open} onClose={onClose} title={cart.reopened ? "Payment (F8) · reopened order" : "Payment (F8)"} description={cart.reopened ? "A reopened order is completed through the payment screen. It opens on its original method." : undefined} size="xl" className="sm:max-h-[95vh]">
@@ -92,6 +113,11 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
             ))}
             {!active.length ? <p className="col-span-full text-sm text-fg-muted">No payment methods. Add them in the admin.</p> : null}
           </div>
+          {linked ? (
+            <Field label="Tax" hint={`${draft.method?.name} is linked to ${taxRateLabel(linked)}. The order is re-priced with your choice.`}>
+              <Tabs value={taxValue} onChange={(v) => { if (busy) return; void onTaxChoice?.(v === "none" ? { none: true } : { tax_rate_id: linked.id }); }} items={[{ value: "none", label: "No Tax" }, { value: "rate", label: taxRateLabel(linked) }]} size="lg" />
+            </Field>
+          ) : null}
           {draft.method ? (
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between"><span className="font-semibold">{draft.method.name}</span><span className="text-sm text-fg-secondary">{titleCase(draft.method.kind)}</span></div>
@@ -111,6 +137,16 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
               {partial ? <Button variant="secondary" className="w-full" size="lg" onClick={addSplit} disabled={needsRef || khataBlocked || !!offlineBlocked || draft.amount <= 0}>Add {formatMoney(draftAmount, currency)} and split the rest</Button> : null}
             </div>
           ) : null}
+          {!chargesLocked ? (
+            <div className="space-y-2">
+              <ChargeControl label="Service charge" state={service} netMinor={net} currency={currency} busy={busy}
+                onApply={(s) => onCharges!(serviceChargeFields(s))} onRemove={() => onCharges!(serviceChargeFields({ mode: "percent", value: 0 }))} />
+              {delivery ? (
+                <ChargeControl label="Delivery charge" state={delivery} netMinor={net} currency={currency} busy={busy}
+                  onApply={(s) => onCharges!(deliveryChargeFields(s))} onRemove={() => onCharges!(deliveryChargeFields({ mode: "fixed", value: 0 }))} />
+              ) : null}
+            </div>
+          ) : null}
           <Field label="Tip"><div className="flex gap-2"><MoneyInput value={tip} onChange={setTip} className="h-12" />{[0, 5000, 10000, 20000].map((v) => <button key={v} onClick={() => setTip(v)} className={cn("min-h-12 rounded-lg border px-3 text-sm", tip === v ? "border-primary bg-primary-soft" : "bg-card")}>{v ? formatMoney(v, currency) : "None"}</button>)}</div></Field>
         </div>
         <div className="flex flex-col rounded-lg bg-muted p-4">
@@ -118,8 +154,10 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
           <div className="text-4xl font-bold tabular">{formatMoney(due, currency)}</div>
           <div className="mt-2 space-y-1 text-sm text-fg-secondary">
             <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(base.subtotal_minor, currency)}</span></div>
-            {base.service_charge_minor ? <div className="flex justify-between"><span>Service {base.service_charge_percent}%</span><span className="tabular">{formatMoney(base.service_charge_minor, currency)}</span></div> : null}
-            {base.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(base.tax_minor, currency)}</span></div> : null}
+            {base.discount_minor ? <div className="flex justify-between"><span>Discount</span><span className="tabular">-{formatMoney(base.discount_minor, currency)}</span></div> : null}
+            {base.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(service, currency)}</span><span className="tabular">{formatMoney(base.service_charge_minor, currency)}</span></div> : null}
+            {base.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery {delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}</span><span className="tabular">{formatMoney(base.delivery_charge_minor, currency)}</span></div> : null}
+            {base.tax_minor || cart.tax_choice ? <div className="flex justify-between"><span>Tax{cart.tax_choice === "none" ? " (none)" : ""}</span><span className="tabular">{formatMoney(base.tax_minor, currency)}</span></div> : null}
             {rounding ? <div className="flex justify-between"><span>Cash rounding</span><span className="tabular">{formatMoney(rounding, currency)}</span></div> : null}
             {tip ? <div className="flex justify-between"><span>Tip</span><span className="tabular">{formatMoney(tip, currency)}</span></div> : null}
             {paidBefore ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(total, currency)}</span></div> : null}
@@ -138,5 +176,41 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy }: Props) {
         </div>
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * SPEC Charges: one charge as an editable value with a "%" / "Rs" mode toggle. The pre-filled value is the setting
+ * default (or the order's own value); Apply saves it on the order, Remove sets it to zero. Switching the mode keeps
+ * the same money amount so the cashier sees what the change is worth before applying it.
+ */
+function ChargeControl({ label, state, netMinor, currency, busy, onApply, onRemove }: { label: string; state: ChargeState; netMinor: number; currency?: string; busy: boolean; onApply: (s: ChargeState) => Promise<void>; onRemove: () => Promise<void> }) {
+  const [mode, setMode] = useState(state.mode);
+  const [value, setValue] = useState(state.value);
+  useEffect(() => { setMode(state.mode); setValue(state.value); }, [state.mode, state.value]);
+  const dirty = mode !== state.mode || value !== state.value;
+  const amount = chargeAmount({ mode, value }, netMinor);
+  const switchMode = (m: typeof mode) => {
+    if (m === mode) return;
+    setMode(m);
+    setValue(m === "fixed" ? amount : netMinor > 0 ? Number(((amount / netMinor) * 100).toFixed(2)) : 0);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border p-2">
+      <span className="w-32 text-sm font-medium">{label}</span>
+      <div role="group" aria-label={`${label} mode`} className="flex overflow-hidden rounded-full border border-border-strong">
+        {(["percent", "fixed"] as const).map((m) => (
+          <button key={m} type="button" aria-pressed={mode === m} onClick={() => switchMode(m)} className={cn("h-10 px-3 text-sm font-medium", mode === m ? "bg-sidebar-active-bg text-sidebar-active" : "text-fg hover:bg-fg/8", m === "fixed" && "border-l border-border-strong")}>{m === "percent" ? "%" : "Rs"}</button>
+        ))}
+      </div>
+      {mode === "percent"
+        ? <Input type="number" inputMode="decimal" min={0} step="0.5" value={value === 0 ? "" : value} onChange={(e) => setValue(Math.max(0, parseFloat(e.target.value || "0") || 0))} className="h-10 w-24 tabular" aria-label={`${label} percent`} />
+        : <MoneyInput value={value} onChange={(v) => setValue(Math.max(0, v))} className="h-10 w-32" aria-label={`${label} amount`} />}
+      <span className="text-sm text-fg-secondary tabular">= {formatMoney(amount, currency)}</span>
+      <div className="ml-auto flex gap-1">
+        <Button size="sm" variant="secondary" disabled={!dirty || busy} onClick={() => onApply({ mode, value })}>Apply</Button>
+        <Button size="sm" variant="ghost" disabled={busy || (state.value === 0 && !dirty)} onClick={onRemove}>Remove</Button>
+      </div>
+    </div>
   );
 }

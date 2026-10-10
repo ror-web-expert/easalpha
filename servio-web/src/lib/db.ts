@@ -47,6 +47,12 @@ export interface LocalOrder {
   open: number;
   delivery_charge_minor?: number;
   address_id?: string | null;
+  /** SPEC Charges and Tax: per-order charge values and the tax choice, as last known from the server or the cashier. */
+  service_charge_percent?: number | null;
+  service_charge_fixed_minor?: number | null;
+  delivery_charge_percent?: number | null;
+  tax_choice?: "none" | "rate" | null;
+  tax_rate_id?: string | null;
 }
 
 export interface QueueItem {
