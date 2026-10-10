@@ -971,3 +971,25 @@ Stock deducts at completion; `stock_documents` carry posting_date and nine kinds
 | GET, POST, PATCH | /api/v1/finance/fixed_assets | assets; POST /:id/depreciate, /:id/dispose |
 
 Permissions: PURCHASE_ORDERS, PO_CREATE, PO_EDIT, PO_DELETE, PO_RECEIVE, PO_RETURN, PO_PAYMENT, PO_ADD_ITEM (stock_items#create), PO_ADD_SUPPLIER (suppliers#create); SUPPLIERS, SUPPLIER_LEDGER, SUPPLIER_VIEW_LEDGER, SUPPLIER_RECORD_PAYMENT. Finance screens: finance.view to read, settings.manage to post.
+
+## Phase 6 additions (11 Oct 2026, SPEC "Staff, attendance and payroll", "Riders", Cashier Till)
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/attendance/today | Today counters (scans, currently in, checked out, not checked in, late) and rows |
+| GET | /api/v1/attendance/scans | Scan Log, every tap |
+| POST | /api/v1/attendance/scan { fingerprint_id | employee_id } | kiosk intake: check in or out, "Already Marked" inside the gap |
+| GET, POST | /api/v1/attendance/enrolled, /enrol, /revoke | fingerprint enrolment |
+| GET | /api/v1/attendance/ledger?employee_id&month | month view per employee with the charges |
+| GET | /api/v1/attendance/reports?month | per employee totals |
+| POST | /api/v1/attendance/auto_close | close everyone still checked in |
+| PUT | /api/v1/employees/rules | Defaults (no employee_id) or per-employee rules: master switch, thresholds, overtime, weekly offs, no-scan, allowances, penalties, fine cap, checkout gap, divisor |
+| GET | /api/v1/payroll/overview, /ledger, /reports | payroll screens |
+| GET, PATCH | /api/v1/payroll/settings | salary method with the worked example, require fingerprint to close shift |
+| GET, POST | /api/v1/riders (temporary: true, lifetime_kind, lifetime_value, permissions) | temporary riders; rows carry assigned_count, completed_count, expired |
+| GET | /api/v1/reports/riders, /reports/cashier_till | Rider Reports and Cashier Till |
+| GET | /api/v1/shifts/my_till | My Till |
+| GET, POST | /api/v1/day_end_settlements | Day-End Settlement |
+| POST | /api/v1/devices { kind: "rider" } | a rider's phone as a device; PIN login issues a rider token |
+
+Permissions: RIDERS, RIDER_VIEW, RIDER_CREATE, RIDER_EDIT, RIDER_DELETE, DUMMY_RIDER_VIEW, DUMMY_RIDER_CREATE, DUMMY_RIDER_EDIT, DUMMY_RIDER_DELETE; MY_TILL; PAYROLL.

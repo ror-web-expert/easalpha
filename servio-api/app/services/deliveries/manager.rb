@@ -22,6 +22,7 @@ module Deliveries
     def assign!(delivery, rider:, actor:)
       raise Api::Errors::Conflict.new("delivery.status", "Delivery is #{delivery.status}") unless delivery.can_move_to?("assigned") || delivery.status == "assigned"
       raise Api::Errors::Conflict.new("rider.inactive", "#{rider.name} is not active") unless rider.active
+      raise Api::Errors::Conflict.new("rider.expired", "#{rider.name} is a temporary rider whose lifetime (#{rider.lifetime_label}) is over") if rider.expired?
       Delivery.transaction do
         delivery.update!(rider: rider, status: "assigned", assigned_at: Time.current, failed_reason: nil)
         delivery.order.update_columns(rider_id: rider.id)
@@ -55,6 +56,7 @@ module Deliveries
         if to.in?(%w[delivered failed]) && delivery.rider && !Delivery.where(rider_id: delivery.rider_id, status: %w[assigned picked_up on_the_way arrived]).where.not(id: delivery.id).exists?
           delivery.rider.update!(status: "available")
         end
+        Rider.where(id: delivery.rider_id).update_all("orders_used = orders_used + 1") if to == "delivered" && delivery.rider&.temporary
         order = delivery.order
         if to == "picked_up" && order.status.in?(%w[placed preparing ready])
           Orders::Transitions.serve!(order, actor: actor) # dispatched; the cashier still closes it at the till

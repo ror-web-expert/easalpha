@@ -28,6 +28,9 @@ module Api
       def modified = render(json: { from: @from, to: @to, data: report.modified })
       def customers = render(json: { from: @from, to: @to, data: report.customers })
       def shifts = render(json: { from: @from, to: @to, data: report.shifts })
+      # SPEC Cashier Till and Delivery Riders reports
+      def cashier_till = render(json: Reports::CashierTill.run(branch: current_branch, from: @from, to: @to))
+      def riders = render(json: Reports::Riders.run(branch: current_branch, from: @from, to: @to))
 
       # One payload for the printed daily or monthly report.
       def grand

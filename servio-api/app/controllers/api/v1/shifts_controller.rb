@@ -2,7 +2,7 @@ module Api
   module V1
     class ShiftsController < BaseController
       before_action :authenticate!
-      before_action :read_only_guard!, except: %i[index show current z_report]
+      before_action :read_only_guard!, except: %i[index show current z_report my_till day_end_settlements]
 
       def index
         require_permission!("shifts.any", "reports.view_all", "reports.view_branch", "shifts.own")
@@ -12,6 +12,26 @@ module Api
         scope = scope.where(status: params[:status]) if params[:status].present?
         rows, cursor = Paginator.call(scope, cursor: params[:cursor], limit: params[:limit], order_column: :opened_at)
         render_page(rows, cursor) { |s| ShiftSerializers.shift(s) }
+      end
+
+      # GET /shifts/my_till  (SPEC MY_TILL: the cashier's own till)
+      def my_till
+        require_permission!("MY_TILL", "shifts.own", "shifts.any")
+        render json: Shifts::DayEnd.my_till(current_membership, branch: current_branch)
+      end
+
+      # GET /day_end_settlements   POST /day_end_settlements { business_day?, note?, force? }  (SPEC Day-End Settlement)
+      def day_end_settlements
+        require_permission!("shifts.any", "reports.view_all", "reports.view_branch")
+        rows = DayEndSettlement.where(branch_id: current_branch.id).order(business_day: :desc, created_at: :desc).limit(100)
+        render json: { data: rows.map { |s| ShiftSerializers.day_end_settlement(s) } }
+      end
+
+      def day_end_settle
+        require_permission!("shifts.any")
+        day = params[:business_day].present? ? Date.parse(params[:business_day]) : current_branch.business_day_for(Time.current)
+        rec = Shifts::DayEnd.settle!(branch: current_branch, day: day, by: current_membership, note: params[:note], force: ActiveModel::Type::Boolean.new.cast(params[:force]))
+        render json: ShiftSerializers.day_end_settlement(rec), status: :created
       end
 
       def current

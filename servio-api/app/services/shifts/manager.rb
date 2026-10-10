@@ -44,12 +44,14 @@ module Shifts
       raise Api::Errors::Conflict.new("shift.open", "Close the shift before settling") if shift.open?
       Shift.transaction do
         drawer = shift.drawer_account
+        company_cash = PaymentAccount.active.company.find_by(kind: "cash", is_default: true) || PaymentAccount.active.company.find_by(kind: "cash")
+        drawer_amount = drawer&.current_balance_minor
         if drawer && drawer.current_balance_minor != 0
-          company_cash = PaymentAccount.active.company.find_by(kind: "cash", is_default: true) || PaymentAccount.active.company.find_by(kind: "cash")
           amount = drawer.current_balance_minor
           drawer.post!(kind: "transfer_out", amount_minor: -amount, business_day: shift.business_day, ref: shift, description: "Settlement to #{company_cash&.name || 'cash'}", by: by, shift_id: shift.id, branch_id: shift.branch_id)
           company_cash&.post!(kind: "transfer_in", amount_minor: amount, business_day: shift.business_day, ref: shift, description: "Settlement from #{drawer.name}", by: by, shift_id: shift.id, branch_id: shift.branch_id)
         end
+        Finance::Journal.transfer!(from: drawer, to: company_cash, amount_minor: drawer_amount, business_day: shift.business_day, actor: by, note: "till settlement", ref: shift) if drawer && company_cash && drawer_amount.to_i != 0
         shift.update!(settlement_status: "settled")
         AuditLog.record(action: "update", record: shift, after: { settled: true })
       end

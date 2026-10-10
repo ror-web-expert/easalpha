@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_11_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -120,10 +120,47 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.boolean "require_fingerprint_to_close_shift", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "rules_enabled", default: true, null: false
+    t.integer "late_after_minutes"
+    t.integer "half_day_after_minutes"
+    t.integer "absent_after_minutes"
+    t.boolean "overtime_enabled", default: false, null: false
+    t.bigint "overtime_rate_minor_per_hour", default: 0, null: false
+    t.boolean "no_scan_counts_absent", default: true, null: false
+    t.integer "free_lates", default: 0, null: false
+    t.integer "free_half_days", default: 0, null: false
+    t.integer "free_absents", default: 0, null: false
+    t.string "late_penalty", default: "fine_only", null: false
+    t.string "half_day_penalty", default: "lose_day", null: false
+    t.string "absent_penalty", default: "lose_day", null: false
+    t.bigint "half_day_fine_minor", default: 0, null: false
+    t.bigint "absent_fine_minor", default: 0, null: false
+    t.bigint "fine_cap_minor"
+    t.integer "checkout_gap_minutes", default: 5, null: false
+    t.integer "fixed_divisor", default: 26, null: false
     t.index ["business_id", "employee_id"], name: "idx_attendance_rules_unique", unique: true, where: "(employee_id IS NOT NULL)"
     t.index ["business_id"], name: "index_attendance_rules_on_business_id"
     t.index ["employee_id"], name: "index_attendance_rules_on_employee_id"
+    t.check_constraint "(late_penalty::text = ANY (ARRAY['fine_only'::character varying, 'lose_day'::character varying, 'both'::character varying, 'none'::character varying]::text[])) AND (half_day_penalty::text = ANY (ARRAY['fine_only'::character varying, 'lose_day'::character varying, 'both'::character varying, 'none'::character varying]::text[])) AND (absent_penalty::text = ANY (ARRAY['fine_only'::character varying, 'lose_day'::character varying, 'both'::character varying, 'none'::character varying]::text[]))", name: "attendance_rules_penalty_check"
     t.check_constraint "absent_rule::text = ANY (ARRAY['calendar_days'::character varying::text, 'fixed_26'::character varying::text])", name: "attendance_rules_absent_check"
+  end
+
+  create_table "attendance_scans", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.uuid "employee_id"
+    t.uuid "attendance_id"
+    t.uuid "device_id"
+    t.string "fingerprint_id"
+    t.datetime "scanned_at", null: false
+    t.string "result", null: false
+    t.string "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "scanned_at"], name: "index_attendance_scans_on_business_id_and_scanned_at"
+    t.index ["business_id"], name: "index_attendance_scans_on_business_id"
+    t.index ["employee_id"], name: "index_attendance_scans_on_employee_id"
+    t.check_constraint "result::text = ANY (ARRAY['check_in'::character varying, 'check_out'::character varying, 'already_marked'::character varying, 'rejected'::character varying, 'unknown'::character varying, 'manual_out'::character varying, 'auto_close'::character varying]::text[])", name: "attendance_scans_result_check"
   end
 
   create_table "attendances", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -143,12 +180,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "marked_by_membership_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "overtime_minutes", default: 0, null: false
+    t.boolean "missing_punch", default: false, null: false
+    t.boolean "auto_closed", default: false, null: false
+    t.boolean "lost_day", default: false, null: false
     t.index ["branch_id"], name: "index_attendances_on_branch_id"
     t.index ["business_id"], name: "index_attendances_on_business_id"
     t.index ["employee_id", "business_day"], name: "index_attendances_on_employee_id_and_business_day", unique: true
     t.index ["employee_id"], name: "index_attendances_on_employee_id"
     t.check_constraint "source::text = ANY (ARRAY['fingerprint'::character varying::text, 'selfie'::character varying::text, 'manual'::character varying::text, 'pin'::character varying::text])", name: "attendances_source_check"
-    t.check_constraint "status::text = ANY (ARRAY['present'::character varying::text, 'absent'::character varying::text, 'leave'::character varying::text, 'holiday'::character varying::text, 'half_day'::character varying::text])", name: "attendances_status_check"
+    t.check_constraint "status::text = ANY (ARRAY['present'::character varying, 'late'::character varying, 'half_day'::character varying, 'absent'::character varying, 'leave'::character varying, 'holiday'::character varying, 'weekly_off'::character varying]::text[])", name: "attendances_status_check"
   end
 
   create_table "audit_logs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -432,6 +473,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["business_id"], name: "index_day_closes_on_business_id"
   end
 
+  create_table "day_end_settlements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id", null: false
+    t.date "business_day", null: false
+    t.uuid "settled_by_membership_id"
+    t.integer "shifts_count", default: 0, null: false
+    t.bigint "amount_minor", default: 0, null: false
+    t.jsonb "detail", default: {}, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "branch_id", "business_day"], name: "idx_on_business_id_branch_id_business_day_06ff3c9fce"
+    t.index ["business_id"], name: "index_day_end_settlements_on_business_id"
+  end
+
   create_table "deal_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "deal_id", null: false
@@ -573,7 +629,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["business_id", "branch_id", "code"], name: "index_devices_on_business_id_and_branch_id_and_code", unique: true
     t.index ["business_id"], name: "index_devices_on_business_id"
     t.index ["pairing_code"], name: "index_devices_on_pairing_code", unique: true, where: "(pairing_code IS NOT NULL)"
-    t.check_constraint "kind::text = ANY (ARRAY['till'::character varying::text, 'tablet'::character varying::text, 'kitchen'::character varying::text, 'customer_display'::character varying::text, 'token_screen'::character varying::text, 'kiosk'::character varying::text])", name: "devices_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['till'::character varying, 'tablet'::character varying, 'kitchen'::character varying, 'customer_display'::character varying, 'token_screen'::character varying, 'kiosk'::character varying, 'rider'::character varying]::text[])", name: "devices_kind_check"
   end
 
   create_table "dining_tables", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -658,7 +714,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "fingerprint_id"
+    t.datetime "fingerprint_enrolled_at"
+    t.datetime "fingerprint_revoked_at"
     t.index ["branch_id"], name: "index_employees_on_branch_id"
+    t.index ["business_id", "fingerprint_id"], name: "index_employees_on_business_id_and_fingerprint_id", unique: true, where: "(fingerprint_id IS NOT NULL)"
     t.index ["business_id", "membership_id"], name: "index_employees_on_business_id_and_membership_id", unique: true, where: "(membership_id IS NOT NULL)"
     t.index ["business_id"], name: "index_employees_on_business_id"
     t.index ["department_id"], name: "index_employees_on_department_id"
@@ -772,8 +832,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["business_id", "code"], name: "index_gl_accounts_on_business_id_and_code", unique: true
     t.index ["business_id"], name: "index_gl_accounts_on_business_id"
     t.index ["payment_account_id"], name: "index_gl_accounts_on_payment_account_id"
-    t.check_constraint "kind::text = ANY (ARRAY['asset'::character varying, 'liability'::character varying, 'equity'::character varying, 'income'::character varying, 'expense'::character varying]::text[])", name: "gl_accounts_kind_check"
-    t.check_constraint "normal_side::text = ANY (ARRAY['debit'::character varying, 'credit'::character varying]::text[])", name: "gl_accounts_side_check"
+    t.check_constraint "kind::text = ANY (ARRAY['asset'::character varying::text, 'liability'::character varying::text, 'equity'::character varying::text, 'income'::character varying::text, 'expense'::character varying::text])", name: "gl_accounts_kind_check"
+    t.check_constraint "normal_side::text = ANY (ARRAY['debit'::character varying::text, 'credit'::character varying::text])", name: "gl_accounts_side_check"
   end
 
   create_table "goods_receipt_lines", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -1404,6 +1464,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "paid_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "settings_snapshot", default: {}, null: false
     t.index ["branch_id"], name: "index_payroll_runs_on_branch_id"
     t.index ["business_id", "branch_id", "month"], name: "index_payroll_runs_on_business_id_and_branch_id_and_month", unique: true
     t.index ["business_id"], name: "index_payroll_runs_on_business_id"
@@ -1879,10 +1940,19 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "temporary", default: false, null: false
+    t.string "lifetime_kind"
+    t.integer "lifetime_value"
+    t.datetime "expires_at"
+    t.integer "orders_allowed"
+    t.integer "orders_used", default: 0, null: false
+    t.jsonb "permissions", default: [], null: false
+    t.uuid "created_by_membership_id"
     t.index ["branch_id"], name: "index_riders_on_branch_id"
     t.index ["business_id", "membership_id"], name: "index_riders_on_business_id_and_membership_id", unique: true, where: "(membership_id IS NOT NULL)"
     t.index ["business_id"], name: "index_riders_on_business_id"
     t.index ["membership_id"], name: "index_riders_on_membership_id"
+    t.check_constraint "lifetime_kind IS NULL OR (lifetime_kind::text = ANY (ARRAY['one_order'::character varying, 'n_orders'::character varying, 'rest_of_today'::character varying, 'n_hours'::character varying]::text[]))", name: "riders_lifetime_kind_check"
   end
 
   create_table "role_permissions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2641,6 +2711,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "aggregator_events", "businesses"
   add_foreign_key "attendance_rules", "businesses"
   add_foreign_key "attendance_rules", "employees"
+  add_foreign_key "attendance_scans", "businesses"
   add_foreign_key "attendances", "branches"
   add_foreign_key "attendances", "businesses"
   add_foreign_key "attendances", "employees"
@@ -2668,6 +2739,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "customers", "customer_groups", column: "group_id"
   add_foreign_key "day_closes", "branches"
   add_foreign_key "day_closes", "businesses"
+  add_foreign_key "day_end_settlements", "businesses"
   add_foreign_key "deal_items", "businesses"
   add_foreign_key "deal_items", "deals"
   add_foreign_key "deal_items", "products"

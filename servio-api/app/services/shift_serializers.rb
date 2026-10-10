@@ -16,4 +16,8 @@ module ShiftSerializers
   def movement(m)
     { id: m.id, shift_id: m.shift_id, kind: m.kind, amount_minor: m.amount_minor, reason: m.reason, reference: m.reference, by_membership_id: m.by_membership_id, approved_by_membership_id: m.approved_by_membership_id, occurred_at: m.occurred_at }
   end
+
+  def day_end_settlement(s)
+    { id: s.id, branch_id: s.branch_id, business_day: s.business_day, settled_by_membership_id: s.settled_by_membership_id, shifts_count: s.shifts_count, amount_minor: s.amount_minor, detail: s.detail, note: s.note, created_at: s.created_at }
+  end
 end

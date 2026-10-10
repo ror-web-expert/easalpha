@@ -114,6 +114,11 @@ Rails.application.routes.draw do
         end
       end
       get "payments", to: "payments#index"
+      get "shifts/my_till", to: "shifts#my_till"
+      get "day_end_settlements", to: "shifts#day_end_settlements"
+      post "day_end_settlements", to: "shifts#day_end_settle"
+      get "reports/cashier_till", to: "reports#cashier_till"
+      get "reports/riders", to: "reports#riders"
       resources :shifts, only: %i[index show create] do
         collection { get :current }
         member do
@@ -212,6 +217,20 @@ Rails.application.routes.draw do
       delete "employees/holidays/:id", to: "employees#destroy_holiday"
       resources :employees, only: %i[index show create update destroy]
       get "attendance", to: "attendance#index"
+      get "attendance/today", to: "attendance#today"
+      get "attendance/scans", to: "attendance#scans"
+      post "attendance/scan", to: "attendance#scan"
+      get "attendance/enrolled", to: "attendance#enrolled"
+      post "attendance/enrol", to: "attendance#enrol"
+      post "attendance/revoke", to: "attendance#revoke"
+      get "attendance/ledger", to: "attendance#ledger"
+      get "attendance/reports", to: "attendance#reports"
+      post "attendance/auto_close", to: "attendance#auto_close"
+      get "payroll/overview", to: "payroll#overview"
+      get "payroll/ledger", to: "payroll#ledger"
+      get "payroll/reports", to: "payroll#reports"
+      get "payroll/settings", to: "payroll#settings"
+      patch "payroll/settings", to: "payroll#update_settings"
       get "attendance/summary", to: "attendance#summary"
       post "attendance/check_in", to: "attendance#check_in"
       post "attendance/check_out", to: "attendance#check_out"

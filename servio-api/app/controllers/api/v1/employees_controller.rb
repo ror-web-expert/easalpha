@@ -63,7 +63,10 @@ module Api
       def rules = render(json: { data: AttendanceRule.order(Arel.sql("employee_id NULLS FIRST")).map { |r| PayrollSerializers.rule(r) } })
       def upsert_rule
         r = AttendanceRule.find_or_initialize_by(employee_id: params[:employee_id].presence)
-        r.update!(params.permit(:shift_start, :shift_end, :grace_minutes, :late_fine_minor, :late_fine_after_minutes, :absent_rule, :require_fingerprint_to_close_shift, working_days: []))
+        r.update!(params.permit(:shift_start, :shift_end, :grace_minutes, :late_fine_minor, :late_fine_after_minutes, :absent_rule, :fixed_divisor, :require_fingerprint_to_close_shift, :rules_enabled,
+                                :late_after_minutes, :half_day_after_minutes, :absent_after_minutes, :overtime_enabled, :overtime_rate_minor_per_hour, :no_scan_counts_absent, :free_lates, :free_half_days, :free_absents,
+                                :late_penalty, :half_day_penalty, :absent_penalty, :half_day_fine_minor, :absent_fine_minor, :fine_cap_minor, :checkout_gap_minutes, working_days: []))
+        audit!("settings_change", record: r, after: PayrollSerializers.rule(r))
         render json: PayrollSerializers.rule(r)
       end
 

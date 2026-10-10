@@ -33,7 +33,8 @@ RSpec.describe "Payroll and attendance", type: :request do
     travel_to Time.zone.parse("2026-09-01 10:50 +0500") do
       api_post "/api/v1/attendance/check_in", { pin: "1234", source: "pin" }, headers: headers
       expect(response).to have_http_status(:created)
-      expect(json[:late_minutes]).to eq(35)
+      expect(json[:late_minutes]).to eq(50) # SPEC: minutes from shift start, judged on the first scan
+      expect(json[:status]).to eq("late")
       expect(json[:fine_minor]).to eq(20_000)
       api_post "/api/v1/attendance/check_in", { employee_id: emp[:id] }, headers: headers
       expect(response).to have_http_status(:conflict)
@@ -47,10 +48,10 @@ RSpec.describe "Payroll and attendance", type: :request do
       expect(json[:late_minutes]).to eq(0)
     end
     api_post "/api/v1/attendance/fill_absences", { from: "2026-09-01", to: "2026-09-08" }, headers: headers
-    expect(json[:filled]).to eq(5) # 3,4 leave; 5 absent; 6 holiday (Sunday skipped: 2026-09-06 is Sunday -> not working day); 7, 8 absent
+    expect(json[:filled]).to eq(6) # 3,4 leave; 5 absent; 6 holiday (a Sunday, named as the holiday rather than a weekly off); 7, 8 absent
     get "/api/v1/attendance?from=2026-09-01&to=2026-09-08&employee_id=#{emp[:id]}", headers: headers
     statuses = json[:data].sort_by { |a| a[:business_day] }.map { |a| a[:status] }
-    expect(statuses).to eq(%w[present present leave leave absent absent absent])
+    expect(statuses).to eq(%w[late present leave leave absent holiday absent absent]) # SPEC: Late is a stored status; off days get their own row
     get "/api/v1/attendance/summary?month=2026-09", headers: headers
     s = json[:data].first[:summary]
     expect(s).to include(present: 2, absent: 3, leave: 2, unpaid_leave: 2, late_days: 1, fines_minor: 20_000)
@@ -71,7 +72,7 @@ RSpec.describe "Payroll and attendance", type: :request do
     api_post "/api/v1/attendance/mark", { employee_id: sana[:id], business_day: "2026-09-03", status: "absent" }, headers: headers
     within(biz) { Employee.find(newbie[:id]); (Date.new(2026, 9, 1)..Date.new(2026, 9, 30)).each { |d| Attendance.create!(employee_id: sana[:id], business_day: d, status: "present", source: "manual") unless Attendance.exists?(employee_id: sana[:id], business_day: d) } }
     within(biz) { (Date.new(2026, 9, 16)..Date.new(2026, 9, 30)).each { |d| Attendance.create!(employee_id: newbie[:id], business_day: d, status: "present", source: "manual") } }
-    within(biz) { Attendance.find_by!(employee_id: sana[:id], business_day: Date.new(2026, 9, 4)).update!(late_minutes: 20, fine_minor: 10_000) }
+    within(biz) { Attendance.find_by!(employee_id: sana[:id], business_day: Date.new(2026, 9, 4)).update!(status: "late", late_minutes: 20, fine_minor: 10_000) }
 
     api_post "/api/v1/payroll/advances", { employee_id: sana[:id], amount_minor: 300_000, reason: "Medical", installment_minor: 100_000 }, headers: headers
     adv = json

@@ -45,7 +45,7 @@ await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
-  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs", "/admin/purchasing/price-history", "/admin/suppliers/ledger", "/admin/suppliers/insights", "/admin/suppliers/payments", "/admin/finance/dashboard", "/admin/finance/combined-ledger", "/admin/finance/journal-voucher", "/admin/finance/chart-of-accounts", "/admin/finance/fixed-assets", "/admin/finance/liabilities", "/admin/finance/equity", "/admin/finance/balance-sheet", "/admin/finance/trial-balance"];
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs", "/admin/purchasing/price-history", "/admin/suppliers/ledger", "/admin/suppliers/insights", "/admin/suppliers/payments", "/admin/finance/dashboard", "/admin/finance/combined-ledger", "/admin/finance/journal-voucher", "/admin/finance/chart-of-accounts", "/admin/finance/fixed-assets", "/admin/finance/liabilities", "/admin/finance/equity", "/admin/finance/balance-sheet", "/admin/finance/trial-balance", "/admin/payroll/overview", "/admin/payroll/employees", "/admin/payroll/advances", "/admin/payroll/run", "/admin/payroll/ledger", "/admin/payroll/fingerprint", "/admin/payroll/reports", "/admin/payroll/settings", "/admin/reports/cashier-till", "/admin/reports/delivery-riders", "/admin/riders/reports", "/admin/riders/manage"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -165,6 +165,34 @@ for (const p of adminPages) {
   const tb = await api(`/finance/trial_balance?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`, { token: T });
   const bs = await api("/finance/balance_sheet", { token: T });
   step("phase 5: trial balance and balance sheet balance", tb.status === 200 && tb.j.balanced === true && bs.status === 200 && bs.j.balanced === true, JSON.stringify([tb.j?.balanced, bs.j?.balanced]));
+}
+
+
+// ---- Phase 6 gate (SPEC): the payroll run matches the attendance it priced.
+{
+  const rules = await api("/employees/rules", { method: "PUT", token: T, body: { shift_start: "10:00", shift_end: "18:00", rules_enabled: true, late_after_minutes: 15, late_penalty: "fine_only", late_fine_minor: 50000, free_lates: 0, absent_penalty: "lose_day", absent_rule: "fixed_26", fixed_divisor: 26, working_days: [1, 2, 3, 4, 5, 6] } });
+  const emp = await api("/employees", { method: "POST", token: T, body: { name: `E2E Cook ${Date.now()}`, base_salary_minor: 2600000, joined_on: "2026-01-01" } });
+  const fp = `E2E-${Date.now()}`;
+  const enrol = await api("/attendance/enrol", { method: "POST", token: T, body: { employee_id: emp.j.id, fingerprint_id: fp } });
+  step("phase 6: rules saved and employee enrolled", rules.status === 200 && emp.status === 201 && enrol.status === 200 && enrol.j.fingerprint_enrolled === true, JSON.stringify([rules.status, emp.status, enrol.status]));
+  const scan = await api("/attendance/scan", { method: "POST", token: T, body: { fingerprint_id: fp } });
+  const again = await api("/attendance/scan", { method: "POST", token: T, body: { fingerprint_id: fp } });
+  step("phase 6: a scan checks in and a second tap is Already Marked", scan.status === 200 && scan.j.result === "check_in" && again.j.result === "already_marked", JSON.stringify([scan.j?.result, again.j?.result]));
+  const month = new Date().toISOString().slice(0, 7);
+  const ledger = await api(`/attendance/ledger?employee_id=${emp.j.id}&month=${month}`, { token: T });
+  const existing = await api("/payroll/runs", { token: T });
+  for (const r of existing.j.data.filter((x) => x.month.startsWith(month) && x.status !== "paid" && x.status !== "cancelled")) await api(`/payroll/runs/${r.id}/cancel`, { method: "POST", token: T });
+  const run = await api("/payroll/runs", { method: "POST", token: T, body: { month } });
+  const slip = run.j?.payslips?.find((p) => p.employee_id === emp.j.id);
+  const expectedFines = ledger.j?.summary?.charges?.fines_minor;
+  step("phase 6: payroll run prices the month the rules engine decided", run.status === 201 && slip && slip.late_fines_minor === expectedFines && slip.detail.divisor === 26 && run.j.settings_snapshot.fixed_divisor === 26, JSON.stringify({ status: run.status, fines: slip?.late_fines_minor, expectedFines, divisor: slip?.detail?.divisor }));
+  if (run.status === 201) await api(`/payroll/runs/${run.j.id}/cancel`, { method: "POST", token: T });
+  await api("/attendance/revoke", { method: "POST", token: T, body: { employee_id: emp.j.id } });
+  await api("/employees/rules", { method: "PUT", token: T, body: { rules_enabled: false } });
+  const temp = await api("/riders", { method: "POST", token: T, body: { name: `E2E Temp ${Date.now()}`, temporary: true, lifetime_kind: "one_order" } });
+  const till = await api(`/reports/cashier_till?from=${new Date(Date.now() - 86400000).toISOString().slice(0, 10)}&to=${new Date().toISOString().slice(0, 10)}`, { token: T });
+  step("phase 6: temporary rider created and Cashier Till report answers", temp.status === 201 && temp.j.lifetime_label === "One order" && till.status === 200 && Array.isArray(till.j.rows), JSON.stringify([temp.j?.lifetime_label, till.status]));
+  if (temp.status === 201) await api(`/riders/${temp.j.id}`, { method: "DELETE", token: T });
 }
 
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");

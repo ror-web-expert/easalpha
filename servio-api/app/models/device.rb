@@ -1,6 +1,6 @@
 class Device < ApplicationRecord
   include Tenanted
-  KINDS = %w[till tablet kitchen customer_display token_screen kiosk].freeze
+  KINDS = %w[till tablet kitchen customer_display token_screen kiosk rider].freeze # SPEC: rider app
   belongs_to :branch
   validates :name, :code, presence: true
   validates :kind, inclusion: { in: KINDS }

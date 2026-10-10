@@ -9,7 +9,10 @@ module Payroll
       raise Api::Errors::Conflict.new("payroll.exists", "Payroll for #{month.strftime('%B %Y')} already exists") if PayrollRun.where(branch_id: branch&.id, month: month).where.not(status: "cancelled").exists?
       from, to = month, month.end_of_month
       Attendance.fill_absences!(from: from, to: [to, Date.current].min)
-      run = PayrollRun.create!(branch: branch, month: month, notes: notes, generated_by_membership_id: actor&.id)
+      defaults = AttendanceRule.find_by(employee_id: nil) || AttendanceRule.new
+      # SPEC: the run snapshots the divisor, the fines and the allowances it used, so later rule changes never move a paid month.
+      run = PayrollRun.create!(branch: branch, month: month, notes: notes, generated_by_membership_id: actor&.id,
+                               settings_snapshot: { salary_method: defaults.absent_rule, fixed_divisor: defaults.fixed_divisor, rules_enabled: defaults.rules_enabled, defaults: PayrollSerializers.rule(defaults) })
       employees = Employee.active.select { |e| e.active_on?(from) || e.active_on?(to) }
       employees = employees.select { |e| e.branch_id.nil? || e.branch_id == branch.id } if branch
       main_branch = branch || Branch.active.order(is_main: :desc).first
@@ -22,15 +25,17 @@ module Payroll
         active_days = (from..to).count { |d| e.active_on?(d) }
         base = (BigDecimal(e.base_salary_minor.to_s) * active_days / days_in_month).round
         att = Attendance.month_summary(e, month)
-        divisor = rule.absent_rule == "fixed_26" ? 26 : days_in_month
-        absence_days = att[:absent] + att[:unpaid_leave] + att[:half_days] * 0.5
+        divisor = rule.divisor(days_in_month)
+        # Lost days come from the penalties (absent, half day or late set to lose the day), plus unpaid leave.
+        absence_days = BigDecimal(att[:lost_days].to_s) + att[:unpaid_leave]
         absence = (BigDecimal(e.base_salary_minor.to_s) / divisor * absence_days).round
+        overtime = rule.overtime_enabled ? (BigDecimal(att[:overtime_minutes].to_s) / 60 * rule.overtime_rate_minor_per_hour).round : 0
         comps = e.employee_salary_components.includes(:salary_component).map { |c| { name: c.salary_component.name, kind: c.salary_component.kind, amount_minor: c.amount_for(base) } }
         earnings = comps.select { |c| c[:kind] == "earning" }.sum { |c| c[:amount_minor] }
         deductions = comps.select { |c| c[:kind] == "deduction" }.sum { |c| c[:amount_minor] }
         commission = e.membership_id ? (commissions[e.membership_id] || []).sum { |r| r[:commission_minor] } : 0
         tips = tip_sharers.any? && e.shares_tips ? tips_total / tip_sharers.size : 0
-        gross = base + earnings + commission + tips
+        gross = base + earnings + commission + tips + overtime
         advances = Advance.where(employee_id: e.id, status: "paid").where("outstanding_minor > 0").order(:requested_on)
         recoverable = [gross - deductions - absence - att[:fines_minor], 0].max
         recovered = 0
@@ -40,9 +45,11 @@ module Payroll
           { advance: a.label, taken_minor: take, outstanding_after_minor: a.outstanding_minor - take }
         end
         net = gross - deductions - absence - att[:fines_minor] - recovered
-        Payslip.create!(payroll_run: run, employee: e, base_minor: base, earnings_minor: earnings + commission + tips, deductions_minor: deductions, absence_minor: absence, late_fines_minor: att[:fines_minor],
+        Payslip.create!(payroll_run: run, employee: e, base_minor: base, earnings_minor: earnings + commission + tips + overtime, deductions_minor: deductions, absence_minor: absence, late_fines_minor: att[:fines_minor],
                         advances_recovered_minor: recovered, tips_minor: tips, commission_minor: commission, net_minor: net, days_present: att[:present], days_absent: att[:absent], days_leave: att[:leave],
-                        detail: { components: comps, attendance: att, advances: adv_detail, active_days: active_days, days_in_month: days_in_month, absent_rule: rule.absent_rule, absence_days: absence_days.to_f })
+                        detail: { components: comps, attendance: att, advances: adv_detail, active_days: active_days, days_in_month: days_in_month, absent_rule: rule.absent_rule, divisor: divisor,
+                                  daily_rate_minor: (BigDecimal(e.base_salary_minor.to_s) / divisor).round, absence_days: absence_days.to_f, lost_days: att[:lost_days], overtime_minor: overtime,
+                                  charges: att[:charges], rule: PayrollSerializers.rule(rule) })
       end
       run.update!(employees_count: run.payslips.count, gross_minor: run.payslips.sum(:base_minor) + run.payslips.sum(:earnings_minor), deductions_minor: run.payslips.sum("deductions_minor + absence_minor + late_fines_minor + advances_recovered_minor"), net_minor: run.payslips.sum(:net_minor))
       AuditLog.record(action: "payroll_generate", record: run, after: { month: month, employees: run.employees_count, net_minor: run.net_minor })

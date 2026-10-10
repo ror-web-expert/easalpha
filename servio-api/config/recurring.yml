@@ -1,4 +1,8 @@
 production:
+  attendance_auto_close:
+    class: AttendanceAutoCloseJob
+    queue: default
+    schedule: every 30 minutes
   stock_safety_net:
     class: StockSafetyNetJob
     queue: default

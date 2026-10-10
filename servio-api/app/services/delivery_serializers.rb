@@ -17,7 +17,9 @@ module DeliverySerializers
 
   def rider(r)
     { id: r.id, branch_id: r.branch_id, membership_id: r.membership_id, name: r.name, phone: r.phone, vehicle: r.vehicle, vehicle_no: r.vehicle_no, address: r.address, charge_per_delivery_minor: r.charge_per_delivery_minor,
-      float_minor: r.float_minor, status: r.status, last_lat: r.last_lat&.to_f, last_lng: r.last_lng&.to_f, last_seen_at: r.last_seen_at, active: r.active, archived_at: r.archived_at }
+      float_minor: r.float_minor, status: r.status, last_lat: r.last_lat&.to_f, last_lng: r.last_lng&.to_f, last_seen_at: r.last_seen_at, active: r.active, archived_at: r.archived_at,
+      temporary: r.temporary, lifetime_kind: r.lifetime_kind, lifetime_value: r.lifetime_value, lifetime_label: r.lifetime_label, expires_at: r.expires_at, orders_allowed: r.orders_allowed, orders_used: r.orders_used,
+      expired: r.expired?, permissions: r.permissions, assigned_count: r.assigned_count, completed_count: r.completed_count }
   end
 
   def delivery(d, full: false)

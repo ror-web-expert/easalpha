@@ -20,6 +20,11 @@ class Branch < ApplicationRecord
 
   def business_day_window = "#{business_day_start.strftime('%H:%M')} to #{day_end_time.strftime('%H:%M')}"
 
+  # The instant a business day ends: its end time on the following calendar date (02:01 the next morning by default).
+  def business_day_end_at(day)
+    Time.use_zone(time_zone) { Time.zone.parse("#{day + 1} #{day_end_time.strftime('%H:%M')}") }
+  end
+
   QR_DEFAULTS = { "enabled" => false, "cashier_accept" => true, "call_waiter" => true, "ask_bill" => true, "running_bill" => true, "guest_name" => true, "welcome" => nil }.freeze
 
   def qr_setting(key) = (qr_settings || {}).fetch(key.to_s, QR_DEFAULTS[key.to_s])
