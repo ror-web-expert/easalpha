@@ -48,7 +48,7 @@ export default function ReorderPage() {
                     <TD right className={Number(r.on_hand) <= 0 ? "font-medium text-danger" : "text-warning"}>{formatBaseQty(r.on_hand, r.unit_code)}</TD>
                     <TD right className="text-fg-secondary">{formatBaseQty(r.minimum, r.unit_code)}</TD>
                     <TD right className="font-medium">{formatBaseQty(r.suggested_qty, r.unit_code)}</TD>
-                    <TD>{r.supplier ? <Link href={`/admin/purchasing/payables-aging/purchase-orders/new?supplier_id=${r.supplier.id}`} className="text-primary hover:underline">{r.supplier.name}</Link> : <span className="text-fg-muted">Never bought</span>}</TD>
+                    <TD>{r.supplier ? <Link href={`/admin/purchasing/purchase-orders/new?supplier_id=${r.supplier.id}`} className="text-primary hover:underline">{r.supplier.name}</Link> : <span className="text-fg-muted">Never bought</span>}</TD>
                     <TD right>{formatMoney(r.est_cost_minor)}</TD>
                   </TR>
                 )) : <EmptyRow colSpan={6}>Nothing is below its minimum. Set minimums on stock items to get suggestions.</EmptyRow>}
@@ -84,7 +84,7 @@ export default function ReorderPage() {
                       <TD right className={r.days_left !== null && r.days_left < Number(days) ? "font-medium text-danger" : ""}>{r.days_left === null ? "-" : r.days_left > 999 ? "999+" : r.days_left}</TD>
                       <TD right className="text-fg-secondary">{formatBaseQty(r.needed, r.unit_code)}</TD>
                       <TD right className={Number(r.order_qty) > 0 ? "font-medium" : "text-fg-muted"}>{Number(r.order_qty) > 0 ? formatBaseQty(r.order_qty, r.unit_code) : "Enough"}</TD>
-                      <TD>{r.supplier ? <Link href={`/admin/purchasing/payables-aging/purchase-orders/new?supplier_id=${r.supplier.id}`} className="text-primary hover:underline">{r.supplier.name}</Link> : <span className="text-fg-muted">-</span>}</TD>
+                      <TD>{r.supplier ? <Link href={`/admin/purchasing/purchase-orders/new?supplier_id=${r.supplier.id}`} className="text-primary hover:underline">{r.supplier.name}</Link> : <span className="text-fg-muted">-</span>}</TD>
                       <TD right>{formatMoney(r.est_cost_minor)}</TD>
                     </TR>
                   );

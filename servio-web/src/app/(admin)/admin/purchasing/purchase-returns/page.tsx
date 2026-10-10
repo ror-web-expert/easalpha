@@ -15,7 +15,7 @@ export default function PurchaseReturnsPage() {
   const list = usePagedList<PurchaseReturn>(["purchase_returns"], "/purchase_returns", { supplier_id: supplier });
   return (
     <>
-      <PageHeader icon={Undo2} title="Returns to suppliers" description="Goods sent back. A credit note lowers what you owe; a cash refund puts money back in the drawer or account." actions={<Link href="/admin/purchasing/payables-aging/purchase-returns/new"><Button><Plus className="h-4 w-4" /> New return</Button></Link>} />
+      <PageHeader icon={Undo2} title="Returns to suppliers" description="Goods sent back. A credit note lowers what you owe; a cash refund puts money back in the drawer or account." actions={<Link href="/admin/purchasing/purchase-returns/new"><Button><Plus className="h-4 w-4" /> New return</Button></Link>} />
       <FilterBar><SupplierSelect className="w-auto" value={supplier} onChange={(id) => setSupplier(id)} /></FilterBar>
       {list.isLoading ? <Loading /> : (
         <Table>
@@ -29,7 +29,7 @@ export default function PurchaseReturnsPage() {
                 <TD className="text-fg-secondary">{formatDate(r.returned_on)}</TD>
                 <TD><Badge variant={r.settlement === "cash_refund" ? "success" : "info"}>{r.settlement === "cash_refund" ? "Cash refund" : "Credit note"}</Badge></TD>
                 <TD className="max-w-56 truncate text-fg-secondary">{r.reason ?? "-"}</TD>
-                <TD className="whitespace-nowrap text-xs">{r.goods_receipt_id ? <Link href={`/admin/purchasing/payables-aging/goods-received/${r.goods_receipt_id}`} className="text-primary hover:underline">Receipt</Link> : null}{r.goods_receipt_id && r.stock_document_id ? " · " : null}{r.stock_document_id ? <Link href={`/admin/inventory/stock-actions/${r.stock_document_id}`} className="text-primary hover:underline">Document</Link> : null}</TD>
+                <TD className="whitespace-nowrap text-xs">{r.goods_receipt_id ? <Link href={`/admin/purchasing/goods-received/${r.goods_receipt_id}`} className="text-primary hover:underline">Receipt</Link> : null}{r.goods_receipt_id && r.stock_document_id ? " · " : null}{r.stock_document_id ? <Link href={`/admin/inventory/stock-actions/${r.stock_document_id}`} className="text-primary hover:underline">Document</Link> : null}</TD>
                 <TD right className="font-medium">{formatMoney(r.amount_minor)}</TD>
                 <TD className="whitespace-nowrap text-fg-secondary">{formatDateTime(r.created_at)}</TD>
               </TR>

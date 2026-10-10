@@ -1,6 +1,6 @@
 # Servio build log
 
-Autonomous build started 9 Oct 2026. One sprint at a time, each ending with automated tests and a smoke run. Nothing is committed to git; the working trees are in `servio-api/` and `servio-web/`.
+Autonomous build started 9 Oct 2026. One sprint at a time, each ending with automated tests and a smoke run. From 10 Oct 2026 the project is a git repository (owner's answer) and every unit is committed.
 
 | Sprint | Scope | Status | Tests |
 |---|---|---|---|
@@ -29,8 +29,21 @@ Autonomous build started 9 Oct 2026. One sprint at a time, each ending with auto
 | 19 | Hardening: Urdu error messages for 60 common codes when the client sends Accept-Language or X-Locale ur (English stays the fallback), applied to authenticated and public QR endpoints; Brakeman clean apart from the Rails end-of-support notice; Phase 1 smoke rerun 87 of 87 | Done | 137 passing |
 | 19w | Design system moved to Material Design 3 (10 Oct 2026, the user chose M3 with a blue main colour after asking for an international standard): colours generated with Google's material-color-utilities from seed #1A73E8 (fidelity scheme, primary #005BBF) for light and dark, status colours as M3 tonal palettes, every text pair WCAG AA; Roboto self-hosted from @fontsource (works offline on tills) with the M3 type scale (Body Medium 14/20, input text 16, Title Large 22 page titles); pill buttons (filled, outlined, tonal, text), outlined 40px text fields, segmented buttons, 12px outlined cards, 48px table rows, tonal status chips, 28px dialogs, snackbar, navigation drawer with pill indicator, accordion groups and Ctrl+K page search; split-screen login; till tiles, category pills and order-type segments restyled; unbuilt pages marked Soon; app icons recoloured | Done | tsc and lint clean |
 
+## SPEC phases (from 10 Oct 2026)
+
+`docs/SPEC.md` is the requirement; the build follows its 7 phases. See `docs/phase1-plan.md` and `docs/PDF-ALIGNMENT-SHORT.md`.
+
+| Phase | Scope | Status | Tests |
+|---|---|---|---|
+| 1 Foundation, API | Permission registry: 57 SPEC codes with module, surface and restriction beside the 46 Servio codes; Cashier, Supervisor, Manager presets; `user_permissions` with role or custom mode; granted set in the access token (takes effect at next sign-in); surface rule for software-only and app-only codes. Staff types admin, cashier (cashier, supervisor, kitchen_display), order_taker, rider. User sessions list and revoke. Business day as a window, default 06:01 to 02:01. Settings table grouped as the five SPEC areas with defaults and a version (`GET/PATCH /settings`, `GET /settings/version`, version in sync). Audit of every create, update and delete from a model concern, SPEC action names, append-only trigger, filters by date, actor, action and entity, entities and insights endpoints. `PATCH /me` rejects a wrong current password. | Done | 165 passing |
+| 1 Foundation, web | Sidebar in the SPEC layout: Dashboard, Orders, Expenses, Tables, then the 12 groups with SPEC screen names; pages moved to the SPEC route roots with redirects from the old paths. Permission editor (module list with granted-of-total, presets, Select all, Software/App/Both and RESTRICTION badges, next-sign-in note). Admin Staff, Cashiers, Order Takers, User Sessions. Settings: Store Profile with secondary phone, Store Management, Business Hours, Point of Sale, Charges & Tax, Security & Cash with Change Password; Audit Logs with date, actor, action and entity filters, CSV export and Search Insights. Top bar with live clock, business-day window and plan badge. Vitest and Testing Library set up; Zod added. | Done | 31 Vitest; build 96 pages; Playwright 92 of 93 (first login timed out on the dev server's cold compile; every page and all 5 gate steps passed) |
+| 1 Gate | Log in as a manager, grant a custom set, the old session keeps its menu, sign in again and the sidebar follows the new set | Passed | `scripts/e2e-web.mjs` gate steps |
+
+Phase 1 leaves for later phases: the dashboard cards, hourly charts and pills (Phase 3); the SPEC screens marked Soon in the sidebar (their phases). Open: the SPEC's unnamed 8th Orders permission code.
+
 Environment:
 
 - PostgreSQL 16: `docker start servio-pg` (container `servio-pg`, port 5434, postgres/postgres). Databases `servio_development*`, `servio_test`.
 - API: `cd servio-api && bin/dev` (API on 3001 plus Solid Queue worker), or `bin/rails s -p 3001` alone. Tests: `bundle exec rspec`. Smoke: `scripts/smoke/phase1.sh` and `scripts/smoke/phase2.sh`. Security scan: `bundle exec brakeman -q` (only the Rails 8.0 end-of-support notice remains).
-- Rust is not installed, so the till ships as an installable offline web app in `servio-web`; the Tauri wrapper is a follow-up.
+- The till is an installable offline web app in `servio-web`, as SPEC's frontend plan says.
+- Web: `cd servio-web && pnpm dev -p 3000`; checks: `pnpm exec tsc --noEmit -p .`, `pnpm lint`, `pnpm test` (Vitest), `pnpm build` (never beside a running dev server). Browser run: `node scripts/e2e-web.mjs` with Playwright installed in `scripts/` (`cd scripts && npm i --no-save playwright`).

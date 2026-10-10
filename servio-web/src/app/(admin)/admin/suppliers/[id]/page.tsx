@@ -43,7 +43,7 @@ export default function SupplierPage() {
     <>
       <PageHeader icon={Truck} title={s.name} description={[s.contact_name, s.phone, s.email, s.ntn ? `NTN ${s.ntn}` : null, s.payment_terms_days ? `${s.payment_terms_days} day terms` : "Pay on delivery"].filter(Boolean).join(" · ")} actions={<>
         <Button variant="secondary" onClick={() => setEditing(true)}><Pencil className="h-4 w-4" /> Edit</Button>
-        <Link href={`/admin/purchasing/payables-aging/purchase-orders/new?supplier_id=${s.id}`}><Button variant="secondary"><Plus className="h-4 w-4" /> Purchase order</Button></Link>
+        <Link href={`/admin/purchasing/purchase-orders/new?supplier_id=${s.id}`}><Button variant="secondary"><Plus className="h-4 w-4" /> Purchase order</Button></Link>
         <Button onClick={() => setPaying(true)}><HandCoins className="h-4 w-4" /> Record payment</Button>
         {!s.balance_minor ? <Button variant="ghost" onClick={() => setArchiving(true)}><Archive className="h-4 w-4" /> Archive</Button> : null}
       </>} />
@@ -60,7 +60,7 @@ export default function SupplierPage() {
             {ledger.data?.entries.length ? [...ledger.data.entries].reverse().map((e, i) => (
               <TR key={`${e.ref ?? e.kind}-${e.at}-${i}`}>
                 <TD className="whitespace-nowrap text-fg-secondary">{formatDateTime(e.at)}</TD>
-                <TD><Badge variant={entryVariant(e.kind)}>{ENTRY_LABEL[e.kind] ?? titleCase(e.kind)}</Badge>{e.number ? (e.kind === "receipt" ? <Link href={`/admin/purchasing/payables-aging/goods-received/${e.ref}`} className="ml-2 font-mono text-xs text-primary hover:underline">{e.number}</Link> : <span className="ml-2 font-mono text-xs">{e.number}</span>) : null}</TD>
+                <TD><Badge variant={entryVariant(e.kind)}>{ENTRY_LABEL[e.kind] ?? titleCase(e.kind)}</Badge>{e.number ? (e.kind === "receipt" ? <Link href={`/admin/purchasing/goods-received/${e.ref}`} className="ml-2 font-mono text-xs text-primary hover:underline">{e.number}</Link> : <span className="ml-2 font-mono text-xs">{e.number}</span>) : null}</TD>
                 <TD className="text-fg-secondary">{e.description ?? "-"}</TD>
                 <TD right className={e.amount_minor < 0 ? "text-success" : "text-danger"}>{e.amount_minor < 0 ? "-" : "+"}{formatMoney(Math.abs(e.amount_minor))}</TD>
                 <TD right className="font-medium">{formatMoney(e.balance_minor)}</TD>
@@ -128,7 +128,7 @@ export default function SupplierPage() {
               <THead><tr><TH>Order</TH><TH>Status</TH><TH>Expected</TH><TH right>Lines</TH><TH right>Total</TH><TH>Created</TH></tr></THead>
               <TBody>
                 {orders.rows.length ? orders.rows.map((po) => (
-                  <TR key={po.id}><TD><Link href={`/admin/purchasing/payables-aging/purchase-orders/${po.id}`} className="font-mono font-medium text-primary hover:underline">{po.label}</Link></TD><TD><Badge variant={poStatusVariant(po.status)}>{titleCase(po.status)}</Badge></TD><TD className="text-fg-secondary">{po.expected_on ? formatDate(po.expected_on) : "-"}</TD><TD right>{po.line_count}</TD><TD right>{formatMoney(po.total_minor)}</TD><TD className="whitespace-nowrap text-fg-secondary">{formatDateTime(po.created_at)}</TD></TR>
+                  <TR key={po.id}><TD><Link href={`/admin/purchasing/purchase-orders/${po.id}`} className="font-mono font-medium text-primary hover:underline">{po.label}</Link></TD><TD><Badge variant={poStatusVariant(po.status)}>{titleCase(po.status)}</Badge></TD><TD className="text-fg-secondary">{po.expected_on ? formatDate(po.expected_on) : "-"}</TD><TD right>{po.line_count}</TD><TD right>{formatMoney(po.total_minor)}</TD><TD className="whitespace-nowrap text-fg-secondary">{formatDateTime(po.created_at)}</TD></TR>
                 )) : <EmptyRow colSpan={6}>No purchase orders for this supplier.</EmptyRow>}
               </TBody>
             </Table>
@@ -143,7 +143,7 @@ export default function SupplierPage() {
               <THead><tr><TH>Receipt</TH><TH>Status</TH><TH>Received</TH><TH>Invoice</TH><TH right>Lines</TH><TH right>Total</TH></tr></THead>
               <TBody>
                 {receipts.rows.length ? receipts.rows.map((g) => (
-                  <TR key={g.id}><TD><Link href={`/admin/purchasing/payables-aging/goods-received/${g.id}`} className="font-mono font-medium text-primary hover:underline">{g.label}</Link></TD><TD><Badge variant={postedStatusVariant(g.status)}>{g.status}</Badge></TD><TD className="text-fg-secondary">{formatDate(g.received_on)}</TD><TD className="text-fg-secondary">{g.invoice_ref ?? "-"}</TD><TD right>{g.line_count}</TD><TD right>{formatMoney(g.total_minor)}</TD></TR>
+                  <TR key={g.id}><TD><Link href={`/admin/purchasing/goods-received/${g.id}`} className="font-mono font-medium text-primary hover:underline">{g.label}</Link></TD><TD><Badge variant={postedStatusVariant(g.status)}>{g.status}</Badge></TD><TD className="text-fg-secondary">{formatDate(g.received_on)}</TD><TD className="text-fg-secondary">{g.invoice_ref ?? "-"}</TD><TD right>{g.line_count}</TD><TD right>{formatMoney(g.total_minor)}</TD></TR>
                 )) : <EmptyRow colSpan={6}>No goods received from this supplier.</EmptyRow>}
               </TBody>
             </Table>

@@ -878,3 +878,24 @@ Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1
 | GET | /api/v1/super/businesses/:id | show |
 | PATCH | /api/v1/super/businesses/:id | update |
 | PUT | /api/v1/super/businesses/:id | update |
+
+## Phase 1 additions (10 Oct 2026, from SPEC.md)
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/roles/permissions | registry: 57 SPEC codes with module, surface, restriction and implied Servio codes, plus the 46 Servio codes |
+| GET | /api/v1/roles/presets | Cashier, Supervisor, Manager presets |
+| GET | /api/v1/staff/:id/permissions | mode (role or custom), granted, effective, granted-of-total per module |
+| PUT | /api/v1/staff/:id/permissions | body codes[] or preset or select_all or reset; takes effect at the next sign-in |
+| GET | /api/v1/staff?staff_type=admin,cashier,order_taker,rider&cashier_role= | staff populations |
+| GET | /api/v1/staff/sessions?active=&membership_id= | user sessions from refresh tokens |
+| POST | /api/v1/staff/sessions/:id/revoke | sign a session out |
+| PATCH | /api/v1/branches/:id | adds business_day_start; the business day is a window, default 06:01 to 02:01 |
+| GET | /api/v1/settings | the five SPEC settings areas with every key, value and default |
+| PATCH | /api/v1/settings | values: {key: value}; bumps the version |
+| GET | /api/v1/settings/version | the version the POS compares against; user or device token |
+| GET | /api/v1/audit_logs?from&to&user_id&action_name&table_name&record_id | every create, update and delete; append-only |
+| GET | /api/v1/audit_logs/entities | entity types seen and the action list |
+| GET | /api/v1/audit_logs/insights?from&to | counts by action, entity, actor and day |
+
+The access token now carries `perms`, the effective permission codes at sign-in.

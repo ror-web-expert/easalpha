@@ -74,7 +74,7 @@ export default function StockItemPage() {
         </Card>
       </div>
       <Card className="mb-5">
-        <CardHeader><CardTitle>Supplier prices</CardTitle><Link href="/admin/purchasing/payables-aging/goods-received" className="text-xs text-primary hover:underline">All receipts</Link></CardHeader>
+        <CardHeader><CardTitle>Supplier prices</CardTitle><Link href="/admin/purchasing/goods-received" className="text-xs text-primary hover:underline">All receipts</Link></CardHeader>
         <Table>
           <THead><tr><TH>Date</TH><TH>Supplier</TH><TH right>Price</TH><TH right>Per {displayUnit(1000, code).code}</TH><TH>Receipt</TH></tr></THead>
           <TBody>
@@ -84,7 +84,7 @@ export default function StockItemPage() {
                 <TD><Link href={`/admin/suppliers/${p.supplier_id}`} className="font-medium text-primary hover:underline">{p.supplier_name}</Link></TD>
                 <TD right>{formatMoney(p.unit_cost_minor)} / {p.unit_code ?? code}</TD>
                 <TD right className="text-fg-secondary">{formatUnitCost(p.base_unit_cost_minor, code, formatMoney)}</TD>
-                <TD>{p.goods_receipt_id ? <Link href={`/admin/purchasing/payables-aging/goods-received/${p.goods_receipt_id}`} className="text-xs text-primary hover:underline">Open</Link> : "-"}</TD>
+                <TD>{p.goods_receipt_id ? <Link href={`/admin/purchasing/goods-received/${p.goods_receipt_id}`} className="text-xs text-primary hover:underline">Open</Link> : "-"}</TD>
               </TR>
             )) : <EmptyRow colSpan={5}>No purchases recorded yet. Prices appear here from goods receipts.</EmptyRow>}
           </TBody>

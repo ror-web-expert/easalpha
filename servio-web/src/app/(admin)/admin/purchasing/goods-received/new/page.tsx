@@ -47,12 +47,12 @@ function NewReceipt() {
       const g = await api<GoodsReceipt>("/goods_receipts", { method: "POST", body: { supplier_id: supplierId, section_id: sectionId || undefined, invoice_ref: invoiceRef || null, received_on: receivedOn || undefined, note: note || null, lines: purchaseLinesToInput(lines, { batch: true }) } });
       KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(`${g.label} posted`, `${formatMoney(g.total_minor)} added to ${g.supplier_name}'s balance`);
-      router.replace(`/admin/purchasing/payables-aging/goods-received/${g.id}`);
+      router.replace(`/admin/purchasing/goods-received/${g.id}`);
     } catch (e) { toast.error("Could not post", errorMessage(e)); setBusy(false); }
   };
   return (
     <>
-      <PageHeader icon={FileInput} title="New goods receipt" description="A delivery without a purchase order. Posts straight into stock; to receive against an order, open the order and use Receive." actions={<Link href="/admin/purchasing/payables-aging/goods-received"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Receipts</Button></Link>} />
+      <PageHeader icon={FileInput} title="New goods receipt" description="A delivery without a purchase order. Posts straight into stock; to receive against an order, open the order and use Receive." actions={<Link href="/admin/purchasing/goods-received"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Receipts</Button></Link>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle>Details</CardTitle></CardHeader>

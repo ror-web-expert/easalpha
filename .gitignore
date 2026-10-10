@@ -2,3 +2,6 @@
 *.log
 .env
 .env.*
+scripts/node_modules
+scripts/shots
+scripts/report.json

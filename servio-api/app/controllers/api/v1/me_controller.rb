@@ -22,7 +22,11 @@ module Api
       def update
         before = current_user.slice(:name, :email, :phone, :locale)
         current_user.update!(params.permit(:name, :locale, :email, :phone))
-        current_user.update!(password: params[:password]) if params[:password].present? && current_user.authenticate(params[:current_password].to_s)
+        if params[:password].present?
+          raise Api::Errors::BadRequest.new("password.current_wrong", "The current password is wrong") unless current_user.authenticate(params[:current_password].to_s)
+          current_user.update!(password: params[:password])
+          current_user.refresh_tokens.where.not(id: nil).update_all(revoked_at: Time.current) if current_user.respond_to?(:refresh_tokens)
+        end
         audit!("update", record: current_user, before: before, after: current_user.slice(:name, :email, :phone, :locale))
         render json: Serializers.user(current_user)
       end

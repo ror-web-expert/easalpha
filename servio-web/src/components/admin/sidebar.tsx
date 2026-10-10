@@ -9,7 +9,8 @@ import { NAV, type NavGroup, type NavItem } from "./nav";
 import { useAuthStore, hasPermission } from "@/store/auth";
 import { api } from "@/lib/api";
 import type { Session } from "@/lib/types";
-import { Button, ThemeToggle } from "@/components/ui";
+import { Badge, Button, ThemeToggle } from "@/components/ui";
+import { format } from "date-fns";
 import { toast } from "@/store/toast";
 
 function isActive(it: NavItem, pathname: string) {
@@ -281,6 +282,26 @@ function UserFooter({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+/** SPEC top bar: live clock, the business-day window the dashboard reports on, and the plan badge. */
+function DayBar() {
+  const session = useAuthStore((s) => s.session);
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!session) return null;
+  const window_ = session.branch?.business_day_window;
+  return (
+    <div className="hidden items-center gap-2 text-xs text-fg-secondary md:flex">
+      {now ? <span className="tabular whitespace-nowrap" suppressHydrationWarning>{format(now, "EEE d MMM yyyy · HH:mm")}</span> : null}
+      {window_ ? <span className="whitespace-nowrap" title="Daily reports and the dashboard use this window, not midnight to midnight">Business day {window_}</span> : null}
+      <Badge variant="primary">{session.business.plan?.name ?? "Trial"}</Badge>
+    </div>
+  );
+}
+
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -351,6 +372,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Search className="h-6 w-6" />
           </button>
           <BranchPicker />
+          <DayBar />
           <ThemeToggle />
         </header>
         <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-8 pt-2 md:px-6">{children}</main>

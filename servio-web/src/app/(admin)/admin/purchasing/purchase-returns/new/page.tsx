@@ -65,12 +65,12 @@ function NewReturn() {
       } });
       KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(`${r.label} posted`, `${formatMoney(r.amount_minor)} ${r.settlement === "cash_refund" ? "refunded" : "credited"} by ${r.supplier_name}`);
-      router.replace("/admin/purchasing/payables-aging/purchase-returns");
+      router.replace("/admin/purchasing/purchase-returns");
     } catch (e) { toast.error("Could not post", errorMessage(e)); setBusy(false); }
   };
   return (
     <>
-      <PageHeader icon={Undo2} title="Return goods to a supplier" description="Pick the receipt the goods came on to prefill items and costs, or add lines by hand." actions={<Link href="/admin/purchasing/payables-aging/purchase-returns"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Returns</Button></Link>} />
+      <PageHeader icon={Undo2} title="Return goods to a supplier" description="Pick the receipt the goods came on to prefill items and costs, or add lines by hand." actions={<Link href="/admin/purchasing/purchase-returns"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Returns</Button></Link>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle>Details</CardTitle></CardHeader>

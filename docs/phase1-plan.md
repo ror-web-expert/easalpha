@@ -17,3 +17,5 @@ Gate: login and permissions work end to end. Scope is section 3 of `PDF-ALIGNMEN
 | 11 | Web: sidebar and routes | NAV in the SPEC layout (4 standalone + 12 groups, SPEC screen names); folders moved to the SPEC route roots with redirects from the old paths | Vitest on nav; Playwright smoke on every moved page |
 | 12 | Web: screens | Permission editor (module list with granted-of-total, Software/App/Both badges, RESTRICTION, 3 presets, Select all); Admin Staff, Cashiers, Order Takers, User Sessions; Business Hours; Settings in five areas; audit log filters and export | Vitest for the editor; Playwright for the gate |
 | 13 | Gate | Log in, change a user's permissions, sign in again, see the new menu; run the full suite; screenshots; BUILD-LOG | Full suite green |
+
+Not in this phase: the dashboard additions (products, customers and expenses cards, hourly charts, period selector, low-stock and open-orders pills) go with Orders in Phase 3, since they read order and stock data that phase reshapes.

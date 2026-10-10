@@ -12,3 +12,9 @@ export function businessDayFor(dayEndTime: string | null | undefined, at: Date =
   }
   return isoDay(at);
 }
+
+// SPEC Business Hours: the sentence shown under the start and end fields.
+export function windowSentence(start: string, end: string) {
+  const nextDay = end <= start ? " the next day" : "";
+  return `Business day runs ${start} to ${end}${nextDay}; an order at 1:00 am belongs to the previous day's report, so midnight never splits an operational period.`;
+}

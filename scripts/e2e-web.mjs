@@ -42,8 +42,9 @@ await a.getByRole("button", { name: "Log in" }).click();
 try { await a.waitForURL(/\/admin/, { timeout: 30000 }); step("admin login", true, a.url()); } catch { step("admin login", false, a.url()); await shot(a, "admin-login-fail"); }
 await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
-  "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/admin-staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
-  "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store/store-management", "/admin/settings/store/payment-methods", "/admin/settings/store/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/payables-aging/purchase-orders", "/admin/purchasing/payables-aging/purchase-orders/new", "/admin/purchasing/payables-aging/goods-received", "/admin/purchasing/payables-aging/goods-received/new", "/admin/purchasing/payables-aging/purchase-returns", "/admin/purchasing/payables-aging/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/payables-aging/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/store/qr", "/admin/reports/schedules"];
+  "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
+  "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -53,6 +54,31 @@ for (const p of adminPages) {
   const r = { path: p, status: resp?.status(), broken, newConsoleErrors: report.consoleErrors.length - before, newFailedRequests: report.failedRequests.length - beforeF, textLength: (body || "").length };
   report.pages.push(r); step(`admin ${p}`, !broken && r.status === 200 && r.newFailedRequests === 0, JSON.stringify(r));
   await shot(a, "admin" + p.replace(/\//g, "_"));
+}
+
+
+// ---- Phase 1 gate (SPEC): login + permissions. A manager sees Inventory; after a custom grant and a fresh sign-in, the sidebar follows the new set.
+{
+  const mgrRole = roles.j.data.find((r) => r.system_key === "manager").id;
+  const email = `e2e-mgr-${Date.now()}@servio.test`;
+  const mgr = await api("/staff", { method: "POST", token: T, body: { name: "E2E Manager", email, password: "password123", role_id: mgrRole, staff_type: "admin" } });
+  step("gate: manager created", mgr.status === 201, String(mgr.status));
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 800 } }); const g = await ctx.newPage(); wire(g, "gate");
+  const loginAs = async () => { await g.goto(WEB + "/login"); await g.waitForSelector("input[type=email]"); await g.fill("input[type=email]", email); await g.fill("input[type=password]", "password123"); await g.getByRole("button", { name: "Log in" }).click(); await g.waitForURL(/\/admin/, { timeout: 30000 }); await g.waitForTimeout(1200); };
+  await loginAs();
+  const navText1 = await g.evaluate(() => document.querySelector("nav")?.innerText || "");
+  step("gate: manager sees Inventory group", /Inventory/.test(navText1), navText1.slice(0, 80).replace(/\n/g, " "));
+  await g.goto(WEB + `/admin/staff/${mgr.j.id}/access`, { waitUntil: "networkidle" }).catch(() => null); await g.waitForTimeout(800); await shot(g, "gate-permission-editor");
+  const put = await api(`/staff/${mgr.j.id}/permissions`, { method: "PUT", token: T, body: { codes: ["app.admin", "DASHBOARD", "SALES_WALKIN"] } });
+  step("gate: custom grant saved", put.status === 200 && put.j.mode === "custom", JSON.stringify(put.j?.granted));
+  await g.goto(WEB + "/admin", { waitUntil: "networkidle" }); await g.waitForTimeout(800);
+  const navText2 = await g.evaluate(() => document.querySelector("nav")?.innerText || "");
+  step("gate: old session keeps old menu until re-login", /Inventory/.test(navText2), "");
+  await g.evaluate(() => localStorage.removeItem("servio.auth")); await loginAs();
+  const navText3 = await g.evaluate(() => document.querySelector("nav")?.innerText || "");
+  step("gate: after re-login Inventory is gone and Orders stays", !/Inventory/.test(navText3) && /Orders/.test(navText3), navText3.slice(0, 120).replace(/\n/g, " "));
+  await shot(g, "gate-after-relogin");
+  await ctx.close();
 }
 
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");

@@ -18,7 +18,7 @@ export default function GoodsReceiptsPage() {
   const list = usePagedList<GoodsReceipt>(["goods_receipts"], "/goods_receipts", { supplier_id: supplier, status, from, to });
   return (
     <>
-      <PageHeader icon={FileInput} title="Goods received" description="Every delivery, with or without a purchase order. Posting a receipt puts stock in, raises the supplier balance and records the price." actions={<Link href="/admin/purchasing/payables-aging/goods-received/new"><Button><Plus className="h-4 w-4" /> New receipt</Button></Link>} />
+      <PageHeader icon={FileInput} title="Goods received" description="Every delivery, with or without a purchase order. Posting a receipt puts stock in, raises the supplier balance and records the price." actions={<Link href="/admin/purchasing/goods-received/new"><Button><Plus className="h-4 w-4" /> New receipt</Button></Link>} />
       <FilterBar>
         <SupplierSelect className="w-auto" value={supplier} onChange={(id) => setSupplier(id)} />
         <Select className="w-auto" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Any status</option><option value="posted">Posted</option><option value="cancelled">Cancelled</option></Select>
@@ -32,12 +32,12 @@ export default function GoodsReceiptsPage() {
           <TBody>
             {list.rows.length ? list.rows.map((g) => (
               <TR key={g.id}>
-                <TD><Link href={`/admin/purchasing/payables-aging/goods-received/${g.id}`} className="font-mono font-medium text-primary hover:underline">{g.label}</Link></TD>
+                <TD><Link href={`/admin/purchasing/goods-received/${g.id}`} className="font-mono font-medium text-primary hover:underline">{g.label}</Link></TD>
                 <TD><Link href={`/admin/suppliers/${g.supplier_id}`} className="hover:underline">{g.supplier_name}</Link></TD>
                 <TD><Badge variant={postedStatusVariant(g.status)}>{g.status}</Badge></TD>
                 <TD className="text-fg-secondary">{formatDate(g.received_on)}</TD>
                 <TD className="text-fg-secondary">{g.invoice_ref ?? "-"}</TD>
-                <TD>{g.purchase_order_id ? <Link href={`/admin/purchasing/payables-aging/purchase-orders/${g.purchase_order_id}`} className="text-xs text-primary hover:underline">Order</Link> : <span className="text-xs text-fg-muted">Direct</span>}</TD>
+                <TD>{g.purchase_order_id ? <Link href={`/admin/purchasing/purchase-orders/${g.purchase_order_id}`} className="text-xs text-primary hover:underline">Order</Link> : <span className="text-xs text-fg-muted">Direct</span>}</TD>
                 <TD right>{g.line_count}</TD>
                 <TD right className="font-medium">{formatMoney(g.total_minor)}</TD>
                 <TD className="whitespace-nowrap text-fg-secondary">{formatDateTime(g.created_at)}</TD>

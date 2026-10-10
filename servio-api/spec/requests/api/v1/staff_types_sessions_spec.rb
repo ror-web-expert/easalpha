@@ -82,4 +82,16 @@ RSpec.describe "Staff types, user sessions and the business day", type: :request
       expect(response).to have_http_status(:forbidden)
     end
   end
+
+  describe "change password" do
+    it "rejects a wrong current password and accepts the right one" do
+      api_patch "/api/v1/me", { current_password: "nope", password: "newpassword1" }, headers: headers
+      expect(response).to have_http_status(:bad_request)
+      expect(json[:error][:code]).to eq("password.current_wrong")
+      api_patch "/api/v1/me", { current_password: "password123", password: "newpassword1" }, headers: headers
+      expect(response).to have_http_status(:ok)
+      api_post "/api/v1/auth/login", { email: owner.user.email, password: "newpassword1" }
+      expect(response).to have_http_status(:ok)
+    end
+  end
 end

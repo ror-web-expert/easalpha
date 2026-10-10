@@ -55,12 +55,12 @@ function NewOrder() {
       const po = await api<PurchaseOrder>("/purchase_orders", { method: "POST", body: { supplier_id: supplierId, expected_on: expectedOn || null, note: note || null, lines: purchaseLinesToInput(lines), send } });
       PO_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(send ? `${po.label} sent` : `${po.label} saved as draft`);
-      router.replace(`/admin/purchasing/payables-aging/purchase-orders/${po.id}`);
+      router.replace(`/admin/purchasing/purchase-orders/${po.id}`);
     } catch (e) { toast.error(send ? "Could not send" : "Could not save", errorMessage(e)); setBusy(null); }
   };
   return (
     <>
-      <PageHeader icon={ShoppingCart} title="New purchase order" description="Leave a cost blank to use the supplier's last price for that item." actions={<Link href="/admin/purchasing/payables-aging/purchase-orders"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Orders</Button></Link>} />
+      <PageHeader icon={ShoppingCart} title="New purchase order" description="Leave a cost blank to use the supplier's last price for that item." actions={<Link href="/admin/purchasing/purchase-orders"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Orders</Button></Link>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle>Details</CardTitle></CardHeader>

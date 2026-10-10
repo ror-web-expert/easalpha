@@ -42,8 +42,8 @@ export default function GoodsReceiptPage() {
   return (
     <>
       <PageHeader icon={FileInput} title={g.label} description={`${g.supplier_name} · received ${formatDate(g.received_on)}${g.invoice_ref ? ` · invoice ${g.invoice_ref}` : ""}`} actions={<>
-        <Link href="/admin/purchasing/payables-aging/goods-received"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Receipts</Button></Link>
-        {g.status === "posted" ? <Link href={`/admin/purchasing/payables-aging/purchase-returns/new?supplier_id=${g.supplier_id}&goods_receipt_id=${g.id}`}><Button variant="secondary"><Undo2 className="h-4 w-4" /> Return goods</Button></Link> : null}
+        <Link href="/admin/purchasing/goods-received"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Receipts</Button></Link>
+        {g.status === "posted" ? <Link href={`/admin/purchasing/purchase-returns/new?supplier_id=${g.supplier_id}&goods_receipt_id=${g.id}`}><Button variant="secondary"><Undo2 className="h-4 w-4" /> Return goods</Button></Link> : null}
         {g.status === "posted" ? <Button variant="destructive" onClick={() => setCancelOpen(true)}><Ban className="h-4 w-4" /> Cancel</Button> : null}
       </>} />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -56,7 +56,7 @@ export default function GoodsReceiptPage() {
               { label: "Business day", value: g.business_day ? formatDate(g.business_day) : "-" },
               { label: "Section", value: sectionName(sections.data, g.stock_section_id) },
               { label: "Invoice", value: g.invoice_ref ?? "-" },
-              { label: "Purchase order", value: g.purchase_order_id ? <Link href={`/admin/purchasing/payables-aging/purchase-orders/${g.purchase_order_id}`} className="text-primary hover:underline">Open order</Link> : "None (direct)" },
+              { label: "Purchase order", value: g.purchase_order_id ? <Link href={`/admin/purchasing/purchase-orders/${g.purchase_order_id}`} className="text-primary hover:underline">Open order</Link> : "None (direct)" },
               { label: "Stock document", value: g.stock_document_id ? <Link href={`/admin/inventory/stock-actions/${g.stock_document_id}`} className="text-primary hover:underline">Open document</Link> : "-" },
               { label: "Created", value: formatDateTime(g.created_at) },
               ...(g.cancelled_at ? [{ label: "Cancelled", value: formatDateTime(g.cancelled_at) }] : []),

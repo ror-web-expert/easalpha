@@ -37,15 +37,31 @@ export interface Business {
 
 export interface Branch {
   id: ID; business_id: ID; name: string; code: string; address: string | null; city: string | null; phone: string | null;
-  time_zone: string | null; day_end_time: string | null; tax_registration: Record<string, string> | null;
+  time_zone: string | null; day_end_time: string | null; business_day_start?: string | null; business_day_window?: string | null;
+  tax_registration: Record<string, string> | null;
   opening_hours: Record<string, unknown> | null; qr_settings?: Partial<QrSettings> | null; is_main: boolean; archived_at: string | null;
 }
 
+// ---- Settings store (SPEC "Settings and multi-outlet"): typed keys grouped by screen, with a version tills compare. ----
+export type SettingType = "string" | "boolean" | "integer" | "number" | "json" | "pin";
+export interface SettingKey {
+  key: string; group: string; screen: string; type: SettingType; label: string;
+  /** Secrets (pins, tokens) come back as "set" or null, never the real value. */
+  value: unknown; default: unknown;
+}
+export interface SettingsGroup { name: string; screens: Record<string, SettingKey[]> }
+export interface SettingsResponse { version: number; groups: Record<string, SettingsGroup> }
+
 export interface RoleRef { id: ID; name: string; system_key: string | null }
+
+export type StaffType = "admin" | "cashier" | "order_taker" | "rider";
+export type CashierRole = "cashier" | "supervisor" | "kitchen_display";
+export type PermissionsMode = "role" | "custom";
 
 export interface Membership {
   id: ID; business_id: ID; user_id: ID; role: RoleRef; status: string; all_branches: boolean; branch_ids: ID[];
   has_pin: boolean; pin_locked: boolean; invited_via: string | null; created_at: string; deactivated_at: string | null;
+  staff_type: StaffType; cashier_role: CashierRole | null; permissions_mode: PermissionsMode;
   user?: User;
 }
 
@@ -54,7 +70,25 @@ export interface Role {
   permissions: { code: string; limit: number | string | null }[]; archived_at: string | null;
 }
 
-export interface Permission { code: string; description: string }
+export type PermissionSurface = "software" | "app" | "both";
+/** One entry of GET /roles/permissions. SPEC codes are UPPER_SNAKE (spec: true); Servio codes are dotted (module "Servio extras"). */
+export interface Permission {
+  code: string; module: string; label: string; description: string; surface: PermissionSurface; restriction: boolean; implies: string[]; spec: boolean;
+}
+export interface PermissionRegistry { data: Permission[]; modules: string[] }
+export type PermissionPresetKey = "cashier" | "supervisor" | "manager";
+export interface PermissionPreset { key: PermissionPresetKey; name: string; codes: string[] }
+/** GET/PUT /staff/:id/permissions */
+export interface MembershipPermissions {
+  membership_id: ID; mode: PermissionsMode; owner: boolean; granted: string[]; effective: string[];
+  modules: { name: string; total: number; granted: number }[]; takes_effect: string;
+}
+/** GET /staff/sessions */
+export interface UserSession {
+  id: ID; membership_id: ID | null; user_id: ID | null; name: string | null; staff_type: StaffType | null; app: string | null;
+  device_id: ID | null; device: string | null; ip: string | null; user_agent: string | null;
+  signed_in_at: string; signed_out_at: string | null; expires_at: string | null; active: boolean;
+}
 
 export interface Device {
   id: ID; branch_id: ID; name: string; code: string; kind: string; station_id: ID | null; paired: boolean;
@@ -66,6 +100,13 @@ export interface AuditLog {
   id: ID; action: string; table_name: string | null; record_id: ID | null; user_id: ID | null; device_id: ID | null;
   approved_by_user_id: ID | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null;
   ip: string | null; occurred_at: string;
+  user_name?: string | null; approved_by_name?: string | null;
+}
+
+export interface AuditEntities { data: string[]; actions: string[] }
+export interface AuditInsights {
+  total: number; by_action: Record<string, number>; by_entity: Record<string, number>;
+  by_actor: { user_id: ID | null; name: string; count: number }[]; by_day: Record<string, number>;
 }
 
 export interface ChecklistItem { id: ID; key: string; title: string; done: boolean; done_at: string | null; plan_feature_off: boolean; sort_order: number }

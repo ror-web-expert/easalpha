@@ -67,7 +67,7 @@ export default function PurchaseOrderPage() {
   return (
     <>
       <PageHeader icon={ShoppingCart} title={po.label} description={`${po.supplier_name} · created ${formatDateTime(po.created_at)}`} actions={<>
-        <Link href="/admin/purchasing/payables-aging/purchase-orders"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Orders</Button></Link>
+        <Link href="/admin/purchasing/purchase-orders"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Orders</Button></Link>
         {po.status === "draft" ? <Button variant="secondary" onClick={send} loading={busy === "send"} disabled={!po.lines?.length}><Send className="h-4 w-4" /> Send</Button> : null}
         {po.status === "draft" || po.status === "sent" ? <Button variant="destructive" onClick={() => setCancelOpen(true)}><Ban className="h-4 w-4" /> Cancel</Button> : null}
         {canReceive ? <Button onClick={() => setReceiveOpen(true)}><PackageCheck className="h-4 w-4" /> Receive</Button> : null}
@@ -116,7 +116,7 @@ export default function PurchaseOrderPage() {
         <THead><tr><TH>Receipt</TH><TH>Status</TH><TH>Received</TH><TH>Invoice</TH><TH right>Lines</TH><TH right>Total</TH></tr></THead>
         <TBody>
           {po.receipts?.length ? po.receipts.map((g) => (
-            <TR key={g.id}><TD><Link href={`/admin/purchasing/payables-aging/goods-received/${g.id}`} className="font-mono font-medium text-primary hover:underline">{g.label}</Link></TD><TD><Badge variant={postedStatusVariant(g.status)}>{g.status}</Badge></TD><TD className="text-fg-secondary">{formatDate(g.received_on)}</TD><TD className="text-fg-secondary">{g.invoice_ref ?? "-"}</TD><TD right>{g.line_count}</TD><TD right>{formatMoney(g.total_minor)}</TD></TR>
+            <TR key={g.id}><TD><Link href={`/admin/purchasing/goods-received/${g.id}`} className="font-mono font-medium text-primary hover:underline">{g.label}</Link></TD><TD><Badge variant={postedStatusVariant(g.status)}>{g.status}</Badge></TD><TD className="text-fg-secondary">{formatDate(g.received_on)}</TD><TD className="text-fg-secondary">{g.invoice_ref ?? "-"}</TD><TD right>{g.line_count}</TD><TD right>{formatMoney(g.total_minor)}</TD></TR>
           )) : <EmptyRow colSpan={6}>Nothing received yet.</EmptyRow>}
         </TBody>
       </Table>

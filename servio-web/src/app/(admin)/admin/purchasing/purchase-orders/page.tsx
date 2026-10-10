@@ -18,7 +18,7 @@ export default function PurchaseOrdersPage() {
   const list = usePagedList<PurchaseOrder>(["purchase_orders"], "/purchase_orders", { status, open: open ? "true" : "", supplier_id: supplier });
   return (
     <>
-      <PageHeader icon={ShoppingCart} title="Purchase orders" description="Draft, send to the supplier, then receive against the order; partial deliveries are fine." actions={<Link href="/admin/purchasing/payables-aging/purchase-orders/new"><Button><Plus className="h-4 w-4" /> New order</Button></Link>} />
+      <PageHeader icon={ShoppingCart} title="Purchase orders" description="Draft, send to the supplier, then receive against the order; partial deliveries are fine." actions={<Link href="/admin/purchasing/purchase-orders/new"><Button><Plus className="h-4 w-4" /> New order</Button></Link>} />
       <FilterBar>
         <Select className="w-auto" value={status} onChange={(e) => { setStatus(e.target.value); if (e.target.value) setOpen(false); }}><option value="">Any status</option>{PO_STATUSES.map((s) => <option key={s} value={s}>{titleCase(s)}</option>)}</Select>
         <SupplierSelect className="w-auto" value={supplier} onChange={(id) => setSupplier(id)} />
@@ -30,7 +30,7 @@ export default function PurchaseOrdersPage() {
           <TBody>
             {list.rows.length ? list.rows.map((po) => (
               <TR key={po.id}>
-                <TD><Link href={`/admin/purchasing/payables-aging/purchase-orders/${po.id}`} className="font-mono font-medium text-primary hover:underline">{po.label}</Link></TD>
+                <TD><Link href={`/admin/purchasing/purchase-orders/${po.id}`} className="font-mono font-medium text-primary hover:underline">{po.label}</Link></TD>
                 <TD><Link href={`/admin/suppliers/${po.supplier_id}`} className="hover:underline">{po.supplier_name}</Link></TD>
                 <TD><Badge variant={poStatusVariant(po.status)}>{titleCase(po.status)}</Badge></TD>
                 <TD className="text-fg-secondary">{po.expected_on ? formatDate(po.expected_on) : "-"}</TD>
