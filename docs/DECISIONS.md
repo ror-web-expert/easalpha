@@ -31,3 +31,4 @@ Running log, as `SPEC.md` asks. One line per choice, newest last. Each says what
 | 2026-10-10 | Document numbers | GRN-000023 | Numbered per type and business: GRN (goods receipt), POR (PO receipt), TRF, WST, ADJ, CNT, OPB (opening balance), PRD, RET; six digits. |
 | 2026-10-10 | Awaiting approval | A document status, no rule for who approves | Anyone who may view stock drafts and submits; approving and posting need stock.actions. A transfer approved goes In transit and posts when received. |
 | 2026-10-10 | Precision | Quantities at full decimal precision | numeric(20,9) in the base unit on levels, movements, document lines, recipe lines, consumables and PO lines. |
+| 2026-10-10 | Existing data | Sections and numbers from before Phase 4 | Migration gives every old section a slug and marks Kitchen and Warehouse system (Warehouse COGS Primary when none); per-type stock counters start at the highest existing number of that type. |

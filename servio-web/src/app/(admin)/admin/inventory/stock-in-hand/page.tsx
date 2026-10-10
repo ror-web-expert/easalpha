@@ -10,6 +10,7 @@ import { formatBaseQty, formatUnitCost } from "@/lib/units";
 import { useDebounced } from "@/lib/hooks";
 import { Cards, FilterBar, PageHeader, SearchInput } from "@/components/admin/page";
 import { sectionName, useSections } from "@/components/admin/stock";
+import { stockStatusLabel } from "@/components/admin/stockreport-helpers";
 import { Badge, Button, Checkbox, EmptyRow, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 export default function StockOverviewPage() {
@@ -23,14 +24,14 @@ export default function StockOverviewPage() {
   const d = levels.data;
   return (
     <>
-      <PageHeader icon={Boxes} title="Stock levels" description="On-hand quantities and value per section. Sales deduct stock automatically; receive, move, waste and count with documents." actions={<>
+      <PageHeader icon={Boxes} title="Stock levels" description="On-hand quantities and value per section. Sales deduct stock automatically; receive, move, waste and count with documents. Negative stock is permitted and shown as short." actions={<>
         <Link href="/admin/inventory/items"><Button variant="secondary"><Package className="h-4 w-4" /> Items</Button></Link>
         <Link href="/admin/inventory/stock-actions/new"><Button><Plus className="h-4 w-4" /> New document</Button></Link>
       </>} />
       <Cards>
         <SummaryCard label="Total stock value" value={formatMoney(d?.total_value_minor)} sub={`${d?.rows.length ?? 0} items`} icon={Boxes} />
         <SummaryCard label="Below minimum" value={d?.below_minimum_count ?? 0} sub="Items under their minimum" icon={TrendingDown} tone={d?.below_minimum_count ? "warning" : "neutral"} />
-        <SummaryCard label="Negative stock" value={d?.negative_count ?? 0} sub="Count or adjust these" icon={AlertTriangle} tone={d?.negative_count ? "danger" : "neutral"} />
+        <SummaryCard label="Short" value={d?.negative_count ?? 0} sub="Below zero; count or adjust these" icon={AlertTriangle} tone={d?.negative_count ? "danger" : "neutral"} />
         {valuation.data?.map((v) => (
           <SummaryCard key={v.section.id} label={`${v.section.name} value`} value={formatMoney(v.value_minor)} sub={`${v.items} items with stock`} icon={Warehouse} tone="info" />
         ))}
@@ -46,6 +47,7 @@ export default function StockOverviewPage() {
           <TBody>
             {d?.rows.length ? d.rows.map((r) => {
               const code = r.item.base_unit.code;
+              const status = stockStatusLabel(r);
               return (
                 <TR key={r.item.id}>
                   <TD><Link href={`/admin/inventory/items/${r.item.id}`} className="font-medium text-primary hover:underline">{r.item.name}</Link>{r.item.sku ? <span className="ml-2 font-mono text-xs text-fg-muted">{r.item.sku}</span> : null}</TD>
@@ -55,10 +57,10 @@ export default function StockOverviewPage() {
                   <TD right className="text-fg-secondary">{Number(r.item.minimum_qty) > 0 ? formatBaseQty(r.item.minimum_qty, code) : "-"}</TD>
                   <TD right className="text-fg-secondary">{formatUnitCost(r.item.avg_cost_minor_per_base, code, formatMoney)}</TD>
                   <TD right>{formatMoney(r.value_minor)}</TD>
-                  <TD>{r.negative ? <Badge variant="danger">negative</Badge> : r.below_minimum ? <Badge variant="warning">low</Badge> : <Badge variant="success">ok</Badge>}</TD>
+                  <TD><Badge variant={status.variant}>{status.label}</Badge></TD>
                 </TR>
               );
-            }) : <EmptyRow colSpan={8}>{low ? "Nothing is low or negative." : "No stock items yet. Add items or import a CSV."}</EmptyRow>}
+            }) : <EmptyRow colSpan={8}>{low ? "Nothing is low or short." : "No stock items yet. Add items or import a CSV."}</EmptyRow>}
           </TBody>
         </Table>
       )}

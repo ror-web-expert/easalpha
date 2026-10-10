@@ -129,8 +129,11 @@ for (const p of adminPages) {
   step("phase 4: item gets an auto SKU", item.status === 201 && /^[A-Z]{1,3}-[A-Z]{2}-\d{4}$/.test(item.j.sku), item.j?.sku);
   const grn = await api("/stock_documents", { method: "POST", token: T, body: { kind: "receive", to_section_id: kitchen.id, lines: [{ stock_item_id: item.j.id, quantity: 100, unit_cost_minor: 1000 }], post: true } });
   step("phase 4: goods receipt posted as GRN-", grn.status === 201 && /^GRN-\d{6}$/.test(grn.j.label) && grn.j.status === "posted", grn.j?.label);
-  const cat = await api("/catalog", { token: T }); const prod = cat.j.products[0];
+  const cat = await api("/catalog", { token: T });
+  const made = await api("/products", { method: "POST", token: T, body: { category_id: cat.j.categories[0].id, name: `E2E Bun Burger ${Date.now()}`, base_price_minor: 25000 } });
+  const prod = made.j;
   const recipe = await api("/recipes", { method: "POST", token: T, body: { product_id: prod.id, name: "E2E recipe", lines: [{ stock_item_id: item.j.id, quantity: 1 }] } });
+  step("phase 4: product with a one-ingredient recipe", made.status === 201 && recipe.status === 201, `${made.status} ${recipe.status}`);
   const o = await api("/orders", { method: "POST", token: T, body: { order_type: "walk_in", lines: [{ product_id: prod.id, quantity: 2 }], place: true } });
   const before = (await api(`/stock/ledger?item_id=${item.j.id}&kind=sale`, { token: T })).j.data.length;
   await api(`/orders/${o.j.id}/payments`, { method: "POST", token: T, body: { payments: [{ method_code: "cash", amount_minor: o.j.total_minor, tendered_minor: o.j.total_minor }] } });
@@ -141,6 +144,7 @@ for (const p of adminPages) {
   const retry = await api(`/stock/deduction_health/${o.j.id}/retry`, { method: "POST", token: T });
   step("phase 4: retry never deducts twice", retry.status === 200 && retry.j.movements.filter((m) => m.kind === "sale").length === 1, String(retry.j?.movements?.length));
   if (recipe.status === 201) await api(`/recipes/${recipe.j.id}`, { method: "DELETE", token: T });
+  if (made.status === 201) await api(`/products/${prod.id}`, { method: "PATCH", token: T, body: { active: false } });
 }
 
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");

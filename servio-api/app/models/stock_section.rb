@@ -9,13 +9,24 @@ class StockSection < ApplicationRecord
 
   # SPEC: Kitchen and Warehouse are system sections that cannot be removed; Warehouse is the COGS Primary section.
   def self.ensure_system!(branch)
-    kitchen = active.find_by(branch_id: branch.id, slug: "kitchen") || active.where(branch_id: branch.id, name: "Kitchen").first ||
-              create!(branch: branch, name: "Kitchen", slug: "kitchen", is_default: true, is_system: true)
-    kitchen.update_columns(is_system: true) unless kitchen.is_system
-    warehouse = active.find_by(branch_id: branch.id, slug: "warehouse") || create!(branch: branch, name: "Warehouse", slug: "warehouse", is_system: true, cogs_primary: true, sort_order: 1)
-    warehouse.update_columns(is_system: true, cogs_primary: true) unless warehouse.is_system && warehouse.cogs_primary
+    kitchen = system_row!(branch, "Kitchen", "kitchen", is_default: true)
+    warehouse = system_row!(branch, "Warehouse", "warehouse", sort_order: 1)
+    # Warehouse is COGS Primary unless the branch already chose another section.
+    warehouse.update_columns(cogs_primary: true) if !warehouse.cogs_primary && cogs_primary_for(branch).nil?
     [kitchen, warehouse]
   end
+
+  # Finds the branch's section by slug, then by name (rows created before slugs existed), else creates it; marks it system.
+  def self.system_row!(branch, name, slug, **attrs)
+    row = active.find_by(branch_id: branch.id, slug: slug) || active.where(branch_id: branch.id, name: name).first ||
+          create!(branch: branch, name: name, slug: slug, is_system: true, **attrs)
+    fix = {}
+    fix[:is_system] = true unless row.is_system
+    fix[:slug] = slug if row.slug != slug
+    row.update_columns(fix) if fix.any?
+    row
+  end
+  private_class_method :system_row!
 
   def self.default_for(branch)
     ensure_system!(branch).first.then { active.where(branch_id: branch.id).order(is_default: :desc, sort_order: :asc).first }

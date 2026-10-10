@@ -420,30 +420,38 @@ export interface Notification { id: ID; kind: string; title: string; body: strin
 // ---- Stock (Phase 2) ----
 export type UnitKind = "weight" | "volume" | "count";
 export interface Unit { id: ID; code: string; name: string; kind: UnitKind; factor_to_base: string; is_base: boolean; archived_at: string | null }
-export interface StockSection { id: ID; branch_id: ID; name: string; sort_order: number; is_default: boolean; archived_at: string | null }
+export interface StockSection { id: ID; branch_id: ID; name: string; slug: string; sort_order: number; is_default: boolean; is_system: boolean; cogs_primary: boolean; archived_at: string | null }
+/** GET /unit_conversions: one row per direction (1 kg = 1000 g and 1 g = 0.001 kg are two rows). */
+export interface UnitConversion { id: ID; from_unit_id: ID; to_unit_id: ID; from_code: string; to_code: string; factor: string }
 export interface StockLevelRef { section_id: ID; quantity: string; value_minor: number }
 export interface StockItem {
-  id: ID; name: string; name_ur: string | null; sku: string | null; category: string | null; barcode: string | null; base_unit: Unit; purchase_unit: Unit | null;
+  id: ID; name: string; name_ur: string | null; sku: string | null; category: string | null; purchase_category: string | null; active: boolean; barcode: string | null; base_unit: Unit; purchase_unit: Unit | null;
   minimum_qty: string; reorder_qty: string; avg_cost_minor_per_base: string; track_expiry: boolean; is_packaging: boolean; archived_at: string | null; created_at: string;
   levels?: StockLevelRef[]; quantity?: string; value_minor?: number;
 }
-export type StockDocumentKind = "receive" | "transfer" | "waste" | "adjustment" | "count" | "production" | "supplier_return";
-export type StockDocumentStatus = "draft" | "posted" | "cancelled";
+export type StockDocumentKind = "receive" | "po_receipt" | "transfer" | "waste" | "adjustment" | "count" | "opening_balance" | "production" | "supplier_return";
+/** SPEC statuses; "cancelled" is the legacy spelling of voided on older rows. */
+export type StockDocumentStatus = "draft" | "awaiting_approval" | "in_transit" | "posted" | "voided" | "cancelled";
 export interface StockDocumentLine {
   id: ID; stock_item_id: ID; item_name: string; unit_id: ID; unit_code: string; quantity: string; base_quantity: string; unit_cost_minor: number | null;
   batch_no: string | null; expires_on: string | null; counted_qty: string | null; expected_qty: string | null; note: string | null;
 }
 export interface StockDocument {
   id: ID; number: number; label: string; kind: StockDocumentKind; status: StockDocumentStatus; branch_id: ID; from_section_id: ID | null; to_section_id: ID | null;
-  supplier_id: ID | null; goods_receipt_id: ID | null; reason: string | null; invoice_ref: string | null; note: string | null; business_day: string;
+  supplier_id: ID | null; goods_receipt_id: ID | null; purchase_order_id: ID | null; reason: string | null; invoice_ref: string | null; note: string | null; business_day: string;
+  posting_date: string | null; approved_by_membership_id: ID | null; dispatched_at: string | null; received_at: string | null;
   posted_at: string | null; cancelled_at: string | null; by_membership_id: ID | null; posted_by_membership_id: ID | null; created_at: string;
   line_count: number; total_cost_minor: number; lines?: StockDocumentLine[];
 }
 export interface StockDocumentLineInput { stock_item_id: ID; unit_id?: ID; quantity?: number | string; unit_cost_minor?: number | null; batch_no?: string | null; expires_on?: string | null; counted_qty?: number | string; note?: string | null }
 export interface StockDocumentInput {
   kind: StockDocumentKind; from_section_id?: ID | null; to_section_id?: ID | null; supplier_id?: ID | null; reason?: string | null; invoice_ref?: string | null; note?: string | null;
-  client_id?: ID; lines: StockDocumentLineInput[]; post?: boolean;
+  client_id?: ID; lines: StockDocumentLineInput[]; post?: boolean; submit?: boolean; posting_date?: string | null; purchase_order_id?: ID | null;
 }
+/** POST /stock/reset: the adjustment documents that zeroed each section. */
+export interface StockResetResult { documents: StockDocument[] }
+/** POST /stock/rebuild_balances: rows rebuilt per cache. */
+export interface RebuildBalancesResult { stock_levels: number; payment_accounts: number; customers: number; suppliers: number }
 export type StockLedgerKind = "sale" | "sale_return" | "receive" | "transfer_in" | "transfer_out" | "waste" | "adjustment" | "count" | "production_in" | "production_out" | "supplier_return" | "packaging" | "opening";
 export interface StockLedgerEntry {
   id: ID; business_day: string; occurred_at: string; kind: StockLedgerKind; section_id: ID | null; section_name: string | null; stock_item_id: ID; item_name: string | null;
@@ -703,4 +711,29 @@ export interface PayslipDetail {
 export interface Payslip {
   id: ID; payroll_run_id: ID; employee_id: ID; employee_name: string; designation: string | null; base_minor: number; earnings_minor: number; deductions_minor: number; absence_minor: number; late_fines_minor: number;
   advances_recovered_minor: number; tips_minor: number; commission_minor: number; net_minor: number; days_present: number; days_absent: number; days_leave: number; detail: PayslipDetail; paid_at: string | null; expense_id: ID | null;
+}
+
+// ---- Inventory: Demand, Deduction Health and the stock reports (SPEC "Inventory and recipes", "Report catalogue") ----
+export type DemandBucket = "low" | "critical" | "out" | "all_needing" | "everything";
+export type DemandRowBucket = "low" | "critical" | "out" | "ok";
+export interface DemandRow {
+  item: StockItem; bucket: DemandRowBucket; on_hand: string; total_on_hand: string; minimum: string; daily_usage: string; days_left: number | null; on_order: string;
+  transfer_qty: string; buy_qty: string; unit_code: string; est_cost_minor: number;
+}
+export interface DemandReport {
+  bucket: DemandBucket; section_id: ID | null; lookback_days: number; rows: DemandRow[]; counts: { low: number; critical: number; out: number }; transfer_count: number; buy_cost_minor: number;
+}
+export interface SafetyNetStatus {
+  enabled: boolean; interval_minutes: number; lookback_days: number; last_run_at: string | null; last_trigger: string | null; last_checked: number | null; last_deducted: number | null;
+  last_errors: number | null; next_run_at: string | null; running: boolean; pending: number;
+}
+export type DeductionHealthBucket = DeductionAuditStatus | "never_ran" | "pending";
+export interface DeductionHealth { safety_net: SafetyNetStatus; buckets: Partial<Record<DeductionHealthBucket, number>>; problem_orders: OrderSummary[] }
+export interface DeductionHealthOrder { order: OrderSummary; stock_deducted_at: string | null; audits: DeductionAudit[]; movements: StockLedgerEntry[] }
+export interface SafetyNetRunResult { ran_at: string; checked: number; deducted: number; errors: number; detail: { problems?: { order_id: ID; label: string; error: string }[]; reason?: string } | null; status: SafetyNetStatus }
+export interface ActualVsTheoreticalRow { item: StockItem; unit_code: string; theoretical: string; actual: string; variance: string; variance_value_minor: number; used_by_sales: string; waste: string; counted: boolean }
+export interface ActualVsTheoreticalReport { from: string; to: string; section_id: ID | null; rows: ActualVsTheoreticalRow[]; variance_value_minor: number }
+export interface ValuationCogsReport {
+  from: string; to: string; valuation: StockValuationRow[]; stock_value_minor: number; cogs_minor: number; revenue_minor: number; gross_margin_percent: number | null;
+  cogs_by_category: { category: string; cogs_minor: number }[]; cogs_by_item: { item: StockItem; cogs_minor: number }[];
 }
