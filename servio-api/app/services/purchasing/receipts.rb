@@ -17,7 +17,8 @@ module Purchasing
         end
         raise Api::Errors::Conflict.new("goods_receipt.no_lines", "Add at least one line") if grn.lines.empty?
         total = grn.lines.sum(&:line_total_minor)
-        doc = Stock::Posting.create!({ kind: "receive", to_section_id: section.id, supplier_id: supplier.id, goods_receipt_id: grn.id, invoice_ref: attrs[:invoice_ref], note: "#{grn.label} from #{supplier.name}" },
+        # SPEC: a receipt against a purchase order is a PO Receipt; one without is a Goods Receipt.
+        doc = Stock::Posting.create!({ kind: po ? "po_receipt" : "receive", to_section_id: section.id, supplier_id: supplier.id, goods_receipt_id: grn.id, purchase_order_id: po&.id, invoice_ref: attrs[:invoice_ref], note: "#{grn.label} from #{supplier.name}" },
                                      lines: grn.lines.map { |l| { stock_item_id: l.stock_item_id, unit_id: l.unit_id, quantity: l.quantity, unit_cost_minor: l.unit_cost_minor, batch_no: l.batch_no, expires_on: l.expires_on } },
                                      actor: actor, branch: branch)
         Stock::Posting.post!(doc, actor: actor)

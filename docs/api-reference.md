@@ -931,3 +931,21 @@ The access token now carries `perms`, the effective permission codes at sign-in.
 | GET | /api/v1/me | adds pills: open orders today and previous, low-stock items |
 
 Orders carry spec_status, spec_payment_status, reopen_count, edit_count, reopened_at, unpaid_direct and a story block.
+
+## Phase 4 additions (10 Oct 2026, SPEC "Inventory and recipes")
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/stock/deduction_health | safety-net status, buckets, problem orders |
+| GET | /api/v1/stock/deduction_health/:order_id | one order's audits and movements |
+| POST | /api/v1/stock/deduction_health/:order_id/retry | retry the deduction (never twice) |
+| POST | /api/v1/stock/safety_net/run | run the safety net now |
+| POST | /api/v1/stock/rebuild_balances | rebuild cached balances from the ledgers |
+| GET | /api/v1/stock/demand?bucket=&section_id=&category= | Low, Critical, Out of stock; on order; transfer vs buy |
+| POST | /api/v1/stock/reset | zero a section through an adjustment (PIN) |
+| GET | /api/v1/stock/actual_vs_theoretical?from&to&section_id | counted against theoretical |
+| GET | /api/v1/stock/valuation_cogs?from&to | stock value and COGS |
+| GET, POST | /api/v1/unit_conversions | factors stored in each direction |
+| POST | /api/v1/stock_documents/:id/submit, /approve, /dispatch, /receive | Awaiting approval and In transit flows |
+
+Stock deducts at completion; `stock_documents` carry posting_date and nine kinds; sections carry slug, is_system and cogs_primary; items carry active and an auto SKU.

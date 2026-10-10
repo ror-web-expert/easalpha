@@ -10,7 +10,7 @@ RSpec.describe "Stock", type: :request do
     within(biz) do
       Unit.seed_defaults!
       kitchen = StockSection.default_for(branch)
-      store = StockSection.create!(branch: branch, name: "Warehouse")
+      store = StockSection.ensure_system!(branch).last
       kg = Unit.find_by!(code: "kg")
       g = Unit.find_by!(code: "g")
       pcs = Unit.find_by!(code: "pcs")
@@ -26,7 +26,7 @@ RSpec.describe "Stock", type: :request do
     api_post "/api/v1/units", { code: "box", name: "Box of 24", kind: "count", factor_to_base: 24 }, headers: headers
     expect(response).to have_http_status(:created)
     get "/api/v1/stock_sections", headers: headers
-    expect(json[:data].map { |s| s[:name] }).to eq(["Kitchen"])
+    expect(json[:data].map { |s| s[:name] }).to eq(["Kitchen", "Warehouse"])
     kg = within(biz) { Unit.find_by!(code: "kg") }
     g = within(biz) { Unit.find_by!(code: "g") }
     api_post "/api/v1/stock_items", { name: "Flour", sku: "FLR", base_unit_id: g.id, purchase_unit_id: kg.id, minimum_qty: 5000 }, headers: headers
@@ -42,7 +42,7 @@ RSpec.describe "Stock", type: :request do
                                          lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 50_000 }] }, headers: headers
     expect(response).to have_http_status(:created)
     expect(json[:status]).to eq("posted")
-    expect(json[:label]).to eq("RCV-1")
+    expect(json[:label]).to eq("GRN-000001")
     expect(json[:lines].first[:base_quantity]).to eq("10000.0")
     api_post "/api/v1/stock_documents", { kind: "receive", to_section_id: s[:store].id, post: true,
                                          lines: [{ stock_item_id: s[:chicken].id, unit_id: s[:kg].id, quantity: 10, unit_cost_minor: 70_000 }] }, headers: headers
@@ -109,7 +109,7 @@ RSpec.describe "Stock", type: :request do
     doc_id = json[:id]
     api_post "/api/v1/stock_documents/#{doc_id}/cancel", { reason: "Wrong supplier" }, headers: headers
     expect(response).to have_http_status(:ok)
-    expect(json[:status]).to eq("cancelled")
+    expect(json[:status]).to eq("voided")
     get "/api/v1/stock_items/#{s[:buns].id}", headers: headers
     expect(json[:quantity]).to eq("0.0")
     get "/api/v1/stock_items/#{s[:buns].id}/ledger", headers: headers
@@ -136,7 +136,7 @@ RSpec.describe "Stock", type: :request do
     expect(json[:valid_count]).to eq(2)
     api_post "/api/v1/stock_items/import", { csv: csv }, headers: headers
     expect(json[:created]).to eq(2)
-    expect(json[:opening_documents]).to eq(["ADJ-1"])
+    expect(json[:opening_documents]).to eq(["ADJ-000001"])
     get "/api/v1/stock/levels", headers: headers
     tom = json[:rows].find { |r| r[:item][:sku] == "TOM" }
     expect(tom[:quantity]).to eq("15.0")

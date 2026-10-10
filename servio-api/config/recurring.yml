@@ -1,4 +1,12 @@
 production:
+  stock_safety_net:
+    class: StockSafetyNetJob
+    queue: default
+    schedule: every 10 minutes
+  recalculate_balances:
+    class: RecalculateBalancesJob
+    queue: default
+    schedule: every day at 04:30 Asia/Karachi
   tax_queue_sweep:
     class: TaxQueueSweepJob
     queue: tax
@@ -28,6 +36,10 @@ production:
     queue: messages
     schedule: every 10 minutes
 development:
+  stock_safety_net:
+    class: StockSafetyNetJob
+    queue: default
+    schedule: every 10 minutes
   tax_queue_sweep:
     class: TaxQueueSweepJob
     queue: tax

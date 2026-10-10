@@ -45,7 +45,7 @@ await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
-  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending"];
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -118,6 +118,29 @@ for (const p of adminPages) {
   const resp = await a.goto(WEB + "/admin/orders?status=open", { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
   await a.waitForTimeout(800); await shot(a, "phase3-orders-open");
   step("phase 3: admin orders page renders", !!resp && resp.status() === 200, "");
+}
+
+
+// ---- Phase 4 gate (SPEC): stock deducts on sale, at completion, and Deduction Health sees it.
+{
+  const units = await api("/units", { token: T }); const pcs = units.j.data.find((u) => u.code === "pcs");
+  const sections = await api("/stock_sections", { token: T }); const kitchen = sections.j.data.find((s) => s.slug === "kitchen") || sections.j.data[0];
+  const item = await api("/stock_items", { method: "POST", token: T, body: { name: `E2E Bun ${Date.now()}`, base_unit_id: pcs.id } });
+  step("phase 4: item gets an auto SKU", item.status === 201 && /^[A-Z]{1,3}-[A-Z]{2}-\d{4}$/.test(item.j.sku), item.j?.sku);
+  const grn = await api("/stock_documents", { method: "POST", token: T, body: { kind: "receive", to_section_id: kitchen.id, lines: [{ stock_item_id: item.j.id, quantity: 100, unit_cost_minor: 1000 }], post: true } });
+  step("phase 4: goods receipt posted as GRN-", grn.status === 201 && /^GRN-\d{6}$/.test(grn.j.label) && grn.j.status === "posted", grn.j?.label);
+  const cat = await api("/catalog", { token: T }); const prod = cat.j.products[0];
+  const recipe = await api("/recipes", { method: "POST", token: T, body: { product_id: prod.id, name: "E2E recipe", lines: [{ stock_item_id: item.j.id, quantity: 1 }] } });
+  const o = await api("/orders", { method: "POST", token: T, body: { order_type: "walk_in", lines: [{ product_id: prod.id, quantity: 2 }], place: true } });
+  const before = (await api(`/stock/ledger?item_id=${item.j.id}&kind=sale`, { token: T })).j.data.length;
+  await api(`/orders/${o.j.id}/payments`, { method: "POST", token: T, body: { payments: [{ method_code: "cash", amount_minor: o.j.total_minor, tendered_minor: o.j.total_minor }] } });
+  const after = (await api(`/stock/ledger?item_id=${item.j.id}&kind=sale`, { token: T })).j.data;
+  step("phase 4: stock deducts at completion (not at placing)", before === 0 && after.length === 1 && Number(after[0].quantity) === -2, JSON.stringify({ before, after: after.map((e) => e.quantity) }));
+  const health = await api(`/stock/deduction_health/${o.j.id}`, { token: T });
+  step("phase 4: deduction health shows the movement", health.status === 200 && health.j.movements.length >= 1 && health.j.audits[0]?.status === "ok", JSON.stringify(health.j?.audits?.[0]?.status));
+  const retry = await api(`/stock/deduction_health/${o.j.id}/retry`, { method: "POST", token: T });
+  step("phase 4: retry never deducts twice", retry.status === 200 && retry.j.movements.filter((m) => m.kind === "sale").length === 1, String(retry.j?.movements?.length));
+  if (recipe.status === 201) await api(`/recipes/${recipe.j.id}`, { method: "DELETE", token: T });
 }
 
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");

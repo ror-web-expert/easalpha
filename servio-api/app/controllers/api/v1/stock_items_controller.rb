@@ -25,7 +25,7 @@ module Api
       def create
         Unit.seed_defaults! unless Unit.exists?
         i = StockItem.create!(item_params)
-        audit!("create", record: i, after: { name: i.name })
+        audit!("create", record: i, after: { name: i.name, sku: i.sku })
         render json: StockSerializers.item(i, levels: []), status: :created
       end
 
@@ -74,7 +74,9 @@ module Api
       private
 
       def item_params
-        params.permit(:name, :name_ur, :sku, :category, :base_unit_id, :purchase_unit_id, :minimum_qty, :reorder_qty, :track_expiry, :barcode, :is_packaging)
+        p = params.permit(:active, :name, :name_ur, :sku, :category, :base_unit_id, :purchase_unit_id, :minimum_qty, :reorder_qty, :track_expiry, :barcode, :is_packaging)
+        p[:category] = params[:purchase_category] if params[:purchase_category].present? # SPEC name for the category
+        p
       end
     end
   end

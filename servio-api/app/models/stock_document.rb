@@ -1,8 +1,9 @@
 class StockDocument < ApplicationRecord
   include Tenanted
-  KINDS = %w[receive transfer waste adjustment count production supplier_return].freeze
-  STATUSES = %w[draft posted cancelled].freeze
-  PREFIX = { "receive" => "RCV", "transfer" => "TRF", "waste" => "WST", "adjustment" => "ADJ", "count" => "CNT", "production" => "PRD", "supplier_return" => "RET" }.freeze
+  # SPEC Stock Actions register: eight types, five statuses, numbered like GRN-000023.
+  KINDS = %w[receive po_receipt transfer waste adjustment count opening_balance production supplier_return].freeze
+  STATUSES = %w[draft awaiting_approval in_transit posted voided cancelled].freeze
+  PREFIX = { "receive" => "GRN", "po_receipt" => "POR", "transfer" => "TRF", "waste" => "WST", "adjustment" => "ADJ", "count" => "CNT", "opening_balance" => "OPB", "production" => "PRD", "supplier_return" => "RET" }.freeze
   belongs_to :branch
   belongs_to :from_section, class_name: "StockSection", optional: true
   belongs_to :to_section, class_name: "StockSection", optional: true
@@ -14,15 +15,18 @@ class StockDocument < ApplicationRecord
   validates :reason, presence: true, if: -> { kind == "waste" }
   validate :sections_for_kind
 
-  def label = "#{PREFIX[kind]}-#{number}"
+  def label = "#{PREFIX[kind]}-#{number.to_s.rjust(6, '0')}"
   def draft? = status == "draft"
+  def awaiting_approval? = status == "awaiting_approval"
+  def in_transit? = status == "in_transit"
   def posted? = status == "posted"
+  def voided? = status.in?(%w[voided cancelled])
 
   private
 
   def sections_for_kind
     case kind
-    when "receive", "production" then errors.add(:to_section, "is required") unless to_section_id
+    when "receive", "po_receipt", "opening_balance", "production" then errors.add(:to_section, "is required") unless to_section_id
     when "waste", "supplier_return", "adjustment", "count" then errors.add(:from_section, "is required") unless from_section_id
     when "transfer"
       errors.add(:from_section, "is required") unless from_section_id

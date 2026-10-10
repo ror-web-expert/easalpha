@@ -25,6 +25,15 @@ module Payments
           order.status = "refunded"
           order.payment_status = "refunded"
           OrderStatusEvent.create!(order: order, from_status: "paid", to_status: "refunded", membership_id: actor&.id, device_id: device&.id, reason: reason, occurred_at: Time.current)
+          Orders::Story.record!(order, "cancelled", actor: actor, device: device, amount_before: order.total_minor, amount_after: 0, note: "refunded: #{reason}")
+          # SPEC Return stock on cancellation: a completed order's ingredients come back when the setting is on; otherwise staff record waste.
+          if order.stock_deducted_at
+            if InventorySetting.current.return_on_cancel
+              Stock::Deduction.return!(order, actor: actor, reason: "refund")
+            else
+              Stock::Deduction.waste!(order, reason: "refund: #{reason}")
+            end
+          end
         else
           order.payment_status = "partial"
         end

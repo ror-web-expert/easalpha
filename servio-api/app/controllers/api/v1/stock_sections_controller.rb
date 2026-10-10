@@ -13,18 +13,21 @@ module Api
       end
 
       def create
-        s = StockSection.create!(params.permit(:name, :sort_order, :is_default).merge(branch: Branch.active.find(params[:branch_id].presence || current_branch.id)))
+        s = StockSection.create!(params.permit(:name, :slug, :sort_order, :is_default, :cogs_primary).merge(branch: Branch.active.find(params[:branch_id].presence || current_branch.id)))
+        StockSection.where(branch_id: s.branch_id).where.not(id: s.id).update_all(cogs_primary: false) if s.cogs_primary
         render json: StockSerializers.section(s), status: :created
       end
 
       def update
         s = StockSection.active.find(params[:id])
-        s.update!(params.permit(:name, :sort_order, :is_default))
+        s.update!(params.permit(:name, :slug, :sort_order, :is_default, :cogs_primary))
+        StockSection.where(branch_id: s.branch_id).where.not(id: s.id).update_all(cogs_primary: false) if s.cogs_primary
         render json: StockSerializers.section(s)
       end
 
       def destroy
         s = StockSection.active.find(params[:id])
+        raise Api::Errors::Conflict.new("stock.section_system", "#{s.name} is a system section and cannot be removed") if s.is_system
         raise Api::Errors::Conflict.new("stock.section_has_stock", "Move or count the stock out of this section first") if StockLevel.where(stock_section_id: s.id).where.not(quantity: 0).exists?
         s.update!(archived_at: Time.current)
         head :no_content

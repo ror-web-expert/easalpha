@@ -3,10 +3,12 @@ module StockSerializers
 
   def unit(u) = { id: u.id, code: u.code, name: u.name, kind: u.kind, factor_to_base: u.factor_to_base.to_s, is_base: u.is_base, archived_at: u.archived_at }
 
-  def section(s) = { id: s.id, branch_id: s.branch_id, name: s.name, sort_order: s.sort_order, is_default: s.is_default, archived_at: s.archived_at }
+  def section(s) = { id: s.id, branch_id: s.branch_id, name: s.name, slug: s.slug, sort_order: s.sort_order, is_default: s.is_default, is_system: s.is_system, cogs_primary: s.cogs_primary, archived_at: s.archived_at }
+
+  def unit_conversion(c) = { id: c.id, from_unit_id: c.from_unit_id, to_unit_id: c.to_unit_id, from_code: c.from_unit.code, to_code: c.to_unit.code, factor: c.factor.to_s("F") }
 
   def item(i, levels: nil)
-    h = { id: i.id, name: i.name, name_ur: i.name_ur, sku: i.sku, category: i.category, barcode: i.barcode, base_unit: unit(i.base_unit), purchase_unit: i.purchase_unit && unit(i.purchase_unit),
+    h = { id: i.id, name: i.name, name_ur: i.name_ur, sku: i.sku, category: i.category, purchase_category: i.category, active: i.active, barcode: i.barcode, base_unit: unit(i.base_unit), purchase_unit: i.purchase_unit && unit(i.purchase_unit),
           minimum_qty: i.minimum_qty.to_s, reorder_qty: i.reorder_qty.to_s, avg_cost_minor_per_base: i.avg_cost_minor_per_base.to_s, track_expiry: i.track_expiry, is_packaging: i.is_packaging,
           archived_at: i.archived_at, created_at: i.created_at }
     if levels
@@ -19,7 +21,8 @@ module StockSerializers
 
   def document(d, full: false)
     h = { id: d.id, number: d.number, label: d.label, kind: d.kind, status: d.status, branch_id: d.branch_id, from_section_id: d.from_section_id, to_section_id: d.to_section_id,
-          supplier_id: d.supplier_id, goods_receipt_id: d.goods_receipt_id, reason: d.reason, invoice_ref: d.invoice_ref, note: d.note, business_day: d.business_day,
+          supplier_id: d.supplier_id, goods_receipt_id: d.goods_receipt_id, purchase_order_id: d.purchase_order_id, reason: d.reason, invoice_ref: d.invoice_ref, note: d.note, business_day: d.business_day,
+          posting_date: d.posting_date, approved_by_membership_id: d.approved_by_membership_id, dispatched_at: d.dispatched_at, received_at: d.received_at,
           posted_at: d.posted_at, cancelled_at: d.cancelled_at, by_membership_id: d.by_membership_id, posted_by_membership_id: d.posted_by_membership_id, created_at: d.created_at,
           line_count: d.lines.size, total_cost_minor: d.lines.sum { |l| l.unit_cost_minor ? (BigDecimal(l.unit_cost_minor.to_s) * l.quantity).round : 0 } }
     h[:lines] = d.lines.map { |l| line(l) } if full

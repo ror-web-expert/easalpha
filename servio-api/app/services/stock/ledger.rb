@@ -30,6 +30,7 @@ module Stock
         )
         level.update!(quantity: after, value_minor: (after * item.avg_cost_minor_per_base).round)
         Alerts.negative_stock(item, section, after) if after.negative? && !before.negative?
+        Alerts.low_stock(item, item.total_quantity) if item.minimum_qty.positive? && after <= item.minimum_qty && before > item.minimum_qty
         Result.new(entry: entry, level: level)
       end
     end

@@ -737,8 +737,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "stock_item_id", null: false
     t.uuid "unit_id", null: false
     t.uuid "purchase_order_line_id"
-    t.decimal "quantity", precision: 14, scale: 3, null: false
-    t.decimal "base_quantity", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, null: false
+    t.decimal "base_quantity", precision: 20, scale: 9, default: "0.0", null: false
     t.bigint "unit_cost_minor", default: 0, null: false
     t.string "batch_no"
     t.date "expires_on"
@@ -1091,7 +1091,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "variant_id"
     t.string "order_type", null: false
     t.uuid "stock_item_id", null: false
-    t.decimal "quantity", precision: 14, scale: 3, default: "1.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, default: "1.0", null: false
     t.uuid "unit_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -1208,7 +1208,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "branch_id"
     t.string "order_type", null: false
     t.uuid "stock_item_id", null: false
-    t.decimal "quantity", precision: 14, scale: 3, default: "1.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, default: "1.0", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["branch_id"], name: "index_packaging_rules_on_branch_id"
@@ -1490,10 +1490,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "purchase_order_id", null: false
     t.uuid "stock_item_id", null: false
     t.uuid "unit_id", null: false
-    t.decimal "quantity", precision: 14, scale: 3, null: false
-    t.decimal "base_quantity", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, null: false
+    t.decimal "base_quantity", precision: 20, scale: 9, default: "0.0", null: false
     t.bigint "unit_cost_minor", default: 0, null: false
-    t.decimal "received_base_qty", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "received_base_qty", precision: 20, scale: 9, default: "0.0", null: false
     t.integer "sort_order", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -1600,8 +1600,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "recipe_id", null: false
     t.uuid "stock_item_id", null: false
     t.uuid "unit_id", null: false
-    t.decimal "quantity", precision: 14, scale: 3, null: false
-    t.decimal "base_quantity", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, null: false
+    t.decimal "base_quantity", precision: 20, scale: 9, default: "0.0", null: false
     t.decimal "waste_percent", precision: 5, scale: 2, default: "0.0", null: false
     t.integer "sort_order", default: 0, null: false
     t.datetime "created_at", null: false
@@ -1821,6 +1821,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "updated_at", null: false
     t.index ["business_id", "name"], name: "index_roles_on_business_id_and_name", unique: true, where: "(archived_at IS NULL)"
     t.index ["business_id"], name: "index_roles_on_business_id"
+  end
+
+  create_table "safety_net_runs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.string "trigger", default: "job", null: false
+    t.uuid "by_membership_id"
+    t.datetime "ran_at", null: false
+    t.integer "checked", default: 0, null: false
+    t.integer "deducted", default: 0, null: false
+    t.integer "errors_count", default: 0, null: false
+    t.jsonb "detail", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "ran_at"], name: "index_safety_net_runs_on_business_id_and_ran_at"
+    t.index ["business_id"], name: "index_safety_net_runs_on_business_id"
   end
 
   create_table "salary_components", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2061,13 +2076,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "stock_document_id", null: false
     t.uuid "stock_item_id", null: false
     t.uuid "unit_id", null: false
-    t.decimal "quantity", precision: 14, scale: 3, default: "0.0", null: false
-    t.decimal "base_quantity", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, default: "0.0", null: false
+    t.decimal "base_quantity", precision: 20, scale: 9, default: "0.0", null: false
     t.bigint "unit_cost_minor"
     t.string "batch_no"
     t.date "expires_on"
-    t.decimal "counted_qty", precision: 14, scale: 3
-    t.decimal "expected_qty", precision: 14, scale: 3
+    t.decimal "counted_qty", precision: 20, scale: 9
+    t.decimal "expected_qty", precision: 20, scale: 9
     t.string "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -2098,13 +2113,18 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "posted_by_membership_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "approved_by_membership_id"
+    t.datetime "dispatched_at"
+    t.datetime "received_at"
+    t.uuid "purchase_order_id"
+    t.date "posting_date"
     t.index ["branch_id", "business_day", "kind"], name: "index_stock_documents_on_branch_id_and_business_day_and_kind"
     t.index ["branch_id"], name: "index_stock_documents_on_branch_id"
     t.index ["business_id", "client_id"], name: "index_stock_documents_on_business_id_and_client_id", unique: true, where: "(client_id IS NOT NULL)"
-    t.index ["business_id", "number"], name: "index_stock_documents_on_business_id_and_number", unique: true
+    t.index ["business_id", "kind", "number"], name: "index_stock_documents_on_business_id_and_kind_and_number", unique: true
     t.index ["business_id"], name: "index_stock_documents_on_business_id"
-    t.check_constraint "kind::text = ANY (ARRAY['receive'::character varying, 'transfer'::character varying, 'waste'::character varying, 'adjustment'::character varying, 'count'::character varying, 'production'::character varying, 'supplier_return'::character varying]::text[])", name: "stock_documents_kind_check"
-    t.check_constraint "status::text = ANY (ARRAY['draft'::character varying, 'posted'::character varying, 'cancelled'::character varying]::text[])", name: "stock_documents_status_check"
+    t.check_constraint "kind::text = ANY (ARRAY['receive'::character varying, 'po_receipt'::character varying, 'transfer'::character varying, 'waste'::character varying, 'adjustment'::character varying, 'count'::character varying, 'opening_balance'::character varying, 'production'::character varying, 'supplier_return'::character varying]::text[])", name: "stock_documents_kind_check"
+    t.check_constraint "status::text = ANY (ARRAY['draft'::character varying, 'awaiting_approval'::character varying, 'in_transit'::character varying, 'posted'::character varying, 'voided'::character varying, 'cancelled'::character varying]::text[])", name: "stock_documents_status_check"
   end
 
   create_table "stock_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2115,8 +2135,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.string "category"
     t.uuid "base_unit_id", null: false
     t.uuid "purchase_unit_id"
-    t.decimal "minimum_qty", precision: 14, scale: 3, default: "0.0", null: false
-    t.decimal "reorder_qty", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "minimum_qty", precision: 20, scale: 9, default: "0.0", null: false
+    t.decimal "reorder_qty", precision: 20, scale: 9, default: "0.0", null: false
     t.decimal "avg_cost_minor_per_base", precision: 18, scale: 6, default: "0.0", null: false
     t.boolean "track_expiry", default: false, null: false
     t.string "barcode"
@@ -2124,6 +2144,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "active", default: true, null: false
     t.index ["base_unit_id"], name: "index_stock_items_on_base_unit_id"
     t.index ["business_id", "name"], name: "index_stock_items_on_business_id_and_name"
     t.index ["business_id", "sku"], name: "index_stock_items_on_business_id_and_sku", unique: true, where: "((sku IS NOT NULL) AND (archived_at IS NULL))"
@@ -2138,9 +2159,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "stock_item_id", null: false
     t.date "business_day", null: false
     t.string "kind", null: false
-    t.decimal "quantity", precision: 14, scale: 3, null: false
-    t.decimal "before_qty", precision: 14, scale: 3, null: false
-    t.decimal "after_qty", precision: 14, scale: 3, null: false
+    t.decimal "quantity", precision: 20, scale: 9, null: false
+    t.decimal "before_qty", precision: 20, scale: 9, null: false
+    t.decimal "after_qty", precision: 20, scale: 9, null: false
     t.decimal "unit_cost_minor", precision: 18, scale: 6, default: "0.0", null: false
     t.bigint "value_minor", default: 0, null: false
     t.string "ref_table"
@@ -2158,6 +2179,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.index ["business_id", "stock_item_id", "occurred_at"], name: "idx_on_business_id_stock_item_id_occurred_at_e2880c1350"
     t.index ["business_id"], name: "index_stock_ledger_entries_on_business_id"
     t.index ["ref_line_id"], name: "index_stock_ledger_entries_on_ref_line_id"
+    t.index ["ref_table", "ref_id", "ref_line_id", "stock_item_id", "stock_section_id", "kind"], name: "index_stock_ledger_sale_deductions_unique", unique: true, where: "(((kind)::text = ANY ((ARRAY['sale'::character varying, 'packaging'::character varying])::text[])) AND (ref_id IS NOT NULL) AND (reversed_by_entry_id IS NULL) AND (reverses_entry_id IS NULL))", nulls_not_distinct: true
     t.index ["stock_item_id"], name: "index_stock_ledger_entries_on_stock_item_id"
     t.index ["stock_section_id", "business_day"], name: "idx_on_stock_section_id_business_day_24988e1b54"
     t.index ["stock_section_id"], name: "index_stock_ledger_entries_on_stock_section_id"
@@ -2168,7 +2190,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.uuid "business_id", null: false
     t.uuid "stock_section_id", null: false
     t.uuid "stock_item_id", null: false
-    t.decimal "quantity", precision: 14, scale: 3, default: "0.0", null: false
+    t.decimal "quantity", precision: 20, scale: 9, default: "0.0", null: false
     t.bigint "value_minor", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -2187,7 +2209,11 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "is_system", default: false, null: false
+    t.boolean "cogs_primary", default: false, null: false
+    t.string "slug"
     t.index ["branch_id", "name"], name: "index_stock_sections_on_branch_id_and_name", unique: true, where: "(archived_at IS NULL)"
+    t.index ["branch_id", "slug"], name: "index_stock_sections_on_branch_id_and_slug", unique: true, where: "(archived_at IS NULL)"
     t.index ["branch_id"], name: "index_stock_sections_on_branch_id"
     t.index ["business_id"], name: "index_stock_sections_on_business_id"
   end
@@ -2393,6 +2419,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["business_id"], name: "index_tax_rates_on_business_id"
+  end
+
+  create_table "unit_conversions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "from_unit_id", null: false
+    t.uuid "to_unit_id", null: false
+    t.decimal "factor", precision: 18, scale: 9, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_unit_conversions_on_business_id"
+    t.index ["from_unit_id", "to_unit_id"], name: "index_unit_conversions_on_from_unit_id_and_to_unit_id", unique: true
   end
 
   create_table "units", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2707,6 +2744,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "role_permissions", "businesses"
   add_foreign_key "role_permissions", "roles"
   add_foreign_key "roles", "businesses"
+  add_foreign_key "safety_net_runs", "businesses"
   add_foreign_key "salary_components", "businesses"
   add_foreign_key "settings", "businesses"
   add_foreign_key "setup_checklist_items", "businesses"
@@ -2763,6 +2801,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_10_111537) do
   add_foreign_key "tax_invoices", "businesses"
   add_foreign_key "tax_invoices", "orders"
   add_foreign_key "tax_rates", "businesses"
+  add_foreign_key "unit_conversions", "businesses"
   add_foreign_key "units", "businesses"
   add_foreign_key "user_permissions", "businesses"
   add_foreign_key "user_permissions", "memberships"

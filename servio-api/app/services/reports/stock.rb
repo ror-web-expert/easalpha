@@ -30,6 +30,42 @@ module Reports
       end
     end
 
+    # SPEC Actual vs Theoretical: counts post the difference between what recipes say should remain and what was found,
+    # so over a period the count entries are the variance; waste is shown beside it.
+    def actual_vs_theoretical(branch:, from:, to:, section_id: nil)
+      entries = StockLedgerEntry.where(branch_id: branch.id, business_day: from..to)
+      entries = entries.where(stock_section_id: section_id) if section_id
+      counts = entries.where(kind: "count").group(:stock_item_id).sum(:quantity)
+      waste = entries.where(kind: "waste").group(:stock_item_id).sum(:quantity)
+      sales = entries.where(kind: %w[sale packaging sale_return]).group(:stock_item_id).sum(:quantity)
+      closing = StockLedgerEntry.where(branch_id: branch.id).where("business_day <= ?", to)
+      closing = closing.where(stock_section_id: section_id) if section_id
+      actual = closing.group(:stock_item_id).sum(:quantity)
+      ids = (counts.keys + sales.keys).uniq
+      items = StockItem.where(id: ids).includes(:base_unit).index_by(&:id)
+      rows = ids.filter_map do |id|
+        i = items[id] or next
+        a = (actual[id] || 0).to_d
+        variance = (counts[id] || 0).to_d
+        { item: StockSerializers.item(i), unit_code: i.base_unit.code, theoretical: (a - variance).to_s("F"), actual: a.to_s("F"), variance: variance.to_s("F"),
+          variance_value_minor: (variance * i.avg_cost_minor_per_base).round, used_by_sales: (-(sales[id] || 0).to_d).to_s("F"), waste: (-(waste[id] || 0).to_d).to_s("F"), counted: counts.key?(id) }
+      end.sort_by { |r| -r[:variance_value_minor].abs }
+      { from: from, to: to, section_id: section_id, rows: rows, variance_value_minor: rows.sum { |r| r[:variance_value_minor] } }
+    end
+
+    # SPEC Valuation & COGS: stock value by section and item plus cost of goods sold for the period from sale movements.
+    def valuation_cogs(branch:, from:, to:)
+      sold = StockLedgerEntry.where(branch_id: branch.id, kind: %w[sale packaging sale_return], business_day: from..to)
+      cogs_by_item = sold.group(:stock_item_id).sum(:value_minor).transform_values { |v| -v }
+      items = StockItem.where(id: cogs_by_item.keys).includes(:base_unit).index_by(&:id)
+      by_item = cogs_by_item.map { |id, v| items[id] && { item: StockSerializers.item(items[id]), cogs_minor: v } }.compact.sort_by { |r| -r[:cogs_minor] }
+      by_category = by_item.group_by { |r| r[:item][:category].presence || "Uncategorised" }.map { |c, rs| { category: c, cogs_minor: rs.sum { |r| r[:cogs_minor] } } }.sort_by { |r| -r[:cogs_minor] }
+      revenue = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed]).sum(:total_minor) - Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed]).sum(:tax_minor)
+      cogs = by_item.sum { |r| r[:cogs_minor] }
+      { from: from, to: to, valuation: valuation, stock_value_minor: StockLevel.sum(:value_minor), cogs_minor: cogs, revenue_minor: revenue,
+        gross_margin_percent: revenue.positive? ? ((revenue - cogs) * 100.0 / revenue).round(1) : nil, cogs_by_category: by_category, cogs_by_item: by_item.first(50) }
+    end
+
     # Opening, in, out, waste, sale, adjusted, closing per item for one section and business day.
     def daily_sheet(section:, day:)
       entries = StockLedgerEntry.where(stock_section_id: section.id)

@@ -15,11 +15,14 @@ module Stock
       items ||= order.active_items
       section_default = StockSection.default_for(order.branch)
       entries, missing = [], []
+      already = StockLedgerEntry.where(ref_table: "orders", ref_id: order.id, kind: %w[sale packaging], reversed_by_entry_id: nil, reverses_entry_id: nil)
+                                .pluck(:ref_line_id, :stock_item_id, :stock_section_id, :kind).to_set
       StockLedgerEntry.transaction do
         items.each do |item|
           # SPEC Order Inventory: consumables set per order type and variant on the product, charged with the sale.
           if item.product_id && packaging
             OrderTypeConsumable.for_line(product_id: item.product_id, variant_id: item.variant_id, order_type: order.order_type).each do |c|
+              next if already.include?([item.id, c.stock_item_id, section_default.id, "packaging"])
               r = Ledger.apply!(section: section_default, item: c.stock_item, kind: "packaging", quantity: -(c.base_quantity * item.quantity), actor: actor, ref: order, ref_line_id: item.id,
                                 business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot} consumables")
               entries << r.entry
@@ -30,8 +33,9 @@ module Stock
             missing << item.name_snapshot
             next
           end
-          moves.each do |m|
-            r = Ledger.apply!(section: m[:section] || section_default, item: m[:stock_item], kind: "sale", quantity: -m[:quantity], actor: actor, ref: order, ref_line_id: item.id,
+          merge_moves(moves, section_default).each do |m|
+            next if already.include?([item.id, m[:stock_item].id, m[:section].id, "sale"]) # SPEC: never twice
+            r = Ledger.apply!(section: m[:section], item: m[:stock_item], kind: "sale", quantity: -m[:quantity], actor: actor, ref: order, ref_line_id: item.id,
                               business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot}")
             entries << r.entry
           end
@@ -41,6 +45,7 @@ module Stock
         end
         if packaging
           PackagingRule.for(branch_id: order.branch_id, order_type: order.order_type).each do |rule|
+            next if already.include?([nil, rule.stock_item_id, section_default.id, "packaging"])
             r = Ledger.apply!(section: section_default, item: rule.stock_item, kind: "packaging", quantity: -rule.quantity, actor: actor, ref: order, business_day: order.business_day, allow_negative: true, reason: "#{order.label} packaging")
             entries << r.entry
           end
@@ -107,13 +112,20 @@ module Stock
       moves
     end
 
+    # One movement per item and section, so a recipe that lists an ingredient twice still writes one unique row.
+    def merge_moves(moves, section_default)
+      moves.group_by { |m| [m[:stock_item].id, (m[:section] || section_default).id] }.map do |_, ms|
+        { stock_item: ms.first[:stock_item], section: ms.first[:section] || section_default, quantity: ms.sum { |m| m[:quantity] } }
+      end
+    end
+
     def recipe_for(product, variant_id)
       (variant_id && Recipe.active.find_by(product_id: product.id, variant_id: variant_id)) || Recipe.active.find_by(product_id: product.id, variant_id: nil)
     end
 
     def recipe_moves(recipe, portions)
       per = BigDecimal(portions.to_s) / recipe.yield_qty
-      recipe.lines.includes(:stock_item).map { |l| { stock_item: l.stock_item, quantity: (l.gross_base_quantity * per).round(3), section: recipe.source_section } }
+      recipe.lines.includes(:stock_item).map { |l| { stock_item: l.stock_item, quantity: (l.gross_base_quantity * per), section: recipe.source_section } }
     end
 
     def recipe_cost_for(item)

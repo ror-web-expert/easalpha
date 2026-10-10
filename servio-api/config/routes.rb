@@ -352,6 +352,8 @@ Rails.application.routes.draw do
       %w[summary aging suggestions forecast prices report].each { |r| get "purchasing/#{r}", to: "purchasing##{r}" }
 
       # Stock (Phase 2)
+      get "unit_conversions", to: "units#conversions"
+      post "unit_conversions", to: "units#set_conversion"
       resources :units, only: %i[index create update destroy]
       resources :stock_sections, only: %i[index create update destroy]
       resources :stock_items, only: %i[index show create update destroy] do
@@ -366,6 +368,10 @@ Rails.application.routes.draw do
         member do
           post :post
           post :cancel
+          post :submit
+          post :approve
+          post :dispatch, action: :dispatch_transfer
+          post :receive
         end
       end
       resources :recipes, only: %i[index show create update destroy] do
@@ -385,6 +391,15 @@ Rails.application.routes.draw do
       get "stock/daily_sheet", to: "stock#daily_sheet"
       get "stock/waste", to: "stock#waste"
       get "stock/ledger", to: "stock#ledger"
+      get "stock/demand", to: "stock#demand"
+      post "stock/reset", to: "stock#reset"
+      get "stock/actual_vs_theoretical", to: "stock#actual_vs_theoretical"
+      get "stock/valuation_cogs", to: "stock#valuation_cogs"
+      get "stock/deduction_health", to: "stock#deduction_health"
+      get "stock/deduction_health/:order_id", to: "stock#deduction_health_order"
+      post "stock/deduction_health/:order_id/retry", to: "stock#retry_deduction"
+      post "stock/safety_net/run", to: "stock#safety_net_run"
+      post "stock/rebuild_balances", to: "stock#rebuild_balances"
       get "inventory_settings", to: "inventory_settings#show"
       patch "inventory_settings", to: "inventory_settings#update"
       post "inventory_settings/counting", to: "inventory_settings#counting"

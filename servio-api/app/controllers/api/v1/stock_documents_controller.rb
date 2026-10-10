@@ -27,7 +27,8 @@ module Api
       # POST /stock_documents { kind, from_section_id, to_section_id, reason, invoice_ref, note, client_id, lines: [{stock_item_id, unit_id, quantity, unit_cost_minor, batch_no, expires_on, counted_qty}], post: true }
       def create
         doc = Stock::Posting.create!(doc_params, lines: lines_param, actor: current_membership, branch: current_branch)
-        Stock::Posting.post!(doc, actor: current_membership) if ActiveModel::Type::Boolean.new.cast(params[:post]) && doc.draft?
+        Stock::Posting.post!(doc, actor: current_membership, posting_date: params[:posting_date].presence) if ActiveModel::Type::Boolean.new.cast(params[:post]) && doc.draft?
+        Stock::Posting.submit!(doc, actor: current_membership) if ActiveModel::Type::Boolean.new.cast(params[:submit]) && doc.draft?
         render json: StockSerializers.document(doc.reload, full: true), status: :created
       end
 
@@ -41,7 +42,35 @@ module Api
 
       def post
         doc = StockDocument.includes(lines: %i[stock_item unit]).find(params[:id])
-        Stock::Posting.post!(doc, actor: current_membership)
+        Stock::Posting.post!(doc, actor: current_membership, posting_date: params[:posting_date].presence)
+        render json: StockSerializers.document(doc.reload, full: true)
+      end
+
+      # SPEC statuses: submit (Awaiting approval), approve, dispatch (In transit) and receive a transfer
+      def submit
+        doc = StockDocument.find(params[:id])
+        Stock::Posting.submit!(doc, actor: current_membership)
+        render json: StockSerializers.document(doc.reload, full: true)
+      end
+
+      def approve
+        require_permission!("stock.actions")
+        doc = StockDocument.includes(lines: %i[stock_item unit]).find(params[:id])
+        Stock::Posting.approve!(doc, actor: current_membership, posting_date: params[:posting_date].presence)
+        audit!("approve", record: doc, after: { status: doc.status })
+        render json: StockSerializers.document(doc.reload, full: true)
+      end
+
+      def dispatch_transfer # `dispatch` is reserved by ActionController
+        doc = StockDocument.includes(lines: %i[stock_item unit]).find(params[:id])
+        Stock::Posting.dispatch!(doc, actor: current_membership, posting_date: params[:posting_date].presence)
+        render json: StockSerializers.document(doc.reload, full: true)
+      end
+
+      def receive
+        doc = StockDocument.includes(lines: %i[stock_item unit]).find(params[:id])
+        raise Api::Errors::Conflict.new("stock.document_status", "Document is #{doc.status}") unless doc.in_transit?
+        Stock::Posting.post!(doc, actor: current_membership, posting_date: params[:posting_date].presence)
         render json: StockSerializers.document(doc.reload, full: true)
       end
 
@@ -68,12 +97,14 @@ module Api
         case kind_param
         when "waste" then require_permission!("stock.actions", "stock.waste")
         when "count" then require_permission!("stock.actions", "stock.count") unless InventorySetting.current.counting_open && current_membership.can?("app.pos")
-        else require_permission!("stock.actions")
+        else
+          # Anyone who may view stock can draft and submit for approval; posting needs stock.actions.
+          action_name.in?(%w[create update submit destroy]) ? require_permission!("stock.actions", "stock.view", "PURCHASE_ORDERS") : require_permission!("stock.actions")
         end
       end
 
       def doc_params
-        params.permit(:kind, :from_section_id, :to_section_id, :supplier_id, :reason, :invoice_ref, :note, :client_id).to_h.symbolize_keys
+        params.permit(:kind, :from_section_id, :to_section_id, :supplier_id, :reason, :invoice_ref, :note, :client_id, :posting_date, :purchase_order_id).to_h.symbolize_keys
       end
 
       def lines_param

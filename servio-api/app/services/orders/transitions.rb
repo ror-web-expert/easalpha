@@ -17,10 +17,16 @@ module Orders
         Story.record!(order, "punched", actor: actor, device: device, amount_after: order.total_minor)
         SetupChecklistItem.complete!("first_order")
       end
-      Stock::Deduction.deduct!(order, actor: actor)
+      # SPEC: stock is deducted once, when the order is completed (see deduct_on_completion!), not here.
       Deliveries::Manager.ensure_for!(order)
       Realtime.order_changed(order)
       order
+    end
+
+    # The till deducts once, at completion. A lost call is caught by Stock::SafetyNet; a repeat can never deduct twice.
+    def deduct_on_completion!(order, actor:)
+      return if order.stock_deducted_at
+      Stock::Deduction.deduct!(order, actor: actor)
     end
 
     # After a placed order is edited: new items get a ticket, removed items a cancelled ticket.
@@ -111,6 +117,7 @@ module Orders
       order.items.where(status: %w[sent preparing ready]).update_all(status: "served")
       change!(order, "paid", actor: actor, device: device)
       Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor)
+      deduct_on_completion!(order, actor: actor)
       order.dining_table&.release! if order.table_id
       Realtime.order_changed(order)
       order
@@ -127,6 +134,7 @@ module Orders
       order.unpaid_direct = true unless paid
       change!(order, "closed", actor: actor, device: device)
       Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor, note: paid ? nil : "placed unpaid") unless was_completed
+      deduct_on_completion!(order, actor: actor)
       order.dining_table&.release! if order.table_id
       Realtime.order_changed(order)
       order

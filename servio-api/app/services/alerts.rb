@@ -14,6 +14,16 @@ module Alerts
     Rails.logger.warn("[alerts] big_void failed: #{e.message}")
   end
 
+  # SPEC Stock Alerts: once per item and day when a level reaches its minimum (setting inventory.stock_alerts.low_stock).
+  def low_stock(item, qty)
+    return unless Current.business&.setting("inventory.stock_alerts.low_stock")
+    link = "/inventory/items/#{item.id}"
+    return if Notification.where(kind: "low_stock", link: link).where("created_at > ?", 24.hours.ago).exists?
+    Notification.create!(kind: "low_stock", title: "#{item.name} is at its minimum", body: "On hand #{qty.to_s('F')} #{item.base_unit.code}, minimum #{item.minimum_qty.to_s('F')}. See Demand for what to order.", link: link)
+  rescue StandardError => e
+    Rails.logger.warn("[alerts] low_stock failed: #{e.message}")
+  end
+
   # Once per item, section and day when a level goes below zero. Creates a manager task in the notification centre.
   def negative_stock(item, section, qty)
     link = "/stock/items/#{item.id}"

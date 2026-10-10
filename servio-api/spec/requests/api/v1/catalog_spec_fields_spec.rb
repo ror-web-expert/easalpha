@@ -79,6 +79,7 @@ RSpec.describe "Catalog SPEC fields", type: :request do
       expect(json[:data].size).to eq(2)
       api_post "/api/v1/orders", { order_type: "takeaway", lines: [{ product_id: m[:burger].id, variant_id: m[:double].id, quantity: 1 }, { product_id: m[:burger].id, quantity: 3 }], place: true }, headers: headers
       expect(response).to have_http_status(:created)
+      api_post "/api/v1/orders/#{json[:id]}/payments", { payments: [{ method_code: "cash", amount_minor: json[:total_minor], tendered_minor: json[:total_minor] }] }, headers: headers
       expect(level(s[:bag])).to eq(98)  # the Double variant's own rows apply to it
       expect(level(s[:box])).to eq(97)  # product-level rows apply to the plain lines
       api_put "/api/v1/products/#{m[:burger].id}/consumables", { rows: [{ order_type: "delivery", stock_item_id: s[:box].id, quantity: 1, unit_id: s[:pcs].id }], copy_all_order_types: true }, headers: headers
