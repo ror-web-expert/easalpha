@@ -63,7 +63,7 @@ export default function PendingOrdersPage() {
             <div className="grid grid-cols-7 gap-1">
               {weeks.flat().map((c) => (
                 <button key={c.day} onClick={() => pick(c.day)} disabled={!c.count} aria-label={`${formatDate(c.day)}: ${c.count} open`}
-                  className={cn("flex h-16 flex-col items-start justify-between rounded-lg border p-2 text-left text-sm transition-colors", c.inMonth ? "bg-card" : "bg-muted/40 text-fg-muted",
+                  className={cn("flex min-h-[88px] flex-col items-start justify-between rounded-xl border p-2.5 text-left text-sm transition-colors", c.inMonth ? "bg-card" : "bg-muted/40 text-fg-muted",
                     c.count ? "hover:bg-fg/[0.04]" : "cursor-default", c.day === day && "border-primary bg-primary-soft", c.day === today && "font-semibold")}>
                   <span className="tabular">{c.day.slice(-2)}</span>
                   {c.count ? <Badge variant={c.day === today ? "warning" : "danger"}>{c.count} open</Badge> : null}

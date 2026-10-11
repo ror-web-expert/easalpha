@@ -1,14 +1,13 @@
 import type { Metadata, Viewport } from "next";
-// Material Design 3 type: Roboto, self-hosted so tills render it offline too
-// (regular 400 and medium 500 carry the M3 scale; bold 700 for big figures).
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
+// Type: Inter for the whole product (self-hosted by next/font, so tills render it offline too);
+// Roboto Mono stays for receipts and other fixed-width figures.
+import { Inter } from "next/font/google";
 import "@fontsource/roboto-mono/400.css";
 import "@fontsource/roboto-mono/700.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-inter", display: "swap" });
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://servio.pk").replace(/\/$/, "");
 const DESCRIPTION = "Servio is the complete restaurant POS for Pakistan: an offline desktop till, order-taker tablet, kitchen display, inventory with recipe deduction, purchasing, double-entry accounts, payroll, riders, khata credit, WhatsApp receipts, FBR and PRA tax and 27 reports.";
@@ -37,7 +36,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-full">
         <Providers>{children}</Providers>
       </body>

@@ -5,15 +5,23 @@ import { Search } from "lucide-react";
 import { Input, Select } from "@/components/ui";
 import { daysAgo, isoDay } from "@/lib/dates";
 
-export function PageHeader({ icon: Icon, title, description, actions, className }: { icon?: LucideIcon; title: string; description?: string; actions?: React.ReactNode; className?: string }) {
+/** Page title band: a white card with an orange icon tile, a bold navy title, optional meta pills beside it,
+ *  a muted one-line description and the page actions on the right. Same props as before; `meta` is new and optional. */
+export function PageHeader({ icon: Icon, title, description, actions, meta, className }: { icon?: LucideIcon; title: string; description?: string; actions?: React.ReactNode; meta?: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("mb-6 flex flex-wrap items-center justify-between gap-3", className)}>
+    <div className={cn("mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card px-6 py-5", className)}>
       <div className="flex min-w-0 items-center gap-4">
-        {Icon ? <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-primary-ink"><Icon className="h-5 w-5" /></span> : null}
-        <div>
-          {/* M3 Title Large 22/28 regular, Body Medium supporting text */}
-          <h1 className="text-[22px] leading-7">{title}</h1>
-          {description ? <p className="mt-0.5 text-sm text-fg-secondary">{description}</p> : null}
+        {Icon ? (
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cta-soft text-cta-ink" aria-hidden="true">
+            <Icon className="h-[22px] w-[22px]" />
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="truncate text-2xl font-bold leading-8 tracking-[-0.01em] text-heading">{title}</h1>
+            {meta ? <div className="flex flex-wrap items-center gap-1.5">{meta}</div> : null}
+          </div>
+          {description ? <p className="mt-1 text-sm leading-5 text-fg-muted">{description}</p> : null}
         </div>
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -34,6 +42,7 @@ export function SearchInput({ value, onChange, placeholder, className }: { value
   );
 }
 
+/** Stat card grid: 16px gaps, two columns on phones, four on wide screens. */
 export function Cards({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cn("mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4", className)}>{children}</div>;
 }

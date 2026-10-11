@@ -33,6 +33,7 @@
   --bg-sidebar: #0b1f3a;       /* navy deep */
   --border: #e6ebf2;
   --border-strong: #8a9ab5;    /* outline */
+  --table-head: #f4f7fb; --table-zebra: #fafbfd; --table-hover: #f1f5fb;   /* data table header, even rows, hover */
   --text-primary: #1f2a3d;     /* body */
   --text-secondary: #41506a;
   --text-muted: #5b6b85;
@@ -61,6 +62,7 @@
     --accent: #ff8a3d;  --accent-fg: #2a1200;  --accent-soft: #4a2a14;  --accent-ink: #ffc9a6;
     --bg-page: #0a1424; --bg-card: #10294d; --bg-muted: #16304f; --bg-high: #1b3a6b; --bg-sidebar: #0b1f3a;
     --border: #23406b; --border-strong: #6f85a8;
+    --table-head: #0e2344; --table-zebra: #0f2748; --table-hover: #16304f;
     --text-primary: #e6edf7; --text-secondary: #c3cfe0; --text-muted: #8fa1ba;
     --heading: #ffffff;
     --inverse: #e6edf7; --inverse-fg: #0b1f3a; --inverse-primary: #10294d; --inverse-danger: #ba1a1a;
@@ -82,6 +84,7 @@
   --accent: #ff8a3d;  --accent-fg: #2a1200;  --accent-soft: #4a2a14;  --accent-ink: #ffc9a6;
   --bg-page: #0a1424; --bg-card: #10294d; --bg-muted: #16304f; --bg-high: #1b3a6b; --bg-sidebar: #0b1f3a;
   --border: #23406b; --border-strong: #6f85a8;
+  --table-head: #0e2344; --table-zebra: #0f2748; --table-hover: #16304f;
   --text-primary: #e6edf7; --text-secondary: #c3cfe0; --text-muted: #8fa1ba;
   --heading: #ffffff;
   --inverse: #e6edf7; --inverse-fg: #0b1f3a; --inverse-primary: #10294d; --inverse-danger: #ba1a1a;
@@ -140,12 +143,15 @@
   --color-inverse-danger: var(--inverse-danger);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-table-head: var(--table-head);
+  --color-table-zebra: var(--table-zebra);
+  --color-table-hover: var(--table-hover);
   --color-fg: var(--text-primary);
   --color-fg-secondary: var(--text-secondary);
   --color-fg-muted: var(--text-muted);
   --radius-md: var(--radius);
   --radius-lg: var(--radius-lg);
-  --font-sans: "Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
   --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -156,16 +162,22 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 20px;
-  letter-spacing: 0.25px;
+  letter-spacing: 0;
+  /* Inter: single-storey a (cv11) and the open digits set (ss01) for a cleaner, more modern texture */
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-h1, h2, h3 { letter-spacing: 0; }
-.tabular { font-variant-numeric: tabular-nums; }
+.tabular { font-variant-numeric: tabular-nums; font-feature-settings: "cv11", "ss01", "tnum"; }
 .till { font-size: 16px; }
 @layer base {
   *, ::before, ::after { border-color: var(--border); }
-  /* Headings are navy on light surfaces; a dark container sets --heading-color (for example white) to override. */
-  h1, h2, h3 { color: var(--heading-color, var(--heading)); }
+  /* Headings are navy on light surfaces; a dark container sets --heading-color (for example white) to override.
+     Scale: h1 24/32 bold, h2 20/28 semibold, h3 16/24 semibold, all slightly tightened. Utility classes override. */
+  h1, h2, h3 { color: var(--heading-color, var(--heading)); letter-spacing: -0.01em; }
+  h1 { font-size: 24px; line-height: 32px; font-weight: 700; }
+  h2 { font-size: 20px; line-height: 28px; font-weight: 600; }
+  h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 }
 button, [role="button"] { cursor: pointer; }

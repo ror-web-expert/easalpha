@@ -378,7 +378,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <DayBar />
           <ThemeToggle className="text-white/85 hover:bg-white/10" />
         </header>
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-8 pt-2 md:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 pb-8 pt-4 sm:px-6">{children}</main>
       </div>
       <PageSearch groups={groups} open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
