@@ -11,7 +11,7 @@ export function Container({ className, children }: { className?: string; childre
 }
 
 export function Section({ id, className, tone = "white", children }: { id?: string; className?: string; tone?: "white" | "tint" | "navy"; children: React.ReactNode }) {
-  const tones = { white: "bg-white", tint: "bg-[#F4F7FB]", navy: "bg-[#0B1F3A] text-white" };
+  const tones = { white: "bg-white", tint: "bg-[#F4F7FB]", navy: "bg-[#0B1F3A] text-white [--heading-color:#fff]" };
   return (
     <section id={id} className={cn("scroll-mt-20 py-20 sm:py-24 lg:py-28", tones[tone], className)}>
       <Container>{children}</Container>

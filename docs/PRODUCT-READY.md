@@ -23,6 +23,10 @@ Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, t
 | 6 People and time | Payroll run matches | Attendance rules engine with every SPEC rule, scan log and fingerprint enrolment, payroll with snapshot and all eight screens, temporary riders with lifetimes and permissions, Rider Reports and the rider app, Cashier Till with Day-End Settlement, My Till |
 | 7 Reports, customers and AI | Grand Report ties out | All 27 report screens with CSV and PDF, regular discount tiers, vouchers, loyalty redemption options, reviews, WhatsApp account notifications, customer screens, Website Config with the storefront, AI Pricing and AI Stock Forecast |
 
+## Brand and marketing site
+
+Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the one action to take, across the admin panel, POS, kitchen display, rider app, storefront and the public site. Logo in `servio-web/public/brand/`. The public site lives in the same app: `/` (landing), `/features`, `/pricing` (real plans), `/signup` (creates the business and signs the owner in), `/contact`, `/privacy`, `/terms`; the device picker moved to `/apps`. Contact details live in `servio-web/src/components/site/site-helpers.ts` and are placeholders until you set them.
+
 ## Tests
 
 | Suite | Count |

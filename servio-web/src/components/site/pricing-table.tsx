@@ -37,7 +37,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
           const m = monthlyMinor(p, currency);
           return (
             <div key={p.code} className={cn("relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-[0_18px_40px_-24px_rgba(11,31,58,0.45)]", p.popular ? "border-[#0B1F3A] ring-1 ring-[#0B1F3A] lg:-translate-y-4 lg:shadow-[0_40px_80px_-30px_rgba(11,31,58,0.55)]" : "border-[#E6EBF2]")}>
-              <div className={cn("px-7 pb-6 pt-7", p.popular ? "bg-[#0B1F3A] text-white" : "text-[#0B1F3A]")}>
+              <div className={cn("px-7 pb-6 pt-7", p.popular ? "bg-[#0B1F3A] text-white [--heading-color:#fff]" : "text-[#0B1F3A]")}>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-lg font-bold">{p.name}</h3>
                   {p.popular ? <span className="rounded-full bg-[#FF7A1A] px-3 py-1 text-xs font-bold text-white">Most popular</span> : null}
