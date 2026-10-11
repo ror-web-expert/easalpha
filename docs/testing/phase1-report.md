@@ -1,6 +1,6 @@
 # Phase 1 test report
 
-Updated as each sprint completes. Automated tests are RSpec request and model specs in `servio-api/spec`. The manual-style check is `scripts/smoke/phase1.sh`, which drives the live API with curl the way a tester would click through the app.
+Updated as each sprint completes. Automated tests are RSpec request and model specs in `easalpha-api/spec`. The manual-style check is `scripts/smoke/phase1.sh`, which drives the live API with curl the way a tester would click through the app.
 
 | Date | Sprint | Automated | Smoke script | Notes |
 |---|---|---|---|---|
@@ -27,8 +27,8 @@ Updated as each sprint completes. Automated tests are RSpec request and model sp
 How to run:
 
 ```
-cd servio-api && bundle exec rspec
-cd servio-api && bin/rails s -p 3001 &
+cd easalpha-api && bundle exec rspec
+cd easalpha-api && bin/rails s -p 3001 &
 scripts/smoke/phase1.sh http://localhost:3001
 scripts/smoke/phase2.sh http://localhost:3001
 ```

@@ -1,6 +1,6 @@
 # SPEC: ARFAPOS Clone, Functional Spec and Build Plan
 
-This is the top-priority requirements document for Servio (set by the owner on 10 Oct 2026). Every feature in it must exist in Servio and behave as described. Servio keeps its own name, design and the extra features listed in `PDF-ALIGNMENT.md`. Source: `SPEC.pdf` (text extracted below).
+This is the top-priority requirements document for EasAlpha (set by the owner on 10 Oct 2026). Every feature in it must exist in EasAlpha and behave as described. EasAlpha keeps its own name, design and the extra features listed in `PDF-ALIGNMENT.md`. Source: `SPEC.pdf` (text extracted below).
 
 ```text
 

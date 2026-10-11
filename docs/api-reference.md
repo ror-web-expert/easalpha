@@ -1020,7 +1020,7 @@ Permissions: RIDERS, RIDER_VIEW, RIDER_CREATE, RIDER_EDIT, RIDER_DELETE, DUMMY_R
 | GET | /api/v1/whatsapp/connection | provider, status (disconnected, qr, connecting, connected, unavailable), qr image, phone |
 | POST | /api/v1/whatsapp/connection/start, /logout | begin pairing, unlink the phone |
 
-Environment: `WHATSAPP_GATEWAY_URL`, `WHATSAPP_GATEWAY_TOKEN` (the gateway in `servio-whatsapp/`), optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Setting `whatsapp.provider` chooses web (linked phone) or cloud (Meta).
+Environment: `WHATSAPP_GATEWAY_URL`, `WHATSAPP_GATEWAY_TOKEN` (the gateway in `easalpha-whatsapp/`), optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Setting `whatsapp.provider` chooses web (linked phone) or cloud (Meta).
 
 ## Help and Support, Branding and the Super panel (11 Oct 2026)
 

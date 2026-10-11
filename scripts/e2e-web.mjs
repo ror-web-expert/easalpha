@@ -65,7 +65,7 @@ for (const p of adminPages) {
 // ---- Phase 1 gate (SPEC): login + permissions. A manager sees Inventory; after a custom grant and a fresh sign-in, the sidebar follows the new set.
 {
   const mgrRole = roles.j.data.find((r) => r.system_key === "manager").id;
-  const email = `e2e-mgr-${Date.now()}@servio.test`;
+  const email = `e2e-mgr-${Date.now()}@easalpha.test`;
   const mgr = await api("/staff", { method: "POST", token: T, body: { name: "E2E Manager", email, password: "password123", role_id: mgrRole, staff_type: "admin" } });
   step("gate: manager created", mgr.status === 201, String(mgr.status));
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 800 } }); const g = await ctx.newPage(); wire(g, "gate");
@@ -79,7 +79,7 @@ for (const p of adminPages) {
   await g.goto(WEB + "/admin", { waitUntil: "networkidle" }); await g.waitForTimeout(800);
   const navText2 = await g.evaluate(() => document.querySelector("nav")?.innerText || "");
   step("gate: old session keeps old menu until re-login", /Inventory/.test(navText2), "");
-  await g.evaluate(() => localStorage.removeItem("servio.auth")); await loginAs();
+  await g.evaluate(() => localStorage.removeItem("easalpha.auth")); await loginAs();
   const navText3 = await g.evaluate(() => document.querySelector("nav")?.innerText || "");
   step("gate: after re-login Inventory is gone and Orders stays", !/Inventory/.test(navText3) && /Orders/.test(navText3), navText3.slice(0, 120).replace(/\n/g, " "));
   await shot(g, "gate-after-relogin");

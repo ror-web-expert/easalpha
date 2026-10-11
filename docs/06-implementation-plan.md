@@ -23,9 +23,9 @@ The original plan shipped a core POS in 10 two-week sprints; from 10 Oct 2026 th
 
 | Role | Owns | Repositories |
 |---|---|---|
-| Backend developer | Rails API, tenancy, jobs, sync, tax, WhatsApp, billing, super admin | `servio-api` |
-| Frontend developer | Next.js admin panel, till screens, kitchen display, customer site | `servio-web` |
-| Full-stack developer | POS web app at `/pos`, IndexedDB, offline queue, printing through the print server; rider app | `servio-web` |
+| Backend developer | Rails API, tenancy, jobs, sync, tax, WhatsApp, billing, super admin | `easalpha-api` |
+| Frontend developer | Next.js admin panel, till screens, kitchen display, customer site | `easalpha-web` |
+| Full-stack developer | POS web app at `/pos`, IndexedDB, offline queue, printing through the print server; rider app | `easalpha-web` |
 | Designer, part time | Design system in `07-design-system.md`, till and admin screens, receipts, Urdu layout | Figma |
 | QA and pilot owner, part time | Test plans, staging checks, pilot onboarding, help articles | |
 
@@ -33,13 +33,13 @@ Two tracks run in parallel from sprint 2: the **API and admin** track and the **
 
 ## 3. Week 0: foundations
 
-1. Create the repositories (`servio-api`, `servio-web`; see `02-technology.md` section 3) with CI (lint, tests, security scan) and branch protection.
+1. Create the repositories (`easalpha-api`, `easalpha-web`; see `02-technology.md` section 3) with CI (lint, tests, security scan) and branch protection.
 2. Docker Compose for local: PostgreSQL 16, Rails 8 API, Next.js, mailcatcher, a fake WhatsApp endpoint.
 3. Staging on Heroku or a single Kamal host; production on AWS Bahrain prepared but empty.
 4. Rails API skeleton: UUID primary keys, `business_id` on every table, acts_as_tenant, Row-Level Security policies, Pundit, Rack::Attack, audit log, Solid Queue, Action Cable, rswag.
 5. The tenant isolation test harness: a request spec helper that replays every endpoint as another business and expects 404 or 403.
-6. OpenAPI v1 skeleton with auth, businesses, menus, orders, payments, shifts, sync; TypeScript types generated into `servio-web`.
-7. Design tokens from `07-design-system.md` as CSS variables and a Tailwind config in `servio-web`; shadcn/ui installed.
+6. OpenAPI v1 skeleton with auth, businesses, menus, orders, payments, shifts, sync; TypeScript types generated into `easalpha-web`.
+7. Design tokens from `07-design-system.md` as CSS variables and a Tailwind config in `easalpha-web`; shadcn/ui installed.
 8. ESC/POS test print on one printer model from the POS web app (no Tauri project is needed: the POS is a web app per SPEC).
 9. Seed data: one sample restaurant with 30 items, 6 categories, 2 deals, 10 tables, 3 staff.
 10. Sentry, uptime check, public status page.

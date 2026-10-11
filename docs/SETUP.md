@@ -6,12 +6,12 @@ Short steps for every way to run EasAlpha. Updated 11 Oct 2026. Logins after set
 
 | Part | Folder | Port | Needs |
 |---|---|---|---|
-| API and job worker | `servio-api` | 3001 | Ruby 3.3.4, PostgreSQL 16 |
-| Web app: admin, POS, kitchen, rider, storefront, public site | `servio-web` | 3000 | Node 20, pnpm 10 |
-| WhatsApp gateway (link a phone by QR) | `servio-whatsapp` | 3010 | Node 20 |
-| Desktop POS (Electron, printing, print server) | `servio-desktop` | 9977 | Node 20, pnpm 10 |
+| API and job worker | `easalpha-api` | 3001 | Ruby 3.3.4, PostgreSQL 16 |
+| Web app: admin, POS, kitchen, rider, storefront, public site | `easalpha-web` | 3000 | Node 20, pnpm 10 |
+| WhatsApp gateway (link a phone by QR) | `easalpha-whatsapp` | 3010 | Node 20 |
+| Desktop POS (Electron, printing, print server) | `easalpha-desktop` | 9977 | Node 20, pnpm 10 |
 
-Secrets: `servio-api/config/master.key` is not in git. Copy it from the person who has it, or run `cd servio-api && bin/rails credentials:edit` once to make a new pair.
+Secrets: `easalpha-api/config/master.key` is not in git. Copy it from the person who has it, or run `cd easalpha-api && bin/rails credentials:edit` once to make a new pair.
 
 ---
 
@@ -42,7 +42,7 @@ echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc && source ~/.
 ### Then, on either
 
 ```bash
-git clone <repo> servio && cd servio
+git clone <repo> easalpha && cd easalpha
 scripts/dev-up.sh        # PostgreSQL in Docker, API + jobs, WhatsApp gateway, web (production build); prints URLs and logins
 scripts/dev-down.sh      # stop (PostgreSQL keeps running)
 ```
@@ -50,14 +50,14 @@ scripts/dev-down.sh      # stop (PostgreSQL keeps running)
 Hot-reload development instead of the production build:
 
 ```bash
-docker start servio-pg
-cd servio-api && bin/dev                                              # API 3001 + jobs
-cd servio-web && NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1 pnpm dev   # web 3000
+docker start easalpha-pg
+cd easalpha-api && bin/dev                                              # API 3001 + jobs
+cd easalpha-web && NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1 pnpm dev   # web 3000
 ```
 
-Rich demo data (30 days of orders, stock, payroll): `cd servio-api && bin/rails demo:rich`.
+Rich demo data (30 days of orders, stock, payroll): `cd easalpha-api && bin/rails demo:rich`.
 
-Tests: `cd servio-api && bundle exec rspec`, `cd servio-web && pnpm test && pnpm lint && pnpm typecheck`, browser gate `node scripts/e2e-web.mjs`.
+Tests: `cd easalpha-api && bundle exec rspec`, `cd easalpha-web && pnpm test && pnpm lint && pnpm typecheck`, browser gate `node scripts/e2e-web.mjs`.
 
 ---
 
@@ -66,7 +66,7 @@ Tests: `cd servio-api && bundle exec rspec`, `cd servio-web && pnpm test && pnpm
 Works on any machine with Docker Compose v2: Ubuntu, Debian, any Linux, a Mac with Docker Desktop, Windows Server with Docker Desktop. Minimum 2 CPU, 4 GB RAM, 40 GB disk. One server runs everything; split later by pointing `PGHOST` at a managed PostgreSQL.
 
 1. **Install Docker** (Ubuntu): `curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER`. Mac and Windows: Docker Desktop.
-2. **Get the code and the key**: `git clone <repo> servio && cd servio`, put `master.key` in `servio-api/config/`.
+2. **Get the code and the key**: `git clone <repo> easalpha && cd easalpha`, put `master.key` in `easalpha-api/config/`.
 3. **Configure**: `cp deploy/.env.example deploy/.env` and fill in: `PUBLIC_URL`, `API_PUBLIC_URL`, `POSTGRES_PASSWORD`, `RAILS_MASTER_KEY` (contents of master.key), `WHATSAPP_GATEWAY_TOKEN`, `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD`.
 4. **Start**: `cd deploy && docker compose --env-file .env up -d --build`. First start creates the databases, runs migrations and creates the super admin.
 5. **TLS**: put Caddy in front (`sudo apt install caddy`, then `/etc/caddy/Caddyfile`):
@@ -91,7 +91,7 @@ Same steps, but in `.env` set `FORCE_SSL=false`, `PUBLIC_URL=http://<server-ip>:
 
 ### Without Docker (Ubuntu, systemd)
 
-Install Ruby, Node and PostgreSQL 16 as in section 1, then: `cd servio-api && bundle install --without development test && RAILS_ENV=production bin/rails db:prepare db:seed`; `cd servio-web && pnpm install && NEXT_PUBLIC_API_URL=https://api.example.pk/api/v1 pnpm build`. Run four services under systemd: `bin/rails server -p 3001`, `bin/jobs`, `pnpm start -p 3000`, `node server.js` (gateway), each with the same environment variables as `deploy/docker-compose.yml`. Docker is the supported path; use this only when Docker is not allowed.
+Install Ruby, Node and PostgreSQL 16 as in section 1, then: `cd easalpha-api && bundle install --without development test && RAILS_ENV=production bin/rails db:prepare db:seed`; `cd easalpha-web && pnpm install && NEXT_PUBLIC_API_URL=https://api.example.pk/api/v1 pnpm build`. Run four services under systemd: `bin/rails server -p 3001`, `bin/jobs`, `pnpm start -p 3000`, `node server.js` (gateway), each with the same environment variables as `deploy/docker-compose.yml`. Docker is the supported path; use this only when Docker is not allowed.
 
 ---
 
@@ -118,26 +118,26 @@ To change a machine's role: EasAlpha menu > "Set up this device again" on the de
 | Secret | `DEPLOY_HOST` | the server, e.g. `pos.easalpha.com` or its IP |
 | Secret | `DEPLOY_USER` | the SSH user that owns the deploy folder |
 | Secret | `DEPLOY_SSH_KEY` | a private key whose public half is in that user's `~/.ssh/authorized_keys` (`ssh-keygen -t ed25519 -f deploy_key`) |
-| Secret | `DEPLOY_DOWNLOADS_PATH` | the folder mounted into the web container, e.g. `/srv/servio/deploy/downloads` |
+| Secret | `DEPLOY_DOWNLOADS_PATH` | the folder mounted into the web container, e.g. `/srv/easalpha/deploy/downloads` |
 | Variable | `PUBLIC_URL` | the website, e.g. `https://easalpha.com`; installed apps then update themselves from `PUBLIC_URL/downloads` |
 
-Then: bump `"version"` in `servio-desktop/package.json`, `git tag v1.0.0 && git push --tags`. About 15 minutes later the three installers are on the site. Without the secrets the workflow still builds and keeps the files as the `servio-pos-downloads` artifact and on the GitHub Release.
+Then: bump `"version"` in `easalpha-desktop/package.json`, `git tag v1.0.0 && git push --tags`. About 15 minutes later the three installers are on the site. Without the secrets the workflow still builds and keeps the files as the `easalpha-pos-downloads` artifact and on the GitHub Release.
 
-**By hand.** `scripts/publish-downloads.sh` builds the Linux installers here, picks up any Windows or Mac files you dropped into `servio-desktop/release/` (from the workflow artifact), writes `manifest.json` and copies everything into `servio-web/public/downloads` (local site) and `deploy/downloads` (copy that folder to the server). Only when the installers live somewhere else entirely set Downloads URL in the super panel; the Desktop version there is the fallback when no manifest exists.
+**By hand.** `scripts/publish-downloads.sh` builds the Linux installers here, picks up any Windows or Mac files you dropped into `easalpha-desktop/release/` (from the workflow artifact), writes `manifest.json` and copies everything into `easalpha-web/public/downloads` (local site) and `deploy/downloads` (copy that folder to the server). Only when the installers live somewhere else entirely set Downloads URL in the super panel; the Desktop version there is the fallback when no manifest exists.
 
 ## 4. Desktop POS installers
 
 The desktop app wraps the web POS and adds receipt printing and the print server for tablets. It opens `http://localhost:3000/setup` by default; change the address once in EasAlpha > Printers (Ctrl+Shift+P) to your `PUBLIC_URL`.
 
-| Target | Build on | Command | Output in `servio-desktop/release/` |
+| Target | Build on | Command | Output in `easalpha-desktop/release/` |
 |---|---|---|---|
-| Linux | Linux | `pnpm dist:linux` | `EasAlpha POS-x.y.z.AppImage`, `servio-desktop_x.y.z_amd64.deb` |
+| Linux | Linux | `pnpm dist:linux` | `EasAlpha POS-x.y.z.AppImage`, `easalpha-desktop_x.y.z_amd64.deb` |
 | Windows | Windows (or Linux with Wine) | `pnpm dist:win` | `EasAlpha POS Setup x.y.z.exe` |
 | macOS Intel + Apple Silicon | macOS | `pnpm dist:mac` | `EasAlpha POS-x.y.z.dmg`, `.zip` |
 
-Before the first build: `cd servio-desktop && pnpm install`. Installers are unsigned, so Windows SmartScreen says "More info, Run anyway" and macOS needs right-click, Open the first time. Code signing certificates (a Windows EV cert, an Apple Developer ID) remove those warnings; add them as CI secrets `CSC_LINK` and `CSC_KEY_PASSWORD` when bought.
+Before the first build: `cd easalpha-desktop && pnpm install`. Installers are unsigned, so Windows SmartScreen says "More info, Run anyway" and macOS needs right-click, Open the first time. Code signing certificates (a Windows EV cert, an Apple Developer ID) remove those warnings; add them as CI secrets `CSC_LINK` and `CSC_KEY_PASSWORD` when bought.
 
-Install on a till: Linux `sudo apt install ./servio-desktop_*.deb` or run the AppImage; Windows run the .exe; macOS open the .dmg and drag to Applications. Give the till a fixed IP so tablets keep printing through it.
+Install on a till: Linux `sudo apt install ./easalpha-desktop_*.deb` or run the AppImage; Windows run the .exe; macOS open the .dmg and drag to Applications. Give the till a fixed IP so tablets keep printing through it.
 
 ---
 
@@ -148,12 +148,12 @@ Push the repository to GitHub and the three workflows in `.github/workflows/` ru
 | Workflow | Runs when | Produces |
 |---|---|---|
 | `ci.yml` | every push and pull request | API specs, rubocop, brakeman; web lint, typecheck, unit tests; desktop unit tests |
-| `images.yml` | push to `main`/`master`, any `v*` tag | Docker images `ghcr.io/<owner>/servio-api`, `servio-web`, `servio-whatsapp`, tagged `latest`, the git tag and the commit SHA |
-| `desktop.yml` | any change under `servio-desktop/`, any `v*` tag | Linux AppImage and deb, Windows exe, macOS dmg and zip as downloadable artifacts (30 days); a `v*` tag also attaches them to a GitHub Release |
+| `images.yml` | push to `main`/`master`, any `v*` tag | Docker images `ghcr.io/<owner>/easalpha-api`, `easalpha-web`, `easalpha-whatsapp`, tagged `latest`, the git tag and the commit SHA |
+| `desktop.yml` | any change under `easalpha-desktop/`, any `v*` tag | Linux AppImage and deb, Windows exe, macOS dmg and zip as downloadable artifacts (30 days); a `v*` tag also attaches them to a GitHub Release |
 
 One-time setup on GitHub: `scripts/github-setup.sh` (after `gh auth login`) creates the repository, sets the `API_PUBLIC_URL` and `PUBLIC_URL` variables and the `DEPLOY_*` secrets, and pushes. With those secrets `images.yml` also deploys: it copies `deploy/` to the server, logs the server into ghcr.io with the run's token, pulls and restarts the stack, and waits for the API health check. The production server, DNS and Caddy steps are in [DEPLOY.md](DEPLOY.md).
 
-Release flow: bump `"version"` in `servio-desktop/package.json`, then `git tag v1.0.0 && git push --tags`. Images and installers for that version appear on the GitHub Release within about 15 minutes.
+Release flow: bump `"version"` in `easalpha-desktop/package.json`, then `git tag v1.0.0 && git push --tags`. Images and installers for that version appear on the GitHub Release within about 15 minutes.
 
 **Self-update.** Installed desktop apps check the release feed 20 seconds after start and every 4 hours, download the new version in the background and install it when the app is closed, so a shift is never interrupted; a prompt offers "Restart now". The feed is this repository's latest GitHub Release (set by the workflow) or the `updateUrl` in `settings.json` for self-hosted customers who publish `latest.yml` and the installers on their own server. Works for the Windows installer and the Linux AppImage; the Linux .deb is updated by hand and macOS needs a signed build. The web app, kitchen screens and phones update on reload because they load from the server.
 
@@ -162,6 +162,6 @@ Release flow: bump `"version"` in `servio-desktop/package.json`, then `git tag v
 ## 6. Update, back up, restore
 
 - **Update a Docker server**: `git pull && cd deploy && docker compose --env-file .env up -d --build` (or `pull` then `up -d` with the images file). Migrations run on start. Do it between 3 pm and 5 pm Pakistan time, outside shifts.
-- **Back up**: `docker compose exec db pg_dump -U postgres servio_production | gzip > servio-$(date +%F).sql.gz`, plus the `storage` volume (uploads) and `wasessions` (linked WhatsApp phone). Run it nightly from cron and copy off the server.
-- **Restore**: `gunzip -c servio-DATE.sql.gz | docker compose exec -T db psql -U postgres servio_production`.
+- **Back up**: `docker compose exec db pg_dump -U postgres easalpha_production | gzip > easalpha-$(date +%F).sql.gz`, plus the `storage` volume (uploads) and `wasessions` (linked WhatsApp phone). Run it nightly from cron and copy off the server.
+- **Restore**: `gunzip -c easalpha-DATE.sql.gz | docker compose exec -T db psql -U postgres easalpha_production`.
 - **Logs**: `docker compose logs -f api` (or `jobs`, `web`, `whatsapp`). Local runs log to `tmp/logs/`.

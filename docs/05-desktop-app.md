@@ -15,7 +15,7 @@ EasAlpha's till, **EasAlpha POS**, is an installable web app at `/pos` (SPEC), u
 |---|---|
 | Platforms | Any current browser on Windows, macOS or Android, installed to the desktop or home screen (see `03-mobile-app.md`). |
 | Shell | Installable web app (SPEC). Printers are set up on the desktop POS; tablets print through the desktop's IP stored as the print server. How the web app reaches the printer is open: SPEC question 3. |
-| Screens | The Next.js till screens from `servio-web` at `/pos`. One code base for desktop and tablet. |
+| Screens | The Next.js till screens from `easalpha-web` at `/pos`. One code base for desktop and tablet. |
 | Local data | IndexedDB with menu, prices, tax, staff PINs, tables, open orders, shift, 7 days of synced orders; the catalog is checked by ETag on launch. |
 | Minimum screen | 1366 x 768. Works with touch, mouse and keyboard. |
 | Install | Installed from the browser to the desktop or home screen, or the desktop installer; updates apply only when no shift is open. |
@@ -136,4 +136,4 @@ Both are browser pages opened from the till's Settings on a second monitor or a 
 
 ## 5. Till app repository
 
-Not needed while the POS is a web app (SPEC). The earlier plan was `servio-pos-desktop`, a Tauri 2 project with Rust crates for ESC/POS printing, cash drawer, SQLCipher, the sync queue and auto-update. The web layer is the shared till screens from `servio-web`, pulled in as a package. End-to-end tests with Playwright against the bundled screens; the offline test (disconnect, 20 orders, reconnect) runs in CI with a mocked API.
+Not needed while the POS is a web app (SPEC). The earlier plan was `easalpha-pos-desktop`, a Tauri 2 project with Rust crates for ESC/POS printing, cash drawer, SQLCipher, the sync queue and auto-update. The web layer is the shared till screens from `easalpha-web`, pulled in as a package. End-to-end tests with Playwright against the bundled screens; the offline test (disconnect, 20 orders, reconnect) runs in CI with a mocked API.

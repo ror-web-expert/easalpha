@@ -61,15 +61,15 @@ One Rails API serves every screen: the desktop till, the kitchen display, the ad
 
 | Repository | Contents |
 |---|---|
-| `servio-api` | Rails API, background jobs, super admin |
-| `servio-web` | Next.js admin panel, kitchen display, online ordering pages, shared till screens (one monorepo with shared UI components) |
-| `servio-pos-desktop` | Tauri desktop till with local SQLite and the sync queue (not needed: the POS is a web app per SPEC) |
-| `servio-mobile` | Rider app and branded customer app, only if native builds are chosen (`PDF-ALIGNMENT.md` question 2) |
-| `servio-print-bridge` | Printing helper for Android tablets and kitchen printers (replaced by the SPEC print server) |
+| `easalpha-api` | Rails API, background jobs, super admin |
+| `easalpha-web` | Next.js admin panel, kitchen display, online ordering pages, shared till screens (one monorepo with shared UI components) |
+| `easalpha-pos-desktop` | Tauri desktop till with local SQLite and the sync queue (not needed: the POS is a web app per SPEC) |
+| `easalpha-mobile` | Rider app and branded customer app, only if native builds are chosen (`PDF-ALIGNMENT.md` question 2) |
+| `easalpha-print-bridge` | Printing helper for Android tablets and kitchen printers (replaced by the SPEC print server) |
 
 Separate repositories per app, small pull requests, nothing reaches customers without passing tests on staging.
 
-On 10 Oct 2026 the code lives in two folders, `servio-api` and `servio-web`, beside `docs`. The desktop, mobile and print-bridge repositories are not needed while the POS is a web app.
+On 10 Oct 2026 the code lives in two folders, `easalpha-api` and `easalpha-web`, beside `docs`. The desktop, mobile and print-bridge repositories are not needed while the POS is a web app.
 
 ---
 

@@ -10,27 +10,27 @@ export WHATSAPP_GATEWAY_TOKEN="${WHATSAPP_GATEWAY_TOKEN:-dev-gateway-token}"
 up() { ss -ltn 2>/dev/null | grep -q ":$1 "; }
 
 echo "1/4 PostgreSQL"
-docker start servio-pg >/dev/null 2>&1 || docker run -d --name servio-pg -p 5434:5432 -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null
-until docker exec servio-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+docker start easalpha-pg >/dev/null 2>&1 || docker run -d --name easalpha-pg -p 5434:5432 -e POSTGRES_PASSWORD=postgres postgres:16 >/dev/null
+until docker exec easalpha-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
 
 echo "2/4 API and jobs on 3001"
 if ! up 3001; then
-  (cd "$ROOT/servio-api" && bundle check >/dev/null 2>&1 || bundle install --quiet)
-  (cd "$ROOT/servio-api" && bin/rails db:prepare >/dev/null && bin/rails db:seed >/dev/null 2>&1 || true)
-  (cd "$ROOT/servio-api" && nohup bin/dev > "$LOG/api.log" 2>&1 &)
+  (cd "$ROOT/easalpha-api" && bundle check >/dev/null 2>&1 || bundle install --quiet)
+  (cd "$ROOT/easalpha-api" && bin/rails db:prepare >/dev/null && bin/rails db:seed >/dev/null 2>&1 || true)
+  (cd "$ROOT/easalpha-api" && nohup bin/dev > "$LOG/api.log" 2>&1 &)
 fi
 
 echo "3/4 WhatsApp gateway on 3010"
 if ! up 3010; then
-  (cd "$ROOT/servio-whatsapp" && [ -d node_modules ] || npm install --no-audit --no-fund --silent)
-  (cd "$ROOT/servio-whatsapp" && PORT=3010 nohup npm start > "$LOG/whatsapp.log" 2>&1 &)
+  (cd "$ROOT/easalpha-whatsapp" && [ -d node_modules ] || npm install --no-audit --no-fund --silent)
+  (cd "$ROOT/easalpha-whatsapp" && PORT=3010 nohup npm start > "$LOG/whatsapp.log" 2>&1 &)
 fi
 
 echo "4/4 Web on 3000 (production build)"
 if ! up 3000; then
-  (cd "$ROOT/servio-web" && [ -d node_modules ] || pnpm install --silent)
-  (cd "$ROOT/servio-web" && [ -f .next/BUILD_ID ] || pnpm build > "$LOG/web-build.log" 2>&1)
-  (cd "$ROOT/servio-web" && nohup pnpm start -p 3000 > "$LOG/web.log" 2>&1 &)
+  (cd "$ROOT/easalpha-web" && [ -d node_modules ] || pnpm install --silent)
+  (cd "$ROOT/easalpha-web" && [ -f .next/BUILD_ID ] || pnpm build > "$LOG/web-build.log" 2>&1)
+  (cd "$ROOT/easalpha-web" && nohup pnpm start -p 3000 > "$LOG/web.log" 2>&1 &)
 fi
 
 for p in 3001 3010 3000; do until up $p; do sleep 1; done; done

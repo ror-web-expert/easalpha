@@ -3,7 +3,7 @@
 One server, five containers: PostgreSQL, the API, the job worker, the web app and the WhatsApp gateway.
 
 ```bash
-cp deploy/.env.example deploy/.env      # fill in the values; RAILS_MASTER_KEY is servio-api/config/master.key
+cp deploy/.env.example deploy/.env      # fill in the values; RAILS_MASTER_KEY is easalpha-api/config/master.key
 cd deploy && docker compose --env-file .env up -d --build
 ```
 
@@ -22,4 +22,4 @@ First start runs the migrations and creates the super admin from `SUPER_ADMIN_EM
 
 Backups: the `pgdata` volume (database), `storage` (uploaded images and documents) and `wasessions` (the linked WhatsApp phone). Updates: run the compose command again; migrations run on start.
 
-The desktop POS installers are built from `servio-desktop/` (`pnpm dist:linux`, `pnpm dist:win`, `pnpm dist:mac`) or by the `desktop` GitHub Actions workflow. The app opens `PUBLIC_URL/pos`; set that address once in EasAlpha > Printers on each till.
+The desktop POS installers are built from `easalpha-desktop/` (`pnpm dist:linux`, `pnpm dist:win`, `pnpm dist:mac`) or by the `desktop` GitHub Actions workflow. The app opens `PUBLIC_URL/pos`; set that address once in EasAlpha > Printers on each till.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Writes <folder>/manifest.json for the website's Download page: the desktop version and which installer files exist.
-// Usage: node scripts/downloads-manifest.mjs <downloads folder> <servio-desktop/package.json>
+// Usage: node scripts/downloads-manifest.mjs <downloads folder> <easalpha-desktop/package.json>
 import fs from "node:fs";
 import path from "node:path";
 const [folder, pkgPath] = process.argv.slice(2);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Manual-style smoke test for the EasAlpha API, driven by curl. Run against a server started with:
-#   cd servio-api && bin/rails s -p 3001
+#   cd easalpha-api && bin/rails s -p 3001
 # Usage: scripts/smoke/phase1.sh [http://localhost:3001]
 set -u
 BASE="${1:-http://localhost:3001}/api/v1"
@@ -14,11 +14,11 @@ req() { # method path token body -> sets STATUS BODY
   local m=$1 p=$2 t=$3 b=${4:-}
   local out
   if [ -n "$b" ]; then
-    out=$(curl -sS -o /tmp/servio_body -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"} -d "$b")
+    out=$(curl -sS -o /tmp/easalpha_body -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"} -d "$b")
   else
-    out=$(curl -sS -o /tmp/servio_body -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"})
+    out=$(curl -sS -o /tmp/easalpha_body -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"})
   fi
-  STATUS=$out; BODY=$(cat /tmp/servio_body)
+  STATUS=$out; BODY=$(cat /tmp/easalpha_body)
 }
 jqv() { echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d$1)" 2>/dev/null; }
 

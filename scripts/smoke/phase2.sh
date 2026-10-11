@@ -8,9 +8,9 @@ STAMP=$(date +%s)
 say() { printf "\n== %s\n" "$1"; }
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf "  ok   %-60s %s\n" "$1" "$3"; else FAIL=$((FAIL+1)); printf "  FAIL %-60s got %s expected %s\n  %s\n" "$1" "$3" "$2" "$(echo "$4" | head -c 300)"; fi; }
 req() { local m=$1 p=$2 t=$3 b=${4:-}; local out
-  if [ -n "$b" ]; then out=$(curl -sS -o /tmp/servio_body2 -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"} -d "$b")
-  else out=$(curl -sS -o /tmp/servio_body2 -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"}); fi
-  STATUS=$out; BODY=$(cat /tmp/servio_body2); }
+  if [ -n "$b" ]; then out=$(curl -sS -o /tmp/easalpha_body2 -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"} -d "$b")
+  else out=$(curl -sS -o /tmp/easalpha_body2 -w "%{http_code}" -X "$m" "$BASE$p" -H "Content-Type: application/json" ${t:+-H "Authorization: Bearer $t"}); fi
+  STATUS=$out; BODY=$(cat /tmp/easalpha_body2); }
 jqv() { echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d$1)" 2>/dev/null; }
 eqv() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf "  ok   %-60s %s\n" "$1" "$3"; else FAIL=$((FAIL+1)); printf "  FAIL %-60s got %s expected %s\n" "$1" "$3" "$2"; fi; }
 
@@ -223,9 +223,9 @@ req PATCH /integrations/foodpanda "$TOKEN" '{"enabled":true,"secret":"rotate","c
 req GET /me "$TOKEN"; SLUG=$(jqv "['business']['slug']")
 FPBODY="{\"event\":\"order.new\",\"order\":{\"id\":\"FP-$STAMP\",\"customer\":{\"name\":\"Zain\",\"phone\":\"0300$((STAMP % 9000000 + 1000000))\"},\"items\":[{\"name\":\"Zinger Burger\",\"quantity\":1}],\"delivery_fee\":50}}"
 FPSIG=$(printf '%s' "$FPBODY" | openssl dgst -sha256 -hmac "$FPSECRET" | sed 's/^.* //')
-FPSTATUS=$(curl -sS -o /tmp/servio_body2 -w "%{http_code}" -X POST "$BASE/webhooks/foodpanda/$SLUG" -H "Content-Type: application/json" -H "X-Signature: sha256=$FPSIG" -d "$FPBODY"); BODY=$(cat /tmp/servio_body2)
+FPSTATUS=$(curl -sS -o /tmp/easalpha_body2 -w "%{http_code}" -X POST "$BASE/webhooks/foodpanda/$SLUG" -H "Content-Type: application/json" -H "X-Signature: sha256=$FPSIG" -d "$FPBODY"); BODY=$(cat /tmp/easalpha_body2)
 check "POST /webhooks/foodpanda/:slug signed" 200 "$FPSTATUS" "$BODY"; eqv "foodpanda order created" "processed" "$(jqv "['status']")"
-FPSTATUS=$(curl -sS -o /tmp/servio_body2 -w "%{http_code}" -X POST "$BASE/webhooks/foodpanda/$SLUG" -H "Content-Type: application/json" -H "X-Signature: sha256=bad" -d "$FPBODY"); BODY=$(cat /tmp/servio_body2)
+FPSTATUS=$(curl -sS -o /tmp/easalpha_body2 -w "%{http_code}" -X POST "$BASE/webhooks/foodpanda/$SLUG" -H "Content-Type: application/json" -H "X-Signature: sha256=bad" -d "$FPBODY"); BODY=$(cat /tmp/easalpha_body2)
 check "POST /webhooks/foodpanda bad signature" 401 "$FPSTATUS" "$BODY"
 req GET /reports/foodpanda "$TOKEN"; check "GET /reports/foodpanda" 200 "$STATUS" "$BODY"
 

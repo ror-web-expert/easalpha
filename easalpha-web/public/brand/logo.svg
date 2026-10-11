@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" width="300" height="64" role="img" aria-label="EasAlpha">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10294D"/>
+      <stop offset="1" stop-color="#0B1F3A"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#g)"/>
+  <!-- the A of Alpha as a peak, with an orange bar -->
+  <path d="M32 14 L50 50 H42.5 L32 28.5 L21.5 50 H14 Z" fill="#fff"/>
+  <rect x="22" y="40" width="20" height="6" rx="3" fill="#FF7A1A"/>
+  <text x="78" y="43" font-family="Inter, Roboto, Segoe UI, Helvetica, Arial, sans-serif" font-size="34" font-weight="800" letter-spacing="-1" fill="#10294D">Eas<tspan fill="#FF7A1A">Alpha</tspan></text>
+</svg>

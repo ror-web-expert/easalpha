@@ -135,7 +135,7 @@ Features and behaviour follow the PDF exactly. For tools, the owner chose "best 
 | Backend tests | RSpec + FactoryBot | RSpec | RSpec + FactoryBot | Add the three-case spec per endpoint |
 | Frontend tests | Vitest + Testing Library | Playwright | Playwright script | Add Vitest and Testing Library; keep Playwright |
 | Charts | One library, one palette | One palette | Recharts | Keep |
-| Repository | /api, /web, /docs | Five repositories | servio-api, servio-web, docs | Keep the folders |
+| Repository | /api, /web, /docs | Five repositories | easalpha-api, easalpha-web, docs | Keep the folders |
 | Admin routes | /admin/products, /inventory, /purchasing, /suppliers, /customers, /staff, /finance, /payroll, /reports, /riders, /settings | Not stated | /admin/menu, /stock, /delivery and others | Rename when the sidebar is regrouped |
 | POS | Installable web app at /pos, IndexedDB catalog with ETag, offline queue | Tauri 2 desktop app with SQLite | Web app at /pos, IndexedDB, cursor sync | Keep; add the ETag check |
 | Storefront | Public site at /, server-rendered | Ordering site per subdomain | None | Build it |

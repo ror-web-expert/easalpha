@@ -1,8 +1,8 @@
-// Captures real product screenshots for the marketing site into servio-web/public/marketing/.
+// Captures real product screenshots for the marketing site into easalpha-web/public/marketing/.
 import { chromium } from "playwright";
 import fs from "node:fs";
 const API = "http://localhost:3001/api/v1", WEB = "http://localhost:3000";
-const OUT = new URL("../servio-web/public/marketing/", import.meta.url).pathname; fs.mkdirSync(OUT, { recursive: true });
+const OUT = new URL("../easalpha-web/public/marketing/", import.meta.url).pathname; fs.mkdirSync(OUT, { recursive: true });
 const api = async (path, { method = "GET", token, body } = {}) => { const r = await fetch(API + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); let j = null; try { j = await r.json(); } catch {} return { status: r.status, j }; };
 const login = await api("/auth/login", { method: "POST", body: { email: "demo@easalpha.com", password: "password123" } }); const T = login.j.access_token;
 for (const d of (await api("/devices", { token: T })).j?.data || []) if (/^Shot /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
@@ -57,4 +57,4 @@ await s.goto(WEB + "/store/demo-cafe"); await shot(s, "storefront-desktop", { wa
 await browser.close();
 for (const d of (await api("/devices", { token: T })).j?.data || []) if (/^Shot /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
 console.log("done", fs.readdirSync(OUT).length, "files");
-console.log("Next's image optimiser caches old versions: rm -rf servio-web/.next/cache/images and restart the web server to serve the new captures.");
+console.log("Next's image optimiser caches old versions: rm -rf easalpha-web/.next/cache/images and restart the web server to serve the new captures.");

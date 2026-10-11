@@ -5,11 +5,20 @@
 scripts/node_modules
 scripts/shots
 scripts/report.json
-servio-desktop/node_modules
-servio-desktop/dist
-servio-desktop/out
-servio-desktop/*.log
+easalpha-desktop/node_modules
+easalpha-desktop/dist
+easalpha-desktop/out
+easalpha-desktop/*.log
 
 # desktop installers served by the Download page (binaries, not committed)
 deploy/downloads/*
 !deploy/downloads/README.md
+
+# the template is committed; only real .env files are ignored
+!deploy/.env.example
+
+# local scratch (logs live in ../easalpha-extras/tmp)
+/tmp/
+/screenshots/
+*.pdf
+!docs/SPEC.pdf

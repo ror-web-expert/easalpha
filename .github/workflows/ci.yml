@@ -14,12 +14,12 @@ jobs:
         env: { POSTGRES_PASSWORD: postgres }
         ports: ["5434:5432"]
         options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
-    defaults: { run: { working-directory: servio-api } }
+    defaults: { run: { working-directory: easalpha-api } }
     env: { RAILS_ENV: test, PGHOST: localhost, PGPORT: "5434", PGUSER: postgres, PGPASSWORD: postgres }
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
-        with: { ruby-version: 3.3.4, bundler-cache: true, working-directory: servio-api }
+        with: { ruby-version: 3.3.4, bundler-cache: true, working-directory: easalpha-api }
       - run: bin/rails db:create db:schema:load
       - run: bundle exec rspec
       - run: bundle exec rubocop
@@ -27,13 +27,13 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: servio-web } }
+    defaults: { run: { working-directory: easalpha-web } }
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with: { version: 10.27.0 }
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm, cache-dependency-path: servio-web/pnpm-lock.yaml }
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: easalpha-web/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
@@ -41,12 +41,12 @@ jobs:
 
   desktop:
     runs-on: ubuntu-latest
-    defaults: { run: { working-directory: servio-desktop } }
+    defaults: { run: { working-directory: easalpha-desktop } }
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with: { version: 10.27.0 }
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm, cache-dependency-path: servio-desktop/pnpm-lock.yaml }
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: easalpha-desktop/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test

@@ -6,10 +6,10 @@ Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, t
 
 | Part | Where | What it is |
 |---|---|---|
-| API | `servio-api/` | Rails 8, PostgreSQL 16, row-level security, Solid Queue jobs, own JWT login with per-user permissions |
-| Admin panel, POS, kitchen display, order-taker tablet, rider app, storefront | `servio-web/` | Next.js 15. The POS, tablet and rider app are installable web pages; the storefront is `/store/<slug>` |
-| Desktop POS | `servio-desktop/` | Electron wrapper with ESC/POS printing and the print server tablets print through |
-| WhatsApp gateway | `servio-whatsapp/` | Links any WhatsApp number by QR code and sends notifications from it |
+| API | `easalpha-api/` | Rails 8, PostgreSQL 16, row-level security, Solid Queue jobs, own JWT login with per-user permissions |
+| Admin panel, POS, kitchen display, order-taker tablet, rider app, storefront | `easalpha-web/` | Next.js 15. The POS, tablet and rider app are installable web pages; the storefront is `/store/<slug>` |
+| Desktop POS | `easalpha-desktop/` | Electron wrapper with ESC/POS printing and the print server tablets print through |
+| WhatsApp gateway | `easalpha-whatsapp/` | Links any WhatsApp number by QR code and sends notifications from it |
 
 ## The seven SPEC phases
 
@@ -25,7 +25,7 @@ Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, t
 
 ## Brand and marketing site
 
-Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the one action to take, across the admin panel, POS, kitchen display, rider app, storefront and the public site. Logo in `servio-web/public/brand/` (navy tile, white cloche, orange tick; `logo.svg`, `logo-white.svg`, `logo-mark.svg`), PWA icons and the OG image rendered from it by `scripts/render-icons.mjs`. Marketing screenshots in `servio-web/public/marketing/` come from `scripts/capture-marketing.mjs` against the rich demo seed (`bin/rails demo:rich`). The public site lives in the same app: `/` (landing), `/features`, `/pricing` (real plans), `/signup` (creates the business and signs the owner in), `/contact`, `/privacy`, `/terms`; the device picker moved to `/apps`. Contact details live in `servio-web/src/components/site/site-helpers.ts` and are placeholders until you set them.
+Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the one action to take, across the admin panel, POS, kitchen display, rider app, storefront and the public site. Logo in `easalpha-web/public/brand/` (navy tile, white cloche, orange tick; `logo.svg`, `logo-white.svg`, `logo-mark.svg`), PWA icons and the OG image rendered from it by `scripts/render-icons.mjs`. Marketing screenshots in `easalpha-web/public/marketing/` come from `scripts/capture-marketing.mjs` against the rich demo seed (`bin/rails demo:rich`). The public site lives in the same app: `/` (landing), `/features`, `/pricing` (real plans), `/signup` (creates the business and signs the owner in), `/contact`, `/privacy`, `/terms`; the device picker moved to `/apps`. Contact details live in `easalpha-web/src/components/site/site-helpers.ts` and are placeholders until you set them.
 
 ## Tests
 
@@ -42,7 +42,7 @@ Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the on
 ```bash
 scripts/dev-up.sh          # everything locally: PostgreSQL, API with jobs, WhatsApp gateway, web; prints URLs and logins
 scripts/dev-down.sh        # stop
-cd servio-desktop && pnpm dist:linux   # or dist:win, dist:mac: installers for the desktop POS
+cd easalpha-desktop && pnpm dist:linux   # or dist:win, dist:mac: installers for the desktop POS
 ```
 
 On a server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`). Full install steps for Ubuntu, Mac, Docker and the desktop apps: `docs/SETUP.md`. GitHub Actions (`.github/workflows/`) run the tests, build the Docker images and the desktop installers on every change.
@@ -61,5 +61,5 @@ Demo login: demo@easalpha.com / password123. Manager PIN 9999, cashier PIN 1111.
 - A fingerprint reader driver: the kiosk endpoint and enrolment exist; a reader feeds it the fingerprint id. Manual taps work today.
 - A native customer mobile app: the storefront is an installable web page; the SPEC's Mobile App section of Website Config holds the store links.
 - Desktop installers: Linux AppImage and deb are built locally; Windows (`pnpm dist:win`) and Mac (`pnpm dist:mac`) are built by the `desktop` workflow on GitHub's Windows and Mac runners. All are unsigned until code-signing certificates are bought.
-- WhatsApp sends either from a phone linked by QR (run `servio-whatsapp/`, then scan in Settings, WhatsApp) or through the Meta Cloud API with credentials; with neither, messages are logged, not sent.
+- WhatsApp sends either from a phone linked by QR (run `easalpha-whatsapp/`, then scan in Settings, WhatsApp) or through the Meta Cloud API with credentials; with neither, messages are logged, not sent.
 - PRA e-IMS filing uses the configured sandbox; production needs the PRA registration.

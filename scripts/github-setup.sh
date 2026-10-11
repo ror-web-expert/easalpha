@@ -3,19 +3,19 @@
 # use, installs the deploy key on the server and pushes the code (which triggers the first build and deploy).
 #
 #   gh auth login                      # once, in a browser
-#   scripts/github-setup.sh            # defaults below; override with env vars, e.g. REPO=myorg/servio
+#   scripts/github-setup.sh            # defaults below; override with env vars, e.g. REPO=myorg/easalpha
 #
 # Secrets set:   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH, DEPLOY_DOWNLOADS_PATH
 # Variables set: API_PUBLIC_URL (baked into the web image), PUBLIC_URL (desktop installers' update feed)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-REPO="${REPO:-servio}"                              # "name" (under your user) or "owner/name"
+REPO="${REPO:-easalpha}"                              # "name" (under your user) or "owner/name"
 VISIBILITY="${VISIBILITY:-private}"
 DEPLOY_HOST="${DEPLOY_HOST:-103.173.62.218}"
 DEPLOY_USER="${DEPLOY_USER:-sajid}"
-DEPLOY_PATH="${DEPLOY_PATH:-/home/$DEPLOY_USER/servio}"
-DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/servio_deploy}"   # private key; public half goes to the server
+DEPLOY_PATH="${DEPLOY_PATH:-/home/$DEPLOY_USER/easalpha}"
+DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/easalpha_deploy}"   # private key; public half goes to the server
 PUBLIC_URL="${PUBLIC_URL:-https://easalpha.com}"
 API_PUBLIC_URL="${API_PUBLIC_URL:-https://api.easalpha.com}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -23,7 +23,7 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 command -v gh >/dev/null || { echo "gh (GitHub CLI) is not installed: https://cli.github.com"; exit 1; }
 gh auth status >/dev/null 2>&1 || { echo "Not logged in: run 'gh auth login' first"; exit 1; }
 
-[ -f "$DEPLOY_KEY" ] || ssh-keygen -t ed25519 -N "" -C "servio-deploy@github-actions" -f "$DEPLOY_KEY" -q
+[ -f "$DEPLOY_KEY" ] || ssh-keygen -t ed25519 -N "" -C "easalpha-deploy@github-actions" -f "$DEPLOY_KEY" -q
 echo "1/5 Deploy key on the server ($DEPLOY_USER@$DEPLOY_HOST)"
 ssh-copy-id -i "$DEPLOY_KEY.pub" "$DEPLOY_USER@$DEPLOY_HOST" >/dev/null 2>&1 || true
 ssh -i "$DEPLOY_KEY" -o IdentitiesOnly=yes -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/downloads' && echo '   key works'"

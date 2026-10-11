@@ -1,7 +1,7 @@
 // Rasterises the brand mark into the PWA icons and an OG image (no native image library needed).
 import { chromium } from "playwright";
 import fs from "node:fs";
-const PUB = new URL("../servio-web/public/", import.meta.url).pathname;
+const PUB = new URL("../easalpha-web/public/", import.meta.url).pathname;
 const svg = fs.readFileSync(PUB + "brand/logo-mark.svg", "utf8");
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 for (const size of [192, 512, 64, 32]) {

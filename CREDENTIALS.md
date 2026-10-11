@@ -55,15 +55,15 @@ Quickest: open http://localhost:3000/setup, sign in as demo@easalpha.com, choose
 
 | Item | Value |
 |---|---|
-| Host and port | localhost:5434 (Docker container `servio-pg`) |
+| Host and port | localhost:5434 (Docker container `easalpha-pg`) |
 | User | postgres |
 | Password | postgres |
-| Database | servio_development |
+| Database | easalpha_development |
 
 ## Restart everything
 
 ```
-docker start servio-pg
-cd servio-api && bin/dev           # API on 3001 plus background jobs
-cd servio-web && pnpm dev -p 3000  # web app on 3000
+docker start easalpha-pg
+cd easalpha-api && bin/dev           # API on 3001 plus background jobs
+cd easalpha-web && pnpm dev -p 3000  # web app on 3000
 ```
