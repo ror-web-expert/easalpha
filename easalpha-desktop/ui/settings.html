@@ -52,7 +52,7 @@
     <p class="note">Enter this address as the Print Server in the admin panel. Order-taker tablets then print through this computer.</p>
     <div class="row">
       <label>Port <input id="port" type="number" min="1" max="65535" style="width:110px"></label>
-      <label>Web app URL <input id="webUrl" type="url" style="width:280px" placeholder="http://localhost:3000"></label>
+      <label>Web app URL <input id="webUrl" type="url" style="width:280px" placeholder="https://easalpha.com"></label>
       <button id="saveGeneral">Save</button>
     </div>
   </section>
@@ -227,7 +227,7 @@
     var port = Number($("#port").value);
     var webUrl = $("#webUrl").value.trim();
     if (!(port > 0 && port < 65536)) { setMsg("Port must be between 1 and 65535.", false); return; }
-    api.save({ printServerPort: port, webUrl: webUrl || "http://localhost:3000" }).then(function (s) { apply(s); setMsg("Settings saved.", true); });
+    api.save({ printServerPort: port, webUrl: webUrl || "https://easalpha.com" }).then(function (s) { apply(s); setMsg("Settings saved.", true); });
   };
 
   api.load().then(function (s) {

@@ -73,6 +73,8 @@ jobs:
           # new files first, manifest last, so a visitor never sees a version whose installer is still uploading
           rsync -av --exclude manifest.json -e "ssh -i ~/.ssh/deploy_key" downloads/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH/"
           rsync -av -e "ssh -i ~/.ssh/deploy_key" downloads/manifest.json "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH/manifest.json"
+          # Next.js lists public/ files when it starts, so a new installer name is 404 until the web container restarts.
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "cd '$(dirname "$DEPLOY_DOWNLOADS_PATH")' && docker compose restart web" || echo "web restart skipped (no compose project next to the downloads folder)"
           echo "Published $(node -p "require('./easalpha-desktop/package.json').version") to $DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH"
       - if: ${{ secrets.DEPLOY_HOST == '' }}
         run: echo "DEPLOY_HOST secret not set; installers are in the easalpha-pos-downloads artifact and the GitHub Release only."

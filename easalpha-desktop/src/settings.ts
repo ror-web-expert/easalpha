@@ -61,8 +61,12 @@ export function loadSettings(): Settings {
   const port = Number(raw.printServerPort);
   const updateUrl = typeof raw.updateUrl === "string" && /^https?:\/\//.test(raw.updateUrl.trim()) ? raw.updateUrl.trim().replace(/\/+$/, "") : "";
   return {
+    // "http://localhost:3000" was the default written by builds before 0.3.0; treat it as unset so those installs move
+    // to the hosted service. A developer server is still reachable as http://127.0.0.1:3000.
     webUrl:
-      typeof raw.webUrl === "string" && raw.webUrl.trim() ? raw.webUrl.trim().replace(/\/+$/, "") : DEFAULT_SETTINGS.webUrl,
+      typeof raw.webUrl === "string" && raw.webUrl.trim() && raw.webUrl.trim().replace(/\/+$/, "") !== "http://localhost:3000"
+        ? raw.webUrl.trim().replace(/\/+$/, "")
+        : DEFAULT_SETTINGS.webUrl,
     printServerPort: Number.isInteger(port) && port > 0 && port < 65536 ? port : DEFAULT_SETTINGS.printServerPort,
     printers: Array.isArray(raw.printers)
       ? (raw.printers.map(sanitizePrinter).filter(Boolean) as PrinterConfig[])

@@ -110,7 +110,9 @@ curl -s https://api.easalpha.com/api/v1/health
 - **First business**: `https://easalpha.com/signup`.
 - **WhatsApp**: Admin > Settings > WhatsApp shows the QR; the linked session persists in the `easalpha_wasessions` volume.
 - **Desktop installers**: files in `~/easalpha/downloads/` are served at `https://easalpha.com/downloads/`; the desktop
-  workflow uploads new builds there on every `v*` tag.
+  workflow uploads new builds there on every `v*` tag and restarts the web container, because Next.js lists `public/`
+  files only at start (a file copied by hand is 404 until `docker compose restart web`). The installers default to
+  `https://easalpha.com`; a self-hosted shop changes the address once in the app's Printers window.
 - **Backup** (nightly cron suggested):
   `docker compose exec -T db pg_dump -U postgres easalpha_production | gzip > ~/backups/easalpha-$(date +%F).sql.gz`
   plus the volumes `easalpha_storage` (uploads) and `easalpha_wasessions`. Restore:

@@ -29,7 +29,7 @@
   </div>
 <script>
   var params = new URLSearchParams(location.search);
-  var target = params.get("url") || "http://localhost:3000/setup";
+  var target = params.get("url") || "https://easalpha.com/setup";
   document.getElementById("url").textContent = target;
   document.getElementById("retry").addEventListener("click", function () {
     var b = document.getElementById("retry");

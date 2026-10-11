@@ -60,7 +60,7 @@ export type Settings = {
 export type PrintServerStatus = { host: string; port: number; running: boolean };
 
 export const DEFAULT_SETTINGS: Settings = {
-  webUrl: "http://localhost:3000",
+  webUrl: "https://easalpha.com",
   printServerPort: 9977,
   printers: [],
 };

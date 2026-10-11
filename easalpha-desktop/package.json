@@ -1,6 +1,6 @@
 {
   "name": "easalpha-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "EasAlpha POS desktop shell: wraps the web POS and adds ESC/POS printing and the LAN print server",
   "main": "dist/main.js",
   "private": true,

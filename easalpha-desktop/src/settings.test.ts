@@ -9,7 +9,7 @@ test("settings default, save and reload with printer sanitising", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "easalpha-settings-"));
   initSettings(dir);
   const d = loadSettings();
-  assert.equal(d.webUrl, "http://localhost:3000");
+  assert.equal(d.webUrl, "https://easalpha.com");
   assert.equal(d.printServerPort, 9977);
   assert.deepEqual(d.printers, []);
 
