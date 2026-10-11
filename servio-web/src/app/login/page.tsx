@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
 import { api, errorMessage } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/lib/types";
@@ -55,10 +57,9 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#1a73e8]/45 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 -left-24 h-[26rem] w-[26rem] rounded-full bg-[#adc7ff]/15 blur-3xl" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
-        <div className="relative flex items-center gap-2.5">
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-lg font-medium text-[#005bbf]">S</span>
-          <span className="text-[22px] leading-7">Servio</span>
-        </div>
+        <Link href="/" className="relative flex items-center" aria-label="Servio home">
+          <Image src="/brand/logo-white.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
+        </Link>
         <div className="relative mt-auto max-w-md">
           <h2 className="text-4xl leading-[44px]">Run every counter, kitchen and branch from one place.</h2>
           <p className="mt-4 text-base leading-6 tracking-[0.5px] text-white/75">Orders, stock, suppliers, staff and reports for Pakistani restaurants. Tills keep selling when the internet drops.</p>
@@ -76,10 +77,9 @@ export default function LoginPage() {
       <section className="relative flex items-center justify-center px-4 py-12">
         <div className="absolute right-4 top-4"><ThemeToggle /></div>
         <div className="w-full max-w-[360px]">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-lg font-medium text-primary-fg">S</span>
-            <span className="text-[22px] leading-7">Servio</span>
-          </div>
+          <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="Servio home">
+            <Image src="/brand/logo.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
+          </Link>
           <h1 className="text-[28px] leading-9">Welcome back</h1>
           <p className="mt-1 text-sm text-fg-secondary">Log in to the admin panel.</p>
           <Tabs value={mode} onChange={(m) => { setMode(m); setError(null); }} items={[{ value: "password", label: "Email" }, { value: "otp", label: "Phone (OTP)" }]} className="mb-6 mt-6 w-full" />
@@ -105,7 +105,8 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" loading={busy}>Send code</Button>
             </form>
           )}
-          <p className="mt-8 border-t pt-5 text-xs tracking-[0.4px] text-fg-secondary">Till staff: open <a className="font-medium text-primary hover:underline" href="/pos">/pos</a> on the paired device and log in with your PIN.</p>
+          <p className="mt-6 text-center text-sm text-fg-secondary">New to Servio? <Link href="/signup" className="font-medium text-primary hover:underline">Create your account</Link></p>
+          <p className="mt-6 border-t pt-5 text-xs tracking-[0.4px] text-fg-secondary">Till staff: open <a className="font-medium text-primary hover:underline" href="/pos">/pos</a> on the paired device and log in with your PIN.</p>
         </div>
       </section>
     </main>
