@@ -2,7 +2,7 @@
 import dynamic from "next/dynamic";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import type { Series } from "./series";
+import { breakdownColor, type Series } from "./series";
 
 export { SERIES, type Series } from "./series";
 
@@ -33,24 +33,34 @@ export function BarsChart({ data, x, series, money, height = 220, className }: C
   );
 }
 
-/** Horizontal breakdown with direct labels (for by_payment_method, by_order_type...). One hue; identity carried by the label. */
-export function Breakdown({ data, money = true, className, labelFor }: { data: Record<string, number> | { label: string; value: number }[] | undefined; money?: boolean; className?: string; labelFor?: (k: string) => string }) {
+/**
+ * Horizontal breakdown with direct labels (for by_payment_method, by_order_type...). Each row takes the next palette colour
+ * (navy, orange, teal, amber, ...). With colorBy="status" rows are toned by state instead: completed/paid/ready green,
+ * pending/preparing/open orange, dispatched teal, cancelled/voided/refunded red, complimentary/unpaid amber.
+ */
+export function Breakdown({ data, money = true, className, labelFor, colorBy = "palette" }: { data: Record<string, number> | { label: string; value: number }[] | undefined; money?: boolean; className?: string; labelFor?: (k: string) => string; colorBy?: "palette" | "status" }) {
   const rows = Array.isArray(data) ? data : Object.entries(data ?? {}).map(([k, v]) => ({ label: labelFor ? labelFor(k) : k, value: Number(v) }));
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   if (!rows.length) return <div className={cn("py-6 text-center text-sm text-fg-muted", className)}>Nothing yet</div>;
   return (
     <ul className={cn("space-y-2", className)}>
-      {rows.sort((a, b) => b.value - a.value).map((r) => (
-        <li key={r.label} className="text-sm">
-          <div className="flex justify-between">
-            <span className="capitalize text-fg-secondary">{r.label.replace(/_/g, " ")}</span>
-            <span className="font-medium tabular">{money ? formatMoney(r.value) : r.value.toLocaleString()}</span>
-          </div>
-          <div className="mt-1 h-2 rounded-full bg-muted">
-            <div className="h-2 rounded-full bg-primary" style={{ width: `${Math.max(2, (Math.abs(r.value) / max) * 100)}%` }} />
-          </div>
-        </li>
-      ))}
+      {rows.sort((a, b) => b.value - a.value).map((r, i) => {
+        const color = breakdownColor(r.label, i, colorBy);
+        return (
+          <li key={r.label} className="text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 capitalize text-fg-secondary">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
+                {r.label.replace(/_/g, " ")}
+              </span>
+              <span className="font-medium tabular">{money ? formatMoney(r.value) : r.value.toLocaleString()}</span>
+            </div>
+            <div className="mt-1 h-2 rounded-full bg-muted">
+              <div className="h-2 rounded-full" style={{ width: `${Math.max(2, (Math.abs(r.value) / max) * 100)}%`, background: color }} />
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }

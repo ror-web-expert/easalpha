@@ -75,7 +75,7 @@ export default function DashboardPage() {
             <Card>
               <CardHeader><CardTitle>Order Status Distribution</CardTitle><span className="text-xs text-fg-muted">For the period</span></CardHeader>
               <CardBody>
-                <Breakdown data={d!.charts.order_status.map((r) => ({ label: titleCase(r.status), value: r.orders }))} money={false} />
+                <Breakdown data={d!.charts.order_status.map((r) => ({ label: titleCase(r.status), value: r.orders }))} money={false} colorBy="status" />
                 <div className="mt-3 flex flex-wrap gap-1">{d!.charts.order_status.map((r) => <Badge key={r.status} variant={specStatusVariant(r.status)}>{titleCase(r.status)} {r.orders}</Badge>)}</div>
               </CardBody>
             </Card>
