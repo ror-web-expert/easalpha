@@ -103,7 +103,7 @@ module Demo
       Tenancy::Context.with(@business) do
         branch = Branch.order(:created_at).first
         {
-          orders: Order.count, orders_by_status: Order.group(:status).count, open_orders_today: Order.open.where(business_day: branch.business_day_for(Time.current)).where.not(status: "draft").count,
+          orders: Order.count, orders_by_status: Order.group(:status).count, open_orders_today: Order.open.where(business_day: @today || branch.business_day_for(Time.current)).where.not(status: "draft").count,
           payments: Payment.where(status: "captured").count, payments_by_method: Payment.where(status: "captured").group(:method_code).sum(:amount_minor),
           revenue_minor: Order.where(status: %w[paid closed refunded]).sum(:total_minor), voids: Void.count, refunds: Refund.count, staff_meals: Order.where(is_staff_meal: true).count,
           discounts: DiscountApplied.count, vouchers_issued: Voucher.count, vouchers_redeemed: Voucher.where(status: "redeemed").count,
@@ -858,8 +858,9 @@ module Demo
       wanted = rand_i(5..8)
       wanted.times do |i|
         placed = @real_now - rand_i(4..55).minutes
-        # Right after the day end (02:01) "55 minutes ago" is still yesterday's business day; keep the order on today's.
-        placed = @real_now - rand_i(1..3).minutes unless @branch.business_day_for(placed) == @today
+        # Right after the day end (02:01) "55 minutes ago" is still yesterday's business day; keep the order on today's
+        # (the run started on @today, so @real_now itself is always on it).
+        placed = @real_now unless @branch.business_day_for(placed) == @today
         go(placed)
         type = pick(%w[dine_in dine_in takeaway walk_in delivery])
         order, actor, = build_order!(order_type: type)
