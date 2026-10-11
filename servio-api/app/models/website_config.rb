@@ -10,7 +10,7 @@ class WebsiteConfig < ApplicationRecord
   end
 
   def self.defaults(business)
-    { "identity" => { "name" => business&.name, "slug" => business&.slug, "description" => nil, "theme_color" => "#1976d2", "logo_key" => business&.logo_key, "cover_key" => nil, "favicon_key" => nil },
+    { "identity" => { "name" => business&.name, "slug" => business&.slug, "description" => nil, "theme_color" => "#10294D", "logo_key" => business&.logo_key, "cover_key" => nil, "favicon_key" => nil },
       "pages" => { "home" => true, "menu" => true, "about" => false, "contact" => true, "reviews" => true },
       "menu_slider" => { "items" => [] }, "documents" => { "terms" => nil, "privacy" => nil, "refund" => nil }, "footer" => { "text" => nil, "links" => [] },
       "availability" => { "online_ordering" => true, "accept_outside_hours" => false, "closed_message" => "We are closed right now" },
