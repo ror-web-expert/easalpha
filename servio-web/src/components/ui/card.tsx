@@ -19,9 +19,9 @@ export function SummaryCard({ label, value, sub, icon: Icon, tone = "primary", c
   return (
     <Card className={cn("flex items-start justify-between gap-3 p-5", className)}>
       <div className="min-w-0">
-        <div className="truncate text-[13px] font-medium uppercase leading-4 tracking-[0.04em] text-fg-muted">{label}</div>
-        <div className="mt-2 truncate text-[28px] font-bold leading-9 tracking-[-0.01em] text-heading tabular">{value}</div>
-        {sub ? <div className="mt-1 truncate text-[13px] leading-4 text-fg-muted">{sub}</div> : null}
+        <div className="text-[12px] font-semibold uppercase leading-4 tracking-[0.04em] text-fg-muted">{label}</div>
+        <div className="mt-2 text-[clamp(20px,1.5vw,28px)] font-bold leading-tight tracking-[-0.01em] text-heading tabular">{value}</div>
+        {sub ? <div className="mt-1 line-clamp-2 text-[13px] leading-4 text-fg-muted">{sub}</div> : null}
       </div>
       {Icon ? (
         <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", tones[tone])} aria-hidden="true">

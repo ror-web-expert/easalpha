@@ -51,7 +51,7 @@ export default function DashboardPage() {
       {spec.isLoading ? <Loading /> : spec.error ? <ErrorState message={errorMessage(spec.error)} onRetry={() => spec.refetch()} /> : null}
       {cards ? (
         <>
-          <Cards className="xl:grid-cols-6">
+          <Cards className="md:grid-cols-3 2xl:grid-cols-6">
             <SummaryCard label="Total Products" value={cards.total_products} sub="Active catalog products" icon={Package} tone="neutral" />
             <SummaryCard label="Total Revenue" value={formatMoney(cards.total_revenue_minor)} sub="Completed orders only" icon={Wallet} tone="success" />
             <SummaryCard label="Incl. Open Orders" value={formatMoney(cards.incl_open_minor)} sub={`+ ${formatMoney(cards.open_minor)} still open`} icon={ReceiptText} tone="info" />
