@@ -57,7 +57,7 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
   return (
     <main className="min-h-screen bg-page text-fg" style={{ ["--primary" as string]: theme, ["--primary-fg" as string]: onTheme, ["--primary-hover" as string]: theme }}>
       {bool(system.maintenance) ? <div className="bg-warning px-4 py-2 text-center text-sm text-warning-fg">We are doing some maintenance. Ordering is paused for a short while.</div> : null}
-      <header className="text-primary-fg" style={{ backgroundColor: theme, color: onTheme }}>
+      <header className="text-primary-fg" style={{ backgroundColor: theme, color: onTheme, ["--heading-color" as string]: onTheme }}>
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt="" className="h-40 w-full object-cover sm:h-56" />

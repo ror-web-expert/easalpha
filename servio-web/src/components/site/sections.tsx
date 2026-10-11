@@ -95,8 +95,8 @@ export function PhoneFrame({ shot, sizes, className, priority }: { shot: Shot; s
   return (
     <div className={cn("relative mx-auto w-[220px] sm:w-[250px]", className)}>
       <div aria-hidden className="pointer-events-none absolute -inset-5 -z-10 rounded-[3rem] bg-linear-to-br from-[#FF7A1A]/30 to-[#0B1F3A]/20 blur-2xl" />
-      <div className="relative overflow-hidden rounded-[2.2rem] border-[7px] border-[#0B1F3A] bg-[#0B1F3A] shadow-[0_24px_60px_-20px_rgba(11,31,58,0.6)]">
-        <div aria-hidden className="absolute left-1/2 top-0 z-10 h-5 w-24 -translate-x-1/2 rounded-b-xl bg-[#0B1F3A]" />
+      <div className="relative overflow-hidden rounded-[2.2rem] border-[7px] border-[#0B1F3A] bg-[#0B1F3A] shadow-[0_24px_60px_-20px_rgba(11,31,58,0.6)] [--heading-color:#fff]">
+        <div aria-hidden className="absolute left-1/2 top-0 z-10 h-5 w-24 -translate-x-1/2 rounded-b-xl bg-[#0B1F3A] [--heading-color:#fff]" />
         <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} sizes={sizes} priority={priority} className="block h-auto w-full rounded-[1.7rem]" />
       </div>
     </div>
@@ -122,7 +122,7 @@ export function FeatureRow({ eyebrow, title, text, bullets, shot, flip, href = "
       </Reveal>
       <Reveal delay={120} className={cn("relative", flip && "lg:order-1")}>
         <BrowserFrame shot={shot} sizes="(max-width: 1024px) 100vw, 560px" />
-        {caption ? <span className="absolute -bottom-3 left-6 rounded-full bg-[#0B1F3A] px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg ring-1 ring-white/20">{caption}</span> : null}
+        {caption ? <span className="absolute -bottom-3 left-6 rounded-full bg-[#0B1F3A] px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg ring-1 ring-white/20 [--heading-color:#fff]">{caption}</span> : null}
       </Reveal>
     </div>
   );
@@ -147,7 +147,7 @@ export function FaqList({ items }: { items: { q: string; a: React.ReactNode }[] 
 export function CtaBand({ title, titleKey, text, primary = { href: "/signup", label: "Start free" }, secondary }: { title: string; titleKey?: UiKey; text: string; primary?: { href: string; label: string }; secondary?: { href: string; label: string } }) {
   const h2 = "text-[36px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[48px]";
   return (
-    <section className="relative overflow-hidden bg-[#0B1F3A] py-20 text-white sm:py-28">
+    <section className="relative overflow-hidden bg-[#0B1F3A] py-20 text-white sm:py-28 [--heading-color:#fff]">
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
       <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[32rem] w-[32rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[28rem] w-[28rem] rounded-full bg-[#1E88E5]/20 blur-3xl" />
@@ -188,7 +188,7 @@ export function Prose({ children }: { children: React.ReactNode }) {
 /** Navy top band for inner pages; the fixed header sits over it, so it carries the header's height in padding. */
 export function PageHero({ eyebrow, title, text, children }: { eyebrow: string; title: string; text?: string; children?: React.ReactNode }) {
   return (
-    <section className="relative overflow-hidden bg-linear-to-br from-[#0B1F3A] to-[#10294D] pb-16 pt-28 text-white sm:pb-20 sm:pt-36">
+    <section className="relative overflow-hidden bg-linear-to-br from-[#0B1F3A] to-[#10294D] pb-16 pt-28 text-white sm:pb-20 sm:pt-36 [--heading-color:#fff]">
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
       <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[#FF7A1A]/15 blur-3xl" />
       <Container className="relative max-w-3xl text-center">

@@ -71,7 +71,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
           <table className="w-full min-w-[640px] text-sm">
             <caption className="sr-only">Plan comparison</caption>
             <thead>
-              <tr className="bg-[#0B1F3A] text-left text-white">
+              <tr className="bg-[#0B1F3A] text-left text-white [--heading-color:#fff]">
                 <th scope="col" className="px-5 py-4 font-semibold">What you get</th>
                 {PLANS.map((p) => (
                   <th key={p.code} scope="col" className="px-5 py-4 font-semibold">

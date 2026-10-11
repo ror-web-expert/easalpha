@@ -73,8 +73,8 @@ export default function HomePage() {
   return (
     <SiteShell>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-[#0B1F3A] pb-32 pt-28 text-white sm:pt-36 lg:pb-44">
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-linear-to-br from-[#0B1F3A] to-[#10294D]" />
+      <section className="relative overflow-hidden bg-[#0B1F3A] pb-32 pt-28 text-white sm:pt-36 lg:pb-44 [--heading-color:#fff]">
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-linear-to-br from-[#0B1F3A] to-[#10294D] [--heading-color:#fff]" />
         <div aria-hidden className="pointer-events-none absolute -right-40 -top-48 h-[40rem] w-[40rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-56 -left-40 h-[36rem] w-[36rem] rounded-full bg-[#1E88E5]/25 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:24px_24px]" />
@@ -132,7 +132,7 @@ export default function HomePage() {
               <span aria-hidden className="absolute left-6 top-2 font-serif text-[72px] font-bold leading-none text-[#FF7A1A]">&ldquo;</span>
               <p className="flex-1 text-slate-700">{q.text}</p>
               <div className="mt-6 flex items-center gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#0B1F3A] text-sm font-bold text-white">{q.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#0B1F3A] text-sm font-bold text-white [--heading-color:#fff]">{q.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
                 <div className="leading-tight">
                   <div className="font-bold text-[#0B1F3A]">{q.name}</div>
                   <div className="text-sm text-slate-500">{q.place} <span className="text-slate-400">(example)</span></div>

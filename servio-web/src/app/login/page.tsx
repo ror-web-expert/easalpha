@@ -53,7 +53,7 @@ export default function LoginPage() {
 
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-navy-deep p-12 text-white lg:flex lg:flex-col">
+      <section className="relative hidden overflow-hidden bg-navy-deep p-12 text-white lg:flex lg:flex-col [--heading-color:#fff]">
         <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-cta/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 -left-24 h-[26rem] w-[26rem] rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />

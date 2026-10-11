@@ -104,8 +104,8 @@ function Board() {
   }, [list, alerts.timeoutMinutes, alerts.redSound, beep]);
   const changed = tickets.data ?? [];
   return (
-    <div className="flex h-screen flex-col bg-navy-deep text-white">
-      <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-3">
+    <div className="flex h-screen flex-col bg-navy-deep text-white [--heading-color:#fff]">
+      <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-3 [--heading-color:#fff]">
         <ChefHat className="h-6 w-6 text-cta" />
         <span className="text-lg font-semibold">Kitchen</span>
         <Select className="h-11 w-48 border-white/30 text-base text-white hover:border-white [&>option]:bg-card [&>option]:text-fg" value={station} onChange={(e) => setStation(e.target.value)} aria-label="Station"><option value="">All stations</option>{stations.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>

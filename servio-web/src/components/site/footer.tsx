@@ -12,7 +12,7 @@ const link = "text-sm text-white/90 transition-colors hover:text-[#FFB27A]";
 
 export function SiteFooter() {
   return (
-    <footer className="bg-[#0B1F3A] text-white">
+    <footer className="bg-[#0B1F3A] text-white [--heading-color:#fff]">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
         <div>
           <Image src="/brand/logo-white.svg" alt="Servio" width={130} height={32} unoptimized className="h-8 w-auto" />

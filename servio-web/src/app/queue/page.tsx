@@ -50,8 +50,8 @@ function Screen() {
   }, [q.data, sound, beep]);
   const clock = q.data?.at ? formatTime(q.data.at) : "";
   return (
-    <div className="flex h-screen flex-col bg-navy-deep text-white">
-      <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-4">
+    <div className="flex h-screen flex-col bg-navy-deep text-white [--heading-color:#fff]">
+      <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-4 [--heading-color:#fff]">
         <ListOrdered className="h-6 w-6 text-cta" /><span className="text-lg font-semibold">Order queue</span>
         <div className="flex-1" />
         <span className={cn("text-sm tabular text-white/70", q.isError && "text-danger")}>{q.isError ? "Reconnecting…" : clock}</span>

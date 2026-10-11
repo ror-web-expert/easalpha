@@ -164,7 +164,8 @@ h1, h2, h3 { letter-spacing: 0; }
 .till { font-size: 16px; }
 @layer base {
   *, ::before, ::after { border-color: var(--border); }
-  h1, h2, h3 { color: var(--heading); }
+  /* Headings are navy on light surfaces; a dark container sets --heading-color (for example white) to override. */
+  h1, h2, h3 { color: var(--heading-color, var(--heading)); }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 }
 button, [role="button"] { cursor: pointer; }

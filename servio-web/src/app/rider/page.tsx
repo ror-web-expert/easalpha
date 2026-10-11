@@ -55,7 +55,7 @@ export default function RiderHomePage() {
   };
   return (
     <main className="flex min-h-screen flex-col pb-8">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-navy px-4 py-3 text-white">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-navy px-4 py-3 text-white [--heading-color:#fff]">
         <div className="flex min-w-0 items-center gap-2">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-cta text-cta-fg"><Bike className="h-5 w-5" /></span>
           <div className="min-w-0">
