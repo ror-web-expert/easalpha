@@ -54,7 +54,7 @@ export type Shot = { src: string; alt: string; width: number; height: number; ur
 
 /** Admin and storefront captures are 2880x1800 at 2x; till and kitchen 2732x1536; phones 1170x2532. */
 export const SHOTS = {
-  dashboard: { src: "/marketing/admin-dashboard.png", alt: "Servio admin dashboard with today's sales, order cards and the sales chart", width: 1440, height: 900, url: "app.servio.pk/admin" },
+  dashboard: { src: "/marketing/admin-dashboard.png", alt: "Servio admin dashboard with 30-day revenue, orders, customers and expenses, plus sales and order charts by hour", width: 1440, height: 900, url: "app.servio.pk/admin" },
   orders: { src: "/marketing/admin-orders.png", alt: "Orders list with status, type, payment and rider filters", width: 1440, height: 900, url: "app.servio.pk/admin/orders" },
   catalog: { src: "/marketing/admin-catalog.png", alt: "Product catalog with categories, images and prices", width: 1440, height: 900, url: "app.servio.pk/admin/products/catalog" },
   stock: { src: "/marketing/admin-stock.png", alt: "Stock in hand by section with quantities and values", width: 1440, height: 900, url: "app.servio.pk/admin/inventory/stock-in-hand" },
@@ -150,7 +150,7 @@ export function CtaBand({ title, titleKey, text, primary = { href: "/signup", la
     <section className="relative overflow-hidden bg-[#0B1F3A] py-20 text-white sm:py-28 [--heading-color:#fff]">
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
       <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[32rem] w-[32rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[28rem] w-[28rem] rounded-full bg-[#1E88E5]/20 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[28rem] w-[28rem] rounded-full bg-[#FF7A1A]/15 blur-3xl" />
       <Container className="relative text-center">
         {titleKey ? <Txt k={titleKey} as="h2" className={h2} /> : <h2 className={h2}>{title}</h2>}
         <p className="mx-auto mt-5 max-w-2xl text-[17px] leading-[1.6] text-white/80 sm:text-lg">{text}</p>

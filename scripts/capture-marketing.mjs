@@ -20,7 +20,13 @@ await a.getByRole("button", { name: "Log in" }).click(); await a.waitForURL(/\/a
 const adminShots = [["/admin", "admin-dashboard"], ["/admin/orders", "admin-orders"], ["/admin/products/catalog", "admin-catalog"], ["/admin/inventory/stock-in-hand", "admin-stock"], ["/admin/inventory-reports/deduction-health", "admin-deduction-health"],
   ["/admin/reports/grand", "admin-grand-report"], ["/admin/finance/dashboard", "admin-finance"], ["/admin/finance/balance-sheet", "admin-balance-sheet"], ["/admin/payroll/fingerprint", "admin-attendance"], ["/admin/suppliers/ledger", "admin-supplier-ledger"],
   ["/admin/settings/whatsapp", "admin-whatsapp"], ["/admin/staff/roles", "admin-permissions"], ["/admin/reports/sales-calendar", "admin-sales-calendar"]];
-if (!process.argv.includes("--pos-only")) for (const [path, name] of adminShots) { await a.goto(WEB + path); await shot(a, name); }
+const widen = async (page) => {
+  // richer screenshots: the last 30 days rather than today's handful
+  await page.getByText("Last 30 days", { exact: true }).first().click({ timeout: 2500 }).catch(() => {}); await page.waitForTimeout(1500);
+  const preset = page.locator("select").filter({ hasText: "Last 30 days" }).first();
+  if (await preset.count().catch(() => 0)) await preset.selectOption({ label: "Last 30 days" }).catch(() => {});
+};
+if (!process.argv.includes("--pos-only")) for (const [path, name] of adminShots) { await a.goto(WEB + path); await a.waitForTimeout(800); await widen(a); await shot(a, name); }
 await admin.close();
 
 const pos = await browser.newContext({ viewport: { width: 1366, height: 768 }, deviceScaleFactor: 2 }); const t = await pos.newPage();
@@ -51,3 +57,4 @@ await s.goto(WEB + "/store/demo-cafe"); await shot(s, "storefront-desktop", { wa
 await browser.close();
 for (const d of (await api("/devices", { token: T })).j?.data || []) if (/^Shot /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
 console.log("done", fs.readdirSync(OUT).length, "files");
+console.log("Next's image optimiser caches old versions: rm -rf servio-web/.next/cache/images and restart the web server to serve the new captures.");

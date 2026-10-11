@@ -30,7 +30,7 @@ export default function SignupPage() {
       <section className="relative hidden overflow-hidden bg-linear-to-br from-[#0B1F3A] to-[#10294D] p-12 text-white [--heading-color:#fff] lg:flex lg:flex-col">
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
         <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[26rem] w-[26rem] rounded-full bg-[#1E88E5]/25 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[26rem] w-[26rem] rounded-full bg-[#FF7A1A]/20 blur-3xl" />
         <Link href="/" className="relative flex items-center" aria-label="Servio home">
           <Image src="/brand/logo-white.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
         </Link>

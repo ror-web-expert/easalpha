@@ -12,10 +12,10 @@ for (const size of [192, 512, 64, 32]) {
 }
 const logo = fs.readFileSync(PUB + "brand/logo-white.svg", "utf8");
 const og = await browser.newPage({ viewport: { width: 1200, height: 630 } });
-await og.setContent(`<html><body style="margin:0;width:1200px;height:630px;display:flex;flex-direction:column;justify-content:center;padding:80px;box-sizing:border-box;background:linear-gradient(135deg,#0D47A1,#1E88E5);font-family:Roboto,Inter,Segoe UI,Arial,sans-serif;color:#fff">
+await og.setContent(`<html><body style="margin:0;width:1200px;height:630px;display:flex;flex-direction:column;justify-content:center;padding:80px;box-sizing:border-box;background:linear-gradient(135deg,#0B1F3A,#10294D 60%,#1C3B6E);font-family:Inter,Roboto,Segoe UI,Arial,sans-serif;color:#fff">
   <div style="width:390px">${logo.replace('width="260" height="64"', 'width="390" height="96"')}</div>
   <div style="font-size:56px;font-weight:700;line-height:1.15;margin-top:36px;letter-spacing:-0.5px">The restaurant POS built for Pakistan</div>
-  <div style="font-size:28px;opacity:.9;margin-top:18px">Till, kitchen, inventory, accounts, payroll, riders and WhatsApp. Works offline.</div></body></html>`);
+  <div style="height:6px;width:120px;background:#FF7A1A;border-radius:3px;margin-top:28px"></div><div style="font-size:28px;opacity:.9;margin-top:18px">Till, kitchen, inventory, accounts, payroll, riders and WhatsApp. Works offline.</div></body></html>`);
 await og.screenshot({ path: PUB + "og.png" });
 await browser.close();
 console.log("icons:", fs.readdirSync(PUB).filter((f) => /icon|favicon|og\.png/.test(f)).join(", "));

@@ -25,7 +25,7 @@ Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, t
 
 ## Brand and marketing site
 
-Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the one action to take, across the admin panel, POS, kitchen display, rider app, storefront and the public site. Logo in `servio-web/public/brand/`. The public site lives in the same app: `/` (landing), `/features`, `/pricing` (real plans), `/signup` (creates the business and signs the owner in), `/contact`, `/privacy`, `/terms`; the device picker moved to `/apps`. Contact details live in `servio-web/src/components/site/site-helpers.ts` and are placeholders until you set them.
+Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the one action to take, across the admin panel, POS, kitchen display, rider app, storefront and the public site. Logo in `servio-web/public/brand/` (navy tile, white cloche, orange tick; `logo.svg`, `logo-white.svg`, `logo-mark.svg`), PWA icons and the OG image rendered from it by `scripts/render-icons.mjs`. Marketing screenshots in `servio-web/public/marketing/` come from `scripts/capture-marketing.mjs` against the rich demo seed (`bin/rails demo:rich`). The public site lives in the same app: `/` (landing), `/features`, `/pricing` (real plans), `/signup` (creates the business and signs the owner in), `/contact`, `/privacy`, `/terms`; the device picker moved to `/apps`. Contact details live in `servio-web/src/components/site/site-helpers.ts` and are placeholders until you set them.
 
 ## Tests
 

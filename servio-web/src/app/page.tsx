@@ -76,7 +76,7 @@ export default function HomePage() {
       <section className="relative overflow-hidden bg-[#0B1F3A] pb-32 pt-28 text-white sm:pt-36 lg:pb-44 [--heading-color:#fff]">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-linear-to-br from-[#0B1F3A] to-[#10294D] [--heading-color:#fff]" />
         <div aria-hidden className="pointer-events-none absolute -right-40 -top-48 h-[40rem] w-[40rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-56 -left-40 h-[36rem] w-[36rem] rounded-full bg-[#1E88E5]/25 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -bottom-56 -left-40 h-[36rem] w-[36rem] rounded-full bg-[#FF7A1A]/20 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:24px_24px]" />
         <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.07]" viewBox="0 0 1440 800" preserveAspectRatio="none" fill="none" stroke="white" strokeWidth="1">
           <path d="M-100 700 L600 -100" /><path d="M200 900 L1000 -100" /><path d="M500 900 L1300 -100" /><path d="M800 900 L1600 -100" /><path d="M1100 900 L1900 -100" />
