@@ -61,7 +61,9 @@ module Reports
       prep = paid.where.not(placed_at: nil).where.not(ready_at: nil).pluck(:placed_at, :ready_at).map { |a, b| (b - a) / 60 }
       complete = paid.where.not(placed_at: nil).where.not(closed_at: nil).pluck(:placed_at, :closed_at).map { |a, b| (b - a) / 60 }
       deliveries = Delivery.joins(:order).where(orders: { branch_id: branch.id, business_day: from..to }, status: "delivered").where.not(assigned_at: nil).where.not(delivered_at: nil).pluck(:assigned_at, :delivered_at).map { |a, b| (b - a) / 60 }
-      by_hour = paid.where.not(placed_at: nil).group(Arel.sql("EXTRACT(HOUR FROM placed_at AT TIME ZONE '#{branch.time_zone}')")).count.transform_keys(&:to_i)
+      # placed_at is stored in UTC; count by the hour in the branch's own zone
+      hour_sql = "EXTRACT(HOUR FROM (placed_at AT TIME ZONE 'UTC') AT TIME ZONE '#{branch.time_zone}')"
+      by_hour = paid.where.not(placed_at: nil).group(Arel.sql(hour_sql)).pluck(Arel.sql(hour_sql), Arel.sql("count(*)")).to_h { |h, c| [ h.to_i, c ] }
       days = (to - from).to_i + 1
       items = OrderItem.joins(:order).where(orders: { id: paid.select(:id) }).where.not(status: "cancelled").sum(:quantity)
       { from: from, to: to, orders: paid.count, orders_per_day: (paid.count.to_f / days).round(1), items_per_order: paid.count.zero? ? 0 : (items / paid.count).round(2),
