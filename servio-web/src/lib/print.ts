@@ -6,6 +6,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { settingValue } from "@/lib/pricing";
+import { formatQty } from "@/components/pos/receipt";
 
 export type PrintLine =
   | { text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: 1 | 2 }
@@ -133,7 +134,9 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   else if (r.order?.guest_name) lines.push(text(`Guest ${r.order.guest_name}`));
   lines.push({ divider: true });
   for (const l of r.lines ?? []) {
-    lines.push(...row(`${l.quantity} x ${l.name}`, m(l.line_total_minor), width));
+    const qty = Number(l.quantity ?? 1);
+    lines.push(...row(`${formatQty(l.quantity)} x ${l.name}`, m(l.line_total_minor), width));
+    if (qty !== 1 && l.unit_price_minor) lines.push(text(`  @ ${m(l.unit_price_minor)} each`));
     for (const mo of l.modifiers ?? []) lines.push(...row(`  + ${mo.name}`, mo.price_minor ? m(mo.price_minor) : "", width));
     if (l.discount_minor) lines.push(...row("  Discount", `-${m(l.discount_minor)}`, width));
     if (l.notes) lines.push(...wrap(l.notes, width - 2).map((t) => text(`  ${t}`)));
@@ -150,12 +153,12 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   lines.push(...row("TOTAL", m(t?.total_minor), width, true));
   lines.push({ divider: true });
   for (const p of r.payments ?? []) {
-    lines.push(...row(titleCase(p.method), m(p.amount_minor), width));
-    if (p.tendered_minor) lines.push(...row("  Tendered", m(p.tendered_minor), width));
-    if (p.change_minor) lines.push(...row("  Change", m(p.change_minor), width));
+    lines.push(...row(`Paid by ${titleCase(p.method)}`, m(p.amount_minor), width));
+    if (p.method === "cash" && p.tendered_minor) lines.push(...row("  Cash tendered", m(p.tendered_minor), width), ...row("  Change", m(p.change_minor ?? 0), width));
     if (p.reference) lines.push(text(`  Ref ${p.reference}`));
   }
-  if (t?.due_minor) lines.push(...row("Due", m(t.due_minor), width, true));
+  if (t?.due_minor) lines.push(...row("BALANCE DUE", m(t.due_minor), width, true));
+  else if (r.payments?.length) lines.push(center("PAID", { bold: true }));
   for (const rf of r.refunds ?? []) lines.push(...row(`Refund ${rf.method}`, `-${m(rf.amount_minor)}`, width));
   if (r.khata) lines.push(text(`Khata balance: ${m(r.khata.balance_minor)}`));
   if (r.tax_invoice?.number) lines.push(center(`${(r.tax_invoice.authority ?? "FBR").toUpperCase()} invoice ${r.tax_invoice.number}`));
@@ -165,6 +168,7 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   if (r.footer) lines.push(...wrap(r.footer, width).map((x) => center(x)));
   if (rs.footerQrUrl) lines.push({ qr: rs.footerQrUrl });
   if (r.feedback_whatsapp) lines.push(center(`WhatsApp ${r.feedback_whatsapp}`));
+  lines.push(center("Powered by Servio"));
   lines.push({ feed: 3 }, { cut: true });
   return lines;
 }

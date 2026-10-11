@@ -44,7 +44,7 @@ export function ReceiptDialog({ receipt, change, onClose, onNew, offline }: { re
       </>}>
       {receipt ? (
         <div className="grid gap-4 md:grid-cols-[1fr_280px]">
-          <div className="print-area rounded-lg border bg-white p-2"><ReceiptView r={receipt} branding={{ secondaryPhone: branding.secondaryPhone, footerQrUrl: branding.footerQrUrl }} /></div>
+          <div className="print-area rounded-lg border bg-white p-2"><ReceiptView r={receipt} branding={{ secondaryPhone: branding.secondaryPhone, footerQrUrl: branding.footerQrUrl, showLogo: branding.showLogo, paper: branding.paper }} /></div>
           <div className="no-print space-y-4">
             {change ? <div className="rounded-lg bg-success-soft p-4 text-center"><div className="text-sm">Change due</div><div className="text-4xl font-bold tabular">{formatMoney(change, receipt.business?.currency)}</div></div> : null}
             <div className="rounded-lg border p-3">

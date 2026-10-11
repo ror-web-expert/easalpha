@@ -162,5 +162,7 @@ select.appearance-none {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; left: 0; top: 0; width: 72mm; }
+  .print-area .receipt[data-paper="58"] { width: 48mm; }
+  .print-area img { max-width: 100%; }
   .no-print { display: none !important; }
 }

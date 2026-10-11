@@ -42,7 +42,7 @@ describe("receiptLines", () => {
     expect(t.find((x) => x.startsWith("Discount"))).toMatch(/-Rs 110$/);
     expect(t.find((x) => x.startsWith("Service charge"))).toMatch(/Rs 107$/);
     expect(t.find((x) => x.startsWith("TOTAL"))).toMatch(/Rs 1,177$/);
-    expect(t.find((x) => /^Cash\s/.test(x))).toMatch(/Rs 1,177$/);
+    expect(t.find((x) => /^Paid by Cash\s/.test(x))).toMatch(/Rs 1,177$/);
     expect(t.find((x) => x.startsWith("  Change"))).toMatch(/Rs 23$/);
     expect(t).toContain("Thank you");
   });
