@@ -17,7 +17,7 @@ class Device < ApplicationRecord
 
   def issue_pairing_code!
     code = format("%06d", SecureRandom.random_number(1_000_000))
-    update!(pairing_code: code, pairing_expires_at: 15.minutes.from_now)
+    update!(pairing_code: code, pairing_expires_at: 24.hours.from_now) # one use; long enough to walk to the till
     code
   end
 

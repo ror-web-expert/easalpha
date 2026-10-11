@@ -34,7 +34,7 @@ export default function DevicesPage() {
                 <TD>{titleCase(d.kind)}{d.station_id ? <span className="text-xs text-fg-muted"> · {stations.data?.find((s) => s.id === d.station_id)?.name}</span> : null}</TD>
                 <TD className="text-fg-secondary">{branches.data?.find((b) => b.id === d.branch_id)?.name ?? "-"}</TD>
                 <TD>{d.revoked_at ? <Badge variant="danger">revoked</Badge> : d.paired ? <Badge variant="success">paired</Badge> : <Badge variant="warning">not paired</Badge>}</TD>
-                <TD>{d.pairing_code && !d.paired ? <button className="font-mono text-base font-semibold tracking-widest text-primary" onClick={() => setCode(d)}>{d.pairing_code}</button> : "-"}</TD>
+                <TD>{d.pairing_code && !d.paired ? <div><button className="font-mono text-base font-semibold tracking-widest text-primary" onClick={() => setCode(d)}>{d.pairing_code}</button><div className="text-xs text-fg-muted">valid until {formatDateTime(d.pairing_expires_at)}</div></div> : "-"}</TD>
                 <TD className="text-fg-secondary" title={formatDateTime(d.last_seen_at)}>{d.last_seen_at ? formatAgo(d.last_seen_at) : "-"}</TD>
                 <TD className="text-fg-secondary" title={formatDateTime(d.last_sync_at)}>{d.last_sync_at ? formatAgo(d.last_sync_at) : "-"}</TD>
                 <TD right>
@@ -56,7 +56,7 @@ export default function DevicesPage() {
           </div>
         ) : null}
       </Dialog>
-      <Dialog open={!!code} onClose={() => setCode(null)} title="Pairing code" description={`Enter this on the device at /pos/pair (till) or /kitchen (kitchen display). Expires ${formatDateTime(code?.pairing_expires_at)}.`} size="sm" footer={<Button onClick={() => setCode(null)}>Done</Button>}>
+      <Dialog open={!!code} onClose={() => setCode(null)} title="Pairing code" description={`Enter this on the device at /pos (till or tablet), /kitchen (kitchen display) or /rider (rider phone). One use; valid until ${formatDateTime(code?.pairing_expires_at)}.`} size="sm" footer={<Button onClick={() => setCode(null)}>Done</Button>}>
         <div className="py-6 text-center font-mono text-5xl font-bold tracking-[0.3em] text-primary">{code?.pairing_code}</div>
         <p className="text-center text-sm text-fg-secondary">{code?.name}</p>
       </Dialog>
