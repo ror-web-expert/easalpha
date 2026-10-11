@@ -59,6 +59,14 @@
       "category": "Office",
       "maintainer": "EasAlpha <support@easalpha.com>"
     },
+    "deb": {
+      "fpm": [
+        "--replaces",
+        "servio-desktop",
+        "--conflicts",
+        "servio-desktop"
+      ]
+    },
     "mac": {
       "target": [
         {
