@@ -5,6 +5,12 @@ module Api
       rescue_from ActiveRecord::RecordNotFound do
         render json: { error: { code: "not_found", message: "Not found" } }, status: :not_found
       end
+      rescue_from Api::Errors::ApiError do |e|
+        render json: { error: { code: e.code, message: e.message, details: e.details }.compact }, status: e.status
+      end
+      rescue_from ActiveRecord::RecordInvalid do |e|
+        render json: { error: { code: "validation_failed", message: e.record.errors.full_messages.to_sentence } }, status: :unprocessable_content
+      end
 
       # GET /public/storefront/:slug
       def show
@@ -23,6 +29,29 @@ module Api
                          products: products.map { |p| { id: p.id, name: p.name, description: p.description, category_id: p.category_id, price_minor: p.base_price_minor, image_key: p.image_key,
                                                         variants: p.variants.map { |v| { id: v.id, name: v.name, price_minor: v.price_minor } } } },
                          reviews: { summary: Reviews.summary(Review.all), recent: reviews.map { |r| { rating: r.rating, rating_word: r.rating_word, comment: r.comment, order_type: r.order_type, at: r.created_at } } } }
+        end
+      end
+
+      # POST /public/storefront/:slug/orders { lines: [{ product_id, variant_id, quantity, modifiers }], order_type: delivery|takeaway,
+      #   customer: { name, phone, address, area, city }, notes, client_id }  -> the order plus a guest token for tracking
+      def create_order
+        cfg = Tenancy::Context.unscoped { WebsiteConfig.find_by!(slug: params[:slug], published: true) }
+        business = Business.find(cfg.business_id)
+        Tenancy::Context.with(business) do
+          lines = Array(params[:lines]).map { |l| l.respond_to?(:to_unsafe_h) ? l.to_unsafe_h.symbolize_keys : l.to_h.symbolize_keys }
+          customer = params[:customer].respond_to?(:to_unsafe_h) ? params[:customer].to_unsafe_h : {}
+          order = Storefront::Ordering.place!(business, cfg, lines: lines, order_type: params[:order_type], customer: customer, notes: params[:notes], client_id: params[:client_id])
+          render json: Storefront::Ordering.guest_view(order, cfg), status: :created
+        end
+      end
+
+      # GET /public/storefront/:slug/orders/:id?guest_token=  tracking while the kitchen works
+      def order
+        cfg = Tenancy::Context.unscoped { WebsiteConfig.find_by!(slug: params[:slug], published: true) }
+        Tenancy::Context.with(Business.find(cfg.business_id)) do
+          order = Order.find_by!(id: params[:id], source: "online")
+          raise ActiveRecord::RecordNotFound unless order.qr_guest_token.present? && order.qr_guest_token == params[:guest_token].to_s
+          render json: Storefront::Ordering.guest_view(order, cfg)
         end
       end
 

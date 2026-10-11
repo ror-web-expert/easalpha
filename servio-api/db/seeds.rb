@@ -1,10 +1,19 @@
 Plan.seed!
 WhatsappTemplate.seed_defaults!
-if Rails.env.development? && !User.exists?(email: "demo@servio.pk")
-  r = Auth::Signup.call(name: "Demo Owner", business_name: "Demo Cafe", email: "demo@servio.pk", password: "password123")
+# Production: the first super admin comes from the environment (deploy/.env). Nothing happens if the login exists.
+if ENV["SUPER_ADMIN_EMAIL"].present? && ENV["SUPER_ADMIN_PASSWORD"].present? && !SuperAdmin.exists?(email: ENV["SUPER_ADMIN_EMAIL"])
+  SuperAdmin.create!(name: ENV.fetch("SUPER_ADMIN_NAME", "EasAlpha Owner"), email: ENV["SUPER_ADMIN_EMAIL"], password: ENV["SUPER_ADMIN_PASSWORD"])
+  puts "Super admin: #{ENV['SUPER_ADMIN_EMAIL']} (super panel at /super)"
+end
+if Rails.env.development? && !SuperAdmin.exists?(email: "admin@easalpha.com")
+  SuperAdmin.create!(name: "EasAlpha Owner", email: "admin@easalpha.com", password: "admin12345")
+  puts "Super admin: admin@easalpha.com / admin12345 (super panel at /super)"
+end
+if Rails.env.development? && !User.exists?(email: "demo@easalpha.com")
+  r = Auth::Signup.call(name: "Demo Owner", business_name: "Demo Cafe", email: "demo@easalpha.com", password: "password123")
   Tenancy::Context.with(r.business, user: r.user, membership: r.membership) do
     Branch.first.update!(tax_registration: { "authority" => "pra", "ntn" => "0000000-0", "pos_id" => "DEMO" })
-    manager = Membership.create!(user: User.create!(name: "Demo Manager", email: "manager@servio.pk", password: "password123"), role: Role.find_by!(system_key: "manager"), status: "active")
+    manager = Membership.create!(user: User.create!(name: "Demo Manager", email: "manager@easalpha.com", password: "password123"), role: Role.find_by!(system_key: "manager"), status: "active")
     manager.set_pin!("9999")
     cashier = Membership.create!(user: User.create!(name: "Demo Cashier", phone: "+923001112233"), role: Role.find_by!(system_key: "cashier"), status: "active")
     cashier.set_pin!("1111")
@@ -15,7 +24,7 @@ if Rails.env.development? && !User.exists?(email: "demo@servio.pk")
     %w[Grill Drinks].each { |n| Station.create!(branch: Branch.first, name: n) }
     4.times { |i| DiningTable.create!(branch: Branch.first, code: "T#{i + 1}", seats: 4, location: "Hall") }
   end
-  puts "Demo business: demo@servio.pk / password123, manager PIN 9999, cashier PIN 1111, till pairing code 123456, kitchen pairing code 654321"
+  puts "Demo business: demo@easalpha.com / password123, manager PIN 9999, cashier PIN 1111, till pairing code 123456, kitchen pairing code 654321"
 end
 
 # Demo stock (Phase 2): runs once per demo business.

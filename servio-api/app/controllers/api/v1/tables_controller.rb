@@ -55,7 +55,7 @@ module Api
       # GET /tables/:id/qr  the link printed on the table card
       def qr_card
         t = DiningTable.find(params[:id])
-        base = ENV.fetch("SERVIO_QR_BASE_URL", current_business.setting("qr_base_url") || "https://order.servio.pk")
+        base = ENV.fetch("SERVIO_QR_BASE_URL", current_business.setting("qr_base_url") || "https://order.easalpha.com")
         render json: { table_id: t.id, code: t.code, token: t.qr_token, url: "#{base}/q/#{t.qr_token}", enabled: current_branch.qr_setting("enabled") }
       end
 

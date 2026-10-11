@@ -4,7 +4,8 @@ import { useDeviceStore } from "@/store/device";
 import type { Session } from "@/lib/types";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1").replace(/\/$/, "");
-export const CABLE_URL = process.env.NEXT_PUBLIC_CABLE_URL || API_URL.replace(/^http/, "ws").replace(/\/api\/v1$/, "") + "/cable";
+// Accepts http(s) or ws(s); the socket always opens on ws(s) so the value can be written either way.
+export const CABLE_URL = (process.env.NEXT_PUBLIC_CABLE_URL || API_URL.replace(/\/api\/v1$/, "") + "/cable").replace(/^http/, "ws");
 
 export class ApiError extends Error {
   code: string;

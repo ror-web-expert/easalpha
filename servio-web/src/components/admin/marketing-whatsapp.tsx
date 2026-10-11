@@ -15,7 +15,7 @@ import { insertVariable, messageStatusVariant, renderTemplate, SAMPLE_VARIABLES,
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Dialog, EmptyRow, Field, Input, Label, Loading, Select, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 
 // SPEC "Account notifications over WhatsApp": Templates built from the account variables, Manual Send, Bulk Send and
-// Send Logs. Shared templates come from Servio; a business template with the same name overrides the shared one.
+// Send Logs. Shared templates come from EasAlpha; a business template with the same name overrides the shared one.
 
 export function useWhatsappVariables() {
   return useQuery({ queryKey: ["whatsapp_variables"], queryFn: () => api<{ data: string[]; master_enabled: boolean }>("/whatsapp/variables") });

@@ -1,7 +1,7 @@
 {
-  "name": "Servio Till",
-  "short_name": "Servio",
-  "description": "Servio restaurant POS till",
+  "name": "EasAlpha Till",
+  "short_name": "EasAlpha",
+  "description": "EasAlpha restaurant POS till",
   "start_url": "/pos",
   "scope": "/",
   "display": "standalone",

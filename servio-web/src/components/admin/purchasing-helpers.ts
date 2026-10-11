@@ -57,7 +57,7 @@ export function ledgerTypeVariant(type: SupplierLedgerType | string | null | und
 }
 
 // ---- Permissions and allowed actions ----
-/** SPEC codes with the legacy Servio code that implies each (see the API's Permission catalogue). */
+/** SPEC codes with the legacy EasAlpha code that implies each (see the API's Permission catalogue). */
 export const PO_PERMS = {
   view: ["PURCHASE_ORDERS", "purchasing.manage", "stock.view"],
   create: ["PO_CREATE", "purchasing.manage"],

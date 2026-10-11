@@ -12,8 +12,8 @@ test("job starts with ESC @ (init) and ESC t 0 (CP437)", () => {
 });
 
 test("plain text is ASCII bytes followed by LF", () => {
-  const out = encodeLines([{ text: "Servio" }], 80);
-  assert.ok(includes(out, Buffer.concat([Buffer.from("Servio", "ascii"), CMD.lf])));
+  const out = encodeLines([{ text: "EasAlpha" }], 80);
+  assert.ok(includes(out, Buffer.concat([Buffer.from("EasAlpha", "ascii"), CMD.lf])));
 });
 
 test("non-ASCII characters (Urdu) are replaced by ?", () => {
@@ -61,7 +61,7 @@ test("long text wraps at the paper width", () => {
 });
 
 test("QR uses GS ( k with the correct store length and print command", () => {
-  const data = "https://servio.pk/r/123";
+  const data = "https://easalpha.com/r/123";
   const qr = qrCode(data);
   const len = data.length + 3;
   // model, size, error correction
@@ -104,19 +104,19 @@ test("drawer emits ESC p 0 kick", () => {
 test("full receipt encodes in order: header, items, QR, feed, cut", () => {
   const out = encodeLines(
     [
-      { text: "Servio Cafe", align: "center", bold: true, size: 2 },
+      { text: "EasAlpha Cafe", align: "center", bold: true, size: 2 },
       { divider: true },
       { text: "1 x Chai            Rs 150" },
-      { qr: "https://servio.pk/menu" },
+      { qr: "https://easalpha.com/menu" },
       { feed: 3 },
       { cut: true },
     ],
     80,
   );
-  const iCafe = out.indexOf(Buffer.from("Servio Cafe"));
+  const iCafe = out.indexOf(Buffer.from("EasAlpha Cafe"));
   const iDiv = out.indexOf(Buffer.from("-".repeat(48)));
   const iItem = out.indexOf(Buffer.from("1 x Chai"));
-  const iQr = out.indexOf(Buffer.from("https://servio.pk/menu"));
+  const iQr = out.indexOf(Buffer.from("https://easalpha.com/menu"));
   const iFeed = out.indexOf(Buffer.from([0x1b, 0x64, 0x03]));
   const iCut = out.indexOf(CMD.partialCut);
   assert.ok(iCafe < iDiv && iDiv < iItem && iItem < iQr && iQr < iFeed && iFeed < iCut);

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  PLANS, TRIAL_DAYS, displayPriceMinor, formatMoney, isValidEmail, isValidPakistaniPhone, mailtoLink, monthlyMinor,
-  normalizePhone, passwordStrength, signupPayload, toggleCurrency, validateSignup, whatsappLink, yearlyMinor,
-  yearlyPerMonthMinor, yearlySavingMinor, type SignupInput, UI, t, toggleLang, isLang, telLink,
-} from "./site-helpers";
+import { PLANS, TRIAL_DAYS, displayPriceMinor, formatMoney, isValidEmail, isValidPakistaniPhone, mailtoLink, monthlyMinor, normalizePhone, passwordStrength, signupPayload, toggleCurrency, validateSignup, whatsappLink, yearlyMinor, yearlyPerMonthMinor, yearlySavingMinor, type SignupInput, UI, t, toggleLang, isLang, telLink, contactFromPlatform, displayPhone, CONTACT } from "./site-helpers";
 
 const starter = PLANS[0];
 const pro = PLANS[1];
@@ -125,11 +121,23 @@ describe("validateSignup", () => {
 
 describe("contact links", () => {
   it("builds a WhatsApp click-to-chat link", () => {
-    expect(whatsappLink()).toBe("https://wa.me/923001234567");
-    expect(whatsappLink("Hi Servio")).toBe("https://wa.me/923001234567?text=Hi%20Servio");
+    expect(whatsappLink()).toBe("https://wa.me/923437172731");
+    expect(whatsappLink("Hi EasAlpha")).toBe("https://wa.me/923437172731?text=Hi%20EasAlpha");
+  });
+  it("maps the product owner's platform settings onto the contact block, keeping defaults for blanks", () => {
+    const c = contactFromPlatform({ support_email: "help@easalpha.com", support_whatsapp: "+92 311 0000000", support_hours: "", product_name: null });
+    expect(c.email).toBe("help@easalpha.com");
+    expect(c.whatsapp).toBe("+92 311 0000000");
+    expect(c.whatsappDisplay).toBe("+92 311 0000000");
+    expect(c.hours).toBe(CONTACT.hours);
+    expect(c.productName).toBe("EasAlpha");
+    expect(whatsappLink("Hi", c)).toBe("https://wa.me/923110000000?text=Hi");
+    expect(contactFromPlatform(null)).toEqual(CONTACT);
+    expect(displayPhone("+923001234567")).toBe("+92 300 1234567");
+    expect(displayPhone("042-111-222")).toBe("042-111-222");
   });
   it("builds a mailto with an encoded subject and body", () => {
-    expect(mailtoLink("Demo request", "Name: Ali\nPhone: +92")).toBe("mailto:hello@servio.pk?subject=Demo%20request&body=Name%3A%20Ali%0APhone%3A%20%2B92");
+    expect(mailtoLink("Demo request", "Name: Ali\nPhone: +92")).toBe("mailto:hello@easalpha.com?subject=Demo%20request&body=Name%3A%20Ali%0APhone%3A%20%2B92");
   });
 });
 
@@ -153,6 +161,6 @@ describe("language dictionary", () => {
     expect(isLang("fr")).toBe(false);
   });
   it("builds a phone link", () => {
-    expect(telLink()).toBe("tel:+923001234567");
+    expect(telLink()).toBe("tel:+923437172731");
   });
 });

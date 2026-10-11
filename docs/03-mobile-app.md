@@ -1,15 +1,15 @@
-# Servio: Mobile Apps
+# EasAlpha: Mobile Apps
 
 Date: 8 Oct 2026. Sources: the build blueprint and the ArfaPOS audit (Rider app settings, Order Takers, QR Ordering pages).
 
 > **10 Oct 2026: `SPEC.md` is the requirement.** Where this file differs from `SPEC.md`, `SPEC.md` wins. The differences are listed in `PDF-ALIGNMENT.md`; the extras in this file stay. The text before this change is kept in `archive/before-spec-2026-10-10/`.
 
 
-Servio runs on phones and tablets in five ways. Three are apps the restaurant's own people use, two are for customers. All of them talk to the same Rails API with the same login system; the role decides which app a person can open.
+EasAlpha runs on phones and tablets in five ways. Three are apps the restaurant's own people use, two are for customers. All of them talk to the same Rails API with the same login system; the role decides which app a person can open.
 
 | App | Platform | Who | Login | Offline | Phase |
 |---|---|---|---|---|---|
-| Servio POS on tablet | Android tablet 10 inch and up; waiter's Android phone; iPad later | Cashier, waiter, manager | 4-digit PIN on a device paired to the branch | Full | Core |
+| EasAlpha POS on tablet | Android tablet 10 inch and up; waiter's Android phone; iPad later | Cashier, waiter, manager | 4-digit PIN on a device paired to the branch | Full | Core |
 | Rider app | Android and iOS; technology open (recommended: an installable web page) | Rider | Phone + WhatsApp OTP | Queue and sync | Phase 2 |
 | Stock count on phone | Browser or the POS app on Android | Manager, stock staff | PIN or admin login | Queue and sync | Phase 2 |
 | Customer ordering site | Web page per restaurant, installable like an app | Customers | Phone + WhatsApp OTP, no password | No | Phase 2 |
@@ -19,7 +19,7 @@ Owners use the admin panel on the phone browser plus WhatsApp alerts. A separate
 
 ---
 
-## 1. Servio POS on Android tablet and waiter phone
+## 1. EasAlpha POS on Android tablet and waiter phone
 
 The same till as the desktop: the installable web app at `/pos`, with the catalog in IndexedDB and the offline queue (SPEC). Order-taker tablets do not set up printers: they print through the desktop computer whose IP the admin stores as the print server (SPEC).
 
@@ -91,7 +91,7 @@ A manager walks the store with a phone and counts a section. Opens only when the
 
 ## 4. Customer ordering site and QR ordering (Phase 2)
 
-A web page per restaurant at `<slug>.servio.menu`, or the restaurant's own domain on the Business plan. Installable to the home screen; no app store needed. Works like an app on any phone.
+A web page per restaurant at `easalpha.com/store/<slug>`, or the restaurant's own domain on the Business plan. Installable to the home screen; no app store needed. Works like an app on any phone.
 
 Modes:
 

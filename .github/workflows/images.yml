@@ -1,0 +1,109 @@
+# Build and deploy. On every push to main/master (and every v* tag):
+#   1. build: Docker images for the API, web app and WhatsApp gateway, pushed to GitHub Container Registry as
+#      ghcr.io/<owner>/servio-api, servio-web, servio-whatsapp. Tags: "latest" (branch), the git tag (releases), the short SHA.
+#      The web image bakes in the API address: repository variable API_PUBLIC_URL (Settings > Secrets and variables >
+#      Actions > Variables), e.g. https://api.easalpha.com.
+#   2. deploy: over SSH, copies deploy/ to the server, logs the server into ghcr.io with this run's token, pulls the new
+#      images and restarts the stack (migrations and seeds run on API start). Waits for the API health check.
+#      Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key whose public half is in the server's
+#      ~/.ssh/authorized_keys). Optional DEPLOY_PATH (default ~/servio). scripts/github-setup.sh sets all of these.
+#      No DEPLOY_HOST secret: images are built and the deploy step is skipped.
+name: images
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: { contents: read, packages: write }
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { name: api, context: servio-api }
+          - { name: web, context: servio-web }
+          - { name: whatsapp, context: servio-whatsapp }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/servio-${{ matrix.name }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=sha,prefix=
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.API_PUBLIC_URL || 'https://api.example.pk' }}/api/v1
+            NEXT_PUBLIC_CABLE_URL=${{ vars.API_PUBLIC_URL || 'https://api.example.pk' }}/cable
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' }}
+    concurrency: { group: deploy-production, cancel-in-progress: false }
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '~/servio' }}
+    steps:
+      - if: ${{ env.DEPLOY_HOST == '' }}
+        run: echo "DEPLOY_HOST secret not set; images are on ghcr.io, nothing deployed."
+      - if: ${{ env.DEPLOY_HOST != '' }}
+        uses: actions/checkout@v4
+        with: { sparse-checkout: deploy, sparse-checkout-cone-mode: false }
+      - if: ${{ env.DEPLOY_HOST != '' }}
+        name: SSH key
+        env: { DEPLOY_SSH_KEY: "${{ secrets.DEPLOY_SSH_KEY }}" }
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "Host server
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes" > ~/.ssh/config
+      - if: ${{ env.DEPLOY_HOST != '' }}
+        name: Copy compose files (never .env or downloads)
+        run: |
+          ssh server "mkdir -p $DEPLOY_PATH/downloads"
+          rsync -av --exclude '.env' --exclude 'downloads' --exclude '.env.example' deploy/ "server:$DEPLOY_PATH/"
+      - if: ${{ env.DEPLOY_HOST != '' }}
+        name: Pull images and restart
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          REPO="ghcr.io/${OWNER,,}/servio"; TAG="${SHA:0:7}"
+          ssh server "set -e
+            cd $DEPLOY_PATH
+            test -f .env || { echo '.env missing on the server: copy deploy/.env.example to $DEPLOY_PATH/.env and fill it in'; exit 1; }
+            sed -i -e 's#^IMAGE_REPO=.*#IMAGE_REPO=$REPO#' -e 's#^IMAGE_TAG=.*#IMAGE_TAG=$TAG#' .env
+            grep -q '^IMAGE_REPO=' .env || echo 'IMAGE_REPO=$REPO' >> .env
+            grep -q '^IMAGE_TAG=' .env || echo 'IMAGE_TAG=$TAG' >> .env
+            echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin
+            docker compose pull --quiet
+            docker compose up -d --remove-orphans
+            docker image prune -f >/dev/null
+            echo 'Waiting for the API...'
+            for i in \$(seq 1 60); do
+              if docker compose exec -T api curl -fsS http://localhost:3001/api/v1/health >/dev/null 2>&1; then echo 'API healthy'; exit 0; fi
+              sleep 5
+            done
+            echo 'API did not become healthy in 5 minutes'; docker compose logs --tail=100 api; exit 1"

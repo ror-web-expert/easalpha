@@ -64,6 +64,7 @@ export default function StoreProfilePage() {
         <Card>
           <CardHeader><CardTitle>Other settings</CardTitle></CardHeader>
           <CardBody className="space-y-2 text-sm text-fg-secondary">
+            <p>Your logo, receipt header and footer, and the storefront colours and favicon are under <Link href="/admin/settings/branding" className="font-medium text-primary">Branding</Link>.</p>
             <p>Order flow, customer rules, alerts and receipt branding are under <Link href="/admin/settings/point-of-sale" className="font-medium text-primary">Point of Sale</Link>.</p>
             <p>Service charge, delivery charge, cash rounding and PRA e-IMS are under <Link href="/admin/settings/charges-tax" className="font-medium text-primary">Charges &amp; Tax</Link>.</p>
             <p>Branch addresses and the business-day window are under <Link href="/admin/settings/store-management" className="font-medium text-primary">Store Management</Link> and <Link href="/admin/settings/business-hours" className="font-medium text-primary">Business Hours</Link>.</p>

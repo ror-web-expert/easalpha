@@ -17,7 +17,7 @@ export default function FoodpandaReportPage() {
   const days = Object.entries(d?.by_day ?? {}).sort((a, b) => a[0].localeCompare(b[0])).map(([day, sales]) => ({ day, sales }));
   const commissionPct = d ? pctOf(d.commission_minor, d.sales_minor) : 0;
   return (
-    <ReportShell icon={Bike} title="Foodpanda" description="A Servio extra: orders received from Foodpanda in the period, what they sold for, the commission taken and what you keep."
+    <ReportShell icon={Bike} title="Foodpanda" description="A EasAlpha extra: orders received from Foodpanda in the period, what they sold for, the commission taken and what you keep."
       range={range} onRange={setRange} loading={q.isLoading} error={q.isError} onRetry={() => q.refetch()}
       exportData={{
         name: "foodpanda",

@@ -1,0 +1,78 @@
+# Desktop POS installers, built automatically on every change to servio-desktop/ and on every v* tag.
+# Linux: AppImage + .deb (ubuntu). Windows: NSIS .exe (windows). macOS: .dmg + .zip for Intel and Apple Silicon (macos).
+# Every run keeps the installers as workflow artifacts for 30 days; a v* tag also attaches them to a GitHub Release.
+# Builds are unsigned: Windows SmartScreen and macOS Gatekeeper warn on first open (see docs/SETUP.md).
+# After the three builds, the "publish" job (v* tags and manual runs) gathers every installer, writes downloads/manifest.json
+# and uploads the folder to the website server over SSH, so the site's Download page offers the new version with no
+# manual step. Secrets to add once: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key), DEPLOY_DOWNLOADS_PATH (the
+# server folder mounted as /app/public/downloads, e.g. /srv/servio/deploy/downloads). Variable PUBLIC_URL (the website,
+# e.g. https://easalpha.com) makes the installers update themselves from <PUBLIC_URL>/downloads; without it the update
+# feed is this repository's latest GitHub Release (AppImage and Windows; macOS needs a signed build, .deb by hand).
+name: desktop
+on:
+  push:
+    branches: [main, master]
+    paths: ["servio-desktop/**", ".github/workflows/desktop.yml"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: { contents: write }
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, script: "dist:linux", glob: "release/*.{AppImage,deb,yml,blockmap}" }
+          - { os: windows-latest, script: "dist:win", glob: "release/*.{exe,yml,blockmap}" }
+          - { os: macos-latest, script: "dist:mac", glob: "release/*.{dmg,zip,yml,blockmap}" }
+    runs-on: ${{ matrix.os }}
+    defaults: { run: { working-directory: servio-desktop } }
+    env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.27.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: servio-desktop/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm ${{ matrix.script }} -- -c.publish.url=${{ vars.PUBLIC_URL && format('{0}/downloads', vars.PUBLIC_URL) || format('https://github.com/{0}/releases/latest/download', github.repository) }}
+      - uses: actions/upload-artifact@v4
+        with: { name: "servio-pos-${{ matrix.os }}", path: "servio-desktop/${{ matrix.glob }}", retention-days: 30 }
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with: { files: "servio-desktop/${{ matrix.glob }}" }
+
+  publish:
+    # Gather the three builds and put them on the website: deploy/downloads on the server, served at /downloads.
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: "servio-desktop/package.json\nscripts/downloads-manifest.mjs", sparse-checkout-cone-mode: false }
+      - uses: actions/download-artifact@v4
+        with: { path: downloads, pattern: "servio-pos-*", merge-multiple: true }
+      - name: Write manifest.json (version, files per operating system)
+        run: node scripts/downloads-manifest.mjs downloads servio-desktop/package.json
+      - uses: actions/upload-artifact@v4
+        with: { name: "servio-pos-downloads", path: downloads, retention-days: 30 }
+      - name: Upload to the website server
+        if: ${{ secrets.DEPLOY_HOST != '' }}
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_DOWNLOADS_PATH: ${{ secrets.DEPLOY_DOWNLOADS_PATH }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_DOWNLOADS_PATH'"
+          # new files first, manifest last, so a visitor never sees a version whose installer is still uploading
+          rsync -av --exclude manifest.json -e "ssh -i ~/.ssh/deploy_key" downloads/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH/"
+          rsync -av -e "ssh -i ~/.ssh/deploy_key" downloads/manifest.json "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH/manifest.json"
+          echo "Published $(node -p "require('./servio-desktop/package.json').version") to $DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH"
+      - if: ${{ secrets.DEPLOY_HOST == '' }}
+        run: echo "DEPLOY_HOST secret not set; installers are in the servio-pos-downloads artifact and the GitHub Release only."

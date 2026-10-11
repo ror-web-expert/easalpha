@@ -11,7 +11,7 @@ const perm = (code: string, module: string, extra: Partial<Permission> = {}): Pe
   ({ code, module, label: code.toLowerCase().replace(/_/g, " "), description: `${code} description`, surface: "both", restriction: false, implies: [], spec: !code.includes("."), ...extra });
 
 const registry: PermissionRegistry = {
-  modules: ["Dashboard", "Take Orders", "Security", "Servio extras"],
+  modules: ["Dashboard", "Take Orders", "Security", "EasAlpha extras"],
   data: [
     perm("DASHBOARD", "Dashboard", { surface: "software", implies: ["reports.view_own"] }),
     perm("VIEW_DAILY_SALES", "Dashboard", { surface: "app" }),
@@ -19,8 +19,8 @@ const registry: PermissionRegistry = {
     perm("SALES_WALKIN", "Take Orders", { implies: ["orders.create"] }),
     perm("SALES_TAKEAWAY", "Take Orders", { implies: ["orders.create"] }),
     perm("REQUIRE_PIN_FOR_ORDER_UPDATE", "Security", { restriction: true }),
-    perm("orders.create", "Servio extras"),
-    perm("reports.view_own", "Servio extras"),
+    perm("orders.create", "EasAlpha extras"),
+    perm("reports.view_own", "EasAlpha extras"),
   ],
 };
 
@@ -34,7 +34,7 @@ describe("permission editor selection logic", () => {
     expect(applyPreset({ codes: ["SALES_WALKIN", "DASHBOARD", "SALES_WALKIN"] })).toEqual(["SALES_WALKIN", "DASHBOARD"]);
   });
 
-  it("selectAll ticks every SPEC code, restrictions included, and keeps ticked Servio extras", () => {
+  it("selectAll ticks every SPEC code, restrictions included, and keeps ticked EasAlpha extras", () => {
     const out = selectAll(registry.data, ["orders.create", "SETTINGS"]);
     expect(out).toContain("REQUIRE_PIN_FOR_ORDER_UPDATE");
     expect(out).toContain("orders.create");
@@ -47,11 +47,11 @@ describe("permission editor selection logic", () => {
       { name: "Dashboard", total: 3, granted: 2 },
       { name: "Take Orders", total: 2, granted: 1 },
       { name: "Security", total: 1, granted: 0 },
-      { name: "Servio extras", total: 2, granted: 1 },
+      { name: "EasAlpha extras", total: 2, granted: 1 },
     ]);
   });
 
-  it("impliedBy lists Servio codes the ticked SPEC codes imply but that are not ticked", () => {
+  it("impliedBy lists EasAlpha codes the ticked SPEC codes imply but that are not ticked", () => {
     expect([...impliedBy(registry.data, ["DASHBOARD", "SALES_WALKIN", "orders.create"])]).toEqual(["reports.view_own"]);
   });
 

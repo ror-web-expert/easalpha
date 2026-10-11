@@ -12,7 +12,7 @@ import { useAction } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, Field, Input, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR, type BadgeVariant } from "@/components/ui";
 
 // SPEC Plan: the subscription tier (Business in the reviewed account), trial or subscription state, invoices, and
-// how to pay. Choosing a plan issues an invoice; the owner reports the payment and Servio confirms it.
+// how to pay. Choosing a plan issues an invoice; the owner reports the payment and EasAlpha confirms it.
 
 function invoiceVariant(status: string): BadgeVariant {
   switch (status) {
@@ -38,7 +38,7 @@ export default function PlanPage() {
   const [choose, setChoose] = useState<{ plan_code: string; cycle: "monthly" | "yearly"; tills: string } | null>(null);
   const [report, setReport] = useState<{ invoice: BillingInvoice; method: string; reference: string } | null>(null);
   const chooseM = useAction<{ plan_code: string; cycle: string; tills: number }>(["billing", "business"], (body) => api("/billing/choose_plan", { method: "POST", body: { ...body, period: body.cycle } }), "Plan chosen and invoice issued");
-  const reportM = useAction<{ id: string; method: string; reference: string }>(["billing"], ({ id, ...body }) => api(`/billing/invoices/${id}/report_payment`, { method: "POST", body }), "Payment reported; Servio will confirm it");
+  const reportM = useAction<{ id: string; method: string; reference: string }>(["billing"], ({ id, ...body }) => api(`/billing/invoices/${id}/report_payment`, { method: "POST", body }), "Payment reported; EasAlpha will confirm it");
   if (q.isLoading || !q.data) return <Loading />;
   const b = q.data;
   const sub = b.subscription;
@@ -86,7 +86,7 @@ export default function PlanPage() {
                 {pi.easypaisa ? <p>Easypaisa: <span className="font-mono">{pi.easypaisa}</span></p> : null}
                 {pi.bank ? <p>Bank: <span className="font-mono">{pi.bank}</span></p> : null}
                 {!pi.jazzcash && !pi.easypaisa && !pi.bank ? <p>Payment details are shared on the invoice.</p> : null}
-                <p className="mt-1">After paying, report the payment on the invoice and Servio confirms it.</p>
+                <p className="mt-1">After paying, report the payment on the invoice and EasAlpha confirms it.</p>
               </div>
             )}
           </CardBody>

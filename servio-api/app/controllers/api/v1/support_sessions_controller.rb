@@ -1,6 +1,6 @@
 module Api
   module V1
-    # Support access: Servio staff ask, the owner approves, access lasts an hour and every action is logged.
+    # Support access: EasAlpha staff ask, the owner approves, access lasts an hour and every action is logged.
     class SupportSessionsController < BaseController
       before_action :authenticate!, only: %i[index approve deny]
       before_action :authenticate_super!, only: %i[request_access token]
@@ -30,7 +30,7 @@ module Api
         business = Business.find(params.require(:business_id))
         s = Tenancy::Context.with(business) do
           sess = SupportSession.create!(business: business, super_admin_id: @super_admin.id, reason: params.require(:reason))
-          Notification.create!(kind: "support_request", title: "Servio support asks for access", body: sess.reason, link: "/settings/support")
+          Notification.create!(kind: "support_request", title: "EasAlpha support asks for access", body: sess.reason, link: "/settings/support")
           sess
         end
         render json: serialize(s), status: :created

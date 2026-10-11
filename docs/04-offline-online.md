@@ -1,4 +1,4 @@
-# Servio: Offline and Online Behaviour
+# EasAlpha: Offline and Online Behaviour
 
 Date: 8 Oct 2026. Source: the build blueprint, with lessons from the ArfaPOS audit (its safety net for lost deductions and its 146 never-closed sessions).
 

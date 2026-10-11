@@ -49,7 +49,7 @@ export function KitchenGate({ children, title }: { children: React.ReactNode; ti
     <main className="flex min-h-screen flex-col items-center justify-center bg-page px-4 text-fg">
       <div className="w-full max-w-sm space-y-6 text-center">
         <h1 className="text-2xl font-semibold">{title}</h1>
-        <p className="text-fg-secondary">Pair this screen with the 6-digit code from Admin › Devices (kind: kitchen or token screen), or <Link href="/login" className="text-primary">log in</Link> as a manager.</p>
+        <p className="text-fg-secondary"><Link href="/setup" className="text-primary">Set this screen up with a manager login</Link>, pair it with the 6-digit code from Admin › Devices (kind: kitchen or token screen), or <Link href="/login" className="text-primary">log in</Link> as a manager.</p>
         <div className="flex justify-center gap-2">{Array.from({ length: 6 }).map((_, i) => <span key={i} className="grid h-14 w-11 place-items-center rounded-lg border bg-card font-mono text-2xl font-bold">{code[i] ?? ""}</span>)}</div>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Keypad onKey={(d) => setCode((c) => (c.length < 6 ? c + d : c))} onBackspace={() => setCode((c) => c.slice(0, -1))} onClear={() => setCode("")} />

@@ -198,25 +198,52 @@ export function signupPayload(input: SignupInput) {
 }
 
 // ---- Contact ----
+// Defaults only. The live values come from the product owner's platform settings (GET /platform, edited in the super
+// panel); contactFromPlatform maps them and every link helper takes the contact as its last argument.
 
-export const CONTACT = {
-  email: "hello@servio.pk",
-  whatsapp: "+923001234567",
-  whatsappDisplay: "+92 300 1234567",
+export interface SiteContact { email: string; whatsapp: string; whatsappDisplay: string; address: string; hours: string; productName: string }
+
+export const CONTACT: SiteContact = {
+  email: "hello@easalpha.com",
+  whatsapp: "+923437172731",
+  whatsappDisplay: "+92 343 7172731",
   address: "Office address to be announced, Lahore, Pakistan",
+  hours: "10 am to 11 pm Pakistan time, every day",
+  productName: "EasAlpha",
 };
 
-export function whatsappLink(message?: string): string {
-  const base = `https://wa.me/${CONTACT.whatsapp.replace(/\D/g, "")}`;
+/** "+923001234567" reads as "+92 300 1234567"; anything else is shown as typed. */
+export function displayPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (/^92\d{10}$/.test(digits)) return `+92 ${digits.slice(2, 5)} ${digits.slice(5)}`;
+  return raw.trim();
+}
+
+/** Platform settings (support_* keys) to the site's contact block; blanks keep the defaults. */
+export function contactFromPlatform(p: { support_email?: string | null; support_whatsapp?: string | null; support_phone?: string | null; support_hours?: string | null; product_name?: string | null } | null | undefined): SiteContact {
+  if (!p) return CONTACT;
+  const whatsapp = (p.support_whatsapp || p.support_phone || CONTACT.whatsapp).trim();
+  return {
+    email: (p.support_email || CONTACT.email).trim(),
+    whatsapp,
+    whatsappDisplay: displayPhone(whatsapp),
+    address: CONTACT.address,
+    hours: (p.support_hours || CONTACT.hours).trim(),
+    productName: (p.product_name || CONTACT.productName).trim(),
+  };
+}
+
+export function whatsappLink(message?: string, contact: SiteContact = CONTACT): string {
+  const base = `https://wa.me/${contact.whatsapp.replace(/\D/g, "")}`;
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
 
-export function mailtoLink(subject: string, body: string): string {
-  return `mailto:${CONTACT.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+export function mailtoLink(subject: string, body: string, contact: SiteContact = CONTACT): string {
+  return `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-export function telLink(): string {
-  return `tel:${CONTACT.whatsapp}`;
+export function telLink(contact: SiteContact = CONTACT): string {
+  return `tel:${contact.whatsapp}`;
 }
 
 // ---- Site palette (also used as literal Tailwind classes in the components) ----
@@ -234,7 +261,7 @@ export const UI = {
   "hero.title.pre": { en: "Run every counter, kitchen and branch from one system that ", ur: "ہر کاؤنٹر، کچن اور برانچ ایک ایسے سسٹم سے چلائیں جو " },
   "hero.title.accent": { en: "keeps selling when the internet does not.", ur: "انٹرنیٹ بند ہونے پر بھی بیچتا رہے۔" },
   "hero.subtitle": {
-    en: "Servio gives restaurant owners an offline till, kitchen screens, stock that deducts itself, supplier and khata ledgers, payroll, riders, WhatsApp receipts and 27 reports, all in one account.",
+    en: "EasAlpha gives restaurant owners an offline till, kitchen screens, stock that deducts itself, supplier and khata ledgers, payroll, riders, WhatsApp receipts and 27 reports, all in one account.",
     ur: "سرویو ریسٹورنٹ مالکان کو آف لائن ٹِل، کچن اسکرینیں، خود کٹنے والا اسٹاک، سپلائر اور کھاتہ لیجر، پے رول، رائڈرز، واٹس ایپ رسیدیں اور 27 رپورٹیں ایک ہی اکاؤنٹ میں دیتا ہے۔",
   },
   "cta.start": { en: "Start free", ur: "مفت شروع کریں" },
@@ -247,6 +274,7 @@ export const UI = {
   "nav.features": { en: "Features", ur: "خصوصیات" },
   "nav.pricing": { en: "Pricing", ur: "قیمتیں" },
   "nav.contact": { en: "Contact", ur: "رابطہ" },
+  "nav.download": { en: "Download", ur: "ڈاؤن لوڈ" },
   "sec.tour": { en: "Everything a restaurant runs on, in one account", ur: "ریسٹورنٹ کی ہر ضرورت، ایک اکاؤنٹ میں" },
   "sec.pk": { en: "The details that only matter here, done right", ur: "پاکستان کی ضروریات، درست طریقے سے" },
   "sec.surfaces": { en: "Every screen your staff touch", ur: "آپ کے عملے کی ہر اسکرین" },

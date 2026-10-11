@@ -76,7 +76,7 @@ export function copyOrderType(rows: ConsumableRow[], from: string, to: string, k
 
 // ---- Import JSON ----
 
-/** Picks the import source from pasted or uploaded text: Servio's own export declares format "servio_json"; any other JSON is
+/** Picks the import source from pasted or uploaded text: EasAlpha's own export declares format "servio_json"; any other JSON is
  *  read as an ArfaPOS export; anything that is not JSON is treated as CSV. */
 export function detectImportSource(text: string): MenuImportSource {
   const t = text.trim();

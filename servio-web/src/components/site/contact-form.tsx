@@ -2,12 +2,12 @@
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
-import { mailtoLink } from "./site-helpers";
+import { CONTACT, mailtoLink, type SiteContact } from "./site-helpers";
 
 const TOPICS = ["Book a demo", "Pricing and plans", "Moving from another POS", "Help with my account", "Something else"];
 
 /** Opens the visitor's mail app with a prefilled message. No backend involved. */
-export function ContactForm() {
+export function ContactForm({ contact = CONTACT }: { contact?: SiteContact }) {
   const [name, setName] = useState("");
   const [restaurant, setRestaurant] = useState("");
   const [phone, setPhone] = useState("");
@@ -16,7 +16,7 @@ export function ContactForm() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const body = [`Name: ${name}`, `Restaurant: ${restaurant}`, `Phone: ${phone}`, "", message].join("\n");
-    window.location.href = mailtoLink(`${topic} - ${restaurant || name}`, body);
+    window.location.href = mailtoLink(`${topic} - ${restaurant || name}`, body, contact);
   };
   return (
     <form onSubmit={submit} className="space-y-4">

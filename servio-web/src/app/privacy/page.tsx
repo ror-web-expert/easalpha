@@ -1,23 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/shell";
-import { Container, PageHero, Prose } from "@/components/site/sections";
+import { Container, HeroStack, PageHero, Prose } from "@/components/site/sections";
+import { FileText, Lock, ShieldCheck } from "lucide-react";
 import { CONTACT } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
-  description: "How Servio handles your restaurant's data: what we store, who can see it, how you export it and how to have it deleted.",
+  description: "How EasAlpha handles your restaurant's data: what we store, who can see it, how you export it and how to have it deleted.",
   alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
   return (
     <SiteShell>
-      <PageHero eyebrow="Privacy policy" title="Your data stays yours"><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
+      <PageHero eyebrow="Privacy policy" title="Your data stays yours" visual={<HeroStack chips={[{ icon: ShieldCheck, title: "Your data stays yours", text: "never sold, never shared" }, { icon: Lock, title: "Encrypted", text: "in transit and at rest" }, { icon: FileText, title: "Plain language", text: "no legal maze" }]} />}><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
       <Container className="max-w-3xl py-16 sm:py-20">
         <div>
           <Prose>
-            <p>Servio is a point-of-sale and management service for restaurants. This page explains, in plain language, what data the service holds, who can see it and what you can ask us to do with it. It applies to the public website, the admin panel, the till, tablet, kitchen, rider and storefront apps and the WhatsApp gateway.</p>
+            <p>EasAlpha is a point-of-sale and management service for restaurants. This page explains, in plain language, what data the service holds, who can see it and what you can ask us to do with it. It applies to the public website, the admin panel, the till, tablet, kitchen, rider and storefront apps and the WhatsApp gateway.</p>
             <h2>What we store</h2>
             <ul>
               <li><strong>Your account:</strong> the owner&apos;s name, email, phone number and a hashed password. We never store the password itself.</li>
@@ -29,7 +30,7 @@ export default function PrivacyPage() {
             <h2>Who can see it</h2>
             <ul>
               <li>Your data belongs to your account. It is separated from other customers&apos; data at the database level, and only users you add, with the permissions you grant, can see it.</li>
-              <li>Servio staff access customer data only to fix a problem you have reported or to keep the service running, and that access is logged.</li>
+              <li>EasAlpha staff access customer data only to fix a problem you have reported or to keep the service running, and that access is logged.</li>
               <li>We do not sell data or share it with advertisers. We share it with third parties only where you have set up an integration (for example WhatsApp through Meta&apos;s Cloud API, Foodpanda, or tax filing to FBR or PRA) and only the data that integration needs.</li>
               <li>We use hosting and infrastructure providers to run the service. They process data on our instructions and do not use it for their own purposes.</li>
             </ul>

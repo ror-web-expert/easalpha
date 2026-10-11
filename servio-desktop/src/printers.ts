@@ -71,7 +71,7 @@ export async function print(job: PrintJob): Promise<PrintResult> {
 
 export function testPrintLines(printer: PrinterConfig, extra: string): PrintLine[] {
   return [
-    { text: "Servio POS", align: "center", bold: true, size: 2 },
+    { text: "EasAlpha POS", align: "center", bold: true, size: 2 },
     { text: "Test print", align: "center" },
     { divider: true },
     { text: `Printer: ${printer.name}` },
@@ -84,7 +84,7 @@ export function testPrintLines(printer: PrinterConfig, extra: string): PrintLine
     { text: "Right", align: "right" },
     { text: "Bold", bold: true },
     { text: "Large", size: 2 },
-    { qr: "https://servio.pk" },
+    { qr: "https://easalpha.com" },
     { text: "Non-ASCII prints as ? for now: ?????", align: "center" },
     { feed: 3 },
     { cut: true },

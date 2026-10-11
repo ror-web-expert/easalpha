@@ -1,5 +1,5 @@
 # The three SPEC presets for the permission editor: Cashier, Supervisor, Manager. Applying one fills a user's grants;
-# it is a shortcut, not a role. The seven role templates in RoleTemplate stay as Servio extras.
+# it is a shortcut, not a role. The seven role templates in RoleTemplate stay as EasAlpha extras.
 module PermissionPreset
   CASHIER = %w[
     DASHBOARD VIEW_DAILY_SALES OFFLINE_ORDERS PRINTERS

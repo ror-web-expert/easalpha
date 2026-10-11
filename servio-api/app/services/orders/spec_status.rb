@@ -1,6 +1,6 @@
 module Orders
   # SPEC statuses (Pending, Preparing, Ready, Dispatched, Completed, Cancelled; Open = the first four) and SPEC payment
-  # statuses (Paid, Pending, Unpaid, Account, Complimentary) read over Servio's finer internal states, which stay as extras.
+  # statuses (Paid, Pending, Unpaid, Account, Complimentary) read over EasAlpha's finer internal states, which stay as extras.
   module SpecStatus
     STATUS_MAP = {
       "pending" => %w[draft held placed], "preparing" => %w[preparing], "ready" => %w[ready served], "dispatched" => %w[dispatched],

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/shell";
-import { CtaBand, FaqList, PageHero, Section, SectionHeading } from "@/components/site/sections";
+import { CtaBand, FaqList, HeroStack, PageHero, Section, SectionHeading } from "@/components/site/sections";
+import { BadgeCheck, Banknote, CalendarCheck } from "lucide-react";
 import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: `Servio plans in PKR and USD: Starter Rs 2,500, Pro Rs 4,999 and Business Rs 8,999 a month. Yearly billing is ten months' price. Every plan starts with a ${TRIAL_DAYS}-day free trial.`,
+  description: `EasAlpha plans in PKR and USD: Starter Rs 2,500, Pro Rs 4,999 and Business Rs 8,999 a month. Yearly billing is ten months' price. Every plan starts with a ${TRIAL_DAYS}-day free trial.`,
   alternates: { canonical: "/pricing" },
 };
 
@@ -25,7 +26,8 @@ const FAQ = [
 export default function PricingPage() {
   return (
     <SiteShell>
-      <PageHero eyebrow="Pricing" title="Plans that grow with your restaurant" text={`Prices in rupees, no per-order fees, and every plan starts with a ${TRIAL_DAYS}-day free trial. No card needed to begin.`} />
+      <PageHero eyebrow="Pricing" title="Plans that grow with your restaurant" text={`Prices in rupees, no per-order fees, and every plan starts with a ${TRIAL_DAYS}-day free trial. No card needed to begin.`} 
+        visual={<HeroStack chips={[{ icon: CalendarCheck, title: `${TRIAL_DAYS}-day free trial`, text: "every plan, every feature" }, { icon: Banknote, title: "Prices in rupees", text: "no per-order fees" }, { icon: BadgeCheck, title: "Cancel any time", text: "no contract, no card to start" }]} />} />
       <Section className="pt-16 sm:pt-20 lg:pt-24">
         <PricingTable />
         <p className="mt-6 text-center text-sm text-slate-500">Prices exclude sales tax where it applies. USD prices are for customers billed outside Pakistan.</p>
@@ -33,7 +35,7 @@ export default function PricingPage() {
       <Section tone="tint">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr]">
           <div>
-            <SectionHeading align="left" eyebrow="Billing questions" title="How paying for Servio works" />
+            <SectionHeading align="left" eyebrow="Billing questions" title="How paying for EasAlpha works" />
             <p className="mt-6 text-slate-600">Something specific? <Link href="/contact" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Ask us</Link>, we reply the same day.</p>
           </div>
           <FaqList items={FAQ} />

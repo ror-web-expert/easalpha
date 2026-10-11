@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Manual-style smoke test for the Servio API, driven by curl. Run against a server started with:
+# Manual-style smoke test for the EasAlpha API, driven by curl. Run against a server started with:
 #   cd servio-api && bin/rails s -p 3001
 # Usage: scripts/smoke/phase1.sh [http://localhost:3001]
 set -u

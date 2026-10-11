@@ -5,7 +5,7 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
   let(:biz) { owner.business }
   let(:headers) { auth_headers(owner) }
 
-  it "shows the plan, usage and invoices, lets the owner choose a plan, report payment, and Servio confirms it" do
+  it "shows the plan, usage and invoices, lets the owner choose a plan, report payment, and EasAlpha confirms it" do
     get "/api/v1/billing", headers: headers
     expect(response).to have_http_status(:ok)
     expect(json[:plans].map { |p| p[:code] }).to eq(%w[starter pro business])

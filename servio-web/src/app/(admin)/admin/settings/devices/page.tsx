@@ -23,7 +23,7 @@ export default function DevicesPage() {
   const remove = useRemove(["devices"], (id) => `/devices/${id}`, "Device revoked");
   return (
     <>
-      <PageHeader icon={MonitorSmartphone} title="Devices" description="Tills, tablets, kitchen displays and token screens paired to a branch." actions={<Button onClick={() => setForm({ name: "", kind: "till", branch_id: branches.data?.[0]?.id ?? "", station_id: "" })}><Plus className="h-4 w-4" /> New device</Button>} />
+      <PageHeader icon={MonitorSmartphone} title="Devices" description="Tills, tablets, kitchen displays, token screens and rider phones. Quickest: open /setup on the machine itself and sign in as a manager; the code below is the fallback." actions={<Button onClick={() => setForm({ name: "", kind: "till", branch_id: branches.data?.[0]?.id ?? "", station_id: "" })}><Plus className="h-4 w-4" /> New device</Button>} />
       {list.isLoading ? <Loading /> : (
         <Table>
           <THead><tr><TH>Device</TH><TH>Kind</TH><TH>Branch</TH><TH>Status</TH><TH>Pairing code</TH><TH>Last seen</TH><TH>Last sync</TH><TH right>Actions</TH></tr></THead>

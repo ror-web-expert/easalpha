@@ -1,10 +1,10 @@
-# Servio: Design System and Colour Scheme
+# EasAlpha: Design System and Colour Scheme
 
 Date: 8 Oct 2026. Source: the blueprint's UI and UX guidelines, the ArfaPOS audit, and a validated chart palette.
 
 > **10 Oct 2026: `SPEC.md` is the requirement.** Where this file differs from `SPEC.md`, `SPEC.md` wins. The differences are listed in `PDF-ALIGNMENT.md`; the extras in this file stay. The text before this change is kept in `archive/before-spec-2026-10-10/`.
 
-> `SPEC.md` does not change Servio's design: the PDF says the clone keeps its own look. It asks for one chart library and one palette everywhere, and these shared admin patterns: a filter bar with its state in the URL, a KPI tile row, a data table with server-side paging, sorting and CSV or PDF export, a right-hand detail drawer with tabs, a multi-step form with a section rail, and an empty state with a primary action.
+> `SPEC.md` does not change EasAlpha's design: the PDF says the clone keeps its own look. It asks for one chart library and one palette everywhere, and these shared admin patterns: a filter bar with its state in the URL, a KPI tile row, a data table with server-side paging, sorting and CSV or PDF export, a right-hand detail drawer with tabs, a multi-step form with a section rail, and an empty state with a primary action.
 >
 > Colours: on 10 Oct 2026 the owner chose Material Design 3 with a blue primary (seed #1A73E8, primary #005BBF) and Roboto, and the app uses it. The teal palette and Inter font below are out of date.
 
@@ -25,7 +25,7 @@ One design system serves two very different screens: the till is built for speed
 
 ## 2. Colour scheme (superseded on 10 Oct 2026 by Material Design 3, blue primary; kept as the original proposal)
 
-Brand primary is **teal 600**, chosen over indigo so Servio does not look like ArfaPOS, which is indigo and purple. The accent is **amber 500**, used for highlights and the order-type switch, never for buttons.
+Brand primary is **teal 600**, chosen over indigo so EasAlpha does not look like ArfaPOS, which is indigo and purple. The accent is **amber 500**, used for highlights and the order-type switch, never for buttons.
 
 ### 2.1 Brand
 

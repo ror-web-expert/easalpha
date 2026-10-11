@@ -9,7 +9,7 @@ import { titleCase } from "@/lib/utils";
 export const SPEC_STATUSES: SpecStatus[] = ["pending", "preparing", "ready", "dispatched", "completed", "cancelled"];
 export const SPEC_PAYMENT_STATUSES: SpecPaymentStatus[] = ["paid", "pending", "unpaid", "account", "complimentary"];
 export const ORDER_TYPES = ["walk_in", "takeaway", "delivery", "dine_in"] as const;
-/** SPEC sources: Counter (POS), Website, Mobile App, QR Table and the Online Orders bucket, plus Servio's extra channels. */
+/** SPEC sources: Counter (POS), Website, Mobile App, QR Table and the Online Orders bucket, plus EasAlpha's extra channels. */
 export const ORDER_SOURCES: { value: string; label: string }[] = [
   { value: "till", label: "Counter (POS)" }, { value: "online", label: "Website" }, { value: "app", label: "Mobile App" }, { value: "qr", label: "QR Table" },
   { value: "phone", label: "Phone" }, { value: "foodpanda", label: "Foodpanda" }, { value: "kiosk", label: "Kiosk" },

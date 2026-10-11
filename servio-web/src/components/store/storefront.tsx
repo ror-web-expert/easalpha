@@ -1,17 +1,23 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MapPin, Phone, Mail, MessageCircle, Star, Clock, Store as StoreIcon } from "lucide-react";
+import { MapPin, Phone, Mail, MessageCircle, Star, Clock, Store as StoreIcon, Plus } from "lucide-react";
 import { api, ApiError, errorMessage } from "@/lib/api";
-import type { Storefront } from "@/lib/types";
+import type { Storefront, StorefrontProduct } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
-import { titleCase } from "@/lib/utils";
+import { cn, titleCase } from "@/lib/utils";
 import { averageRatingLabel, RATING_WORDS, ratingWord, readableOn } from "@/components/admin/marketing-helpers";
+import { useStorefrontCart } from "@/store/storefront-cart";
+import { deliveryLine, lineKey, ratingBadge, type DeliverySettings } from "./cart-helpers";
+import { DishImage } from "./dish-placeholder";
+import { CartBar, CartSheet, QtyStepper, type CartSheetView } from "./cart-sheet";
 
 // Public, mobile-first storefront driven by Website Config: identity header in the theme colour, the online menu by
-// category, contact and social links, and reviews with a Leave a review form (SPEC: reviews come in from the website).
+// category with Add buttons feeding a persisted cart (cart-sheet.tsx handles checkout and live tracking), contact and
+// social links, and reviews with a Leave a review form (SPEC: reviews come in from the website).
 // No admin shell and no auth token: the API's /public/storefront/:slug is open.
+// Deep link: /store/:slug?order=<id>&token=<guest_token> opens the tracking view for that order.
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const bool = (v: unknown): boolean => v === true;
@@ -28,6 +34,25 @@ export function StorefrontNotFound({ slug }: { slug: string }) {
       <p className="text-sm text-fg-secondary">There is no live site at <span className="font-mono">/store/{slug}</span>. If this is your business, open Settings, then Website Config, and turn on Published.</p>
     </main>
   );
+}
+
+/** Browser tab: the site name and, when Website Config has one, its favicon (identity.favicon_key) instead of EasAlpha's. */
+export function useStorefrontTab(title: string, favicon: string | null) {
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = title;
+    const existing = Array.from(document.head.querySelectorAll<HTMLLinkElement>("link[rel~='icon']"));
+    let added: HTMLLinkElement | null = null;
+    if (favicon) {
+      existing.forEach((l) => { l.dataset.storefrontHidden = l.getAttribute("href") ?? ""; l.setAttribute("href", favicon); });
+      if (!existing.length) { added = document.createElement("link"); added.rel = "icon"; added.href = favicon; document.head.appendChild(added); }
+    }
+    return () => {
+      document.title = prevTitle;
+      existing.forEach((l) => { if (l.dataset.storefrontHidden !== undefined) { l.setAttribute("href", l.dataset.storefrontHidden); delete l.dataset.storefrontHidden; } });
+      added?.remove();
+    };
+  }, [title, favicon]);
 }
 
 export function StorefrontView({ slug, data }: { slug: string; data: Storefront }) {
@@ -49,13 +74,37 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
   const name = str(identity.name) || data.business.name;
   const logo = str(identity.logo_key) || data.business.logo_key;
   const cover = str(identity.cover_key);
+  useStorefrontTab(str(identity.name) || data.business.name, str(identity.favicon_key) || null);
   const byCategory = useMemo(() => data.categories.map((c) => ({ ...c, products: data.products.filter((p) => p.category_id === c.id) })).filter((c) => c.products.length), [data]);
   const socialLinks = Object.entries(social).filter(([, v]) => typeof v === "string" && v);
-  const waNumber = str(wa.number) || str(contact.whatsapp);
+  const waNumber = str(wa.number) || str(contact.whatsapp) || (data.business.phone ?? ""); // Branding: blank uses the business WhatsApp
   const waHref = waNumber ? `https://wa.me/${waNumber.replace(/[^0-9]/g, "")}${str(wa.greeting) ? `?text=${encodeURIComponent(str(wa.greeting))}` : ""}` : null;
   const footerLinks = Array.isArray(footer.links) ? (footer.links as unknown[]) : [];
+  const rating = ratingBadge(data.reviews.summary);
+  const closedMessage = bool(system.maintenance) ? "We are doing some maintenance. Ordering is paused for a short while." : str(availability.closed_message) || "Online ordering is closed right now.";
+  const canOrder = availability.online_ordering !== false && !bool(system.maintenance);
+
+  // Cart: rehydrate from localStorage after mount (no SSR mismatch), bind it to this slug, then honour a tracking deep link.
+  const [sheet, setSheet] = useState<CartSheetView | null>(null);
+  const cartCount = useStorefrontCart((s) => (s.hydrated ? s.lines.length : 0));
+  const hasLastOrder = useStorefrontCart((s) => s.hydrated && !!s.lastOrder);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(useStorefrontCart.persist.rehydrate()).then(() => {
+      if (cancelled) return;
+      const st = useStorefrontCart.getState();
+      st.setSlug(slug);
+      const params = new URLSearchParams(window.location.search);
+      const order = params.get("order");
+      const token = params.get("token");
+      if (order && token) { st.setLastOrder({ id: order, guest_token: token }); setSheet("tracking"); }
+    });
+    return () => { cancelled = true; };
+  }, [slug]);
+  const closeSheet = useCallback(() => setSheet(null), []);
+  const barVisible = cartCount > 0 || hasLastOrder;
   return (
-    <main className="min-h-screen bg-page text-fg" style={{ ["--primary" as string]: theme, ["--primary-fg" as string]: onTheme, ["--primary-hover" as string]: theme }}>
+    <main className={cn("min-h-screen bg-page text-fg", barVisible ? "pb-24" : "")} style={{ ["--primary" as string]: theme, ["--primary-fg" as string]: onTheme, ["--primary-hover" as string]: theme }}>
       {bool(system.maintenance) ? <div className="bg-warning px-4 py-2 text-center text-sm text-warning-fg">We are doing some maintenance. Ordering is paused for a short while.</div> : null}
       <header className="text-primary-fg" style={{ backgroundColor: theme, color: onTheme, ["--heading-color" as string]: onTheme }}>
         {cover ? (
@@ -65,12 +114,21 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
         <div className="mx-auto flex max-w-2xl items-center gap-4 px-4 py-5">
           {logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={logo} alt={`${name} logo`} className="h-16 w-16 shrink-0 rounded-full border-2 border-white/40 bg-white object-cover" />
+            <img src={logo} alt={`${name} logo`} className="h-16 w-16 shrink-0 rounded-full border-2 border-white/40 bg-white object-contain p-1" />
           ) : <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-white/20 text-2xl font-bold">{name.charAt(0)}</span>}
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-medium leading-8">{name}</h1>
             {str(identity.description) ? <p className="mt-0.5 text-sm opacity-90">{str(identity.description)}</p> : null}
-            {data.branch?.hours ? <p className="mt-1 flex items-center gap-1 text-xs opacity-80"><Clock className="h-3.5 w-3.5" /> {data.branch.hours}</p> : null}
+            {data.branch?.hours || rating ? (
+              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs opacity-90">
+                {data.branch?.hours ? <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {data.branch.hours}</span> : null}
+                {rating ? (
+                  pages.reviews !== false
+                    ? <a href="#reviews" className="inline-flex items-center gap-1 underline-offset-4 hover:underline" aria-label={`Rated ${rating.average} out of 5 from ${rating.reviews}`}><Star className="h-3.5 w-3.5 fill-current" /> <span className="font-semibold">{rating.average}</span> · {rating.reviews}</a>
+                    : <span className="inline-flex items-center gap-1" aria-label={`Rated ${rating.average} out of 5 from ${rating.reviews}`}><Star className="h-3.5 w-3.5 fill-current" /> <span className="font-semibold">{rating.average}</span> · {rating.reviews}</span>
+                ) : null}
+              </p>
+            ) : null}
           </div>
         </div>
         <nav className="mx-auto flex max-w-2xl gap-4 overflow-x-auto px-4 pb-3 text-sm font-medium">
@@ -82,14 +140,8 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
       </header>
 
       <div className="mx-auto max-w-2xl space-y-8 px-4 py-6">
-        {availability.online_ordering === false ? <p className="rounded-xl bg-muted px-4 py-3 text-sm text-fg-secondary">{str(availability.closed_message) || "Online ordering is closed right now."}</p> : null}
-        {bool(delivery.enabled) ? (
-          <p className="text-xs text-fg-secondary">
-            Delivery{typeof delivery.eta_minutes === "number" ? ` in about ${delivery.eta_minutes} minutes` : ""}
-            {typeof delivery.min_order_minor === "number" && delivery.min_order_minor > 0 ? ` · minimum order ${formatMoney(delivery.min_order_minor)}` : ""}
-            {typeof delivery.free_above_minor === "number" ? ` · free above ${formatMoney(delivery.free_above_minor)}` : ""}
-          </p>
-        ) : null}
+        {!canOrder ? <p className="rounded-xl bg-muted px-4 py-3 text-sm text-fg-secondary">{closedMessage}</p> : null}
+        {bool(delivery.enabled) ? <p className="text-xs text-fg-secondary">{deliveryLine(delivery as DeliverySettings, data.business.currency)}</p> : null}
 
         {pages.about && str(identity.description) ? <section id="about"><h2 className="mb-2 text-lg font-medium">About</h2><p className="text-sm text-fg-secondary">{str(identity.description)}</p></section> : null}
 
@@ -103,19 +155,7 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
                     <h3 className="mb-2 text-base font-medium" style={{ color: theme }}>{c.name}</h3>
                     {c.subtitle ? <p className="-mt-1 mb-2 text-xs text-fg-secondary">{c.subtitle}</p> : null}
                     <ul className="divide-y rounded-xl border bg-card">
-                      {c.products.map((p) => (
-                        <li key={p.id} className="flex gap-3 px-4 py-3">
-                          {p.image_key ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.image_key} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
-                          ) : null}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{p.name}</span>{showPrices && !p.variants.length ? <span className="tabular whitespace-nowrap">{formatMoney(p.price_minor, data.business.currency)}</span> : null}</div>
-                            {p.description ? <p className="mt-0.5 text-xs text-fg-secondary">{p.description}</p> : null}
-                            {p.variants.length ? <ul className="mt-1 space-y-0.5 text-xs text-fg-secondary">{p.variants.map((v) => <li key={v.id} className="flex justify-between gap-3"><span>{v.name}</span>{showPrices ? <span className="tabular">{formatMoney(v.price_minor, data.business.currency)}</span> : null}</li>)}</ul> : null}
-                          </div>
-                        </li>
-                      ))}
+                      {c.products.map((p) => <MenuRow key={p.id} product={p} currency={data.business.currency} showPrices={showPrices} canOrder={canOrder} theme={theme} onTheme={onTheme} />)}
                     </ul>
                   </div>
                 ))}
@@ -148,11 +188,77 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
         <div className="mx-auto max-w-2xl space-y-2 px-4 py-6 text-xs text-fg-secondary">
           {str(footer.text) ? <p>{str(footer.text)}</p> : null}
           {footerLinks.length ? <p className="flex flex-wrap gap-3">{footerLinks.map((l, i) => { const o = typeof l === "object" && l ? (l as { label?: string; url?: string }) : { label: String(l), url: String(l) }; return <a key={i} href={o.url ?? "#"} className="underline-offset-4 hover:underline">{o.label ?? o.url}</a>; })}</p> : null}
-          <p>{name}. Powered by Servio.</p>
+          <p>{name}. Powered by EasAlpha.</p>
         </div>
       </footer>
-      {wa.show_button !== false && waHref ? <a href={waHref} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className="fixed bottom-5 right-5 grid h-14 w-14 place-items-center rounded-full shadow-[var(--shadow-pop)]" style={{ backgroundColor: theme, color: onTheme }}><MessageCircle className="h-7 w-7" /></a> : null}
+      {wa.show_button !== false && waHref ? (
+        // Sits above the cart bar when the bar is showing so neither covers the other.
+        <a href={waHref} target="_blank" rel="noreferrer" aria-label="Chat on WhatsApp" className={cn("help-glow fixed right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-cta pl-3 pr-4 text-sm font-semibold text-cta-fg transition-[background-color,bottom] hover:bg-cta-hover sm:right-6", barVisible ? "bottom-24 sm:bottom-28" : "bottom-4 sm:bottom-6")}>
+          <MessageCircle className="h-5 w-5" />
+          <span>{str(wa.button_label).trim() || "Need help?"}</span>
+        </a>
+      ) : null}
+      <CartBar currency={data.business.currency} theme={theme} onTheme={onTheme} onOpen={setSheet} />
+      <CartSheet slug={slug} data={data} open={sheet !== null} view={sheet ?? "cart"} onViewChange={setSheet} onClose={closeSheet} theme={theme} onTheme={onTheme} canOrder={canOrder} closedMessage={closedMessage} />
     </main>
+  );
+}
+
+/** One menu row: picture (or the placeholder), name, price, description, variants, and the Add button or stepper. */
+function MenuRow({ product: p, currency, showPrices, canOrder, theme, onTheme }: { product: StorefrontProduct; currency: string; showPrices: boolean; canOrder: boolean; theme: string; onTheme: string }) {
+  const hydrated = useStorefrontCart((s) => s.hydrated);
+  const lines = useStorefrontCart((s) => s.lines);
+  const add = useStorefrontCart((s) => s.add);
+  const increment = useStorefrontCart((s) => s.increment);
+  const decrement = useStorefrontCart((s) => s.decrement);
+  const [picker, setPicker] = useState(false);
+  const qtyOf = (variantId: string | null) => (hydrated ? lines.find((l) => l.key === lineKey(p.id, variantId))?.quantity ?? 0 : 0);
+  const hasVariants = p.variants.length > 0;
+  const totalQty = hasVariants ? p.variants.reduce((n, v) => n + qtyOf(v.id), 0) : qtyOf(null);
+  const pickerOpen = hasVariants && (picker || totalQty > 0);
+  const addButton = (onClick: () => void, label = "Add") => (
+    <button type="button" onClick={onClick} aria-label={`${label} ${p.name}`} className="inline-flex h-9 items-center gap-1 rounded-full px-4 text-sm font-semibold transition-[filter] hover:brightness-110" style={{ backgroundColor: theme, color: onTheme }}>
+      <Plus className="h-4 w-4" /> {label}
+    </button>
+  );
+  return (
+    <li className="flex gap-3 px-4 py-3">
+      <DishImage src={p.image_key} color={theme} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-3"><span className="font-medium">{p.name}</span>{showPrices && !hasVariants ? <span className="tabular whitespace-nowrap">{formatMoney(p.price_minor, currency)}</span> : null}</div>
+        {p.description ? <p className="mt-0.5 text-xs text-fg-secondary">{p.description}</p> : null}
+        {hasVariants ? (
+          <ul className={cn("mt-1 text-xs text-fg-secondary", pickerOpen ? "space-y-1.5" : "space-y-0.5")}>
+            {p.variants.map((v) => {
+              const q = qtyOf(v.id);
+              return (
+                <li key={v.id} className="flex items-center justify-between gap-3">
+                  <span className={cn(pickerOpen && canOrder ? "text-fg" : "")}>{v.name}{showPrices ? <span className="tabular text-fg-secondary"> · {formatMoney(v.price_minor, currency)}</span> : null}</span>
+                  {pickerOpen && canOrder ? (
+                    q ? (
+                      <QtyStepper size="sm" theme={theme} quantity={q} label={`${p.name} ${v.name}`} onIncrement={() => increment(lineKey(p.id, v.id))} onDecrement={() => decrement(lineKey(p.id, v.id))} />
+                    ) : (
+                      <button type="button" onClick={() => add({ product_id: p.id, variant_id: v.id, name: p.name, variant_name: v.name, unit_minor: v.price_minor })} aria-label={`Add ${p.name} ${v.name}`} className="inline-flex h-8 items-center gap-1 rounded-full border-2 px-3 text-xs font-semibold hover:bg-fg/8" style={{ borderColor: theme, color: theme }}><Plus className="h-3.5 w-3.5" /> Add</button>
+                    )
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
+      {canOrder ? (
+        <div className="flex shrink-0 flex-col items-end justify-center">
+          {hasVariants ? (
+            pickerOpen ? (
+              totalQty ? <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: `${theme}1a`, color: theme }}>{totalQty} in cart</span> : <button type="button" onClick={() => setPicker(false)} className="text-xs text-fg-secondary underline-offset-4 hover:underline">Close</button>
+            ) : addButton(() => setPicker(true), "Choose")
+          ) : totalQty ? (
+            <QtyStepper theme={theme} quantity={totalQty} label={p.name} onIncrement={() => increment(lineKey(p.id, null))} onDecrement={() => decrement(lineKey(p.id, null))} />
+          ) : addButton(() => add({ product_id: p.id, variant_id: null, name: p.name, variant_name: null, unit_minor: p.price_minor }))}
+        </div>
+      ) : null}
+    </li>
   );
 }
 

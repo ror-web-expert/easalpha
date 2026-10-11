@@ -1,6 +1,6 @@
-# Servio: local logins and URLs
+# EasAlpha: local logins and URLs
 
-Demo data for local testing only. Updated 9 Oct 2026.
+Demo data for local testing only. Updated 11 Oct 2026. These are the base seed values (`db:seed`). After `bin/rails demo:rich` or `scripts/dev-up.sh` the extra devices and PINs (kitchen 3333, rider 2222, one-use pairing codes) are listed in `docs/TESTING-GUIDE.md`.
 
 ## URLs
 
@@ -18,8 +18,8 @@ Demo data for local testing only. Updated 9 Oct 2026.
 
 | Role | Email | Password | PIN |
 |---|---|---|---|
-| Owner | demo@servio.pk | password123 | none |
-| Manager | manager@servio.pk | password123 | 9999 |
+| Owner | demo@easalpha.com | password123 | none |
+| Manager | manager@easalpha.com | password123 | 9999 |
 
 ## Till and kitchen staff (PIN login on a paired device)
 
@@ -39,6 +39,8 @@ Demo data for local testing only. Updated 9 Oct 2026.
 If a code no longer works, open Admin, Devices, and press "Regenerate code". The trial plan allows 3 tills.
 
 ## How to use the till
+
+Quickest: open http://localhost:3000/setup, sign in as demo@easalpha.com, choose Till and press Open. With a code instead:
 
 1. Open http://localhost:3000/pos/pair and enter 123456.
 2. Enter cashier PIN 1111.

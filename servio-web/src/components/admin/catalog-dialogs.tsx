@@ -122,7 +122,7 @@ export function ProductCodesDialog({ open, onClose }: { open: boolean; onClose: 
 
 // ---- Import JSON (POST /menu/import/preview then /menu/import/apply) ----
 
-const SOURCE_LABELS: Record<MenuImportSource, string> = { servio_json: "Servio export", arfapos_json: "ArfaPOS JSON", csv: "CSV" };
+const SOURCE_LABELS: Record<MenuImportSource, string> = { servio_json: "EasAlpha export", arfapos_json: "ArfaPOS JSON", csv: "CSV" };
 
 export function ImportMenuDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
@@ -161,7 +161,7 @@ export function ImportMenuDialog({ open, onClose }: { open: boolean; onClose: ()
   };
   const shown = preview?.rows.slice(0, 200) ?? [];
   return (
-    <Dialog open={open} onClose={onClose} title="Import JSON" description="Load a menu in bulk from a Servio export, an ArfaPOS JSON export or a CSV. Preview first, then apply." size="xl"
+    <Dialog open={open} onClose={onClose} title="Import JSON" description="Load a menu in bulk from a EasAlpha export, an ArfaPOS JSON export or a CSV. Preview first, then apply." size="xl"
       footer={result ? <Button onClick={onClose}>Done</Button> : <>
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         {preview ? <Button onClick={apply} loading={busy === "apply"} disabled={!preview.valid_count}>Apply {preview.valid_count} row{preview.valid_count === 1 ? "" : "s"}</Button>

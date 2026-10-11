@@ -27,7 +27,7 @@ module Api
       end
 
       def test
-        n = Push::Notifier.to_memberships([ current_membership.id ], title: "Servio test notification", body: "Push notifications are working on this device.", url: "/admin/settings/notifications", kind: "test")
+        n = Push::Notifier.to_memberships([ current_membership.id ], title: "EasAlpha test notification", body: "Push notifications are working on this device.", url: "/admin/settings/notifications", kind: "test")
         render json: { sent: n }, status: :accepted
       end
 

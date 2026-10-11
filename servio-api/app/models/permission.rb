@@ -1,9 +1,9 @@
 # Permission registry: the only source of valid codes.
 #
 # Two families live here. SPEC codes (UPPER_SNAKE, from docs/SPEC.md "The permission set") carry a module, a surface
-# (software = desktop POS, app = tablet, both) and a restriction flag. Servio codes (dotted) are the earlier set that
-# the controllers check. Each SPEC code lists the Servio codes it implies, so granting a SPEC code keeps every existing
-# check working; the reverse holds when all of a SPEC code's implied Servio codes are granted.
+# (software = desktop POS, app = tablet, both) and a restriction flag. EasAlpha codes (dotted) are the earlier set that
+# the controllers check. Each SPEC code lists the EasAlpha codes it implies, so granting a SPEC code keeps every existing
+# check working; the reverse holds when all of a SPEC code's implied EasAlpha codes are granted.
 module Permission
   Entry = Struct.new(:code, :module_name, :label, :description, :surface, :restriction, :implies, keyword_init: true) do
     def spec? = code == code.upcase
@@ -11,7 +11,7 @@ module Permission
   end
 
   SURFACES = %w[software app both].freeze
-  SERVIO_MODULE = "Servio extras".freeze
+  SERVIO_MODULE = "EasAlpha extras".freeze
 
   SERVIO = {
     "app.admin" => "Open the admin panel",
@@ -124,7 +124,7 @@ module Permission
   ].freeze
 
   MODULES = SPEC_ROWS.map(&:first).uniq.freeze
-  # SPEC codes that must be granted explicitly: a role's Servio codes never imply them in reverse.
+  # SPEC codes that must be granted explicitly: a role's EasAlpha codes never imply them in reverse.
   EXPLICIT_ONLY = %w[REOPEN_ORDER DELETE_ORDER_ITEM MODIFY_REOPEN_DECREASE_QTY PLACE_UNPAID_DIRECT PLACE_AND_COMPLETE_ORDER].freeze
 
   REGISTRY = (
@@ -144,7 +144,7 @@ module Permission
   def self.grantable_codes = codes - restriction_codes
   def self.entry(code) = REGISTRY[code.to_s]
 
-  # Granted codes plus the Servio codes they imply. A set holding only Servio codes (a role) also gets the SPEC codes
+  # Granted codes plus the EasAlpha codes they imply. A set holding only EasAlpha codes (a role) also gets the SPEC codes
   # it fully covers, so existing roles show up ticked in the editor; a per-user set is taken as given.
   def self.expand(codes)
     set = codes.map(&:to_s).to_set

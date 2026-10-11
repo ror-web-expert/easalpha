@@ -1,6 +1,6 @@
 class AuditLog < ApplicationRecord
   # Not Tenanted: platform events have no business. Queries always filter by business_id explicitly.
-  # SPEC actions first, then the Servio extras the controllers write.
+  # SPEC actions first, then the EasAlpha extras the controllers write.
   ACTIONS = %w[create update delete bulk_update bulk_delete cancel receive status_change ledger_debit ledger_credit
                void refund discount price_change permission_change login logout pin_login pin_failed export settings_change
                pair_device revoke_device approve].freeze

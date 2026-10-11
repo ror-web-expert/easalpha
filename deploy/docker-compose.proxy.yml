@@ -1,0 +1,18 @@
+# For a server where Caddy (or another TLS proxy) already runs in Docker and holds ports 80/443: web and api join the
+# proxy's network and publish no host ports, so the proxy reaches them by service name (servio-web:3000, servio-api:3001).
+# The network name is PROXY_NETWORK in .env (default "kamal", the network Caddy and kamal-proxy share on easalpha's server).
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml:docker-compose.proxy.yml   (in .env, then plain "docker compose up -d")
+# Proxy snippet for Caddy: Caddyfile.easalpha next to this file.
+services:
+  api:
+    container_name: servio-api
+    ports: !reset []
+    networks: [default, proxy]
+  web:
+    container_name: servio-web
+    ports: !reset []
+    networks: [default, proxy]
+networks:
+  proxy:
+    name: ${PROXY_NETWORK:-kamal}
+    external: true

@@ -15,7 +15,10 @@ module Api
         def show
           b = Business.find(params[:id])
           Tenancy::Context.with(b) do
-            render json: Serializers.business(b).merge(branches: Branch.all.map { |br| Serializers.branch(br) }, devices: Device.count, staff: Membership.active.count)
+            render json: Serializers.business(b).merge(branches: Branch.all.map { |br| Serializers.branch(br) }, devices: Device.count, staff: Membership.active.count,
+                                                      orders_30_days: Order.where("created_at > ?", 30.days.ago).count, last_order_at: Order.maximum(:created_at),
+                                                      open_support_requests: SupportRequest.where(status: "open").count,
+                                                      support_sessions: SupportSession.order(created_at: :desc).limit(5).map { |s| { id: s.id, reason: s.reason, status: s.status, expires_at: s.expires_at, active: s.active?, created_at: s.created_at } })
           end
         end
 
@@ -26,11 +29,18 @@ module Api
           render json: Serializers.business(b)
         end
 
+        def plans
+          render json: { data: Plan.order(:sort_order, :code).map { |pl| { id: pl.id, code: pl.code, name: pl.name, price_pkr_minor: pl.price_pkr_minor, active: pl.active, limits: pl.limits } } }
+        end
+
         def stats
           render json: {
             businesses: Business.group(:status).count,
             signups_last_30_days: Business.where("created_at > ?", 30.days.ago).count,
-            plans: Business.joins(:plan).group("plans.code").count
+            plans: Business.joins(:plan).group("plans.code").count,
+            open_support_requests: SupportRequest.where(status: "open").count,
+            pending_support_sessions: SupportSession.where(status: "requested").count,
+            orders_today: Order.where(business_day: Date.current).count
           }
         end
       end

@@ -36,8 +36,8 @@ fi
 for p in 3001 3010 3000; do until up $p; do sleep 1; done; done
 cat <<MSG
 
-Servio is up.
-  Admin panel      http://localhost:3000/login      demo@servio.pk / password123
+EasAlpha is up.
+  Admin panel      http://localhost:3000/login      demo@easalpha.com / password123
   POS / tablet     http://localhost:3000/pos        pair from Settings, Signed-in devices; cashier PIN 1111, manager PIN 9999
   Kitchen display  http://localhost:3000/kitchen    kitchen PIN 3333
   Rider app        http://localhost:3000/rider      rider PIN 2222

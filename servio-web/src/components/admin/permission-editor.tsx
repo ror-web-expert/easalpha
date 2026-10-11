@@ -28,7 +28,7 @@ export function applyPreset(preset: Pick<PermissionPreset, "codes">): string[] {
   return Array.from(new Set(preset.codes));
 }
 
-/** "Select all" ticks every SPEC code (restrictions included); Servio extras are left as they are. */
+/** "Select all" ticks every SPEC code (restrictions included); EasAlpha extras are left as they are. */
 export function selectAll(registry: Permission[], selection: string[]): string[] {
   const spec = registry.filter((p) => p.spec).map((p) => p.code);
   const extras = selection.filter((c) => !spec.includes(c) && registry.some((p) => p.code === c && !p.spec));
@@ -44,7 +44,7 @@ export function moduleCounts(registry: PermissionRegistry, selection: string[]):
   });
 }
 
-/** Codes the selection implies but does not list itself (SPEC codes imply Servio codes). */
+/** Codes the selection implies but does not list itself (SPEC codes imply EasAlpha codes). */
 export function impliedBy(registry: Permission[], selection: string[]): Set<string> {
   const set = new Set(selection);
   const out = new Set<string>();

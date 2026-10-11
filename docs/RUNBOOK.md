@@ -1,6 +1,6 @@
-# Servio runbook
+# EasAlpha runbook
 
-How to run everything that exists today, test it, and find your way around. Updated 9 Oct 2026.
+How to run everything that exists today, test it, and find your way around. Updated 11 Oct 2026. Installation from scratch (Ubuntu, Mac, Docker server, desktop installers, automatic builds) is in `SETUP.md`.
 
 ## Services
 
@@ -12,7 +12,7 @@ How to run everything that exists today, test it, and find your way around. Upda
 | Web app (admin, till, kitchen, token, queue) | `cd servio-web && NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1 pnpm dev` | 3000 |
 | Both API and jobs together | `cd servio-api && bin/dev` | 3001 |
 
-Environment variables for the API (all optional in development): `PGHOST PGPORT PGUSER PGPASSWORD`, `CORS_ORIGINS`, `WHATSAPP_ACCESS_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_VERIFY_TOKEN WHATSAPP_APP_SECRET`, `TAX_FBR_URL TAX_PRA_URL`, `PADDLE_WEBHOOK_SECRET`, `BILLING_JAZZCASH BILLING_EASYPAISA BILLING_BANK`, `SERVIO_APP_DB_PASSWORD` (the non-superuser database role that Row-Level Security applies to; production must connect as this role), `SERVIO_QR_BASE_URL` (the public host printed on QR table cards, default https://order.servio.pk; the card opens `<base>/q/<token>` which calls the public `GET /api/v1/qr/:token`). Foodpanda: the per-business secret is set from Settings, Integrations (or `PATCH /integrations/foodpanda` with `secret: "rotate"`), and Foodpanda posts signed JSON to `POST /api/v1/webhooks/foodpanda/<business slug>` with header `X-Signature: sha256=<HMAC>`.
+Environment variables for the API (all optional in development): `PGHOST PGPORT PGUSER PGPASSWORD`, `CORS_ORIGINS`, `WHATSAPP_ACCESS_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_VERIFY_TOKEN WHATSAPP_APP_SECRET`, `TAX_FBR_URL TAX_PRA_URL`, `PADDLE_WEBHOOK_SECRET`, `BILLING_JAZZCASH BILLING_EASYPAISA BILLING_BANK`, `SERVIO_APP_DB_PASSWORD` (the non-superuser database role that Row-Level Security applies to; production must connect as this role), `SERVIO_QR_BASE_URL` (the public host printed on QR table cards, default https://order.easalpha.com; the card opens `<base>/q/<token>` which calls the public `GET /api/v1/qr/:token`). Foodpanda: the per-business secret is set from Settings, Integrations (or `PATCH /integrations/foodpanda` with `secret: "rotate"`), and Foodpanda posts signed JSON to `POST /api/v1/webhooks/foodpanda/<business slug>` with header `X-Signature: sha256=<HMAC>`.
 
 ## First-time setup
 
@@ -27,8 +27,8 @@ RAILS_ENV=test bin/rails db:create db:schema:load
 
 | What | Value |
 |---|---|
-| Owner login | demo@servio.pk / password123 |
-| Manager | manager@servio.pk / password123, PIN 9999 |
+| Owner login | demo@easalpha.com / password123 |
+| Manager | manager@easalpha.com / password123, PIN 9999 |
 | Cashier | PIN 1111 |
 | Till pairing code | 123456 |
 | Kitchen screen pairing code | 654321 |
@@ -79,4 +79,5 @@ cd servio-api && bundle exec brakeman -q      # security scan
 ## One-command local run and the deployment stack
 
 - Local: `scripts/dev-up.sh` starts PostgreSQL, the API with its job worker, the WhatsApp gateway and the web app (production build), then prints every URL and login; `scripts/dev-down.sh` stops them.
-- Server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`): PostgreSQL, API, jobs, web, WhatsApp gateway, plus a TLS proxy of your choice.
+- Server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`): PostgreSQL, API, jobs, web, WhatsApp gateway, plus a TLS proxy of your choice. `deploy/docker-compose.images.yml` swaps the local builds for the images GitHub Actions publishes.
+- Automatic builds: `.github/workflows/` runs the tests on every push (`ci.yml`), publishes Docker images to GHCR on every push to main and every `v*` tag (`images.yml`), and builds the Linux, Windows and Mac desktop installers on every change to `servio-desktop/` (`desktop.yml`).

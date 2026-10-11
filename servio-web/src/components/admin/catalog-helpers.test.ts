@@ -75,7 +75,7 @@ describe("consumables copy", () => {
 });
 
 describe("import source detection", () => {
-  it("recognises Servio's own export by its format field", () => {
+  it("recognises EasAlpha's own export by its format field", () => {
     expect(detectImportSource(JSON.stringify({ format: "servio_json", version: 1, menus: [] }))).toBe("servio_json");
   });
 

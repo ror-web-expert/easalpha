@@ -36,6 +36,55 @@ RSpec.describe "Devices and PIN login", type: :request do
     expect(json[:permissions]).not_to include("orders.refund")
   end
 
+  it "sets a device up from the machine itself: a manager login creates and pairs it in one call and lists who can sign in" do
+    cashier = add_cashier(pin: "4321")
+    api_post "/api/v1/devices/register", { name: "Counter 1", kind: "till", platform: "windows", app_version: "0.2.0" }, headers: headers
+    expect(response).to have_http_status(:created)
+    token = json[:device_token]
+    expect(token).to be_present
+    expect(json[:device]).to include(paired: true, kind: "till", name: "Counter 1", platform: "windows")
+    expect(json[:device]).not_to have_key(:pairing_code)
+    expect(json[:branch][:id]).to eq(within(owner.business) { Branch.first.id })
+    me = json[:staff].find { |s| s[:id] == cashier.id }
+    expect(me).to include(has_pin: true, role: "Cashier")
+    expect(json[:staff].map { |s| s[:id] }).to include(owner.id)
+
+    api_post "/api/v1/devices/pin_login", { pin: "4321" }, headers: { "Authorization" => "Bearer #{token}" }
+    expect(response).to have_http_status(:ok)
+    expect(json[:app]).to eq("pos")
+    expect(within(owner.business) { AuditLog.where(action: "pair_device").last.after }).to include("via" => "setup")
+  end
+
+  it "registers a kitchen display with the kitchen staff only, and a token screen with nobody" do
+    cashier = add_cashier(pin: "4321")
+    cook = within(owner.business) { Membership.create!(user: create(:user), role: Role.find_by!(system_key: "kitchen"), status: "active") }
+    api_post "/api/v1/devices/register", { name: "Kitchen 1", kind: "kitchen", platform: "web" }, headers: headers
+    expect(response).to have_http_status(:created)
+    ids = json[:staff].map { |s| s[:id] }
+    expect(ids).to include(cook.id)
+    expect(ids).not_to include(cashier.id)
+    expect(json[:staff].find { |s| s[:id] == cook.id }[:has_pin]).to be false
+
+    api_post "/api/v1/devices/register", { name: "Pickup screen", kind: "token_screen", platform: "web" }, headers: headers
+    expect(response).to have_http_status(:created)
+    expect(json[:staff]).to eq([])
+    expect(json[:device][:code]).to eq("S1")
+  end
+
+  it "needs the devices permission to register, and counts tills against the plan" do
+    cashier = add_cashier
+    api_post "/api/v1/devices/register", { name: "Rogue", kind: "till" }, headers: auth_headers(cashier)
+    expect(response).to have_http_status(:forbidden)
+
+    limit = owner.business.plan_limit("tills")
+    if limit
+      limit.times { |i| api_post "/api/v1/devices/register", { name: "Till #{i}", kind: "till" }, headers: headers; expect(response).to have_http_status(:created) }
+      api_post "/api/v1/devices/register", { name: "One too many", kind: "till" }, headers: headers
+      expect(response).to have_http_status(:forbidden)
+      expect(json.dig(:error, :code)).to eq("plan.limit")
+    end
+  end
+
   it "locks a PIN after five wrong tries" do
     device = within(owner.business) { Device.create!(branch: Branch.first, name: "Till", kind: "till", paired_at: Time.current) }
     cashier = add_cashier(pin: "1111")

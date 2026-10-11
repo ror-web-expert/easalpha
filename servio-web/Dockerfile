@@ -1,7 +1,7 @@
-# Servio web: admin panel, POS, kitchen display, rider app, storefront (Next.js 15).
+# EasAlpha web: admin panel, POS, kitchen display, rider app, storefront (Next.js 15).
 # Build: docker build --build-arg NEXT_PUBLIC_API_URL=https://api.example.pk/api/v1 -t servio-web servio-web
 FROM node:20-slim AS build
-RUN corepack enable
+RUN npm install -g pnpm@10.27.0 --no-audit --no-fund
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
@@ -12,7 +12,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_CABLE_URL=$NEXT_PUBLIC_
 RUN pnpm build
 
 FROM node:20-slim
-RUN corepack enable
+RUN npm install -g pnpm@10.27.0 --no-audit --no-fund
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /app/package.json /app/pnpm-lock.yaml ./

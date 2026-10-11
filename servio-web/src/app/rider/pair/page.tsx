@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Bike } from "lucide-react";
 import { errorMessage } from "@/lib/api";
 import type { Branch, Business, Device } from "@/lib/types";
@@ -33,7 +34,7 @@ export default function RiderPairPage() {
         <div>
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-cta text-cta-fg"><Bike className="h-7 w-7" /></span>
           <h1 className="mt-4 text-2xl font-semibold">Pair this phone</h1>
-          <p className="mt-1 text-fg-secondary">Enter the 6-digit code from Admin, Riders, Rider App.</p>
+          <p className="mt-1 text-fg-secondary">Enter the 6-digit code from Admin, Riders, Rider App, or <Link href="/setup" className="text-primary">set it up with a manager login</Link>.</p>
           {device ? <p className="mt-1 text-xs text-fg-muted">This phone was {device.name}; pairing again replaces it.</p> : null}
         </div>
         <div className="flex justify-center gap-2" aria-label="Pairing code">

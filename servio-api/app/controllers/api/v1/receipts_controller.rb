@@ -29,7 +29,7 @@ module Api
         phone = User.normalize_phone(params[:phone].presence || order.customer&.phone)
         raise Api::Errors::BadRequest.new("receipt.no_phone", "No phone number for this order") if phone.blank?
         msg = Whatsapp::Sender.deliver(phone: phone, template: "digital_receipt", customer_id: order.customer_id,
-                                       variables: { business_name: current_business.name, order_label: order.label, total: order.total_minor / 100, receipt_number: order.receipt_number, link: "https://#{current_business.slug}.servio.menu/r/#{order.id}" })
+                                       variables: { business_name: current_business.name, order_label: order.label, total: order.total_minor / 100, receipt_number: order.receipt_number, link: "https://#{current_business.slug}.easalpha.com/r/#{order.id}" })
         ReceiptEvent.create!(order: order, kind: "whatsapp", membership_id: current_membership.id, device_id: current_device&.id, channel: "whatsapp")
         render json: { sent: true, status: msg.status, to: phone }
       end

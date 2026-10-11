@@ -1,0 +1,19 @@
+# Use the images GitHub Actions publishes (.github/workflows/images.yml) instead of building on the server.
+#   cd deploy && docker compose --env-file .env -f docker-compose.yml -f docker-compose.images.yml pull
+#   cd deploy && docker compose --env-file .env -f docker-compose.yml -f docker-compose.images.yml up -d
+# The web image bakes in the API address at build time, so the CI build must use your API_PUBLIC_URL
+# (repository variable API_PUBLIC_URL on GitHub). If it differs, keep building web on the server: drop the
+# "web" block below.
+services:
+  api:
+    image: ${IMAGE_REPO}-api:${IMAGE_TAG:-latest}
+    build: !reset null
+  jobs:
+    image: ${IMAGE_REPO}-api:${IMAGE_TAG:-latest}
+    build: !reset null
+  web:
+    image: ${IMAGE_REPO}-web:${IMAGE_TAG:-latest}
+    build: !reset null
+  whatsapp:
+    image: ${IMAGE_REPO}-whatsapp:${IMAGE_TAG:-latest}
+    build: !reset null

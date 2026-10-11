@@ -13,6 +13,7 @@ import { Badge, Button, ThemeToggle } from "@/components/ui";
 import { format } from "date-fns";
 import { toast } from "@/store/toast";
 import { HeaderPills } from "./dashboard-pills";
+import { AnnouncementBanner, NeedHelpFab, PoweredBy } from "./help-support";
 
 function isActive(it: NavItem, pathname: string) {
   const base = it.href.split("#")[0];
@@ -345,6 +346,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </div>
       <NavLinks groups={groups} onNavigate={() => setMobileOpen(false)} />
       <UserFooter onLogout={logout} />
+      <PoweredBy />
     </aside>
   );
   return (
@@ -378,7 +380,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <DayBar />
           <ThemeToggle className="text-white/85 hover:bg-white/10" />
         </header>
-        <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 pb-8 pt-4 sm:px-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 pb-8 pt-4 sm:px-6">
+          <AnnouncementBanner />
+          <NeedHelpFab />
+          {children}
+        </main>
       </div>
       <PageSearch groups={groups} open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>

@@ -57,8 +57,8 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-cta/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-40 -left-24 h-[26rem] w-[26rem] rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
-        <Link href="/" className="relative flex items-center" aria-label="Servio home">
-          <Image src="/brand/logo-white.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
+        <Link href="/" className="relative flex items-center" aria-label="EasAlpha home">
+          <Image src="/brand/logo-white.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto" />
         </Link>
         <div className="relative mt-auto max-w-md">
           <h2 className="text-4xl leading-[44px] text-white">Run every counter, kitchen and branch from one place.</h2>
@@ -77,8 +77,8 @@ export default function LoginPage() {
       <section className="relative flex items-center justify-center px-4 py-12">
         <div className="absolute right-4 top-4"><ThemeToggle /></div>
         <div className="w-full max-w-[360px] rounded-[28px] bg-card p-8 shadow-[var(--elev-1)] lg:shadow-none">
-          <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="Servio home">
-            <Image src="/brand/logo.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
+          <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="EasAlpha home">
+            <Image src="/brand/logo.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto" />
           </Link>
           <h1 className="text-[28px] leading-9">Welcome back</h1>
           <p className="mt-1 text-sm text-fg-secondary">Log in to the admin panel.</p>
@@ -105,7 +105,7 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" loading={busy}>Send code</Button>
             </form>
           )}
-          <p className="mt-6 text-center text-sm text-fg-secondary">New to Servio? <Link href="/signup" className="font-medium text-primary hover:underline">Create your account</Link></p>
+          <p className="mt-6 text-center text-sm text-fg-secondary">New to EasAlpha? <Link href="/signup" className="font-medium text-primary hover:underline">Create your account</Link></p>
           <p className="mt-6 border-t pt-5 text-xs tracking-[0.4px] text-fg-secondary">Till staff: open <a className="font-medium text-primary hover:underline" href="/pos">/pos</a> on the paired device and log in with your PIN.</p>
         </div>
       </section>

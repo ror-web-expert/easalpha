@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LayoutDashboard, Monitor, ChefHat, Megaphone } from "lucide-react";
+import { LayoutDashboard, Monitor, ChefHat, Megaphone, Settings2, Download } from "lucide-react";
 
-export const metadata: Metadata = { title: "Open an app screen", description: "Pick the Servio screen for this device: admin panel, till, kitchen display or token screen." };
+export const metadata: Metadata = { title: "Open an app screen", description: "Set this device up with a manager login, or pick a EasAlpha screen: admin panel, till, kitchen display or token screen." };
 
 const links = [
+  { href: "/setup", title: "Set up this device", text: "Sign in once as a manager and choose: till, tablet, kitchen, token screen or rider phone.", icon: Settings2 },
   { href: "/admin", title: "Admin panel", text: "Owners and managers: menu, money, people, reports.", icon: LayoutDashboard },
   { href: "/pos", title: "Till (POS)", text: "Pair a till, log in with a PIN and sell.", icon: Monitor },
   { href: "/kitchen", title: "Kitchen display", text: "Tickets per station with timers and bump.", icon: ChefHat },
   { href: "/token", title: "Token screen", text: "Shows which orders are ready for pickup.", icon: Megaphone },
+  { href: "/download", title: "Download the desktop app", text: "Windows, Linux and Mac installers with receipt printing and the print server.", icon: Download },
 ];
 
 export default function AppsPage() {
@@ -17,7 +19,7 @@ export default function AppsPage() {
       <div>
         <div className="flex items-center gap-2 text-primary">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-fg font-bold">S</span>
-          <span className="text-xl font-semibold text-fg">Servio</span>
+          <span className="text-xl font-semibold text-fg">EasAlpha</span>
         </div>
         <p className="mt-2 text-fg-secondary">Restaurant POS for Pakistan. Pick the screen for this device.</p>
       </div>

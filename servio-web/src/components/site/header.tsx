@@ -12,6 +12,7 @@ const NAV: { href: string; k: UiKey }[] = [
   { href: "/features", k: "nav.features" },
   { href: "/pricing", k: "nav.pricing" },
   { href: "/contact", k: "nav.contact" },
+  { href: "/download", k: "nav.download" },
 ];
 
 
@@ -30,8 +31,8 @@ export function SiteHeader() {
   return (
     <header className={cn("fixed inset-x-0 top-0 z-40 text-white transition-[background-color,box-shadow] duration-300", solid ? "bg-[#0B1F3A]/90 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)] backdrop-blur" : "bg-transparent")}>
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center" aria-label="Servio home">
-          <Image src="/brand/logo-white.svg" alt="Servio" width={130} height={32} priority unoptimized className="h-8 w-auto" />
+        <Link href="/" className="flex shrink-0 items-center" aria-label="EasAlpha home">
+          <Image src="/brand/logo-white.svg" alt="EasAlpha" width={130} height={32} priority unoptimized className="h-8 w-auto" />
         </Link>
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Main">
           {NAV.map((n) => (

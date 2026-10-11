@@ -1,6 +1,6 @@
-# Servio POS desktop
+# EasAlpha POS desktop
 
-The desktop shell for the Servio till. It wraps the web POS (the Next.js app, `/pos`) in an Electron window and adds the two things a browser cannot do:
+The desktop shell for the EasAlpha till. It wraps the web POS (the Next.js app, `/pos`) in an Electron window and adds the two things a browser cannot do:
 
 - direct ESC/POS printing to receipt and kitchen printers over the network, USB or the operating system's printer driver, exposed to the web POS as `window.servioDesktop`;
 - the print server from the SPEC ("Kitchen display, printing and devices"): a small HTTP service on this computer that order-taker tablets print through. The admin panel stores this computer's IP as the Print Server and tablets connect to it automatically.
@@ -18,7 +18,7 @@ pnpm start          # compiles TypeScript to dist/ and launches Electron
 pnpm test           # encoder and settings unit tests (node:test)
 ```
 
-The window loads `${webUrl}/pos`. `webUrl` defaults to http://localhost:3000 and is read from `settings.json` in the Electron user-data folder (Linux `~/.config/servio-desktop/settings.json`, Windows `%APPDATA%\servio-desktop\settings.json`). It can be changed from Servio > Printers in the app menu.
+The window loads `${webUrl}/setup`: a machine that is already set up is forwarded to its own screen (till, kitchen display, token screen...); a new machine asks the owner or manager to sign in once and choose what it is (see `docs/SETUP.md` section 3). "Set up this device again" in the EasAlpha menu re-runs that choice. `webUrl` defaults to http://localhost:3000 and is read from `settings.json` in the Electron user-data folder (Linux `~/.config/servio-desktop/settings.json`, Windows `%APPDATA%\servio-desktop\settings.json`). It can be changed from EasAlpha > Printers in the app menu.
 
 If `pnpm start` prints `bad option: --...` the shell has `ELECTRON_RUN_AS_NODE=1` set (some editor terminals do this); run `env -u ELECTRON_RUN_AS_NODE pnpm start`.
 
@@ -27,15 +27,21 @@ If `pnpm start` prints `bad option: --...` the shell has `ELECTRON_RUN_AS_NODE=1
 ```sh
 pnpm dist:win       # Windows NSIS installer, x64 -> release/
 pnpm dist:linux     # Linux AppImage and .deb -> release/
+pnpm dist:mac       # macOS .dmg and .zip, Intel and Apple Silicon -> release/ (run on a Mac)
 pnpm dist:dir       # unpacked folder only, for a quick check
 ```
 
-Building the Windows installer on Linux needs Wine for the NSIS step; electron-builder prints what is missing. The app icon is `build/icon.png` (copied from `servio-web/public/icon-512.png`). App id `pk.servio.pos`, product name "Servio POS".
+Building the Windows installer on Linux needs Wine for the NSIS step; electron-builder prints what is missing. The `desktop` GitHub Actions workflow (`.github/workflows/desktop.yml`) builds all three on every change to this folder and attaches them to a GitHub Release on a `v*` tag; see `docs/SETUP.md` section 3 and 4. The app icon is `build/icon.png` (copied from `servio-web/public/icon-512.png`). App id `com.easalpha.pos`, product name "EasAlpha POS".
+
+## Self-update
+
+`src/updater.ts` (electron-updater) checks the release feed 20 s after start and every 4 hours, downloads in the background and installs on quit, with a "Restart now / Later" prompt so a shift is never cut. The feed is `publish.url` in `package.json` as baked in at build time (the GitHub workflow sets it to the repository's latest release) or `updateUrl` in `settings.json`. Supported: Windows NSIS and Linux AppImage; the .deb and unsigned macOS builds report "not automatic" under About. "Check for updates" is in the EasAlpha menu.
 
 ## Project layout
 
 ```
 src/main.ts              Electron main process: window, menu, IPC, startup
+src/updater.ts           self-update from the release feed (electron-updater)
 src/preload.ts           exposes window.servioDesktop to the web POS
 src/settingsPreload.ts   bridge for the printer settings window
 src/settings.ts          settings.json read/write and sanitising
@@ -71,7 +77,7 @@ interface ServioDesktop {
 
 ## Printers
 
-Open Servio > Printers (Ctrl+Shift+P) or call `openPrinterSettings()`. Each printer has a name, kind, paper width (58 mm = 32 characters, 80 mm = 48 characters) and an optional role (receipt or kitchen).
+Open EasAlpha > Printers (Ctrl+Shift+P) or call `openPrinterSettings()`. Each printer has a name, kind, paper width (58 mm = 32 characters, 80 mm = 48 characters) and an optional role (receipt or kitchen).
 
 | Kind | What to fill in | How it prints |
 | --- | --- | --- |
@@ -87,6 +93,7 @@ Printers are stored in `settings.json`:
 {
   "webUrl": "http://localhost:3000",
   "printServerPort": 9977,
+  "updateUrl": "",
   "printers": [
     { "id": "p_1", "name": "Counter", "kind": "network", "host": "192.168.1.50", "port": 9100, "width": 80, "role": "receipt" },
     { "id": "p_2", "name": "Kitchen", "kind": "network", "host": "192.168.1.51", "port": 9100, "width": 80, "role": "kitchen" },
@@ -123,5 +130,5 @@ curl -X POST http://192.168.1.10:9977/print -H 'Content-Type: application/json' 
 - **USB native module.** The `usb` package is loaded lazily and is not a dependency, so the build never depends on a native compile. Until it is bundled, USB printers should be installed as an OS printer and used with kind "System". Adding it: `pnpm add usb` and rebuild for Electron with `electron-builder install-app-deps`.
 - **Urdu on receipts.** Non-ASCII text prints as `?`. The plan is to render Urdu lines as a raster image (`GS v 0`) with a bundled Nastaliq font in a later phase; the `text` line shape does not need to change.
 - **Logo image** at the top of the receipt (also a raster job, same phase as Urdu).
-- **Auto-update.** No update channel yet; installers are distributed by hand. `electron-updater` can be added once a release server exists.
+- **Code signing.** Updates and first-open warnings: the Windows and macOS builds are unsigned until certificates are bought (`CSC_LINK`, `CSC_KEY_PASSWORD` in CI); unsigned macOS builds cannot self-update.
 - **Authentication on the print server.** It is open on the LAN by design (tablets do not configure anything); a shared token header can be added when the admin panel stores one.

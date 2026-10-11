@@ -30,7 +30,7 @@ export interface BusinessSettings {
 
 export interface Business {
   id: ID; name: string; slug: string; legal_name: string | null; country: string; currency: string; time_zone: string;
-  phone: string | null; email: string | null; status: string; trial_ends_on: string | null; trial_days_left: number;
+  phone: string | null; email: string | null; logo_key: string | null; status: string; trial_ends_on: string | null; trial_days_left: number;
   plan: { code: string; name: string; features: Record<string, unknown>; limits: Record<string, number> } | null;
   settings: BusinessSettings; read_only: boolean; created_at: string;
 }
@@ -95,6 +95,11 @@ export interface Device {
   paired_at: string | null; platform: string | null; app_version: string | null; last_sync_at: string | null;
   last_seen_at: string | null; revoked_at: string | null; pairing_code?: string | null; pairing_expires_at?: string | null;
 }
+
+/** POST /devices/pair and /devices/register. */
+export interface PairedDevice { device_token: string; device: Device; business: Business; branch: Branch }
+/** One row of the "who can sign in here" list that /devices/register returns. */
+export interface SetupStaff { id: ID; name: string | null; role: string; staff_type: StaffType; has_pin: boolean; pin_locked: boolean }
 
 export interface AuditLog {
   id: ID; action: string; table_name: string | null; record_id: ID | null; user_id: ID | null; device_id: ID | null;
@@ -176,7 +181,7 @@ export interface Promotion {
 
 export interface Catalog {
   generated_at: string;
-  business: { id: ID; name: string; currency: string; time_zone: string; settings: BusinessSettings };
+  business: { id: ID; name: string; currency: string; time_zone: string; phone?: string | null; logo_key?: string | null; settings: BusinessSettings };
   branch: Branch | null;
   tax_rates: TaxRate[]; stations: Station[]; menus: Menu[]; categories: Category[]; products: Product[];
   modifier_groups: ModifierGroup[]; deals: Deal[]; promotions: Promotion[]; since: string | null;
@@ -603,7 +608,7 @@ export interface RiderSettlement {
   expected_minor: number; handed_in_minor: number; difference_minor: number; note: string | null; settled_by_membership_id: ID | null; settled_at: string;
 }
 export interface SettlementPreview { rider: Rider; deliveries_count: number; cash_collected_minor: number; float_held_minor: number; expected_minor: number; deliveries: Delivery[] }
-export interface QrOrder extends OrderSummary { qr_status: "pending" | "accepted" | "rejected" }
+export interface QrOrder extends OrderSummary { qr_status: "pending" | "accepted" | "rejected"; address_text?: string | null }
 export interface TableRequest { id: ID; table_id: ID; table_code: string; kind: "call_waiter" | "ask_bill"; guest_name: string | null; note: string | null; requested_at: string; handled_at: string | null; handled_by_membership_id: ID | null }
 export interface QrSettings { enabled: boolean; cashier_accept: boolean; call_waiter: boolean; ask_bill: boolean; running_bill: boolean; guest_name: boolean; welcome: string | null }
 export interface TableQrCard { table_id: ID; code: string; token: string; url: string; enabled: boolean }
@@ -1004,6 +1009,15 @@ export interface Storefront {
   config: WebsiteSections; menus: { id: ID; name: string }[]; categories: { id: ID; name: string; subtitle: string | null; menu_id: ID | null }[]; products: StorefrontProduct[];
   reviews: { summary: ReviewSummary; recent: { rating: number; rating_word: string; comment: string | null; order_type: string | null; at: string }[] };
 }
+/** POST /public/storefront/:slug/orders and GET .../orders/:id?guest_token=: what the guest sees while tracking. */
+export type StorefrontOrderStage = "waiting" | "accepted" | "preparing" | "ready" | "on_the_way" | "done" | "rejected" | "cancelled";
+export interface StorefrontOrder {
+  id: ID; label: string | null; guest_token: string; order_type: "delivery" | "takeaway"; status: string; qr_status: string | null; spec_status: string | null;
+  stage: StorefrontOrderStage; eta_minutes: number | null; created_at: string; placed_at: string | null; ready_at: string | null;
+  customer: { name: string | null; address: string | null };
+  items: { name: string; quantity: string; line_total_minor: number }[];
+  subtotal_minor: number; delivery_charge_minor: number; tax_minor: number; total_minor: number; currency: string;
+}
 
 // ---- POS discounts and reviews (SPEC "Three discount mechanisms", reviews "from the tablet") ----
 export type LoyaltyRedemptionKind = "fixed" | "percent" | "free_item";
@@ -1027,3 +1041,55 @@ export interface WhatsappConnection {
   provider: WhatsappProvider; status: WhatsappConnectionStatus; qr: string | null; phone: string | null;
   connected_at: string | null; last_error: string | null; gateway_configured: boolean;
 }
+
+// ---- Help and Support box, product-owner (platform) settings and the super panel ----
+/** GET /platform (public): how to reach Servio support and what the product owner wants every panel to show. */
+export interface PlatformInfo {
+  product_name: string; support_email: string | null; support_whatsapp: string | null; support_phone: string | null;
+  support_hours: string | null; support_url: string | null; docs_url: string | null; powered_by: string | null;
+  announcement: string | null; announcement_level: "info" | "warning"; version: string;
+  /** Where the desktop installers live, and the version the Download page links to. */
+  downloads_url: string | null; desktop_version: string | null;
+}
+export type SupportRequestStatus = "open" | "answered" | "closed";
+export type SupportRequestCategory = "question" | "problem" | "billing" | "feature" | "other";
+/** A message from this business to Servio support (GET/POST /support_requests). */
+export interface SupportRequest {
+  id: ID; subject: string; message: string; category: SupportRequestCategory; status: SupportRequestStatus; page: string | null;
+  reply: string | null; replied_at: string | null; closed_at: string | null; created_at: string;
+  by: { id: ID; name: string | null } | null;
+}
+/** The owner-approval side of a Servio support login (GET /support_sessions, POST /support_sessions/:id/approve|deny). */
+export interface SupportSession {
+  id: ID; super_admin_id: ID; reason: string; status: "requested" | "approved" | "denied" | "ended" | "expired";
+  approved_at: string | null; expires_at: string | null; ended_at: string | null; created_at: string;
+}
+// Super panel (/super): a separate login (POST /super/login) whose token is a "super" token, never an admin session.
+export interface SuperAdmin { id: ID; name: string; email: string; last_login_at?: string | null }
+export interface SuperLogin { access_token: string; admin: SuperAdmin }
+export interface SuperStats {
+  businesses: Record<string, number>; signups_last_30_days: number; plans: Record<string, number>;
+  open_support_requests: number; pending_support_sessions: number; orders_today: number;
+}
+export interface SuperHealth {
+  status: string; time: string; version: string; database: boolean; pending_jobs: number | null; businesses: number;
+  orders_today: number; tax_failed: number; whatsapp_failed_24h: number;
+}
+export interface SuperBusinessRow extends Business { members: number }
+export interface SuperBusinessDetail extends Business {
+  branches: Branch[]; devices: number; staff: number; orders_30_days: number; last_order_at: string | null; open_support_requests: number;
+  support_sessions: { id: ID; reason: string; status: string; expires_at: string | null; active: boolean; created_at: string }[];
+}
+export interface SuperSupportRequest extends Omit<SupportRequest, "by"> {
+  business: { id: ID; name: string; slug: string; status: string };
+  by: { id: ID; name: string | null; email: string | null } | null;
+}
+export interface SuperSupportSession extends Omit<SupportSession, "ended_at"> { business: { id: ID; name: string }; active: boolean }
+/** GET /super/invoices rows. */
+export interface SuperInvoice {
+  id: ID; number: string | null; business: { id: ID; name: string; slug: string }; amount_minor: number; currency: string; status: string;
+  due_on: string | null; payment_method: string | null; payment_reference: string | null; reported_at: string | null;
+}
+export interface FeatureFlagRow { id: ID; key: string; business_id: ID | null; enabled: boolean }
+/** PUT /super/platform_settings { values } ; GET returns values, defaults and the super admin list. */
+export interface PlatformSettingsResponse { values: Omit<PlatformInfo, "version">; defaults: Omit<PlatformInfo, "version">; admins: SuperAdmin[] }

@@ -1,6 +1,6 @@
-# Servio web
+# EasAlpha web
 
-Next.js 15 front end for the Servio restaurant POS: the admin panel (`/admin`), the till (`/pos`, installable PWA), the kitchen display (`/kitchen`) and the token screen (`/token`). All data loads client-side from the Rails API in `../servio-api`.
+Next.js 15 front end for the EasAlpha restaurant POS: the admin panel (`/admin`), the till (`/pos`, installable PWA), the kitchen display (`/kitchen`) and the token screen (`/token`). All data loads client-side from the Rails API in `../servio-api`.
 
 ## Run
 

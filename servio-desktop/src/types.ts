@@ -53,6 +53,8 @@ export type Settings = {
   webUrl: string;
   printServerPort: number;
   printers: PrinterConfig[];
+  /** Release feed for self-update (a folder holding latest.yml and the installers). Empty = the feed built into the app. */
+  updateUrl?: string;
 };
 
 export type PrintServerStatus = { host: string; port: number; running: boolean };

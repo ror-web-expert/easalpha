@@ -1,23 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/shell";
-import { Container, PageHero, Prose } from "@/components/site/sections";
+import { Container, HeroStack, PageHero, Prose } from "@/components/site/sections";
+import { FileText, Lock, ShieldCheck } from "lucide-react";
 import { CONTACT, TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Terms of service",
-  description: "The terms for using Servio: your account, trials and billing, what we promise about availability, what we ask of you and how either side can end the agreement.",
+  description: "The terms for using EasAlpha: your account, trials and billing, what we promise about availability, what we ask of you and how either side can end the agreement.",
   alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {
   return (
     <SiteShell>
-      <PageHero eyebrow="Terms of service" title="Plain terms for using Servio"><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
+      <PageHero eyebrow="Terms of service" title="Plain terms for using EasAlpha" visual={<HeroStack chips={[{ icon: FileText, title: "Plain terms", text: "written to be read" }, { icon: ShieldCheck, title: "Fair to both sides", text: "no surprises" }, { icon: Lock, title: "Your account, your data", text: "export or delete any time" }]} />}><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
       <Container className="max-w-3xl py-16 sm:py-20">
         <div>
           <Prose>
-            <p>These terms are the agreement between you (the business that opens a Servio account) and Servio. By creating an account you accept them. We have kept them short and in ordinary language; where they are silent, the law of Pakistan applies.</p>
+            <p>These terms are the agreement between you (the business that opens a EasAlpha account) and EasAlpha. By creating an account you accept them. We have kept them short and in ordinary language; where they are silent, the law of Pakistan applies.</p>
             <h2>Your account</h2>
             <ul>
               <li>You must be authorised to act for the restaurant you register and give accurate contact details.</li>
@@ -45,7 +46,7 @@ export default function TermsPage() {
               <li>Keep your receipt printer, devices and internet connection working; we help with setup but cannot operate your hardware for you.</li>
             </ul>
             <h2>Tax, accounting and payroll figures</h2>
-            <p>Servio calculates tax, accounts and payroll from the rules and data you enter. You remain responsible for checking and filing them with FBR, PRA or other authorities. We correct any calculation error you report, but we are not your accountant or tax adviser.</p>
+            <p>EasAlpha calculates tax, accounts and payroll from the rules and data you enter. You remain responsible for checking and filing them with FBR, PRA or other authorities. We correct any calculation error you report, but we are not your accountant or tax adviser.</p>
             <h2>Liability</h2>
             <p>To the extent the law allows, our total liability to you for any claim in a year is limited to the fees you paid us in the twelve months before the claim. We are not liable for indirect losses such as lost profit. Nothing in these terms removes rights the law gives you that cannot be excluded.</p>
             <h2>Ending the agreement</h2>

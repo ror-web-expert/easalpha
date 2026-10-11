@@ -495,6 +495,8 @@ export async function closeShift(shift: Shift, counted_cash_minor: number, count
 export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
   const { catalog, settings, branch } = ctx();
   const biz = catalog?.business ?? useDeviceStore.getState().business;
+  // The catalog sync's business block carries logo_key (API catalog_controller); the pairing payload is the fallback for older caches.
+  const catalogLogo = catalog?.business.logo_key;
   const receipt = (settings.receipt ?? {}) as { header?: string; footer?: string; language?: string; paper?: string };
   const active = o.lines.filter((l) => l.status !== "cancelled");
   const taxGroups = new Map<string, { rate: number; inclusive: boolean; taxable_minor: number; tax_minor: number }>();
@@ -507,7 +509,7 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
   });
   return {
     receipt_number: o.receipt_number, duplicate, printed_at: new Date().toISOString(),
-    business: { name: biz?.name ?? "", legal_name: null, phone: useDeviceStore.getState().business?.phone ?? null, logo_key: null, currency: biz?.currency ?? "PKR" },
+    business: { name: biz?.name ?? "", legal_name: null, phone: useDeviceStore.getState().business?.phone ?? null, logo_key: catalogLogo ?? useDeviceStore.getState().business?.logo_key ?? null, currency: biz?.currency ?? "PKR" },
     branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
     header: receipt.header ?? null, footer: receipt.footer ?? null, language: receipt.language ?? "en", paper: receipt.paper ?? "80",
     order: { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type as Receipt["order"]["order_type"], table: o.table_code, business_day: o.business_day, placed_at: o.created_at, paid_at: o.updated_at, cashier: o.cashier_name, customer: o.customer_id ? { name: o.customer_name ?? "", phone: o.customer_phone, khata_no: null } : null, guest_name: o.guest_name, notes: o.notes },

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, errorMessage } from "@/lib/api";
 import { useDeviceStore } from "@/store/device";
 import type { Branch, Business, Device } from "@/lib/types";
@@ -32,7 +33,7 @@ export default function PairPage() {
         <div>
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-primary text-2xl font-bold text-primary-fg">S</span>
           <h1 className="mt-4 text-2xl font-semibold">Pair this till</h1>
-          <p className="mt-1 text-fg-secondary">Enter the 6-digit code from Admin › Devices.</p>
+          <p className="mt-1 text-fg-secondary">Enter the 6-digit code from Admin › Devices, or <Link href="/setup" className="text-primary">set it up with a manager login</Link>.</p>
           {device ? <p className="mt-1 text-xs text-fg-muted">This device was {device.name}; pairing again replaces it.</p> : null}
         </div>
         <div className="flex justify-center gap-2" aria-label="Pairing code">

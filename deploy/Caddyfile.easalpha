@@ -1,0 +1,12 @@
+# EasAlpha on easalpha.com. Append to the server's /opt/caddy/Caddyfile (above the ":443" catch-all is tidy but not
+# required: Caddy picks the most specific host). Caddy and the servio containers share the "kamal" docker network, so
+# the targets are the compose container names. Reload: docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+easalpha.com, www.easalpha.com {
+  encode zstd gzip
+  reverse_proxy servio-web:3000
+}
+
+api.easalpha.com {
+  encode zstd gzip
+  reverse_proxy servio-api:3001
+}

@@ -1,6 +1,6 @@
 # servio-whatsapp
 
-WhatsApp gateway for Servio. The owner opens Settings, WhatsApp, Connect a phone, scans the QR code with any WhatsApp number (WhatsApp, Linked devices, Link a device), and Servio sends receipts, account statements, vouchers and owner alerts from that number. No Meta business account is needed.
+WhatsApp gateway for EasAlpha. The owner opens Settings, WhatsApp, Connect a phone, scans the QR code with any WhatsApp number (WhatsApp, Linked devices, Link a device), and EasAlpha sends receipts, account statements, vouchers and owner alerts from that number. No Meta business account is needed.
 
 Run it next to the API:
 

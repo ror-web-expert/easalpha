@@ -35,3 +35,12 @@ test("settings default, save and reload with printer sanitising", () => {
   assert.equal(s.printers[2].systemName, "HP");
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("updateUrl is kept only when it is an http(s) address", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "servio-settings-"));
+  initSettings(dir);
+  saveSettings({ updateUrl: "https://example.pk/desktop/" });
+  assert.equal(loadSettings().updateUrl, "https://example.pk/desktop");
+  saveSettings({ updateUrl: "not a url" });
+  assert.equal(loadSettings().updateUrl, undefined);
+});

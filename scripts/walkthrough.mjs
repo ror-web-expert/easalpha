@@ -3,7 +3,7 @@ const API = "http://localhost:3001/api/v1", WEB = "http://localhost:3000";
 const DIR = "/tmp/claude-1000/-home-sajid-projects-company-servio/ba922407-18f1-4492-b13a-51413da7f2e2/scratchpad/walk/";
 import fs from "node:fs"; fs.mkdirSync(DIR, { recursive: true });
 const api = async (path, { method = "GET", token, body } = {}) => { const r = await fetch(API + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); let j = null; try { j = await r.json(); } catch {} return { status: r.status, j }; };
-const T = (await api("/auth/login", { method: "POST", body: { email: "demo@servio.pk", password: "password123" } })).j.access_token;
+const T = (await api("/auth/login", { method: "POST", body: { email: "demo@easalpha.com", password: "password123" } })).j.access_token;
 const devices = (await api("/devices", { token: T })).j.data;
 const counter = devices.find((d) => d.name === "Counter till"); const till = await api(`/devices/${counter.id}/regenerate_code`, { method: "POST", token: T });
 const kdsDev = devices.find((d) => d.name === "Kitchen screen"); const kds = await api(`/devices/${kdsDev.id}/regenerate_code`, { method: "POST", token: T });
@@ -14,7 +14,7 @@ const shot = async (p, n, w = 1200) => { await p.waitForTimeout(w); await p.scre
 
 const a = await b.newPage({ viewport: { width: 1440, height: 900 } }); wire(a, "admin");
 await a.goto(WEB + "/login"); await shot(a, "01-login", 800);
-await a.fill("input[type=email]", "demo@servio.pk"); await a.fill("input[type=password]", "password123"); await a.getByRole("button", { name: "Log in" }).click(); await a.waitForURL(/\/admin/, { timeout: 60000 });
+await a.fill("input[type=email]", "demo@easalpha.com"); await a.fill("input[type=password]", "password123"); await a.getByRole("button", { name: "Log in" }).click(); await a.waitForURL(/\/admin/, { timeout: 60000 });
 await shot(a, "02-admin-dashboard", 2000);
 await a.goto(WEB + "/admin/expenses"); await a.waitForTimeout(1500);
 await a.getByRole("button", { name: /record expense|add expense|new expense/i }).first().click().catch(() => {}); await shot(a, "03-admin-modal", 1000);

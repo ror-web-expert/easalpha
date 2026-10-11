@@ -8,11 +8,13 @@ module Api
 
       # GET /qr_orders?status=pending
       def index
-        scope = Order.includes(:dining_table, :items).where(branch_id: current_branch.id, source: "qr").where.not(qr_status: nil).order(created_at: :desc)
+        # QR table orders and website orders share the accept-or-reject queue; ?source=qr|online narrows it.
+        scope = Order.includes(:dining_table, :items, :address).where(branch_id: current_branch.id, source: %w[qr online]).where.not(qr_status: nil).order(created_at: :desc)
+        scope = scope.where(source: params[:source]) if params[:source].present?
         scope = scope.where(qr_status: params[:status].presence || "pending")
         scope = scope.on_day(current_branch.business_day_for(Time.current)) unless params[:all_days] == "true"
         rows, cursor = paginate(scope)
-        render_page(rows, cursor) { |o| OrderSerializers.summary(o).merge(qr_status: o.qr_status, guest_name: o.guest_name) }
+        render_page(rows, cursor) { |o| OrderSerializers.summary(o).merge(qr_status: o.qr_status, guest_name: o.guest_name, address_text: o.address&.to_s, notes: o.notes) }
       end
 
       def accept

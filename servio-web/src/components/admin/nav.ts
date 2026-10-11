@@ -1,11 +1,11 @@
-import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, type LucideIcon } from "lucide-react";
 
 export interface NavItem { href: string; label: string; icon: LucideIcon; perms?: string[]; soon?: boolean; exact?: boolean }
 /** flat: items render at the top level with no group header (the SPEC's four standalone screens). */
 export interface NavGroup { label: string; icon: LucideIcon; items: NavItem[]; flat?: boolean }
 
 // The sidebar follows docs/SPEC.md "System map": four standalone screens, then 12 groups in SPEC order with SPEC screen
-// names. Servio extras sit inside the nearest group. soon = SPEC screen not built yet.
+// names. EasAlpha extras sit inside the nearest group. soon = SPEC screen not built yet.
 const REPORTS = ["reports.view_all", "reports.view_branch", "reports.view_own", "REPORTS"];
 const STOCK = ["stock.view", "stock.actions", "stock.waste", "stock.count", "reports.view_all"];
 const BUY = ["purchasing.manage", "suppliers.manage", "stock.view", "finance.view", "PURCHASE_ORDERS"];
@@ -108,7 +108,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/customers/ar-aging", label: "AR Aging", icon: PiggyBank, perms: [...PEOPLE, "reports.view_all", "finance.view"] },
       { href: "/admin/customers/campaigns", label: "Campaigns", icon: Megaphone, perms: ["customers.manage", "settings.manage", "MARKETING_CAMPAIGN"] },
       { href: "/admin/customers/reservations", label: "Reservations", icon: CalendarDays, perms: ["orders.create", "tables.manage", "customers.manage"] },
-      { href: "/admin/orders/qr", label: "QR orders", icon: QrCode, perms: ["orders.create", "kitchen.view", "WEB_ORDERS"] },
+      { href: "/admin/orders/qr", label: "Online & QR orders", icon: QrCode, perms: ["orders.create", "kitchen.view", "WEB_ORDERS"] },
     ],
   },
   {
@@ -202,6 +202,7 @@ export const NAV: NavGroup[] = [
     icon: Settings,
     items: [
       { href: "/admin/settings/store", label: "Store", icon: Store, perms: SETTINGS },
+      { href: "/admin/settings/branding", label: "Branding", icon: Palette, perms: SETTINGS },
       { href: "/admin/settings/store-management", label: "Store Management", icon: Building2, perms: SETTINGS },
       { href: "/admin/settings/business-hours", label: "Business Hours", icon: Timer, perms: SETTINGS },
       { href: "/admin/settings/point-of-sale", label: "Point of Sale", icon: MonitorSmartphone, perms: SETTINGS },

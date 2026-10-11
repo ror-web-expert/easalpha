@@ -7,7 +7,7 @@ class PushDeliveryJob < ApplicationJob
       sub = PushSubscription.find_by(id: subscription_id) or return
       keys = VapidKeypair.current
       WebPush.payload_send(message: payload.to_json, endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth, ttl: 3600, urgency: "high",
-                           vapid: { subject: ENV.fetch("VAPID_SUBJECT", "mailto:support@servio.pk"), public_key: keys.public_key, private_key: keys.private_key })
+                           vapid: { subject: ENV.fetch("VAPID_SUBJECT", "mailto:support@easalpha.com"), public_key: keys.public_key, private_key: keys.private_key })
       sub.update_columns(last_used_at: Time.current, failed_count: 0)
     rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription
       sub&.destroy

@@ -1,6 +1,6 @@
 require "csv"
 
-# Imports a menu from Servio JSON, the ArfaPOS JSON export, or a CSV with columns
+# Imports a menu from EasAlpha JSON, the ArfaPOS JSON export, or a CSV with columns
 # category, name, price, sku, description, name_ur. Preview first, then apply.
 class MenuImport
   Row = Struct.new(:line, :category, :name, :name_ur, :price_minor, :sku, :description, :image, :error, keyword_init: true)

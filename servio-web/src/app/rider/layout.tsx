@@ -4,10 +4,10 @@ import { RiderShell } from "@/components/rider/shell";
 // SPEC surfaces: the rider app is its own installable page on the rider's phone (portrait, standalone), with its own
 // manifest so it installs apart from the till.
 export const metadata: Metadata = {
-  title: { default: "Servio Rider", template: "%s | Servio Rider" },
-  description: "Servio rider app: your deliveries and delivery status",
+  title: { default: "EasAlpha Rider", template: "%s | EasAlpha Rider" },
+  description: "EasAlpha rider app: your deliveries and delivery status",
   manifest: "/manifest-rider.json",
-  appleWebApp: { capable: true, title: "Servio Rider", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "EasAlpha Rider", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

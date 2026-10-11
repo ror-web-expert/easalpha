@@ -178,7 +178,7 @@ module Demo
     end
 
     def create_member!(role_key, name, pin)
-      user = User.create!(name: name, email: "#{@business.slug}-#{role_key}@servio.pk", password: "password123")
+      user = User.create!(name: name, email: "#{@business.slug}-#{role_key}@easalpha.com", password: "password123")
       m = Membership.create!(user: user, role: Role.find_by!(system_key: role_key), status: "active")
       m.set_pin!(pin)
       m

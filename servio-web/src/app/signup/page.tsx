@@ -9,7 +9,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Create your account",
-  description: `Start your ${TRIAL_DAYS}-day free Servio trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant.`,
+  description: `Start your ${TRIAL_DAYS}-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant.`,
   robots: { index: true, follow: true },
   alternates: { canonical: "/signup" },
 };
@@ -31,8 +31,8 @@ export default function SignupPage() {
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
         <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[26rem] w-[26rem] rounded-full bg-[#FF7A1A]/20 blur-3xl" />
-        <Link href="/" className="relative flex items-center" aria-label="Servio home">
-          <Image src="/brand/logo-white.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
+        <Link href="/" className="relative flex items-center" aria-label="EasAlpha home">
+          <Image src="/brand/logo-white.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto" />
         </Link>
         <div className="relative mt-auto max-w-md">
           <p className="inline-flex rounded-full bg-[#FF7A1A] px-3 py-1 text-sm font-bold text-white">{TRIAL_DAYS} days free, no card</p>
@@ -47,8 +47,8 @@ export default function SignupPage() {
       </section>
       <section className="flex items-center justify-center px-4 py-12 sm:px-8">
         <div className="w-full max-w-lg">
-          <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="Servio home">
-            <Image src="/brand/logo.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
+          <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="EasAlpha home">
+            <Image src="/brand/logo.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto" />
           </Link>
           <h1 className="text-[36px] font-extrabold leading-[1.05] tracking-[-0.02em] text-[#0B1F3A]">Create your account</h1>
           <p className="mt-2 text-slate-600">Start your {TRIAL_DAYS}-day free trial. You will land in the admin panel signed in.</p>

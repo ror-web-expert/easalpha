@@ -1,4 +1,4 @@
-/* Servio service worker: caches the app shell so /pos, /kitchen and /token open offline (data lives in IndexedDB) and
+/* EasAlpha service worker: caches the app shell so /pos, /kitchen and /token open offline (data lives in IndexedDB) and
    shows browser push notifications for the admin, till, kitchen and rider apps, even while no tab is open. */
 const VERSION = "servio-shell-v2";
 const SHELL = ["/pos", "/pos/pin", "/pos/orders", "/pos/shift", "/pos/attention", "/kitchen", "/token", "/manifest.json", "/icon.svg"];
@@ -43,8 +43,8 @@ function resolveUrl(url) {
 
 self.addEventListener("push", (event) => {
   let payload = {};
-  try { payload = event.data ? event.data.json() : {}; } catch { payload = { title: "Servio", body: event.data ? event.data.text() : "" }; }
-  const title = payload.title || "Servio";
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = { title: "EasAlpha", body: event.data ? event.data.text() : "" }; }
+  const title = payload.title || "EasAlpha";
   const options = {
     body: payload.body || "",
     icon: payload.icon || "/icon-192.png",

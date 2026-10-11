@@ -59,6 +59,7 @@ export function loadSettings(): Settings {
     raw = {};
   }
   const port = Number(raw.printServerPort);
+  const updateUrl = typeof raw.updateUrl === "string" && /^https?:\/\//.test(raw.updateUrl.trim()) ? raw.updateUrl.trim().replace(/\/+$/, "") : "";
   return {
     webUrl:
       typeof raw.webUrl === "string" && raw.webUrl.trim() ? raw.webUrl.trim().replace(/\/+$/, "") : DEFAULT_SETTINGS.webUrl,
@@ -66,6 +67,7 @@ export function loadSettings(): Settings {
     printers: Array.isArray(raw.printers)
       ? (raw.printers.map(sanitizePrinter).filter(Boolean) as PrinterConfig[])
       : [],
+    ...(updateUrl ? { updateUrl } : {}),
   };
 }
 

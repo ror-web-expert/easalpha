@@ -1,11 +1,11 @@
-# Servio: All Features
+# EasAlpha: All Features
 
-Date: 8 Oct 2026. Sources: "Restaurant POS Product Overview and Build Blueprint" (7 Oct 2026), the ArfaPOS audit of 64 admin screenshots, and "Servio Feature Specification v1".
+Date: 8 Oct 2026. Sources: "Restaurant POS Product Overview and Build Blueprint" (7 Oct 2026), the ArfaPOS audit of 64 admin screenshots, and "EasAlpha Feature Specification v1".
 
 > **10 Oct 2026: `SPEC.md` is the requirement.** Where this file differs from `SPEC.md`, `SPEC.md` wins. The differences are listed in `PDF-ALIGNMENT.md`; the extras in this file stay. The text before this change is kept in `archive/before-spec-2026-10-10/`.
 
 
-This file lists every feature Servio will have, by module. Each row gives where the feature comes from (Blueprint, ArfaPOS, or Both), its phase, and its current include status.
+This file lists every feature EasAlpha will have, by module. Each row gives where the feature comes from (Blueprint, ArfaPOS, or Both), its phase, and its current include status.
 
 Phases: **Core** ships first (about 16 to 20 weeks), then **Phase 2** stock, **Phase 3** growth, **Phase 4** AI. From 10 Oct 2026 the build follows the 7 phases in `SPEC.md` (see `02-technology.md` section 12 and `PDF-ALIGNMENT.md` section 8, Testing); the Phase column below is kept for reference.
 
@@ -291,7 +291,7 @@ Permission codes: `app.admin`, `app.pos`, `app.rider`, `orders.create`, `orders.
 
 | Area | Rule |
 |---|---|
-| Orders | Statuses (SPEC): Pending, Preparing, Ready, Dispatched, Completed, Cancelled; Open means the first four. Payment status runs separately: Paid, Pending, Unpaid, Account, Complimentary. Held, served and refunded stay as Servio extras. |
+| Orders | Statuses (SPEC): Pending, Preparing, Ready, Dispatched, Completed, Cancelled; Open means the first four. Payment status runs separately: Paid, Pending, Unpaid, Account, Complimentary. Held, served and refunded stay as EasAlpha extras. |
 | Orders | Stock is deducted once, when the order is completed (SPEC). A safety-net job finds completed orders whose stock never moved and deducts them dated to the sale day, never twice. Cancelling a deducted order returns stock when Return stock on cancellation is on; otherwise staff record waste. |
 | Orders | A completed order can be reopened (SPEC): REOPEN_ORDER, an optional order-update PIN, and separate permissions to delete a line or lower a quantity. Every punch, reopen, edit and completion is stored with user, role, time and the item and money change. Refunds stay as an extra. |
 | Orders | Revenue counts only at Completed (SPEC). Open orders are shown separately. |

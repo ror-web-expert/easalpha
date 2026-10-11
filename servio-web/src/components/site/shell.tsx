@@ -1,16 +1,18 @@
 import { SiteHeader } from "./header";
 import { SiteFooter } from "./footer";
 import { WhatsAppFab } from "./whatsapp-fab";
+import { getSiteContact } from "./platform-server";
 
 /** Public-site wrapper: light theme regardless of the app's dark mode, larger reading type than the admin.
  *  The header is fixed over each page's navy top band, so no top padding here. */
-export function SiteShell({ children }: { children: React.ReactNode }) {
+export async function SiteShell({ children }: { children: React.ReactNode }) {
+  const contact = await getSiteContact();
   return (
     <div className="flex min-h-screen flex-col bg-white text-[17px] leading-[1.6] tracking-normal text-slate-800 antialiased">
       <SiteHeader />
       <main className="flex-1">{children}</main>
-      <SiteFooter />
-      <WhatsAppFab />
+      <SiteFooter contact={contact} />
+      <WhatsAppFab contact={contact} />
     </div>
   );
 }

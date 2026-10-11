@@ -37,7 +37,7 @@ export default function QrOrdersPage() {
   const reqs = requests.data ?? [];
   return (
     <>
-      <PageHeader icon={QrCode} title="QR orders" description="Orders guests placed from a table card. Pending orders wait for a cashier before they reach the kitchen. Refreshes every 10 seconds." />
+      <PageHeader icon={QrCode} title="Online & QR orders" description="Orders customers placed on the website and guests placed from a table card. Pending orders wait for a cashier before they reach the kitchen. Refreshes every 10 seconds." />
       <Cards>
         <SummaryCard label="Waiting for acceptance" value={pending.data?.length ?? 0} tone={pending.data?.length ? "warning" : "neutral"} />
         <SummaryCard label="Waiter calls" value={reqs.filter((r) => r.kind === "call_waiter").length} tone="info" />
@@ -52,12 +52,12 @@ export default function QrOrdersPage() {
           </div>
           {loading ? <Loading /> : (
             <Table>
-              <THead><tr><TH>Table</TH><TH>Guest</TH><TH>Order</TH><TH right>Items</TH><TH right>Total</TH><TH>Placed</TH><TH right>Actions</TH></tr></THead>
+              <THead><tr><TH>From</TH><TH>Customer</TH><TH>Order</TH><TH right>Items</TH><TH right>Total</TH><TH>Placed</TH><TH right>Actions</TH></tr></THead>
               <TBody>
                 {rows.length ? rows.map((o) => (
                   <TR key={o.id} onClick={() => setSelected(o.id)}>
-                    <TD className="font-semibold">{o.table_code ?? "-"}</TD>
-                    <TD>{o.guest_name ?? <span className="text-fg-muted">No name</span>}</TD>
+                    <TD className="font-semibold">{o.source === "online" ? <span className="inline-flex items-center gap-1"><Badge variant="info">Website</Badge><span className="text-xs font-normal text-fg-secondary">{o.order_type === "delivery" ? "Delivery" : "Pickup"}</span></span> : <span>Table {o.table_code ?? "-"}</span>}</TD>
+                    <TD>{o.guest_name ?? <span className="text-fg-muted">No name</span>}{o.address_text ? <div className="max-w-[260px] truncate text-xs text-fg-secondary" title={o.address_text}>{o.address_text}</div> : null}</TD>
                     <TD><span className="font-mono text-xs">{o.label}</span> <Badge variant={o.qr_status === "pending" ? "warning" : o.qr_status === "accepted" ? "success" : "danger"} className="ml-1">{o.qr_status}</Badge> {tab !== "pending" ? <Badge variant={orderStatusVariant(o.status)} className="ml-1">{o.status}</Badge> : null}</TD>
                     <TD right>{o.item_count}</TD>
                     <TD right className="font-medium">{formatMoney(o.total_minor)}</TD>
@@ -71,7 +71,7 @@ export default function QrOrdersPage() {
                       ) : <Button size="sm" variant="ghost" onClick={() => setSelected(o.id)}>View</Button>}
                     </TD>
                   </TR>
-                )) : <EmptyRow colSpan={7}>{tab === "pending" ? "No orders waiting. New QR orders appear here within 10 seconds." : `No ${tab} QR orders${allDays ? "" : " today"}.`}</EmptyRow>}
+                )) : <EmptyRow colSpan={7}>{tab === "pending" ? "No orders waiting. New website and QR orders appear here within 10 seconds." : `No ${tab} QR orders${allDays ? "" : " today"}.`}</EmptyRow>}
               </TBody>
             </Table>
           )}

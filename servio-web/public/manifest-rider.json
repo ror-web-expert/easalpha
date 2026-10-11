@@ -1,7 +1,7 @@
 {
-  "name": "Servio Rider",
-  "short_name": "Servio Rider",
-  "description": "Servio rider app: your deliveries and delivery status",
+  "name": "EasAlpha Rider",
+  "short_name": "EasAlpha Rider",
+  "description": "EasAlpha rider app: your deliveries and delivery status",
   "start_url": "/rider",
   "scope": "/rider",
   "display": "standalone",

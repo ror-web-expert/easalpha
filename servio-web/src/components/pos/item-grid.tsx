@@ -16,8 +16,14 @@ export function ItemTile({ name, price, imageKey, id, onClick, badge, currency, 
       <div className={cn("relative m-2 mb-0 flex h-14 items-center justify-center rounded-lg text-2xl font-medium", tint(id))}>
         {imageKey ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageKey} alt="" className="h-full w-full rounded-lg object-cover" />
-        ) : name.slice(0, 1).toUpperCase()}
+          <img src={imageKey} alt="" className="h-full w-full rounded-lg object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        ) : (
+          // Default dish mark when the product has no image: a cloche on the tile's tint, with the initial beside it.
+          <span className="flex items-center gap-1.5 opacity-80" aria-hidden>
+            <svg viewBox="0 0 32 32" className="h-7 w-7" fill="currentColor"><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v.6A9 9 0 0 1 25 18H7a9 9 0 0 1 7.5-8.9v-.6A1.5 1.5 0 0 1 16 7Z" /><rect x="5" y="19.5" width="22" height="2.5" rx="1.25" /></svg>
+            <span className="text-xl">{name.slice(0, 1).toUpperCase()}</span>
+          </span>
+        )}
         {badge ? <span className="absolute right-1 top-1">{badge}</span> : null}
       </div>
       <div className="flex flex-1 flex-col justify-between px-3 pb-3 pt-2">

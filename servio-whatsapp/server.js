@@ -1,5 +1,5 @@
-// Servio WhatsApp gateway. One WhatsApp Web session per business: the owner scans a QR code with any phone
-// (WhatsApp > Linked devices) and Servio sends receipts, statements and alerts from that number.
+// EasAlpha WhatsApp gateway. One WhatsApp Web session per business: the owner scans a QR code with any phone
+// (WhatsApp > Linked devices) and EasAlpha sends receipts, statements and alerts from that number.
 // Sessions persist on disk under ./sessions/<business id> so a restart does not need a new scan.
 import express from "express";
 import fs from "node:fs";
@@ -35,7 +35,7 @@ async function start(id) {
   try {
     const { state, saveCreds } = await useMultiFileAuthState(path.join(ROOT, id));
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: undefined }));
-    const sock = makeWASocket({ auth: state, version, printQRInTerminal: false, logger: log.child({ id, level: "warn" }), browser: ["Servio", "Chrome", "1.0"], syncFullHistory: false, markOnlineOnConnect: false });
+    const sock = makeWASocket({ auth: state, version, printQRInTerminal: false, logger: log.child({ id, level: "warn" }), browser: ["EasAlpha", "Chrome", "1.0"], syncFullHistory: false, markOnlineOnConnect: false });
     s.sock = sock;
     sock.ev.on("creds.update", saveCreds);
     sock.ev.on("connection.update", async (u) => {

@@ -4,7 +4,7 @@ Gate: login and permissions work end to end. Scope is section 3 of `PDF-ALIGNMEN
 
 | # | Step | Deliverable | Tests |
 |---|---|---|---|
-| 1 | Permission registry | The 57 named SPEC codes with module, label, description, surface (software, app, both) and restriction, beside the 46 Servio codes; each SPEC code lists the Servio codes it implies | Model spec: registry counts, implies, expansion |
+| 1 | Permission registry | The 57 named SPEC codes with module, label, description, surface (software, app, both) and restriction, beside the 46 EasAlpha codes; each SPEC code lists the EasAlpha codes it implies | Model spec: registry counts, implies, expansion |
 | 2 | Presets | Cashier, Supervisor, Manager presets (SPEC) beside the 7 role templates; `GET /roles/presets` | Request spec |
 | 3 | Per-user grants | `user_permissions` table; membership `permissions_mode` role or custom; `GET/PUT /staff/:id/permissions` with preset apply and select all; effective codes = granted set expanded with implied codes | Happy, denied, edge (owner cannot lose access; unknown code) |
 | 4 | Token | Access token carries `perms`; base controller reads them from the token, so a change applies at the next refresh or sign-in | Spec: old token keeps old set, new login gets new set |

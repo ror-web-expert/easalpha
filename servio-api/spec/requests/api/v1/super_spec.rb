@@ -35,7 +35,7 @@ RSpec.describe "Super admin", type: :request do
   it "rejects super endpoints without a super token" do
     get "/api/v1/super/businesses", headers: auth_headers(owner)
     expect(response).to have_http_status(:unauthorized)
-    api_post "/api/v1/super/login", { email: "nobody@servio.com", password: "x" }
+    api_post "/api/v1/super/login", { email: "nobody@easalpha.com", password: "x" }
     expect(response).to have_http_status(:unauthorized)
   end
 end

@@ -4,9 +4,9 @@ Date: 10 Oct 2026. Live copy: https://claude.ai/code/artifact/7e42cc18-71b7-4a3a
 
 ## Rules and numbers
 
-`SPEC.md` (the PDF) is the requirement. Every PDF feature, screen, menu item and behaviour must exist in Servio and work the same way. Where the Servio docs or the app differ, the PDF wins. Servio extras stay. Name and Material Design 3 look stay Servio's own. Tools that already do the same job stay (Solid Queue, own JWT login, two folders); Zod and Vitest are added for forms and tests.
+`SPEC.md` (the PDF) is the requirement. Every PDF feature, screen, menu item and behaviour must exist in EasAlpha and work the same way. Where the EasAlpha docs or the app differ, the PDF wins. EasAlpha extras stay. Name and Material Design 3 look stay EasAlpha's own. Tools that already do the same job stay (Solid Queue, own JWT login, two folders); Zod and Vitest are added for forms and tests.
 
-| PDF features: 218 | Servio docs before 10 Oct | App today |
+| PDF features: 218 | EasAlpha docs before 10 Oct | App today |
 |---|---|---|
 | Match | 86 | 55 |
 | Partly | 65 | 90 |
@@ -17,9 +17,9 @@ Date: 10 Oct 2026. Live copy: https://claude.ai/code/artifact/7e42cc18-71b7-4a3a
 
 Done on 10 Oct 2026: `01` to `08` now follow the PDF; old text in `archive/before-spec-2026-10-10/`.
 
-## Conflicts: Servio changes to the PDF way
+## Conflicts: EasAlpha changes to the PDF way
 
-| Topic | PDF (adopted) | Servio before |
+| Topic | PDF (adopted) | EasAlpha before |
 |---|---|---|
 | Stock deduction | When the order is completed | At Placed |
 | Lost deductions | Safety-net job every 10 to 15 min, unique index, Deduction Health with Retry | None |
@@ -56,7 +56,7 @@ Only what is not built yet. Each phase ends with its PDF gate and the PDF test r
 
 ## Extras kept, open questions
 
-88 Servio features not in the PDF stay: till controls (modifiers, split bill, hold, void and refund with PIN, open item, price override, shortcuts); kitchen stations and token screen; floor plan, reservations, catering, course firing; delivery zones, rider status, phone and Foodpanda orders; time menus, prices per order type, allergen tags, combos with choices, menu import; shifts with blind close, Z report, day close and lock; cash rounding, Raast, tips, FBR/SRB/KPRA tax, monthly tax report; food cost %, recipe coverage, 10x flag, expiry, sold by weight, phone stock count; walk-in customer, birthday offers, campaigns, commissions, checklists, selfie attendance; scheduled reports, branch comparison, menu profitability; signup, trial and billing, super admin, WhatsApp alerts, Urdu, device pairing, offline hub, isolation tests. Reasons per item: `PDF-ALIGNMENT.md` section 7.
+88 EasAlpha features not in the PDF stay: till controls (modifiers, split bill, hold, void and refund with PIN, open item, price override, shortcuts); kitchen stations and token screen; floor plan, reservations, catering, course firing; delivery zones, rider status, phone and Foodpanda orders; time menus, prices per order type, allergen tags, combos with choices, menu import; shifts with blind close, Z report, day close and lock; cash rounding, Raast, tips, FBR/SRB/KPRA tax, monthly tax report; food cost %, recipe coverage, 10x flag, expiry, sold by weight, phone stock count; walk-in customer, birthday offers, campaigns, commissions, checklists, selfie attendance; scheduled reports, branch comparison, menu profitability; signup, trial and billing, super admin, WhatsApp alerts, Urdu, device pairing, offline hub, isolation tests. Reasons per item: `PDF-ALIGNMENT.md` section 7.
 
 Open questions:
 

@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import fs from "node:fs";
-const API = "http://localhost:3001/api/v1", WEB = "http://localhost:3000";
+const API = process.env.API || "http://localhost:3001/api/v1", WEB = process.env.WEB || "http://localhost:3000";
 const OUT = new URL("./shots/", import.meta.url).pathname; fs.mkdirSync(OUT, { recursive: true });
 const report = { pages: [], consoleErrors: [], failedRequests: [], steps: [] };
 const step = (name, ok, info = "") => { report.steps.push({ name, ok, info }); console.log(`${ok ? "ok  " : "FAIL"} ${name} ${info}`); };
@@ -13,7 +13,7 @@ async function api(path, { method = "GET", token, body, branch } = {}) {
   return { status: r.status, j };
 }
 
-const login = await api("/auth/login", { method: "POST", body: { email: "demo@servio.pk", password: "password123" } });
+const login = await api("/auth/login", { method: "POST", body: { email: "demo@easalpha.com", password: "password123" } });
 if (login.status !== 200) { console.error("API login failed", login); process.exit(1); }
 const T = login.j.access_token;
 const me = await api("/me", { token: T }); const branchId = me.j.branches[0].id;
@@ -42,14 +42,14 @@ function wire(page, label) {
 const shot = (page, name) => page.screenshot({ path: OUT + name + ".png", fullPage: false });
 
 const admin = await browser.newContext({ viewport: { width: 1366, height: 800 } }); const a = await admin.newPage(); wire(a, "admin");
-await a.goto(WEB + "/login"); await a.waitForSelector("input[type=email]", { timeout: 60000 }); await a.fill("input[type=email]", "demo@servio.pk"); await a.fill("input[type=password]", "password123");
+await a.goto(WEB + "/login"); await a.waitForSelector("input[type=email]", { timeout: 60000 }); await a.fill("input[type=email]", "demo@easalpha.com"); await a.fill("input[type=password]", "password123");
 await a.getByRole("button", { name: "Log in" }).click();
 try { await a.waitForURL(/\/admin/, { timeout: 90000 }); step("admin login", true, a.url()); } catch { step("admin login", false, a.url()); await shot(a, "admin-login-fail"); }
 await a.waitForTimeout(1500); await shot(a, "admin-dashboard");
 const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/products/categories", "/admin/products/catalog", "/admin/products/modifier-groups", "/admin/products/deals", "/admin/products/promotions", "/admin/products/tax-rates", "/admin/products/stations",
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
-  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs", "/admin/purchasing/price-history", "/admin/suppliers/ledger", "/admin/suppliers/insights", "/admin/suppliers/payments", "/admin/finance/dashboard", "/admin/finance/combined-ledger", "/admin/finance/journal-voucher", "/admin/finance/chart-of-accounts", "/admin/finance/fixed-assets", "/admin/finance/liabilities", "/admin/finance/equity", "/admin/finance/balance-sheet", "/admin/finance/trial-balance", "/admin/payroll/overview", "/admin/payroll/employees", "/admin/payroll/advances", "/admin/payroll/run", "/admin/payroll/ledger", "/admin/payroll/fingerprint", "/admin/payroll/reports", "/admin/payroll/settings", "/admin/reports/cashier-till", "/admin/reports/delivery-riders", "/admin/riders/reports", "/admin/riders/manage", "/admin/reports/grand", "/admin/reports/sales", "/admin/reports/sales-calendar", "/admin/reports/financial", "/admin/reports/products-deals", "/admin/reports/categories", "/admin/reports/order-takers", "/admin/reports/cashiers", "/admin/reports/customers", "/admin/reports/customer-ledger", "/admin/reports/operations", "/admin/reports/cancelled-modified", "/admin/reports/vouchers", "/admin/reports/loyalty-points", "/admin/reports/regular-discounts", "/admin/reports/ai-pricing", "/admin/inventory-reports/ai-stock-forecast", "/admin/customers/ledger", "/admin/customers/insights", "/admin/customers/payments", "/admin/customers/account", "/admin/settings/regular-discounts", "/admin/settings/vouchers", "/admin/settings/reviews", "/admin/settings/whatsapp", "/admin/settings/notifications", "/admin/settings/website", "/admin/settings/plan"];
+  "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs", "/admin/purchasing/price-history", "/admin/suppliers/ledger", "/admin/suppliers/insights", "/admin/suppliers/payments", "/admin/finance/dashboard", "/admin/finance/combined-ledger", "/admin/finance/journal-voucher", "/admin/finance/chart-of-accounts", "/admin/finance/fixed-assets", "/admin/finance/liabilities", "/admin/finance/equity", "/admin/finance/balance-sheet", "/admin/finance/trial-balance", "/admin/payroll/overview", "/admin/payroll/employees", "/admin/payroll/advances", "/admin/payroll/run", "/admin/payroll/ledger", "/admin/payroll/fingerprint", "/admin/payroll/reports", "/admin/payroll/settings", "/admin/reports/cashier-till", "/admin/reports/delivery-riders", "/admin/riders/reports", "/admin/riders/manage", "/admin/reports/grand", "/admin/reports/sales", "/admin/reports/sales-calendar", "/admin/reports/financial", "/admin/reports/products-deals", "/admin/reports/categories", "/admin/reports/order-takers", "/admin/reports/cashiers", "/admin/reports/customers", "/admin/reports/customer-ledger", "/admin/reports/operations", "/admin/reports/cancelled-modified", "/admin/reports/vouchers", "/admin/reports/loyalty-points", "/admin/reports/regular-discounts", "/admin/reports/ai-pricing", "/admin/inventory-reports/ai-stock-forecast", "/admin/customers/ledger", "/admin/customers/insights", "/admin/customers/payments", "/admin/customers/account", "/admin/settings/regular-discounts", "/admin/settings/vouchers", "/admin/settings/reviews", "/admin/settings/whatsapp", "/admin/settings/notifications", "/admin/settings/website", "/admin/settings/plan", "/admin/settings/branding", "/admin/support"];
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -219,6 +219,83 @@ for (const p of adminPages) {
   if (review.status === 201) await api(`/reviews/${review.j.id}`, { method: "DELETE", token: T });
 }
 
+
+// ---- Help & Support box, Branding and the Super panel gate.
+{
+  // Branding: a real PNG goes through POST /uploads, becomes the business logo and renders back as image/png.
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhQGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  const fd = new FormData(); fd.append("file", new Blob([png], { type: "image/png" }), "e2e-logo.png");
+  const up = await fetch(API + "/uploads", { method: "POST", headers: { Authorization: `Bearer ${T}` }, body: fd }); const upJ = await up.json().catch(() => null);
+  const biz0 = await api("/business", { token: T }); const rc0 = await api("/settings", { token: T });
+  const biz = await api("/business", { method: "PATCH", token: T, body: { logo_key: upJ?.key } });
+  const img = upJ?.key ? await fetch(upJ.key) : null;
+  step("branding: logo uploaded, saved on the business and served as an image", up.status === 201 && biz.status === 200 && biz.j.logo_key === upJ.key && img?.status === 200 && /^image\/png/.test(img.headers.get("content-type") || ""), JSON.stringify([up.status, biz.j?.logo_key?.slice(-12), img?.headers.get("content-type")]));
+  const rc = await api("/settings", { method: "PATCH", token: T, body: { values: { "pos.receipt.header": "E2E header", "pos.receipt.footer_qr_url": "https://example.com/review" } } });
+  const wc0 = await api("/website_config", { token: T });
+  const wc = await api("/website_config", { method: "PATCH", token: T, body: { sections: { identity: { ...(wc0.j?.sections?.identity || {}), theme_color: "#2e7d32", favicon_key: upJ?.key, cover_key: upJ?.key } } } });
+  const sf = wc0.j?.slug ? await api(`/public/storefront/${wc0.j.slug}`) : { status: 0, j: null };
+  // Put the demo business back the way it was: the gate must not leave a 1-pixel logo or a green theme behind.
+  const flat = Object.values(rc0.j?.groups || {}).flatMap((g) => Object.values(g.screens || {}).flat());
+  const prev = (k) => flat.find((x) => x.key === k)?.value ?? null;
+  await api("/business", { method: "PATCH", token: T, body: { logo_key: biz0.j?.logo_key ?? null } });
+  await api("/settings", { method: "PATCH", token: T, body: { values: { "pos.receipt.header": prev("pos.receipt.header"), "pos.receipt.footer_qr_url": prev("pos.receipt.footer_qr_url") } } });
+  await api("/website_config", { method: "PATCH", token: T, body: { sections: { identity: { theme_color: wc0.j?.sections?.identity?.theme_color ?? null, favicon_key: wc0.j?.sections?.identity?.favicon_key ?? null, cover_key: wc0.j?.sections?.identity?.cover_key ?? null } } } });
+  step("branding: receipt header, theme colour, cover and favicon saved; storefront carries them", rc.status === 200 && wc.status === 200 && wc.j?.sections?.identity?.theme_color === "#2e7d32" && (sf.status !== 200 || sf.j?.config?.identity?.favicon_key === upJ?.key), JSON.stringify([rc.status, wc.status, wc.j?.sections?.identity?.theme_color, sf.status]));
+
+  // Help & Support: platform info is public, a request goes in, the super admin answers, the answer and a notification come back.
+  const plat = await api("/platform");
+  const req = await api("/support_requests", { method: "POST", token: T, body: { subject: `E2E help ${Date.now()}`, message: "Gate: does the reply reach the box?", category: "question", page: "/admin/support" } });
+  const slog = await api("/super/login", { method: "POST", body: { email: "admin@easalpha.com", password: "admin12345" } }); const ST = slog.j?.access_token;
+  step("support: platform info is public and the super admin can log in", plat.status === 200 && !!plat.j?.product_name && slog.status === 200 && !!ST, JSON.stringify([plat.j?.product_name, slog.status]));
+  const inbox = await api("/super/support_requests?status=open", { token: ST });
+  const mine = (inbox.j?.data || []).find((r) => r.id === req.j?.id);
+  const rep = await api(`/super/support_requests/${req.j?.id}/reply`, { method: "POST", token: ST, body: { reply: "Gate reply: yes, it does." } });
+  const list = await api("/support_requests", { token: T }); const answered = (list.j?.data || []).find((r) => r.id === req.j?.id);
+  const notes = await api("/notifications", { token: T }); const note = (notes.j?.data || []).find((n) => n.kind === "support_reply" && n.link === "/admin/support");
+  step("support: request reaches the super inbox with the business name, the reply comes back answered with a notification", req.status === 201 && !!mine && !!mine.business?.name && rep.status === 200 && answered?.status === "answered" && answered?.reply?.startsWith("Gate reply") && !!note, JSON.stringify([req.status, mine?.business?.name, rep.j?.status, answered?.status, !!note]));
+  await api(`/super/support_requests/${req.j?.id}/close`, { method: "POST", token: ST });
+  const ps = await api("/super/platform_settings", { method: "PUT", token: ST, body: { values: { announcement: "E2E announcement" } } });
+  const plat2 = await api("/platform");
+  await api("/super/platform_settings", { method: "PUT", token: ST, body: { values: { announcement: "" } } });
+  const stats = await api("/super/stats", { token: ST }); const health = await api("/super/health", { token: ST });
+  step("super: platform settings change what every panel reads; stats and health answer", ps.status === 200 && plat2.j?.announcement === "E2E announcement" && stats.status === 200 && typeof stats.j?.open_support_requests === "number" && health.j?.status === "ok", JSON.stringify([ps.status, plat2.j?.announcement, stats.j?.open_support_requests]));
+
+  // Online ordering: the storefront cart places an order, it waits in the cashier's queue, acceptance moves the guest's stage on.
+  const sfo = await api("/public/storefront/demo-cafe");
+  const prod = sfo.j?.products?.find((x) => !x.variants?.length) || sfo.j?.products?.[0];
+  const placed = await api("/public/storefront/demo-cafe/orders", { method: "POST", body: { lines: [{ product_id: prod?.id, quantity: 2 }], order_type: "takeaway", customer: { name: "Gate Guest", phone: "03009998877" }, notes: "gate" } });
+  const queue = await api("/qr_orders?source=online", { token: T, branch: branchId });
+  const inQueue = (queue.j?.data || []).some((o) => o.id === placed.j?.id);
+  const acc = placed.j?.id ? await api(`/qr_orders/${placed.j.id}/accept`, { method: "POST", token: T, branch: branchId }) : { status: 0 };
+  const track = placed.j?.id ? await api(`/public/storefront/demo-cafe/orders/${placed.j.id}?guest_token=${placed.j.guest_token}`) : { status: 0, j: null };
+  step("online ordering: cart order waits in the queue, cashier accepts, guest tracking moves to accepted", placed.status === 201 && placed.j.stage === "waiting" && inQueue && acc.status === 200 && track.j?.stage === "accepted", JSON.stringify([placed.status, placed.j?.stage, inQueue, acc.status, track.j?.stage]));
+
+  // Super panel in the browser: login and every screen renders.
+  const sctx = await browser.newContext({ viewport: { width: 1366, height: 800 } }); const sp = await sctx.newPage(); wire(sp, "super");
+  await sp.goto(WEB + "/super/login"); await sp.waitForSelector("input[type=email]", { timeout: 60000 }); await sp.fill("input[type=email]", "admin@easalpha.com"); await sp.fill("input[type=password]", "admin12345");
+  await sp.getByRole("button", { name: /log in|sign in/i }).click();
+  try { await sp.waitForURL(/\/super(\/)?$/, { timeout: 60000 }); step("super: panel login", true, sp.url()); } catch { step("super: panel login", false, sp.url()); await shot(sp, "super-login-fail"); }
+  await sp.waitForTimeout(1200); await shot(sp, "super-dashboard");
+  for (const p of ["/super", "/super/businesses", `/super/businesses/${me.j.business.id}`, "/super/support", "/super/invoices", "/super/flags", "/super/settings"]) {
+    const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
+    const resp = await sp.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
+    await sp.waitForTimeout(400);
+    const body = await sp.evaluate(() => document.body.innerText).catch(() => "");
+    const broken = /Application error|Unhandled Runtime Error|This page could not be found/.test(body || "");
+    const r = { path: p, status: resp?.status(), broken, newConsoleErrors: report.consoleErrors.length - before, newFailedRequests: report.failedRequests.length - beforeF, textLength: (body || "").length };
+    report.pages.push(r); step(`super ${p}`, !broken && r.status === 200 && r.newFailedRequests === 0 && !/\/super\/login/.test(sp.url()), JSON.stringify(r));
+  }
+  await shot(sp, "super-support"); await sctx.close();
+
+  // Admin Help box opens from the sidebar and shows the contact card.
+  await a.goto(WEB + "/admin", { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
+  const helpBtn = a.getByRole("button", { name: /help/i }).first();
+  let helpText = "";
+  if (await helpBtn.count()) { await helpBtn.click(); await a.waitForTimeout(600); const contactTab = a.getByRole("tab", { name: "Contact" }); if (await contactTab.count()) await contactTab.click(); await a.waitForTimeout(400); helpText = await a.evaluate(() => document.body.innerText).catch(() => ""); await shot(a, "admin-help-box"); }
+  step("support: Help & Support box opens with the contact card", /WhatsApp/i.test(helpText) && new RegExp((plat.j?.support_email || "@").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(helpText), (helpText || "").slice(0, 100).replace(/\s+/g, " "));
+  await a.keyboard.press("Escape").catch(() => {});
+}
+
 const pos = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const t = await pos.newPage(); wire(t, "pos");
 await t.goto(WEB + "/pos/pair"); await t.waitForSelector("button", { timeout: 60000 });
 for (const d of till.j.pairing_code) await t.getByRole("button", { name: d, exact: true }).first().click();
@@ -255,6 +332,24 @@ const ktext = await k.evaluate(() => document.body.innerText); step("kitchen sho
 const tok = await kctx.newPage(); wire(tok, "token"); await tok.goto(WEB + "/token"); await tok.waitForTimeout(2000); await shot(tok, "token");
 const q = await kctx.newPage(); wire(q, "queue"); await q.goto(WEB + "/queue"); await q.waitForTimeout(2500); await shot(q, "queue");
 const qtext = await q.evaluate(() => document.body.innerText); step("queue screen shows preparing or ready", /Preparing|Ready/i.test(qtext || ""), (qtext || "").slice(0, 80).replace(/\s+/g, " "));
+
+// "Set up this device": a manager signs in on the machine, picks a role, and the device is paired without a code.
+const sctx = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const sp = await sctx.newPage(); wire(sp, "setup");
+await sp.goto(WEB + "/setup"); await sp.waitForSelector("form", { timeout: 60000 });
+await sp.getByLabel("Email").fill("demo@easalpha.com"); await sp.getByLabel("Password").fill("password123"); await sp.getByRole("button", { name: "Sign in" }).click();
+try { await sp.getByRole("radio", { name: /Token screen/ }).waitFor({ timeout: 15000 }); step("setup: manager login shows the role choice", true); } catch { step("setup: manager login shows the role choice", false, sp.url()); await shot(sp, "setup-login-fail"); }
+await shot(sp, "setup-choose");
+await sp.getByRole("radio", { name: /Token screen/ }).click().catch(() => {});
+await sp.getByLabel("Name of this device").fill("E2E token screen").catch(() => {});
+await sp.getByRole("button", { name: /^Set up as/ }).click().catch(() => {});
+try { await sp.getByRole("button", { name: /^Open the/ }).waitFor({ timeout: 15000 }); step("setup: device registered without a pairing code", true); } catch { step("setup: device registered without a pairing code", false, sp.url()); await shot(sp, "setup-register-fail"); }
+await shot(sp, "setup-ready");
+await sp.getByRole("button", { name: /^Open the/ }).click().catch(() => {});
+try { await sp.waitForURL(/\/token/, { timeout: 15000 }); step("setup: opens the token screen", true); } catch { step("setup: opens the token screen", false, sp.url()); }
+await sp.goto(WEB + "/setup");
+try { await sp.waitForURL(/\/token/, { timeout: 15000 }); step("setup: a set-up browser forwards to its screen", true); } catch { step("setup: a set-up browser forwards to its screen", false, sp.url()); }
+const regd = await api("/devices", { token: T });
+step("setup: device listed as paired in Admin, Devices", !!(regd.j?.data || []).find((d) => d.name === "E2E token screen" && d.paired), "");
 
 await browser.close(); save();
 console.log("\nconsole errors:", report.consoleErrors.length, "\nfailed requests:", report.failedRequests.length);

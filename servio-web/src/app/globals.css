@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Servio brand tokens, 11 Oct 2026. Two colours carry the whole product:
+/* EasAlpha brand tokens, 11 Oct 2026. Two colours carry the whole product:
    - NAVY is structure and selection: sidebars, top bars, links, focus rings, selected tabs and segments,
      switches that are on, progress, dialog titles. It is --primary.
    - ORANGE is the one action you want the user to take on a screen: Pay, Save, Complete, Add to order,
@@ -169,6 +169,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "cv11", "ss01", "tnum"; }
+/* Backdrop for brand logos and favicons so transparent PNGs show their real edges (BrandImage). */
+.brand-checkered { background-color: #fff; background-image: linear-gradient(45deg, #e6ebf2 25%, transparent 25%, transparent 75%, #e6ebf2 75%), linear-gradient(45deg, #e6ebf2 25%, transparent 25%, transparent 75%, #e6ebf2 75%); background-size: 12px 12px; background-position: 0 0, 6px 6px; }
 .till { font-size: 16px; }
 @layer base {
   *, ::before, ::after { border-color: var(--border); }
@@ -191,6 +193,17 @@ select.appearance-none {
 
 @keyframes servio-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .animate-in { animation: servio-in 150ms ease-out; }
+
+@keyframes hero-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+/* Need help?: a slow breathing light around the orange pill, readable on the light and the dark theme. */
+@keyframes servio-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgb(255 255 255 / 0.25), 0 0 0 0 rgb(255 122 26 / 0), 0 12px 30px -10px rgb(0 0 0 / 0.5); }
+  50% { box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9), 0 0 18px 4px rgb(255 122 26 / 0.55), 0 12px 30px -10px rgb(0 0 0 / 0.5); }
+}
+.help-glow { animation: servio-glow 2.4s ease-in-out infinite; }
+.help-glow:hover, .help-glow:focus-visible { animation-play-state: paused; box-shadow: 0 0 0 2px rgb(255 255 255 / 0.9), 0 0 18px 4px rgb(255 122 26 / 0.55), 0 12px 30px -10px rgb(0 0 0 / 0.5); }
+@media (prefers-reduced-motion: reduce) { .help-glow { animation: none; box-shadow: 0 0 0 2px rgb(255 255 255 / 0.7), 0 12px 30px -10px rgb(0 0 0 / 0.5); } }
 
 /* Receipt printing: 80 mm roll */
 @media print {

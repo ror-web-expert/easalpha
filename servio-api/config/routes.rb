@@ -37,6 +37,7 @@ Rails.application.routes.draw do
         member { post :regenerate_code }
         collection do
           post :pair
+          post :register
           post :pin_login
           post :heartbeat
         end
@@ -149,6 +150,8 @@ Rails.application.routes.draw do
       patch "website_config", to: "website_config#update"
       get "public/storefront/:slug", to: "storefront#show"
       post "public/storefront/:slug/reviews", to: "storefront#create_review"
+      post "public/storefront/:slug/orders", to: "storefront#create_order"
+      get "public/storefront/:slug/orders/:id", to: "storefront#order"
       get "customer_payments", to: "customer_payments#all"
       post "whatsapp/templates", to: "whatsapp#create_template"
       patch "whatsapp/templates/:id", to: "whatsapp#update_template"
@@ -500,6 +503,9 @@ Rails.application.routes.draw do
       get "support_sessions", to: "support_sessions#index"
       post "support_sessions/:id/approve", to: "support_sessions#approve"
       post "support_sessions/:id/deny", to: "support_sessions#deny"
+      get "platform", to: "platform#show"
+      get "support_requests", to: "support_requests#index"
+      post "support_requests", to: "support_requests#create"
       post "onboarding/sample_menu", to: "onboarding#sample_menu"
       get "onboarding/status", to: "onboarding#status"
       get "whatsapp/templates", to: "whatsapp#templates"
@@ -516,8 +522,16 @@ Rails.application.routes.draw do
         post "support_sessions", to: "/api/v1/support_sessions#request_access"
         post "support_sessions/:id/token", to: "/api/v1/support_sessions#token"
         post "login", to: "sessions#create"
+        get "me", to: "sessions#me"
         get "stats", to: "businesses#stats"
+        get "plans", to: "businesses#plans"
         resources :businesses, only: %i[index show update]
+        get "support_sessions", to: "support_sessions#index"
+        get "support_requests", to: "support_requests#index"
+        post "support_requests/:id/reply", to: "support_requests#reply"
+        post "support_requests/:id/close", to: "support_requests#close"
+        get "platform_settings", to: "platform_settings#show"
+        put "platform_settings", to: "platform_settings#update"
       end
     end
   end

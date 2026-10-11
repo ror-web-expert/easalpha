@@ -1,4 +1,4 @@
-# Servio: Database Schema
+# EasAlpha: Database Schema
 
 Date: 8 Oct 2026. Sources: the blueprint data model and rules, plus the additions from the ArfaPOS audit. PostgreSQL 16.
 

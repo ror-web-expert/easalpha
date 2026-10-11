@@ -6,8 +6,8 @@ FactoryBot.define do
   end
 
   factory :super_admin do
-    name { "Servio Admin" }
-    sequence(:email) { |n| "admin#{n}@servio.com" }
+    name { "EasAlpha Admin" }
+    sequence(:email) { |n| "admin#{n}@easalpha.com" }
     password { "supersecret1" }
   end
 end

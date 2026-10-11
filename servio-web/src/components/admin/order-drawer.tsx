@@ -1,6 +1,6 @@
 "use client";
 // SPEC order detail: a side panel with three tabs (Order Details with the order story, Cost Analysis, Payments) and the
-// reopen and complete flows in the footer. Servio's void and refund actions stay.
+// reopen and complete flows in the footer. EasAlpha's void and refund actions stay.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorMessage } from "@/lib/api";
@@ -85,7 +85,7 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
           <Badge variant={specStatusVariant(o.spec_status)}>{titleCase(o.spec_status)}</Badge>
           <Badge variant={orderTypeVariant(o.order_type)}>{titleCase(o.order_type)}</Badge>
           <Badge variant={specPaymentVariant(o.spec_payment_status)}>{titleCase(o.spec_payment_status)}</Badge>
-          <Badge variant={orderStatusVariant(o.status)} title="Servio internal status">{titleCase(o.status)}</Badge>
+          <Badge variant={orderStatusVariant(o.status)} title="EasAlpha internal status">{titleCase(o.status)}</Badge>
           {o.is_staff_meal ? <Badge variant="accent">Complimentary</Badge> : null}
           {header ? <span className="text-xs text-warning-ink">{header}</span> : null}
         </span>

@@ -22,5 +22,7 @@ class Device < ApplicationRecord
   end
 
   def paired? = paired_at.present? && revoked_at.nil?
+  # The app a PIN login on this device opens: kitchen displays and rider phones have their own; everything else is the POS.
+  def app = { "kitchen" => "kitchen", "rider" => "rider" }.fetch(kind, "pos")
   def revoke! = update!(revoked_at: Time.current, token_digest: nil, pairing_code: nil)
 end

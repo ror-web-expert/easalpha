@@ -35,18 +35,18 @@ describe("derivePushState", () => {
 });
 
 describe("resolveNotificationUrl", () => {
-  const origin = "https://till.servio.pk";
+  const origin = "https://till.easalpha.com";
   it("resolves a relative path against the app origin", () => {
-    expect(resolveNotificationUrl("/admin/orders?status=placed", origin)).toBe("https://till.servio.pk/admin/orders?status=placed");
+    expect(resolveNotificationUrl("/admin/orders?status=placed", origin)).toBe("https://till.easalpha.com/admin/orders?status=placed");
   });
   it("keeps an absolute url on the same origin", () => {
-    expect(resolveNotificationUrl("https://till.servio.pk/kitchen", origin)).toBe("https://till.servio.pk/kitchen");
+    expect(resolveNotificationUrl("https://till.easalpha.com/kitchen", origin)).toBe("https://till.easalpha.com/kitchen");
   });
   it("falls back to the home page for a missing, broken or foreign url", () => {
-    expect(resolveNotificationUrl(null, origin)).toBe("https://till.servio.pk/");
-    expect(resolveNotificationUrl("", origin)).toBe("https://till.servio.pk/");
-    expect(resolveNotificationUrl("https://evil.example/phish", origin)).toBe("https://till.servio.pk/");
-    expect(resolveNotificationUrl("http://[bad", origin)).toBe("https://till.servio.pk/");
+    expect(resolveNotificationUrl(null, origin)).toBe("https://till.easalpha.com/");
+    expect(resolveNotificationUrl("", origin)).toBe("https://till.easalpha.com/");
+    expect(resolveNotificationUrl("https://evil.example/phish", origin)).toBe("https://till.easalpha.com/");
+    expect(resolveNotificationUrl("http://[bad", origin)).toBe("https://till.easalpha.com/");
   });
 });
 

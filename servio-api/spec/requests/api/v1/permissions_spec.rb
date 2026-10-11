@@ -9,7 +9,7 @@ RSpec.describe "Per-user permissions", type: :request do
   let(:cashier) { within(owner.business) { Membership.create!(user: create(:user), role: cashier_role, status: "active") } }
 
   describe "registry" do
-    it "lists the SPEC codes with module, surface and restriction, and the Servio extras" do
+    it "lists the SPEC codes with module, surface and restriction, and the EasAlpha extras" do
       get "/api/v1/roles/permissions", headers: headers
       expect(response).to have_http_status(:ok)
       spec = json[:data].select { |p| p[:spec] }
@@ -19,7 +19,7 @@ RSpec.describe "Per-user permissions", type: :request do
       printers = json[:data].find { |p| p[:code] == "PRINTERS" }
       expect(printers[:surface]).to eq("software")
       expect(json[:data].find { |p| p[:code] == "REQUIRE_PIN_FOR_ORDER_UPDATE" }[:restriction]).to be true
-      expect(json[:modules].last).to eq("Servio extras")
+      expect(json[:modules].last).to eq("EasAlpha extras")
     end
 
     it "offers the three presets" do
@@ -30,7 +30,7 @@ RSpec.describe "Per-user permissions", type: :request do
   end
 
   describe "PUT /staff/:id/permissions" do
-    it "grants a custom set and the implied Servio codes come with it" do
+    it "grants a custom set and the implied EasAlpha codes come with it" do
       api_put "/api/v1/staff/#{cashier.id}/permissions", { codes: %w[SALES_WALKIN CANCEL_ORDER KDS] }, headers: headers
       expect(response).to have_http_status(:ok)
       expect(json[:mode]).to eq("custom")

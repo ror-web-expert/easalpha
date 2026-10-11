@@ -54,22 +54,22 @@ export type Shot = { src: string; alt: string; width: number; height: number; ur
 
 /** Admin and storefront captures are 2880x1800 at 2x; till and kitchen 2732x1536; phones 1170x2532. */
 export const SHOTS = {
-  dashboard: { src: "/marketing/admin-dashboard.png", alt: "Servio admin dashboard with 30-day revenue, orders, customers and expenses, plus sales and order charts by hour", width: 1440, height: 900, url: "app.servio.pk/admin" },
-  orders: { src: "/marketing/admin-orders.png", alt: "Orders list with status, type, payment and rider filters", width: 1440, height: 900, url: "app.servio.pk/admin/orders" },
-  catalog: { src: "/marketing/admin-catalog.png", alt: "Product catalog with categories, images and prices", width: 1440, height: 900, url: "app.servio.pk/admin/products/catalog" },
-  stock: { src: "/marketing/admin-stock.png", alt: "Stock in hand by section with quantities and values", width: 1440, height: 900, url: "app.servio.pk/admin/inventory/stock-in-hand" },
-  deduction: { src: "/marketing/admin-deduction-health.png", alt: "Deduction Health screen showing deducted, pending and retried orders", width: 1440, height: 900, url: "app.servio.pk/admin/inventory-reports/deduction-health" },
-  grand: { src: "/marketing/admin-grand-report.png", alt: "Grand Report with sales, discounts, taxes and payments for the period", width: 1440, height: 900, url: "app.servio.pk/admin/reports/grand-report" },
-  finance: { src: "/marketing/admin-finance.png", alt: "Finance dashboard with payment accounts and movements", width: 1440, height: 900, url: "app.servio.pk/admin/finance" },
-  balance: { src: "/marketing/admin-balance-sheet.png", alt: "Balance sheet with assets, liabilities and equity", width: 1440, height: 900, url: "app.servio.pk/admin/finance/balance-sheet" },
-  attendance: { src: "/marketing/admin-attendance.png", alt: "Attendance screen with today's sessions and the scan log", width: 1440, height: 900, url: "app.servio.pk/admin/payroll/attendance" },
-  supplier: { src: "/marketing/admin-supplier-ledger.png", alt: "Supplier ledger with debit, credit and running balance", width: 1440, height: 900, url: "app.servio.pk/admin/suppliers/ledger" },
-  whatsapp: { src: "/marketing/admin-whatsapp.png", alt: "WhatsApp settings with the linked number, templates and send log", width: 1440, height: 900, url: "app.servio.pk/admin/settings/whatsapp" },
-  permissions: { src: "/marketing/admin-permissions.png", alt: "Permission editor with modules, presets and surface badges", width: 1440, height: 900, url: "app.servio.pk/admin/staff/cashiers" },
-  calendar: { src: "/marketing/admin-sales-calendar.png", alt: "Sales calendar showing revenue per day of the month", width: 1440, height: 900, url: "app.servio.pk/admin/reports/sales-calendar" },
-  till: { src: "/marketing/pos-till.png", alt: "Servio till with the menu grid, the order and payment buttons", width: 1366, height: 768, url: "Servio Till" },
+  dashboard: { src: "/marketing/admin-dashboard.png", alt: "EasAlpha admin dashboard with 30-day revenue, orders, customers and expenses, plus sales and order charts by hour", width: 1440, height: 900, url: "app.easalpha.com/admin" },
+  orders: { src: "/marketing/admin-orders.png", alt: "Orders list with status, type, payment and rider filters", width: 1440, height: 900, url: "app.easalpha.com/admin/orders" },
+  catalog: { src: "/marketing/admin-catalog.png", alt: "Product catalog with categories, images and prices", width: 1440, height: 900, url: "app.easalpha.com/admin/products/catalog" },
+  stock: { src: "/marketing/admin-stock.png", alt: "Stock in hand by section with quantities and values", width: 1440, height: 900, url: "app.easalpha.com/admin/inventory/stock-in-hand" },
+  deduction: { src: "/marketing/admin-deduction-health.png", alt: "Deduction Health screen showing deducted, pending and retried orders", width: 1440, height: 900, url: "app.easalpha.com/admin/inventory-reports/deduction-health" },
+  grand: { src: "/marketing/admin-grand-report.png", alt: "Grand Report with sales, discounts, taxes and payments for the period", width: 1440, height: 900, url: "app.easalpha.com/admin/reports/grand-report" },
+  finance: { src: "/marketing/admin-finance.png", alt: "Finance dashboard with payment accounts and movements", width: 1440, height: 900, url: "app.easalpha.com/admin/finance" },
+  balance: { src: "/marketing/admin-balance-sheet.png", alt: "Balance sheet with assets, liabilities and equity", width: 1440, height: 900, url: "app.easalpha.com/admin/finance/balance-sheet" },
+  attendance: { src: "/marketing/admin-attendance.png", alt: "Attendance screen with today's sessions and the scan log", width: 1440, height: 900, url: "app.easalpha.com/admin/payroll/attendance" },
+  supplier: { src: "/marketing/admin-supplier-ledger.png", alt: "Supplier ledger with debit, credit and running balance", width: 1440, height: 900, url: "app.easalpha.com/admin/suppliers/ledger" },
+  whatsapp: { src: "/marketing/admin-whatsapp.png", alt: "WhatsApp settings with the linked number, templates and send log", width: 1440, height: 900, url: "app.easalpha.com/admin/settings/whatsapp" },
+  permissions: { src: "/marketing/admin-permissions.png", alt: "Permission editor with modules, presets and surface badges", width: 1440, height: 900, url: "app.easalpha.com/admin/staff/cashiers" },
+  calendar: { src: "/marketing/admin-sales-calendar.png", alt: "Sales calendar showing revenue per day of the month", width: 1440, height: 900, url: "app.easalpha.com/admin/reports/sales-calendar" },
+  till: { src: "/marketing/pos-till.png", alt: "EasAlpha till with the menu grid, the order and payment buttons", width: 1366, height: 768, url: "EasAlpha Till" },
   kitchen: { src: "/marketing/kitchen-display.png", alt: "Kitchen display with tickets per station and timers", width: 1366, height: 768, url: "Kitchen display" },
-  storefrontDesktop: { src: "/marketing/storefront-desktop.png", alt: "Restaurant storefront website with the menu and cart", width: 1440, height: 900, url: "yourrestaurant.servio.pk" },
+  storefrontDesktop: { src: "/marketing/storefront-desktop.png", alt: "Restaurant storefront website with the menu and cart", width: 1440, height: 900, url: "yourrestaurant.easalpha.com" },
   storefrontPhone: { src: "/marketing/storefront-phone.png", alt: "Storefront on a phone with the menu and ordering", width: 585, height: 1266 },
   rider: { src: "/marketing/rider-pair.png", alt: "Rider app pairing screen on a phone", width: 585, height: 1266 },
 } satisfies Record<string, Shot>;
@@ -185,18 +185,67 @@ export function Prose({ children }: { children: React.ReactNode }) {
   return <div className="space-y-6 text-slate-700 [&_h2]:mt-10 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-[#0B1F3A] [&_li]:ml-5 [&_li]:list-disc [&_li]:marker:text-[#FF7A1A] [&_ul]:space-y-1.5">{children}</div>;
 }
 
-/** Navy top band for inner pages; the fixed header sits over it, so it carries the header's height in padding. */
-export function PageHero({ eyebrow, title, text, children }: { eyebrow: string; title: string; text?: string; children?: React.ReactNode }) {
+/** A glass chip for the hero visual: icon tile, bold title, one line of text. */
+export function HeroChip({ icon: Icon, title, text, className, tone = "orange" }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string; className?: string; tone?: "orange" | "navy" }) {
   return (
-    <section className="relative overflow-hidden bg-linear-to-br from-[#0B1F3A] to-[#10294D] pb-16 pt-28 text-white sm:pb-20 sm:pt-36 [--heading-color:#fff]">
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
-      <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[#FF7A1A]/15 blur-3xl" />
-      <Container className="relative max-w-3xl text-center">
-        <Eyebrow className="text-[#FFB27A]">{eyebrow}</Eyebrow>
-        <h1 className="mt-3 text-[40px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[56px]">{title}</h1>
-        {text ? <p className="mt-5 text-[17px] leading-[1.6] text-white/80 sm:text-lg">{text}</p> : null}
-        {children}
+    <div className={cn("flex items-center gap-3 rounded-2xl border border-white/15 bg-[#0B1F3A]/70 px-4 py-3 text-white shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)] backdrop-blur-md", className)}>
+      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white", tone === "orange" ? "bg-[#FF7A1A]" : "bg-white/15")}><Icon className="h-5 w-5" /></span>
+      <div className="min-w-0 leading-tight">
+        <div className="truncate text-sm font-bold !text-white">{title}</div>
+        <div className="truncate text-xs !text-white/75">{text}</div>
+      </div>
+    </div>
+  );
+}
+
+/** The default hero visual: three chips fanned over a soft orange disc, when a page has no screenshot of its own. */
+export function HeroStack({ chips }: { chips: { icon: React.ComponentType<{ className?: string }>; title: string; text: string }[] }) {
+  return (
+    <div className="relative mx-auto h-[260px] w-full max-w-[380px] sm:h-[300px]">
+      <div aria-hidden className="absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#FF7A1A]/30 blur-2xl sm:h-72 sm:w-72" />
+      <div aria-hidden className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 sm:h-52 sm:w-52" />
+      <div aria-hidden className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-white/10 sm:h-80 sm:w-80" />
+      {chips.slice(0, 3).map((c, i) => (
+        <HeroChip key={c.title} {...c} tone={i === 1 ? "navy" : "orange"}
+          className={cn("absolute w-[min(300px,88%)] animate-[hero-float_6s_ease-in-out_infinite] motion-reduce:animate-none", i === 0 && "left-0 top-2 [animation-delay:0s]", i === 1 && "right-0 top-[38%] [animation-delay:-2s]", i === 2 && "bottom-2 left-6 [animation-delay:-4s]")} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Banner for inner pages: breadcrumb, eyebrow, title and text on the left; a visual on the right (a screenshot frame,
+ * a HeroStack of chips, or anything else). The same navy, orange glow, dots and diagonals as the home hero, and a
+ * curved white edge into the page so the band does not end in a hard line. The fixed header sits over it.
+ */
+export function PageHero({ eyebrow, title, text, children, visual, crumb }: { eyebrow: string; title: string; text?: string; children?: React.ReactNode; visual?: React.ReactNode; crumb?: string }) {
+  return (
+    <section className="relative overflow-hidden bg-[#0B1F3A] pb-24 pt-28 text-white sm:pt-36 lg:pb-28 [--heading-color:#fff]">
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-linear-to-br from-[#0B1F3A] to-[#10294D]" />
+      <div aria-hidden className="pointer-events-none absolute -right-40 -top-48 h-[34rem] w-[34rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-48 -left-40 h-[28rem] w-[28rem] rounded-full bg-[#FF7A1A]/15 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:24px_24px]" />
+      <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.07]" viewBox="0 0 1440 600" preserveAspectRatio="none" fill="none" stroke="white" strokeWidth="1">
+        <path d="M-100 700 L500 -100" /><path d="M300 700 L900 -100" /><path d="M700 700 L1300 -100" /><path d="M1100 700 L1700 -100" />
+        <circle cx="500" cy="-100" r="3" fill="white" /><circle cx="380" cy="280" r="3" fill="white" /><circle cx="1180" cy="200" r="3" fill="white" />
+      </svg>
+      <Container className={cn("relative grid items-center gap-12", visual ? "lg:grid-cols-[1.1fr_0.9fr] lg:gap-10" : "")}>
+        <Reveal className={cn("max-w-2xl", !visual && "mx-auto text-center")}>
+          <nav aria-label="Breadcrumb" className={cn("flex items-center gap-1.5 text-xs font-medium text-white/60", !visual && "justify-center")}>
+            <Link href="/" className="hover:text-white">Home</Link><span aria-hidden>›</span><span className="text-white/85">{crumb ?? eyebrow}</span>
+          </nav>
+          <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#FFB27A] backdrop-blur">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#FF7A1A]" />{eyebrow}
+          </p>
+          <h1 className="mt-5 text-[40px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[52px] lg:text-[58px]">{title}</h1>
+          {text ? <p className={cn("mt-5 text-[17px] leading-[1.6] text-white/80 sm:text-lg", !visual && "mx-auto", "max-w-xl")}>{text}</p> : null}
+          {children}
+        </Reveal>
+        {visual ? <Reveal delay={150} className="relative">{visual}</Reveal> : null}
       </Container>
+      <svg aria-hidden className="pointer-events-none absolute bottom-0 left-0 h-10 w-full text-white sm:h-14" viewBox="0 0 1440 80" preserveAspectRatio="none" fill="currentColor">
+        <path d="M0 80 C 360 0 1080 0 1440 80 Z" />
+      </svg>
     </section>
   );
 }

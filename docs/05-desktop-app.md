@@ -1,15 +1,15 @@
-# Servio: Desktop Applications
+# EasAlpha: Desktop Applications
 
 Date: 8 Oct 2026. Sources: the build blueprint and the ArfaPOS audit.
 
 > **10 Oct 2026: `SPEC.md` is the requirement.** Where this file differs from `SPEC.md`, `SPEC.md` wins. The differences are listed in `PDF-ALIGNMENT.md`; the extras in this file stay. The text before this change is kept in `archive/before-spec-2026-10-10/`.
 
 
-Servio's till, **Servio POS**, is an installable web app at `/pos` (SPEC), used on a desktop PC or a tablet. The kitchen display and the customer display are browser pages served by the same app on a second device or a second screen. The admin panel is web only.
+EasAlpha's till, **EasAlpha POS**, is an installable web app at `/pos` (SPEC), used on a desktop PC or a tablet. The kitchen display and the customer display are browser pages served by the same app on a second device or a second screen. The admin panel is web only.
 
 ---
 
-## 1. Servio POS, the till
+## 1. EasAlpha POS, the till
 
 | Item | Value |
 |---|---|
@@ -18,8 +18,8 @@ Servio's till, **Servio POS**, is an installable web app at `/pos` (SPEC), used 
 | Screens | The Next.js till screens from `servio-web` at `/pos`. One code base for desktop and tablet. |
 | Local data | IndexedDB with menu, prices, tax, staff PINs, tables, open orders, shift, 7 days of synced orders; the catalog is checked by ETag on launch. |
 | Minimum screen | 1366 x 768. Works with touch, mouse and keyboard. |
-| Install | Installed from the browser to the desktop or home screen; updates apply only when no shift is open. |
-| Identity | Paired to one branch with a one-time code; device token stored on the device. |
+| Install | Installed from the browser to the desktop or home screen, or the desktop installer; updates apply only when no shift is open. |
+| Identity | Set up once by an owner or manager signing in on the machine and choosing its role (till, tablet, kitchen display, token or queue screen, rider phone); device token stored on the device. A one-time code is the fallback. |
 
 ### 1.1 Layout
 
@@ -94,6 +94,7 @@ Three columns on every order screen: categories on the left, item grid with phot
 
 ### 1.7 Updates
 
+- The desktop installer updates itself: it checks the release feed on start and every 4 hours, downloads in the background and installs when the app is closed, with a "Restart now / Later" prompt. Every `v*` tag on GitHub publishes the new installers and the feed.
 - The web app checks for a new version and switches only when no shift is open and the queue is empty.
 - The version number shows on the PIN screen; a release can be rolled back by redeploying the previous web build.
 - API versions stay live until every till in the business has updated.

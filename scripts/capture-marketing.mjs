@@ -4,7 +4,7 @@ import fs from "node:fs";
 const API = "http://localhost:3001/api/v1", WEB = "http://localhost:3000";
 const OUT = new URL("../servio-web/public/marketing/", import.meta.url).pathname; fs.mkdirSync(OUT, { recursive: true });
 const api = async (path, { method = "GET", token, body } = {}) => { const r = await fetch(API + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); let j = null; try { j = await r.json(); } catch {} return { status: r.status, j }; };
-const login = await api("/auth/login", { method: "POST", body: { email: "demo@servio.pk", password: "password123" } }); const T = login.j.access_token;
+const login = await api("/auth/login", { method: "POST", body: { email: "demo@easalpha.com", password: "password123" } }); const T = login.j.access_token;
 for (const d of (await api("/devices", { token: T })).j?.data || []) if (/^Shot /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
 // The trial plan allows three tills, so reuse the seeded Counter till with a fresh code instead of adding one.
 const counter = ((await api("/devices", { token: T })).j?.data || []).find((d) => d.name === "Counter till");
@@ -15,7 +15,7 @@ const browser = await chromium.launch({ channel: "chrome", headless: true });
 const shot = async (page, name, opts = {}) => { await page.waitForTimeout(opts.wait ?? 1800); await page.screenshot({ path: OUT + name + ".png", fullPage: false }); console.log("shot", name); };
 
 const admin = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 }); const a = await admin.newPage();
-await a.goto(WEB + "/login"); await a.waitForSelector("input[type=email]"); await a.fill("input[type=email]", "demo@servio.pk"); await a.fill("input[type=password]", "password123");
+await a.goto(WEB + "/login"); await a.waitForSelector("input[type=email]"); await a.fill("input[type=email]", "demo@easalpha.com"); await a.fill("input[type=password]", "password123");
 await a.getByRole("button", { name: "Log in" }).click(); await a.waitForURL(/\/admin/, { timeout: 60000 });
 const adminShots = [["/admin", "admin-dashboard"], ["/admin/orders", "admin-orders"], ["/admin/products/catalog", "admin-catalog"], ["/admin/inventory/stock-in-hand", "admin-stock"], ["/admin/inventory-reports/deduction-health", "admin-deduction-health"],
   ["/admin/reports/grand", "admin-grand-report"], ["/admin/finance/dashboard", "admin-finance"], ["/admin/finance/balance-sheet", "admin-balance-sheet"], ["/admin/payroll/fingerprint", "admin-attendance"], ["/admin/suppliers/ledger", "admin-supplier-ledger"],

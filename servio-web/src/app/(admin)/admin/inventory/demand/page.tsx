@@ -20,7 +20,7 @@ export default function DemandPage() {
   return (
     <>
       <PageHeader icon={TrendingUp} title="Demand" description="What to restock. Each item's stock is checked against its minimum and recent usage, what is already on order is subtracted, and the answer is split into what to transfer from another section and what to buy." />
-      <Tabs value={tab} onChange={setTab} items={[{ value: "demand", label: "Demand" }, { value: "forecast", label: "Forecast (Servio)" }]} className="mb-4 w-fit" />
+      <Tabs value={tab} onChange={setTab} items={[{ value: "demand", label: "Demand" }, { value: "forecast", label: "Forecast (EasAlpha)" }]} className="mb-4 w-fit" />
       {tab === "demand" ? <DemandTab /> : <ForecastTab />}
     </>
   );
@@ -84,7 +84,7 @@ function DemandTab() {
   );
 }
 
-/** Servio extra: the usage forecast that projects recent consumption forward and can be capped by a budget. */
+/** EasAlpha extra: the usage forecast that projects recent consumption forward and can be capped by a budget. */
 function ForecastTab() {
   const [lookback, setLookback] = useState("30");
   const [days, setDays] = useState("7");

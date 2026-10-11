@@ -6,6 +6,7 @@ import type { Category, Menu, Station } from "@/lib/types";
 import { FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction, useList, useRemove, useSave } from "@/components/admin/crud";
 import { ImageUpload } from "@/components/admin/image-upload";
+import { BrandImage } from "@/components/admin/brand-image";
 import { DragHandle, SortableList, SortableRow, type SortHandle } from "@/components/admin/catalog-sortable";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Switch, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
@@ -38,8 +39,13 @@ export default function CategoriesPage() {
     <>
       <TD className="w-10">{handle ? <DragHandle handle={handle} /> : <span className="text-xs text-fg-muted tabular">{i + 1}</span>}</TD>
       <TD className="font-medium">
-        {c.name}{c.name_ur ? <span className="ml-2 font-normal text-fg-muted">{c.name_ur}</span> : null}
-        {c.subtitle ? <div className="text-xs font-normal text-fg-secondary">{c.subtitle}</div> : null}
+        <div className="flex items-center gap-3">
+          <BrandImage src={c.image_key} kind="cover" placeholder={Layers} className="h-9 w-9 shrink-0 rounded-md" />
+          <div>
+            {c.name}{c.name_ur ? <span className="ml-2 font-normal text-fg-muted">{c.name_ur}</span> : null}
+            {c.subtitle ? <div className="text-xs font-normal text-fg-secondary">{c.subtitle}</div> : null}
+          </div>
+        </div>
       </TD>
       <TD className="text-fg-secondary">{menus.data?.find((m) => m.id === c.menu_id)?.name ?? "-"}</TD>
       <TD className="text-fg-secondary">{stations.data?.find((s) => s.id === c.station_id)?.name ?? "-"}</TD>

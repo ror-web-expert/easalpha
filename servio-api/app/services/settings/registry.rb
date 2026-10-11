@@ -78,7 +78,7 @@ module Settings
       [ "security.cashier_pin_required", "security_cash", "Cashier PIN", "boolean", true, "Cashier actions need the cashier's own PIN" ],
       [ "security.cashier_drawer", "security_cash", "Cashier Drawer", "boolean", true, "Payments land in each cashier's own till account instead of the admin accounts" ],
 
-      # Servio extras that already lived in businesses.settings, kept under their old keys.
+      # EasAlpha extras that already lived in businesses.settings, kept under their old keys.
       [ "cash_rounding", "charges_tax", "Service Charge", "integer", 0, "Round cash to Rs 5 or Rs 10" ],
       [ "staff_meal_requires_approval", "point_of_sale", "Order Behavior", "boolean", true, "A staff meal needs a manager PIN" ],
       [ "discount_requires_reason", "point_of_sale", "Order Behavior", "boolean", true, "A discount needs a reason" ],

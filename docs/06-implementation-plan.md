@@ -1,6 +1,6 @@
-# Servio: Implementation Plan
+# EasAlpha: Implementation Plan
 
-Date: 8 Oct 2026. Sources: the build blueprint roadmap, the Servio Feature Specification v1, and `01-features.md`.
+Date: 8 Oct 2026. Sources: the build blueprint roadmap, the EasAlpha Feature Specification v1, and `01-features.md`.
 
 > **10 Oct 2026: `SPEC.md` is the requirement.** Where this file differs from `SPEC.md`, `SPEC.md` wins. The differences are listed in `PDF-ALIGNMENT.md`; the extras in this file stay. The text before this change is kept in `archive/before-spec-2026-10-10/`.
 
@@ -17,7 +17,7 @@ The original plan shipped a core POS in 10 two-week sprints; from 10 Oct 2026 th
 - [x] Android till build: the installable web app at `/pos`, the same as the desktop (SPEC).
 - [ ] Name the 3 pilot restaurants and get their menu, staff list and a printer model each.
 - [ ] Apply for FBR and PRA POS-provider integration and Meta Business verification now. Both take weeks and sit on the critical path.
-- [ ] Register the company, open a bank account, file the Servio trademark.
+- [ ] Register the company, open a bank account, file the EasAlpha trademark.
 
 ## 2. Team and tracks
 

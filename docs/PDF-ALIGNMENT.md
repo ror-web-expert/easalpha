@@ -1,8 +1,8 @@
-# PDF Alignment: SPEC.md vs the Servio docs
+# PDF Alignment: SPEC.md vs the EasAlpha docs
 
-Date: 10 Oct 2026. Live copy: [Servio: PDF Spec vs Servio Docs](https://claude.ai/code/artifact/5830de61-ca3f-49eb-9998-f837c6596a09).
+Date: 10 Oct 2026. Live copy: [EasAlpha: PDF Spec vs EasAlpha Docs](https://claude.ai/code/artifact/5830de61-ca3f-49eb-9998-f837c6596a09).
 
-`SPEC.md` (the PDF "ARFAPOS Clone — Functional Spec & Build Plan", 38 pages) is Servio's requirement. Every feature, screen, menu item and behaviour in it must exist in Servio and work the same way. This file lists, for each PDF feature, whether the Servio docs and the app already have it, where the docs said something different, and the Servio extras that stay.
+`SPEC.md` (the PDF "ARFAPOS Clone — Functional Spec & Build Plan", 38 pages) is EasAlpha's requirement. Every feature, screen, menu item and behaviour in it must exist in EasAlpha and work the same way. This file lists, for each PDF feature, whether the EasAlpha docs and the app already have it, where the docs said something different, and the EasAlpha extras that stay.
 
 Order of authority: `SPEC.md` first, then this file, then `01` to `08`. Where `SPEC.md` is silent, `01` to `08` fill the gap. Where both are silent, ask the owner.
 
@@ -10,12 +10,12 @@ Order of authority: `SPEC.md` first, then this file, then `01` to `08`. Where `S
 
 ## 1. Rules
 
-1. **PDF wins.** Where `01` to `08` say something different, Servio follows `SPEC.md`.
+1. **PDF wins.** Where `01` to `08` say something different, EasAlpha follows `SPEC.md`.
 2. **Same menu.** The admin sidebar copies the PDF's 4 standalone screens and 12 groups, with their screens.
 3. **Same devices.** The POS is an installable web app at `/pos` with an offline queue, as the PDF's frontend plan proposes (its open question 3 leaves installed software as an option for printer access). Tools that already do the same job stay (owner's answer: "best thing and fast, just the features and functionality of this PDF"); see section 5.
-4. **Nothing is removed.** Features in the Servio docs that the PDF does not have stay. They are listed in section 7 with the reason each was added.
+4. **Nothing is removed.** Features in the EasAlpha docs that the PDF does not have stay. They are listed in section 7 with the reason each was added.
 5. **Everything is tested** the way the PDF says: a request spec per endpoint for the happy path, a permission denial and one edge case, and a gate at the end of each phase.
-6. **Own name and look.** The PDF itself says the clone keeps its own name, visual design and wording. Servio keeps its name and its Material Design 3 look; behaviour and menu structure follow the PDF.
+6. **Own name and look.** The PDF itself says the clone keeps its own name, visual design and wording. EasAlpha keeps its name and its Material Design 3 look; behaviour and menu structure follow the PDF.
 
 Column values used below. **The Docs column scores `01` to `08` as they stood before the 10 Oct 2026 edits** (the archived text), so it shows what those docs had to change; after the edits every Differs, Later and Missing row is covered the SPEC way.
 
@@ -45,7 +45,7 @@ App values come from the code check on 10 Oct 2026.
 
 The PDF describes 218 features.
 
-| Status | Servio docs | App on 10 Oct 2026 |
+| Status | EasAlpha docs | App on 10 Oct 2026 |
 |---|---|---|
 | Matches the PDF (Same or Built) | 86 | 55 |
 | Partly | 65 | 90 |
@@ -57,7 +57,7 @@ The PDF describes 218 features.
 
 Biggest gaps, missing from both the docs and the app: per-user permissions with the 58 codes; double-entry finance; the reopen flow and an order story with item and money changes; stock deducted at completion with the safety-net job; the attendance rules engine; regular discounts, voucher batches and reviews; POS settings (customer required, order behaviour, print server, pending-order reminder); Website Config; PDF export.
 
-The Servio docs also hold 88 features the PDF does not have. All stay (section 7).
+The EasAlpha docs also hold 88 features the PDF does not have. All stay (section 7).
 
 ---
 
@@ -65,7 +65,7 @@ The Servio docs also hold 88 features the PDF does not have. All stay (section 7
 
 The PDF sidebar has 4 standalone screens and 12 groups, 94 screens in all. The app sidebar on 10 Oct 2026 had 10 groups and 70 items, 10 marked Soon.
 
-| PDF group | PDF screens, in order | In Servio docs | In the app sidebar on 10 Oct |
+| PDF group | PDF screens, in order | In EasAlpha docs | In the app sidebar on 10 Oct |
 |---|---|---|---|
 | Standalone | Dashboard · Orders · Expenses · Tables | All 4 | All 4, spread over Sell and Money |
 | Products | Menus · Catalog · Deals · Promotions · Quick Add Menu | 4; Quick Add was Later | Menus, Categories, Products, Deals, Promotions; no Quick Add |
@@ -89,7 +89,7 @@ Settings areas, 24 screens:
 - **Inventory:** Sections, Stock Alerts, Reset Stock
 - **Security & Cash:** Change Password, Signed-In Devices, Expense & Report PIN, Cashier PIN, Cashier Drawer
 
-Servio screens with no PDF screen stay, moved into the nearest PDF group: Reservations, QR orders, Modifier groups, Tax rates, Stations, Shifts, Day close, Tax invoices, Overheads, Food cost, Production, Goods received, Payables aging, Purchases report, Delivery board, Zones, Campaigns, Roles, Commissions, Devices, Scheduled reports, Branch comparison, Foodpanda, Needs attention, Branches, QR ordering, Setup checklist, Opening and closing, Integrations.
+EasAlpha screens with no PDF screen stay, moved into the nearest PDF group: Reservations, QR orders, Modifier groups, Tax rates, Stations, Shifts, Day close, Tax invoices, Overheads, Food cost, Production, Goods received, Payables aging, Purchases report, Delivery board, Zones, Campaigns, Roles, Commissions, Devices, Scheduled reports, Branch comparison, Foodpanda, Needs attention, Branches, QR ordering, Setup checklist, Opening and closing, Integrations.
 
 ---
 
@@ -165,8 +165,8 @@ Every PDF behaviour, module by module: 218 rows across 13 modules. Each row must
 | Permissions granted per user; role presets are only a shortcut | Differs | Differs | Docs P8 says per user, but docs section 10 and the schema are per role |
 | 58 permission codes in 12 modules, each with a code and a plain description | Differs | Differs | Docs list 15 codes; app has 46, about 20 PDF codes missing |
 | Presets Cashier, Supervisor, Manager, plus Select all | Partly | Partly | Docs and app have 7 role templates, no Supervisor, no Select all |
-| Surface badge on each permission: Software, App or Both | Missing | Missing | Servio uses app.pos, app.kitchen, app.rider codes instead |
-| RESTRICTION permissions that add a step, such as REQUIRE_PIN_FOR_ORDER_UPDATE | Missing | Missing | Servio asks for a manager PIN when a permission is missing, which is the reverse |
+| Surface badge on each permission: Software, App or Both | Missing | Missing | EasAlpha uses app.pos, app.kitchen, app.rider codes instead |
+| RESTRICTION permissions that add a step, such as REQUIRE_PIN_FOR_ORDER_UPDATE | Missing | Missing | EasAlpha asks for a manager PIN when a permission is missing, which is the reverse |
 | Full-screen permission editor: module list with granted-of-total badge, permissions on the right | Missing | Partly | App has a role editor with checkboxes, no badge per module |
 | Changes take effect at the user's next sign-in; granted set cached in the JWT | Differs | Differs | Docs and app read permissions on every request, so changes apply at once |
 | Checked in the API by policy and hidden in the UI by a Can wrapper | Same | Built | |
@@ -394,7 +394,7 @@ Every PDF behaviour, module by module: 218 rows across 13 modules. Each row must
 | PDF feature and behaviour | Docs | App | Note |
 | --- | --- | --- | --- |
 | Store Profile: name, primary and secondary phone, address, printed on the receipt | Partly | Partly | One phone only |
-| Store Management: link other stores and manage them from one dashboard | Partly | Partly | Servio has branches inside one business |
+| Store Management: link other stores and manage them from one dashboard | Partly | Partly | EasAlpha has branches inside one business |
 | POS settings: Order Taker, Customer Fields, POS Notifications, Barcode Scanning | Partly | Missing | Docs mention a barcode scanner only |
 | Settings as a typed key-value store per outlet with defaults and a version number | Differs | Differs | Docs and app: one JSON field per business |
 | Security: Change Password, Signed-In Devices, Expense and Report PIN, Cashier PIN | Partly | Partly | No expense and report PIN |
@@ -443,15 +443,15 @@ Every PDF behaviour, module by module: 218 rows across 13 modules. Each row must
 
 ---
 
-## 7. Extras: in the Servio docs, not in the PDF
+## 7. Extras: in the EasAlpha docs, not in the PDF
 
-The Servio docs hold 88 features the PDF does not have. None are removed. They came from two earlier sources: **Blueprint** is the first PDF, "Restaurant POS Product Overview and Build Blueprint" (7 Oct 2026); **ArfaPOS audit** is the review of 64 ArfaPOS screenshots (8 Oct 2026). Six rows (11 features in `01`) are parked as Later.
+The EasAlpha docs hold 88 features the PDF does not have. None are removed. They came from two earlier sources: **Blueprint** is the first PDF, "Restaurant POS Product Overview and Build Blueprint" (7 Oct 2026); **ArfaPOS audit** is the review of 64 ArfaPOS screenshots (8 Oct 2026). Six rows (11 features in `01`) are parked as Later.
 
 Where an extra conflicts with the PDF, the PDF behaviour comes first and the extra sits beside it. For example, refunds stay, but completed orders are reopened the PDF way.
 
 ### Selling and orders
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Modifier groups for size, spice and extras | S3, M4 | Blueprint | Karahi and BBQ orders need options that variants alone cannot hold |
 | Split bill by amount or by item | S4 | Blueprint | Tables of friends pay separately |
@@ -479,7 +479,7 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 
 ### Menu
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Time-based menus, such as breakfast hours | M1 | Blueprint | Different menus at different times |
 | Prices by order type and by branch | M5 | Blueprint | Delivery often costs more than dine-in |
@@ -491,7 +491,7 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 
 ### Money and tax
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Shift open with opening cash, cash in and out, blind close, over or short | Y1 | Blueprint | Cash control per cashier |
 | Z report per shift | Y2 | Blueprint | End-of-shift print the owner checks |
@@ -512,7 +512,7 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 
 ### Stock and purchasing
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Recipe coverage meter; a product cannot go live without a recipe | K11 | Blueprint | Stock is only right when every product has a recipe |
 | Food cost percent per item against a target, with waste % per line | K12 | Blueprint | Shows which dishes lose money |
@@ -527,7 +527,7 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 
 ### People
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | One built-in walk-in customer | P5 | ArfaPOS audit | ArfaPOS had duplicate walk-in records |
 | Birthday offers; campaign opt-in and STOP | P6 | Blueprint | WhatsApp rules require opt-in |
@@ -542,7 +542,7 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 
 ### Reports and insight
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Dashboard compares today with the same day last week; shows recipe coverage and tax queue | I1 | Blueprint | The owner sees trend and problems at once |
 | Business overview against yesterday, last week and last month | I2 | ArfaPOS audit | Seen in the ArfaPOS screenshots |
@@ -554,12 +554,12 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 
 ### Platform and devices
 
-| Extra in Servio docs | Docs ref | Source | Why it was added |
+| Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Signup with WhatsApp OTP or email; setup checklist | F1, F2 | Both | Restaurants sign up without a salesperson |
-| Plans, 90-day trial, invoices, grace period, read-only mode; Paddle, JazzCash, EasyPaisa | F4 | Blueprint | Servio is sold by subscription |
+| Plans, 90-day trial, invoices, grace period, read-only mode; Paddle, JazzCash, EasyPaisa | F4 | Blueprint | EasAlpha is sold by subscription |
 | WhatsApp receipts, order status, daily summary, owner alerts; SMS and email fallback | F5 | Blueprint | WhatsApp is how owners and customers talk |
-| Super admin with support login on owner approval | F6 | Blueprint | Servio's own support team |
+| Super admin with support login on owner approval | F6 | Blueprint | EasAlpha's own support team |
 | One formatter for money, dates and phones | F8 | ArfaPOS audit | ArfaPOS showed the same values in different formats |
 | Setup tour | F9 | Blueprint | Onboarding without training |
 | English and Urdu with right-to-left; currency and tax per country | F10 | Blueprint | Pakistan first, then UK and Gulf |
@@ -606,7 +606,7 @@ Phase 3 acceptance check, run in a real browser:
 
 Run again later: the **audit** check (every endpoint that writes stock or money, called twice with the same payload and cut off halfway, stays correct) and the **parity** check (every screen against `SPEC.md`: missing, partial, extra).
 
-Kept from the Servio docs: the 8 offline scenarios in `04`, the tenant isolation suite, the Playwright browser run.
+Kept from the EasAlpha docs: the 8 offline scenarios in `04`, the tenant isolation suite, the Playwright browser run.
 
 ---
 

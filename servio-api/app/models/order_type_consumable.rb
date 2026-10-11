@@ -1,5 +1,5 @@
 # SPEC "Order Inventory" tab: consumables charged by order type rather than by recipe (boxes, bags, fuel), set per
-# order type and per variant, deducted with the sale. Branch-wide packaging rules stay as the Servio extra.
+# order type and per variant, deducted with the sale. Branch-wide packaging rules stay as the EasAlpha extra.
 class OrderTypeConsumable < ApplicationRecord
   include Tenanted
   belongs_to :product

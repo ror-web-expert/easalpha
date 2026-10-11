@@ -28,6 +28,12 @@ describe("SPEC sidebar", () => {
     }
   });
 
+  it("puts Branding right after Store in Settings", () => {
+    const settings = NAV.find((g) => g.label === "Settings")!.items.map((i) => i.label);
+    expect(settings.indexOf("Branding")).toBe(settings.indexOf("Store") + 1);
+    expect(NAV.find((g) => g.label === "Settings")!.items.find((i) => i.label === "Branding")?.href).toBe("/admin/settings/branding");
+  });
+
   it("uses the SPEC route roots", () => {
     const hrefs = NAV.flatMap((g) => g.items.map((i) => i.href.split("#")[0]));
     for (const h of hrefs) expect(h).toMatch(/^\/admin(\/(products|inventory|inventory-reports|purchasing|suppliers|customers|staff|finance|payroll|reports|riders|settings|orders|expenses|tables)(\/.*)?)?$/);

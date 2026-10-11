@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
-import { BrowserFrame, CARD, Container, CtaBand, Eyebrow, PageHero, PhoneFrame, SHOTS, type Shot } from "@/components/site/sections";
+import { BrowserFrame, CARD, Container, CtaBand, Eyebrow, HeroChip, PageHero, PhoneFrame, SHOTS, type Shot } from "@/components/site/sections";
 import { Reveal } from "@/components/site/reveal";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Features",
-  description: "A deeper tour of Servio by area: selling, kitchen, inventory, purchasing, money, people, riders, customers and marketing, reports, settings and security.",
+  description: "A deeper tour of EasAlpha by area: selling, kitchen, inventory, purchasing, money, people, riders, customers and marketing, reports, settings and security.",
   alternates: { canonical: "/features" },
 };
 
@@ -50,7 +50,8 @@ const AREAS: Area[] = [
 export default function FeaturesPage() {
   return (
     <SiteShell>
-      <PageHero eyebrow="Features" title="Everything in Servio, area by area" text="Each section below is built, tested and in the product today. Where a screenshot exists it is the real screen, not a mock-up." />
+      <PageHero eyebrow="Features" title="Everything in EasAlpha, area by area" text="Each section below is built, tested and in the product today. Where a screenshot exists it is the real screen, not a mock-up." 
+        visual={<div className="relative lg:[perspective:1200px]"><div className="lg:origin-left lg:[transform:rotateY(-6deg)]"><BrowserFrame shot={SHOTS.dashboard} sizes="(max-width: 1024px) 100vw, 560px" priority dark /></div><HeroChip icon={CheckCircle2} title="Built and tested" text="every area below is live today" className="absolute -left-4 -bottom-6 hidden sm:flex" /></div>} />
       <Container className="grid gap-12 py-20 lg:grid-cols-[220px_1fr] lg:py-28">
         <nav aria-label="Areas" className="hidden lg:block">
           <ul className="sticky top-24 space-y-1 text-sm">
@@ -75,7 +76,7 @@ export default function FeaturesPage() {
               </Reveal>
             </section>
           ))}
-          <p className={`p-6 text-slate-600 ${CARD}`}>Servio also keeps extras beyond the core spec: reservations, QR table ordering, modifier groups, overheads and food cost, production, goods received, campaigns, roles, branch comparison, Foodpanda, setup checklist and opening and closing checklists. See <Link href="/pricing" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">which plan includes what</Link>.</p>
+          <p className={`p-6 text-slate-600 ${CARD}`}>EasAlpha also keeps extras beyond the core spec: reservations, QR table ordering, modifier groups, overheads and food cost, production, goods received, campaigns, roles, branch comparison, Foodpanda, setup checklist and opening and closing checklists. See <Link href="/pricing" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">which plan includes what</Link>.</p>
         </div>
       </Container>
       <CtaBand title="See it with your own menu" text={`Create an account, import your products and try every screen free for ${TRIAL_DAYS} days.`} secondary={{ href: "/contact", label: "Book a demo" }} />

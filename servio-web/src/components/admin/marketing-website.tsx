@@ -3,12 +3,11 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { listToText, textToList, websiteFieldLabel, websiteFieldType, websiteSectionLabel } from "@/components/admin/marketing-helpers";
 import { ImageUpload } from "@/components/admin/image-upload";
+import { THEME_PRESETS } from "@/components/admin/branding-helpers";
 import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input, MoneyInput, Switch, Textarea } from "@/components/ui";
 
 // SPEC Website Config: a full site builder with one screen per section. Each section is a flat key/value hash on the
 // API; the control for a key is decided by websiteFieldType so a new key on the API shows up without a screen change.
-
-const THEME_PRESETS = ["#10294d", "#ff7a1a", "#2e7d32", "#c62828", "#ef6c00", "#6a1b9a", "#00838f", "#191c23"];
 
 const SECTION_HINTS: Record<string, string> = {
   identity: "Name, URL slug, description, theme colour, logo, cover image and favicon. These shape every page.",

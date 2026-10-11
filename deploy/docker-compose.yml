@@ -1,8 +1,11 @@
-# Servio, complete stack: PostgreSQL, API, job worker, web app, WhatsApp gateway. Put a TLS proxy (Caddy, nginx) in
+# EasAlpha, complete stack: PostgreSQL, API, job worker, web app, WhatsApp gateway. Put a TLS proxy (Caddy, nginx) in
 # front of web:3000 and api:3001, or set FORCE_SSL=false for a plain LAN install.
+# Overlays: docker-compose.images.yml (prebuilt images from GitHub), docker-compose.proxy.yml (Caddy already in Docker).
+# List them in COMPOSE_FILE inside .env and every "docker compose" command picks them up.
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes: ["pgdata:/var/lib/postgresql/data"]
@@ -10,6 +13,7 @@ services:
 
   api:
     build: ../servio-api
+    restart: unless-stopped
     command: bash -c "bin/rails db:prepare && bin/rails db:seed && bin/rails server -b 0.0.0.0 -p 3001"
     environment: &api_env
       RAILS_ENV: production
@@ -19,9 +23,12 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD}
       FORCE_SSL: ${FORCE_SSL:-true}
+      PUBLIC_URL: ${PUBLIC_URL}
       CORS_ORIGINS: ${PUBLIC_URL}
       WHATSAPP_GATEWAY_URL: http://whatsapp:3010
       WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
@@ -35,22 +42,28 @@ services:
 
   jobs:
     build: ../servio-api
+    restart: unless-stopped
     command: bin/jobs
     environment: *api_env
     depends_on: [api]
     volumes: ["storage:/rails/storage"]
 
   web:
+    restart: unless-stopped
     build:
       context: ../servio-web
       args:
         NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL}/api/v1
         NEXT_PUBLIC_CABLE_URL: ${API_PUBLIC_URL}/cable
     ports: ["3000:3000"]
+    # Desktop installers for the Download page: drop the files from a desktop release into deploy/downloads/ and the
+    # site serves them at /downloads, so the links follow the site's own domain.
+    volumes: ["./downloads:/app/public/downloads:ro"]
     depends_on: [api]
 
   whatsapp:
     build: ../servio-whatsapp
+    restart: unless-stopped
     environment:
       PORT: "3010"
       WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}

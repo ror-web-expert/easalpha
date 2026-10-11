@@ -6,6 +6,7 @@ import { printServerStatus, restartPrintServer, startPrintServer } from "./print
 import { listSystemPrinters } from "./transports/system";
 import { usbAvailable } from "./transports/usb";
 import type { PrintJob, PrinterConfig, Settings } from "./types";
+import { checkForUpdatesInteractive, describeUpdateStatus, startUpdater, stopUpdater } from "./updater";
 
 const VERSION: string = app.getVersion();
 const UI_DIR = path.join(__dirname, "..", "ui");
@@ -25,12 +26,18 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-function posUrl(): string {
-  return loadSettings().webUrl + "/pos";
+// Every launch opens /setup: a machine that is already set up is forwarded to its own screen (till, kitchen display,
+// token screen...), a new machine asks the owner or manager to sign in once and choose what it is.
+function appUrl(): string {
+  return loadSettings().webUrl + "/setup";
+}
+
+function setupAgainUrl(): string {
+  return loadSettings().webUrl + "/setup?again=1";
 }
 
 function offlinePageUrl(): string {
-  const params = new URLSearchParams({ url: posUrl() });
+  const params = new URLSearchParams({ url: appUrl() });
   return "file://" + path.join(UI_DIR, "offline.html") + "?" + params.toString();
 }
 
@@ -40,7 +47,7 @@ function createMainWindow(): void {
     height: 800,
     minWidth: 1366,
     minHeight: 800,
-    title: "Servio POS",
+    title: "EasAlpha POS",
     backgroundColor: "#ffffff",
     icon: path.join(__dirname, "..", "build", "icon.png"),
     webPreferences: {
@@ -61,7 +68,7 @@ function createMainWindow(): void {
   });
   mainWindow.webContents.on("did-fail-load", (_e, code, _desc, validatedUrl, isMainFrame) => {
     if (!isMainFrame || code === -3 /* aborted */) return;
-    if (!loadedOnce || validatedUrl === posUrl()) {
+    if (!loadedOnce || validatedUrl === appUrl()) {
       void mainWindow?.loadURL(offlinePageUrl());
     }
   });
@@ -77,7 +84,23 @@ function createMainWindow(): void {
     mainWindow = null;
   });
 
-  void mainWindow.loadURL(posUrl());
+  void mainWindow.loadURL(appUrl());
+}
+
+function setUpDeviceAgain(): void {
+  void dialog
+    .showMessageBox({
+      type: "question",
+      title: "Set up this device again",
+      message: "Change what this machine is?",
+      detail: "An owner or manager signs in and chooses the role again (till, kitchen display, token screen...). The current pairing is replaced.",
+      buttons: ["Continue", "Cancel"],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    .then((r) => {
+      if (r.response === 0) void mainWindow?.loadURL(setupAgainUrl());
+    });
 }
 
 function openPrinterSettings(): void {
@@ -90,7 +113,7 @@ function openPrinterSettings(): void {
     height: 640,
     minWidth: 640,
     minHeight: 480,
-    title: "Printers - Servio POS",
+    title: "Printers - EasAlpha POS",
     parent: mainWindow ?? undefined,
     autoHideMenuBar: true,
     backgroundColor: "#ffffff",
@@ -124,9 +147,9 @@ function showPrintServerStatus(): void {
 function showAbout(): void {
   void dialog.showMessageBox({
     type: "info",
-    title: "About Servio POS",
-    message: `Servio POS ${VERSION}`,
-    detail: `Desktop shell for the Servio web POS.\n\nWeb app: ${loadSettings().webUrl}\nSettings file: ${getSettingsPath()}\nElectron ${process.versions.electron}, Chromium ${process.versions.chrome}`,
+    title: "About EasAlpha POS",
+    message: `EasAlpha POS ${VERSION}`,
+    detail: `Desktop shell for the EasAlpha web POS.\n\nWeb app: ${loadSettings().webUrl}\nSettings file: ${getSettingsPath()}\nUpdates: ${describeUpdateStatus()}\nElectron ${process.versions.electron}, Chromium ${process.versions.chrome}`,
     buttons: ["OK"],
   });
 }
@@ -134,9 +157,9 @@ function showAbout(): void {
 function buildMenu(): void {
   const template: MenuItemConstructorOptions[] = [
     {
-      label: "Servio",
+      label: "EasAlpha",
       submenu: [
-        { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => void mainWindow?.loadURL(posUrl()) },
+        { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => void mainWindow?.loadURL(appUrl()) },
         {
           label: "Full screen",
           accelerator: "F11",
@@ -148,6 +171,8 @@ function buildMenu(): void {
         { label: "Printers", accelerator: "CmdOrCtrl+Shift+P", click: openPrinterSettings },
         { label: "Print server status", click: showPrintServerStatus },
         { type: "separator" },
+        { label: "Set up this device again...", click: setUpDeviceAgain },
+        { label: "Check for updates...", click: () => void checkForUpdatesInteractive() },
         { label: "About", click: showAbout },
         { type: "separator" },
         { role: "quit", label: "Quit" },
@@ -180,7 +205,7 @@ function registerIpc(): void {
     const before = loadSettings();
     const saved = saveSettings(next);
     if (saved.printServerPort !== before.printServerPort) await restartPrintServer(saved.printServerPort, VERSION);
-    if (saved.webUrl !== before.webUrl) void mainWindow?.loadURL(posUrl());
+    if (saved.webUrl !== before.webUrl) void mainWindow?.loadURL(appUrl());
     return saved;
   });
   ipcMain.handle("settings:savePrinter", (_e, printer: Partial<PrinterConfig>) => {
@@ -214,9 +239,11 @@ app.whenReady().then(async () => {
   buildMenu();
   createMainWindow();
   await startPrintServer(loadSettings().printServerPort, VERSION);
+  startUpdater({ updateUrl: loadSettings().updateUrl });
 });
 
 app.on("window-all-closed", () => {
+  stopUpdater();
   app.quit();
 });
 

@@ -1,4 +1,4 @@
-# Servio: Technology and Architecture
+# EasAlpha: Technology and Architecture
 
 Date: 8 Oct 2026. Source: the build blueprint, with additions from the ArfaPOS audit.
 
@@ -12,7 +12,7 @@ One Rails API serves every screen: the desktop till, the kitchen display, the ad
 ## 1. System architecture
 
 ```
- Servio POS        Kitchen screen     Admin panel        Online and QR      Rider app
+ EasAlpha POS        Kitchen screen     Admin panel        Online and QR      Rider app
  Web, IndexedDB    By station         Next.js web        Website, QR menu   Deliveries, map
  Works offline     Live updates       Owner, manager     Customer app       Cash collected
       |                 |                  |                  |                  |
@@ -145,7 +145,7 @@ Rules every developer follows:
 8. An automated test suite tries to read and write another business's data on every endpoint and must fail every time.
 9. Super admin opens a business only for support, with the owner's approval, and every action is logged.
 
-Domains: `servio.com` and `servio.pk` for marketing; `app.servio.com` for staff; `<slug>.servio.menu` for customer ordering; `order.<restaurant>.com` custom domain on the Business plan; `admin.servio.com` for super admin with 2FA and an office IP allowlist.
+Domains: `easalpha.com` for marketing; `app.easalpha.com` for staff; `easalpha.com/store/<slug>` for customer ordering; `order.<restaurant>.com` custom domain on the Business plan; `admin.easalpha.com` for super admin with 2FA and an office IP allowlist.
 
 ---
 
@@ -156,7 +156,7 @@ Security:
 - HTTPS everywhere; passwords hashed with bcrypt; PINs hashed and locked after 5 wrong tries.
 - Rate limits on login, OTP and public ordering endpoints.
 - Role checks on every API endpoint (Pundit) plus the tenant rules above.
-- Payment card data never touches Servio servers (Paddle and card terminals).
+- Payment card data never touches EasAlpha servers (Paddle and card terminals).
 - Dependency and security scans in CI: Brakeman, bundler-audit, npm audit.
 - Yearly external penetration test once there are paying international customers.
 - Local till database encrypted; synced orders older than 7 days cleared from the device.
@@ -188,11 +188,11 @@ Targets:
 | Service | Use | Notes |
 |---|---|---|
 | FBR and PRA (also SRB, KPRA, BRA) | Real-time sales tax invoice sync; invoice number and QR on receipt | Per-branch registration; offline queue with retries in Solid Queue; integration approval needed before launch |
-| WhatsApp Business Platform (Meta Cloud API) | OTP, receipts, order status, daily summary, alerts, trial reminders, campaigns | Pre-approved templates in English and Urdu stored with approval status; delivery and read status by webhook; opt-in and STOP; monthly counter per business; SMS and email fallback. Shared Servio number on Starter and Pro; own number through Meta Embedded Signup on Business |
+| WhatsApp Business Platform (Meta Cloud API) | OTP, receipts, order status, daily summary, alerts, trial reminders, campaigns | Pre-approved templates in English and Urdu stored with approval status; delivery and read status by webhook; opt-in and STOP; monthly counter per business; SMS and email fallback. Shared EasAlpha number on Starter and Pro; own number through Meta Embedded Signup on Business |
 | Paddle | International subscription billing as merchant of record | Cards, global tax, payouts to Pakistan |
 | JazzCash, EasyPaisa, bank transfer | Pakistan subscription billing and customer payments | Monthly invoice with manual or automatic confirmation; 7-day grace then read-only |
 | Raast QR | Customer pays from any bank app | QR on screen or receipt |
-| Card terminals | Amount sent to the bank machine | No card data on Servio servers |
+| Card terminals | Amount sent to the bank machine | No card data on EasAlpha servers |
 | Foodpanda and other aggregators (Phase 3) | Orders pulled into the same order list with commission tracking | |
 | QuickBooks and Xero (Phase 3) | Accounting export | |
 | ZKTeco fingerprint devices (Phase 3) | Attendance | |
@@ -214,7 +214,7 @@ Hardware:
 
 | Device | Support |
 |---|---|
-| Till | Servio POS web app at `/pos` on a Windows or Mac PC; Android tablet 10 inch and up; iPad |
+| Till | EasAlpha POS web app at `/pos` on a Windows or Mac PC; Android tablet 10 inch and up; iPad |
 | Kitchen display | Any Android TV box or tablet in browser kiosk mode |
 | Receipt printers | 58 mm and 80 mm ESC/POS thermal, USB or network; Urdu printed as image |
 | Kitchen printers | One per station, network; prints KOT when the kitchen display is off |
@@ -268,6 +268,6 @@ From 10 Oct 2026 the build follows the 7 phases in `SPEC.md`. Each phase ends wi
 | 6 People and time | Cashier sessions and Day-End Settlement, order takers, permanent and temporary riders, the rider vault, employees, the fingerprint kiosk, the attendance rules engine, payroll runs with advances | Payroll run matches |
 | 7 Reports, customers, AI | The 27 reports with filters and CSV and PDF export, loyalty, regular discounts, vouchers, reviews, WhatsApp account messages, the storefront, audit logs, AI pricing and AI stock forecast | Grand report ties out |
 
-Servio extras (signup, billing, super admin, Foodpanda, reservations, multi-branch, Urdu) are built inside the nearest phase.
+EasAlpha extras (signup, billing, super admin, Foodpanda, reservations, multi-branch, Urdu) are built inside the nearest phase.
 
 Team estimate: 2 to 3 developers.

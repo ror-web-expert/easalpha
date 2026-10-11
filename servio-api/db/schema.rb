@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_11_000004) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_11_000005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1547,6 +1547,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000004) do
     t.index ["code"], name: "index_plans_on_code", unique: true
   end
 
+  create_table "platform_settings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "key", null: false
+    t.jsonb "value"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_platform_settings_on_key", unique: true
+  end
+
   create_table "product_modifier_groups", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "product_id", null: false
@@ -1768,7 +1776,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000004) do
     t.index ["business_id"], name: "index_push_subscriptions_on_business_id"
     t.index ["endpoint"], name: "index_push_subscriptions_on_endpoint", unique: true
     t.index ["membership_id"], name: "index_push_subscriptions_on_membership_id"
-    t.check_constraint "app::text = ANY (ARRAY['admin'::character varying, 'pos'::character varying, 'kitchen'::character varying, 'rider'::character varying]::text[])", name: "push_subscriptions_app_check"
+    t.check_constraint "app::text = ANY (ARRAY['admin'::character varying::text, 'pos'::character varying::text, 'kitchen'::character varying::text, 'rider'::character varying::text])", name: "push_subscriptions_app_check"
   end
 
   create_table "quick_add_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2576,6 +2584,28 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000004) do
     t.index ["business_id"], name: "index_suppliers_on_business_id"
   end
 
+  create_table "support_requests", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id"
+    t.uuid "membership_id"
+    t.string "category", default: "question", null: false
+    t.string "subject", null: false
+    t.text "message", null: false
+    t.string "status", default: "open", null: false
+    t.text "reply"
+    t.uuid "replied_by_super_admin_id"
+    t.datetime "replied_at"
+    t.datetime "closed_at"
+    t.string "page"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id", "status"], name: "index_support_requests_on_business_id_and_status"
+    t.index ["business_id"], name: "index_support_requests_on_business_id"
+    t.index ["status", "created_at"], name: "index_support_requests_on_status_and_created_at"
+    t.check_constraint "category::text = ANY (ARRAY['question'::character varying, 'problem'::character varying, 'billing'::character varying, 'feature'::character varying, 'other'::character varying]::text[])", name: "support_requests_category_check"
+    t.check_constraint "status::text = ANY (ARRAY['open'::character varying, 'answered'::character varying, 'closed'::character varying]::text[])", name: "support_requests_status_check"
+  end
+
   create_table "support_sessions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "super_admin_id", null: false
@@ -3128,6 +3158,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_11_000004) do
   add_foreign_key "supplier_price_history", "suppliers"
   add_foreign_key "supplier_price_history", "units"
   add_foreign_key "suppliers", "businesses"
+  add_foreign_key "support_requests", "businesses"
   add_foreign_key "support_sessions", "businesses"
   add_foreign_key "sync_batches", "businesses"
   add_foreign_key "sync_rejections", "businesses"

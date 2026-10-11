@@ -1,6 +1,6 @@
-# Servio: product ready (11 Oct 2026)
+# EasAlpha: product ready (11 Oct 2026)
 
-Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, the top-priority requirement) is built, tested and committed, phase by phase, with the SPEC's sidebar menu. Nothing that existed before was removed; the Servio extras stay and are listed with their reasons in `docs/PDF-ALIGNMENT.md` section 7.
+Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, the top-priority requirement) is built, tested and committed, phase by phase, with the SPEC's sidebar menu. Nothing that existed before was removed; the EasAlpha extras stay and are listed with their reasons in `docs/PDF-ALIGNMENT.md` section 7.
 
 ## What is here
 
@@ -42,12 +42,12 @@ Navy (#0B1F3A, #10294D) for structure and selection, orange (#FF7A1A) for the on
 ```bash
 scripts/dev-up.sh          # everything locally: PostgreSQL, API with jobs, WhatsApp gateway, web; prints URLs and logins
 scripts/dev-down.sh        # stop
-cd servio-desktop && pnpm dist:linux   # or dist:win: installers for the desktop POS
+cd servio-desktop && pnpm dist:linux   # or dist:win, dist:mac: installers for the desktop POS
 ```
 
-On a server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`).
+On a server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`). Full install steps for Ubuntu, Mac, Docker and the desktop apps: `docs/SETUP.md`. GitHub Actions (`.github/workflows/`) run the tests, build the Docker images and the desktop installers on every change.
 
-Demo login: demo@servio.pk / password123. Manager PIN 9999, cashier PIN 1111. Pair a till, a tablet, a kitchen display or a rider phone from Settings, Devices.
+Demo login: demo@easalpha.com / password123. Manager PIN 9999, cashier PIN 1111. Set a machine up from `/setup` (manager login, pick the role: till, tablet, kitchen display, token or queue screen, rider phone) or pair it with a code from Settings, Devices. The desktop app opens `/setup` on every launch and updates itself from each GitHub release.
 
 ## Where to read more
 
@@ -60,6 +60,6 @@ Demo login: demo@servio.pk / password123. Manager PIN 9999, cashier PIN 1111. Pa
 - A real LLM behind the AI reports: the rules engine fills the same payload today.
 - A fingerprint reader driver: the kiosk endpoint and enrolment exist; a reader feeds it the fingerprint id. Manual taps work today.
 - A native customer mobile app: the storefront is an installable web page; the SPEC's Mobile App section of Website Config holds the store links.
-- The Windows desktop installer is built on Windows (`pnpm dist:win`); the Linux AppImage and deb are built.
+- Desktop installers: Linux AppImage and deb are built locally; Windows (`pnpm dist:win`) and Mac (`pnpm dist:mac`) are built by the `desktop` workflow on GitHub's Windows and Mac runners. All are unsigned until code-signing certificates are bought.
 - WhatsApp sends either from a phone linked by QR (run `servio-whatsapp/`, then scan in Settings, WhatsApp) or through the Meta Cloud API with credentials; with neither, messages are logged, not sent.
 - PRA e-IMS filing uses the configured sandbox; production needs the PRA registration.

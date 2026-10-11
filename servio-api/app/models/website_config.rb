@@ -17,7 +17,7 @@ class WebsiteConfig < ApplicationRecord
       "signups" => { "enabled" => true, "require_approval" => false }, "location" => { "address" => nil, "lat" => nil, "lng" => nil, "map_link" => nil },
       "branches" => { "show_picker" => false }, "delivery" => { "enabled" => true, "min_order_minor" => 0, "free_above_minor" => nil, "eta_minutes" => 45 },
       "pricing" => { "show_prices" => true, "order_type_prices" => false }, "contact" => { "phone" => business&.phone, "email" => business&.email, "whatsapp" => nil },
-      "social" => { "facebook" => nil, "instagram" => nil, "tiktok" => nil, "youtube" => nil }, "whatsapp" => { "number" => nil, "greeting" => nil, "show_button" => true },
+      "social" => { "facebook" => nil, "instagram" => nil, "tiktok" => nil, "youtube" => nil }, "whatsapp" => { "number" => nil, "greeting" => nil, "show_button" => true, "button_label" => "Need help?" },
       "instagram" => { "handle" => nil, "feed" => false }, "seo" => { "title" => business&.name, "description" => nil, "keywords" => [] },
       "mobile_app" => { "android_url" => nil, "ios_url" => nil, "show_banner" => false }, "system" => { "maintenance" => false, "analytics_id" => nil } }
   end

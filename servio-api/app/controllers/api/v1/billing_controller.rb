@@ -26,7 +26,7 @@ module Api
         render json: { invoice: invoice(inv), subscription: subscription(sub) }, status: :created
       end
 
-      # POST /billing/invoices/:id/report_payment  method, reference  (owner tells us they paid; Servio confirms)
+      # POST /billing/invoices/:id/report_payment  method, reference  (owner tells us they paid; EasAlpha confirms)
       def report_payment
         inv = Invoice.unpaid.find(params[:id])
         inv.update!(status: "reported", payment_method: params.require(:method), payment_reference: params.require(:reference), reported_at: Time.current)

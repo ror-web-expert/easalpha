@@ -17,7 +17,7 @@ export default function BranchComparisonPage() {
   const rows = d?.rows ?? [];
   const chart = rows.map((r) => ({ branch: r.branch.code || r.branch.name, revenue: r.revenue_minor, gross_profit: r.gross_profit_minor }));
   return (
-    <ReportShell icon={GitCompare} title="Branch comparison" description="A Servio extra: every outlet side by side for the period, with revenue share, voids, expenses, cost of goods and gross profit."
+    <ReportShell icon={GitCompare} title="Branch comparison" description="A EasAlpha extra: every outlet side by side for the period, with revenue share, voids, expenses, cost of goods and gross profit."
       range={range} onRange={setRange} loading={q.isLoading} error={q.isError} onRetry={() => q.refetch()}
       exportData={{
         name: "branches", landscape: true,

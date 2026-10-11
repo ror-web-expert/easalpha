@@ -10,7 +10,7 @@ import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "Servio: restaurant POS built for Pakistan",
+  title: "EasAlpha: restaurant POS built for Pakistan",
   description: "One system for every counter, kitchen and branch. Offline till, kitchen display, inventory with recipe deduction, supplier and khata ledgers, payroll, riders, WhatsApp receipts, FBR and PRA tax and 27 reports. Start free for 90 days.",
   alternates: { canonical: "/" },
 };
@@ -49,7 +49,7 @@ const SURFACES = [
 ];
 
 const FAQ = [
-  { q: "Does Servio really work offline?", a: "Yes. The till keeps a local copy of the menu and queues orders, payments and receipts while the connection is down. When the internet returns everything syncs in order, and anything the server rejects shows up in a Needs Attention list so nothing is lost silently." },
+  { q: "Does EasAlpha really work offline?", a: "Yes. The till keeps a local copy of the menu and queues orders, payments and receipts while the connection is down. When the internet returns everything syncs in order, and anything the server rejects shows up in a Needs Attention list so nothing is lost silently." },
   { q: "What do I need to run it?", a: "Any Windows or Linux PC for the till, a thermal receipt printer (58 or 80 mm), and Android tablets or phones for the order-taker, kitchen display and rider app. The admin panel runs in any browser. Nothing to install on a server; we host it." },
   { q: "How long does setup take?", a: "Most single-branch restaurants are selling the same day. Import your menu from a spreadsheet, pair your till with a code, and follow the setup checklist. Recipes and stock can be added later without stopping sales." },
   { q: "Can I move from my current POS?", a: "You can import products, categories and customers from CSV. If you are on another system today, contact us and we will help map the export." },
@@ -166,7 +166,7 @@ export default function HomePage() {
       <Section tone="navy" className="relative overflow-hidden">
         <div aria-hidden className="pointer-events-none absolute -right-40 top-0 h-[30rem] w-[30rem] rounded-full bg-[#FF7A1A]/15 blur-3xl" />
         <div className="relative">
-          <SectionHeading dark eyebrow="Built for Pakistan" title="The details that only matter here, done right" titleKey="sec.pk" text="Most POS products are built elsewhere and adapted. Servio starts from how restaurants in Pakistan actually run." />
+          <SectionHeading dark eyebrow="Built for Pakistan" title="The details that only matter here, done right" titleKey="sec.pk" text="Most POS products are built elsewhere and adapted. EasAlpha starts from how restaurants in Pakistan actually run." />
           <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {PAKISTAN.map((f, i) => (
               <Reveal key={f.title} delay={(i % 4) * 70} className="rounded-[20px] border border-white/10 bg-white/[0.06] p-6 transition-[transform,background-color] duration-300 hover:-translate-y-1 hover:bg-white/[0.1]">

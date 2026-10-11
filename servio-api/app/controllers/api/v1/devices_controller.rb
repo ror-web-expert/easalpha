@@ -1,8 +1,8 @@
 module Api
   module V1
     class DevicesController < BaseController
-      before_action :authenticate!, only: [ :index, :create, :update, :regenerate_code, :destroy ]
-      before_action -> { require_permission!("devices.manage") }, only: [ :create, :update, :regenerate_code, :destroy ]
+      before_action :authenticate!, only: [ :index, :create, :register, :update, :regenerate_code, :destroy ]
+      before_action -> { require_permission!("devices.manage") }, only: [ :create, :register, :update, :regenerate_code, :destroy ]
 
       def index
         scope = Device.includes(:branch).order(:created_at)
@@ -13,16 +13,22 @@ module Api
       # POST /devices  name, branch_id, kind  -> pairing code shown once
       def create
         read_only_guard!
-        branch = Branch.active.find(params[:branch_id].presence || current_branch.id)
-        kind = params[:kind].presence || "till"
-        if kind.in?(%w[till tablet])
-          limit = current_business.plan_limit("tills")
-          raise Api::Errors::Forbidden.new("plan.limit", "Your plan allows #{limit} till(s). Add a till to your plan.") if limit && Device.active.where(kind: %w[till tablet]).count >= limit
-        end
-        device = Device.create!(branch: branch, name: params.require(:name), kind: kind, station_id: params[:station_id])
+        device = build_device!
         device.issue_pairing_code!
-        audit!("create", record: device, after: { name: device.name, branch_id: branch.id, kind: kind })
         render json: Serializers.device(device, include_code: true), status: :created
+      end
+
+      # POST /devices/register  name, branch_id, kind, platform, app_version, [station_id]
+      # "Set up this device": an owner or manager signs in on the machine itself, picks what it is, and the machine is
+      # created and paired in one step. The response is the same as /devices/pair, plus the staff who can sign in on it
+      # (so the manager can see who still needs a PIN). No pairing code is ever shown; the manager's login is not kept.
+      def register
+        read_only_guard!
+        device = build_device!
+        device.update!(paired_at: Time.current, platform: params[:platform], app_version: params[:app_version], last_seen_at: Time.current)
+        audit!("pair_device", record: device, after: { platform: params[:platform], via: "setup" })
+        SetupChecklistItem.complete!("printer")
+        render json: pair_payload(device).merge(staff: staff_for(device)), status: :created
       end
 
       def update
@@ -54,8 +60,7 @@ module Api
           device.update!(paired_at: Time.current, pairing_code: nil, pairing_expires_at: nil, platform: params[:platform], app_version: params[:app_version], last_seen_at: Time.current)
           AuditLog.record(action: "pair_device", record: device, after: { platform: params[:platform] })
           SetupChecklistItem.complete!("printer")
-          render json: { device_token: Auth::TokenService.device_token(device), device: Serializers.device(device),
-                         business: Serializers.business(device.business), branch: Serializers.branch(device.branch) }
+          render json: pair_payload(device)
         end
       end
 
@@ -64,11 +69,7 @@ module Api
         authenticate_device!
         pin = params.require(:pin).to_s
         candidates = Membership.active.includes(:role, :user).where.not(pin_digest: nil).select { |m| m.branch_allowed?(current_device.branch_id) }
-        app = case current_device.kind
-        when "kitchen" then "kitchen"
-        when "rider" then "rider" # SPEC rider app: the rider's phone is a paired device
-        else "pos"
-        end
+        app = current_device.app # kitchen, rider (SPEC rider app: the rider's phone is a paired device) or pos
         # Two people may share a PIN by accident; prefer the one who may use this device's app.
         matches = candidates.select { |m| m.pin_digest && BCrypt::Password.new(m.pin_digest) == pin && !m.pin_locked? }
         membership = matches.find { |m| m.can?("app.#{app}") } || matches.first
@@ -91,6 +92,33 @@ module Api
         raise Api::Errors::Unauthorized unless current_device
         current_device.update_columns(last_seen_at: Time.current, app_version: params[:app_version].presence || current_device.app_version)
         render json: { ok: true, server_time: Time.current, business_status: current_business.status, read_only: current_business.read_only? }
+      end
+
+      private
+
+      def build_device!
+        branch = Branch.active.find(params[:branch_id].presence || current_branch.id)
+        kind = params[:kind].presence || "till"
+        if kind.in?(%w[till tablet])
+          limit = current_business.plan_limit("tills")
+          raise Api::Errors::Forbidden.new("plan.limit", "Your plan allows #{limit} till(s). Add a till to your plan.") if limit && Device.active.where(kind: %w[till tablet]).count >= limit
+        end
+        device = Device.create!(branch: branch, name: params.require(:name), kind: kind, station_id: params[:station_id].presence)
+        audit!("create", record: device, after: { name: device.name, branch_id: branch.id, kind: kind })
+        device
+      end
+
+      def pair_payload(device)
+        { device_token: Auth::TokenService.device_token(device), device: Serializers.device(device),
+          business: Serializers.business(device.business), branch: Serializers.branch(device.branch) }
+      end
+
+      # Who can sign in on this device: active, allowed at its branch, and holding the app permission its kind needs.
+      # Screens without a login (token, queue, customer display) list nobody.
+      def staff_for(device)
+        return [] unless device.kind.in?(%w[till tablet kitchen rider])
+        Membership.active.includes(:role, :user).select { |m| m.branch_allowed?(device.branch_id) && m.can?("app.#{device.app}") }
+                  .map { |m| { id: m.id, name: m.user&.name, role: m.role.name, staff_type: m.staff_type, has_pin: m.pin_digest.present?, pin_locked: m.pin_locked? } }
       end
     end
   end

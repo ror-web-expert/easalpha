@@ -1,4 +1,4 @@
-# Servio API reference
+# EasAlpha API reference
 
 Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1. Authentication: Bearer access token (15 min) plus refresh token; device token for paired tills; super admin token for /super; /qr/:token and /webhooks/* are public. Errors: {"error":{"code","message","details"}}. Money in minor units; stock quantities as decimal strings in base units. Cursor pagination: ?cursor=&limit= (max 200), responses {data, next_cursor}.
 
@@ -76,6 +76,7 @@ Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1
 |---|---|---|
 | POST | /api/v1/devices/:id/regenerate_code | regenerate_code |
 | POST | /api/v1/devices/pair | pair |
+| POST | /api/v1/devices/register | register: "Set up this device"; a signed-in owner or manager (devices.manage) creates and pairs the machine in one call; returns the pair payload plus `staff` (who can sign in on it, with has_pin) |
 | POST | /api/v1/devices/pin_login | pin_login |
 | POST | /api/v1/devices/heartbeat | heartbeat |
 | GET | /api/v1/devices | index |
@@ -883,7 +884,7 @@ Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1
 
 | Method | Path | Action |
 |---|---|---|
-| GET | /api/v1/roles/permissions | registry: 57 SPEC codes with module, surface, restriction and implied Servio codes, plus the 46 Servio codes |
+| GET | /api/v1/roles/permissions | registry: 57 SPEC codes with module, surface, restriction and implied EasAlpha codes, plus the 46 EasAlpha codes |
 | GET | /api/v1/roles/presets | Cashier, Supervisor, Manager presets |
 | GET | /api/v1/staff/:id/permissions | mode (role or custom), granted, effective, granted-of-total per module |
 | PUT | /api/v1/staff/:id/permissions | body codes[] or preset or select_all or reset; takes effect at the next sign-in |
@@ -1020,3 +1021,33 @@ Permissions: RIDERS, RIDER_VIEW, RIDER_CREATE, RIDER_EDIT, RIDER_DELETE, DUMMY_R
 | POST | /api/v1/whatsapp/connection/start, /logout | begin pairing, unlink the phone |
 
 Environment: `WHATSAPP_GATEWAY_URL`, `WHATSAPP_GATEWAY_TOKEN` (the gateway in `servio-whatsapp/`), optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. Setting `whatsapp.provider` chooses web (linked phone) or cloud (Meta).
+
+## Help and Support, Branding and the Super panel (11 Oct 2026)
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/platform | public: product name, support email, WhatsApp, phone, hours, docs link, powered-by line, announcement and its level, version. Read by every panel's Help box |
+| GET, POST | /api/v1/support_requests { subject, message, category (question, problem, billing, feature, other), page } | the Help box: staff write to EasAlpha support; managers see the whole business, others their own; a reply arrives as `reply`, `replied_at`, status `answered`, plus a notification linking to /admin/support |
+| GET | /api/v1/support_sessions; POST /:id/approve, /:id/deny | the owner's side of a EasAlpha support login (existing) |
+| PATCH | /api/v1/business { logo_key } | the business logo (an /uploads URL); returned on GET /business, the receipt, the storefront and QR ordering |
+| POST | /api/v1/super/login; GET /super/me | the product owner's login (a `super` token, 8 hours) |
+| GET | /api/v1/super/stats, /super/health | businesses by status, signups, orders today, open support requests, pending support sessions; database, jobs, failed tax invoices and WhatsApp |
+| GET, PATCH | /api/v1/super/businesses (?q, ?status), /:id { status, trial_ends_on, plan_id } | every business; the detail carries branches, staff, devices, orders in 30 days, last order, open support requests and recent support sessions |
+| GET | /api/v1/super/support_requests (?status, ?business_id); POST /:id/reply { reply }, /:id/close | the support inbox |
+| GET | /api/v1/super/support_sessions; POST /super/support_sessions { business_id, reason }; POST /:id/token | request access to a business, then an owner-level token once approved (existing) |
+| GET | /api/v1/super/invoices (?status); POST /:id/confirm; POST /super/billing/run_lifecycle | billing (existing) |
+| GET, PUT | /api/v1/super/feature_flags | global or per-business flags (existing) |
+| GET | /api/v1/super/plans | the plan list for the business detail's plan selector (PATCH /super/businesses/:id { plan_id }) |
+| GET, PUT | /api/v1/super/platform_settings { values } | EasAlpha's own branding: product_name, support_email, support_whatsapp, support_phone, support_hours, support_url, docs_url, powered_by, announcement, announcement_level, downloads_url (the installer folder and update feed), desktop_version (what the Download page offers). A blank value restores the default |
+
+Tables: `support_requests` (tenant, RLS), `platform_settings` (key, jsonb value; not tenant data). Dev super admin from `db/seeds.rb`: admin@easalpha.com / admin12345; the panel is at /super.
+
+## Online ordering from the storefront (11 Oct 2026)
+
+| Method | Path | Action |
+|---|---|---|
+| POST | /api/v1/public/storefront/:slug/orders { lines: [{ product_id, variant_id, quantity }], order_type: delivery or takeaway, customer: { name, phone, address, area, city }, notes, client_id } | public: the cart becomes an order with source `online` that waits in the cashier's queue (`qr_status` pending); the customer is found or created by phone (source online) and a delivery address is saved on them; the delivery charge comes from Charges & Tax and is waived above the website's free-delivery threshold; the website's minimum order is enforced. Returns the guest view with a `guest_token` |
+| GET | /api/v1/public/storefront/:slug/orders/:id?guest_token= | public tracking: `stage` is waiting, accepted, preparing, ready, on_the_way, done, rejected or cancelled, plus items, totals and the delivery ETA |
+| GET | /api/v1/qr_orders (?source=qr or online) | the accept-or-reject queue now holds website orders beside QR table orders; rows carry `address_text` and `notes` |
+
+Error codes: online.closed, online.maintenance, online.no_delivery, online.order_type, online.empty, online.name, online.phone, online.address, online.min_order. A new order raises a notification of kind `online_order`.

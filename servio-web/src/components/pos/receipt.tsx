@@ -123,7 +123,7 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
       {r.footer ? <div className="whitespace-pre-line text-center font-bold">{r.footer}</div> : null}
       {footerQr ? <div className="mt-1 text-center"><img src={footerQr} alt="QR code" className="mx-auto" /><div className="mt-0.5 text-[0.85em] opacity-80">Scan for our menu and reviews</div></div> : null}
       {r.feedback_whatsapp ? <div className="mt-1 text-center text-[0.9em]">WhatsApp {r.feedback_whatsapp}</div> : null}
-      <div className="mt-2 text-center text-[0.8em] opacity-70">Powered by Servio</div>
+      <div className="mt-2 text-center text-[0.8em] opacity-70">Powered by EasAlpha</div>
     </div>
   );
 }

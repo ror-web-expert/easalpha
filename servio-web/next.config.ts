@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 // Old admin paths (before the SPEC sidebar, 10 Oct 2026) keep working through redirects.
 const nextConfig: NextConfig = {
   devIndicators: false,
+  // NEXT_DIST_DIR lets a second build (for the browser gate) sit beside the one a running `next start` is serving.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Rewrite barrel imports from these packages to direct module imports so each page only bundles the pieces it uses.
   experimental: { optimizePackageImports: ["lucide-react", "recharts", "date-fns"] },
   async redirects() {

@@ -12,7 +12,7 @@ module Api
         render json: Serializers.role(Role.includes(:role_permissions).find(params[:id]))
       end
 
-      # The full registry: SPEC codes with module, surface and restriction, then the Servio extras.
+      # The full registry: SPEC codes with module, surface and restriction, then the EasAlpha extras.
       def permissions
         render json: { data: Permission::REGISTRY.values.map(&:to_h), modules: Permission::MODULES + [ Permission::SERVIO_MODULE ] }
       end
