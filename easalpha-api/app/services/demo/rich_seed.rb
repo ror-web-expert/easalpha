@@ -857,7 +857,10 @@ module Demo
     def open_orders_today!
       wanted = rand_i(5..8)
       wanted.times do |i|
-        go(@real_now - rand_i(4..55).minutes)
+        placed = @real_now - rand_i(4..55).minutes
+        # Right after the day end (02:01) "55 minutes ago" is still yesterday's business day; keep the order on today's.
+        placed = @real_now - rand_i(1..3).minutes unless @branch.business_day_for(placed) == @today
+        go(placed)
         type = pick(%w[dine_in dine_in takeaway walk_in delivery])
         order, actor, = build_order!(order_type: type)
         Orders::Transitions.place!(order, actor: actor, device: @till)
