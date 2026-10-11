@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+# Runs the Solid Queue job worker and scheduler (config/queue.yml, config/recurring.yml).
+require_relative "../config/environment"
+require "solid_queue/cli"
+
+SolidQueue::Cli.start(ARGV)

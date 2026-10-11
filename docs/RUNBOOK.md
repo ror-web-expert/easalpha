@@ -75,3 +75,8 @@ cd servio-api && bundle exec brakeman -q      # security scan
 
 - Gateway: `cd servio-whatsapp && npm install && WHATSAPP_GATEWAY_TOKEN=<secret> npm start` (port 3010). Start the API with `WHATSAPP_GATEWAY_URL=http://localhost:3010 WHATSAPP_GATEWAY_TOKEN=<secret>`. In the admin panel open Settings, WhatsApp, Connect a phone, press Start and scan the QR with WhatsApp (Linked devices, Link a device). Sessions persist in `servio-whatsapp/sessions/`.
 - Push: nothing to configure for a single server (keys are generated and stored). For several API servers set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (mailto:). Users enable push per device from Settings, Notifications (admin), the POS shift page, the kitchen header or the rider app.
+
+## One-command local run and the deployment stack
+
+- Local: `scripts/dev-up.sh` starts PostgreSQL, the API with its job worker, the WhatsApp gateway and the web app (production build), then prints every URL and login; `scripts/dev-down.sh` stops them.
+- Server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`): PostgreSQL, API, jobs, web, WhatsApp gateway, plus a TLS proxy of your choice.

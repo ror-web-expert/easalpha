@@ -1,0 +1,62 @@
+# Servio, complete stack: PostgreSQL, API, job worker, web app, WhatsApp gateway. Put a TLS proxy (Caddy, nginx) in
+# front of web:3000 and api:3001, or set FORCE_SSL=false for a plain LAN install.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres"], interval: 5s, retries: 20 }
+
+  api:
+    build: ../servio-api
+    command: bash -c "bin/rails db:prepare && bin/rails db:seed && bin/rails server -b 0.0.0.0 -p 3001"
+    environment: &api_env
+      RAILS_ENV: production
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      FORCE_SSL: ${FORCE_SSL:-true}
+      CORS_ORIGINS: ${PUBLIC_URL}
+      WHATSAPP_GATEWAY_URL: http://whatsapp:3010
+      WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:support@example.pk}
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["3001:3001"]
+    volumes: ["storage:/rails/storage"]
+
+  jobs:
+    build: ../servio-api
+    command: bin/jobs
+    environment: *api_env
+    depends_on: [api]
+    volumes: ["storage:/rails/storage"]
+
+  web:
+    build:
+      context: ../servio-web
+      args:
+        NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL}/api/v1
+        NEXT_PUBLIC_CABLE_URL: ${API_PUBLIC_URL}/cable
+    ports: ["3000:3000"]
+    depends_on: [api]
+
+  whatsapp:
+    build: ../servio-whatsapp
+    environment:
+      PORT: "3010"
+      WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
+    volumes: ["wasessions:/app/sessions"]
+
+volumes:
+  pgdata:
+  storage:
+  wasessions:
