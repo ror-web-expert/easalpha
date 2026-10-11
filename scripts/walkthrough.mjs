@@ -1,0 +1,51 @@
+import { chromium } from "playwright";
+const API = "http://localhost:3001/api/v1", WEB = "http://localhost:3000";
+const DIR = "/tmp/claude-1000/-home-sajid-projects-company-servio/ba922407-18f1-4492-b13a-51413da7f2e2/scratchpad/walk/";
+import fs from "node:fs"; fs.mkdirSync(DIR, { recursive: true });
+const api = async (path, { method = "GET", token, body } = {}) => { const r = await fetch(API + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); let j = null; try { j = await r.json(); } catch {} return { status: r.status, j }; };
+const T = (await api("/auth/login", { method: "POST", body: { email: "demo@servio.pk", password: "password123" } })).j.access_token;
+const devices = (await api("/devices", { token: T })).j.data;
+const counter = devices.find((d) => d.name === "Counter till"); const till = await api(`/devices/${counter.id}/regenerate_code`, { method: "POST", token: T });
+const kdsDev = devices.find((d) => d.name === "Kitchen screen"); const kds = await api(`/devices/${kdsDev.id}/regenerate_code`, { method: "POST", token: T });
+const b = await chromium.launch({ channel: "chrome", headless: true });
+const errs = [];
+const wire = (p, l) => { p.on("pageerror", (e) => errs.push(l + " pageerror: " + e.message.slice(0, 200))); p.on("console", (m) => { if (m.type() === "error") errs.push(l + " console: " + m.text().slice(0, 200)); }); };
+const shot = async (p, n, w = 1200) => { await p.waitForTimeout(w); await p.screenshot({ path: DIR + n + ".png" }); console.log("shot", n); };
+
+const a = await b.newPage({ viewport: { width: 1440, height: 900 } }); wire(a, "admin");
+await a.goto(WEB + "/login"); await shot(a, "01-login", 800);
+await a.fill("input[type=email]", "demo@servio.pk"); await a.fill("input[type=password]", "password123"); await a.getByRole("button", { name: "Log in" }).click(); await a.waitForURL(/\/admin/, { timeout: 60000 });
+await shot(a, "02-admin-dashboard", 2000);
+await a.goto(WEB + "/admin/expenses"); await a.waitForTimeout(1500);
+await a.getByRole("button", { name: /record expense|add expense|new expense/i }).first().click().catch(() => {}); await shot(a, "03-admin-modal", 1000);
+await a.keyboard.press("Escape");
+await a.goto(WEB + "/admin/orders"); await shot(a, "04-admin-orders", 1800);
+await a.goto(WEB + "/admin/settings/whatsapp"); await shot(a, "05-admin-whatsapp", 1800);
+await a.goto(WEB + "/admin/payroll/fingerprint"); await shot(a, "06-admin-attendance", 1800);
+await a.goto(WEB + "/admin/reports/grand"); await shot(a, "07-admin-grand", 2000);
+await a.goto(WEB + "/signup"); await shot(a, "08-signup", 1200);
+
+const t = await b.newPage({ viewport: { width: 1366, height: 768 } }); wire(t, "pos");
+await t.goto(WEB + "/pos/pair"); await t.waitForSelector("button", { timeout: 60000 }); await shot(t, "09-pos-pair", 500);
+for (const d of till.j.pairing_code) await t.getByRole("button", { name: d, exact: true }).first().click();
+await t.getByRole("button", { name: "Pair" }).click(); await t.waitForURL(/\/pos\/pin/, { timeout: 20000 }); await shot(t, "10-pos-pin", 500);
+for (const d of "1111") await t.getByRole("button", { name: d, exact: true }).first().click();
+await t.waitForURL(/\/pos$/, { timeout: 20000 }); await t.waitForTimeout(2500);
+await t.getByText("Burgers", { exact: true }).first().click().catch(() => {}); await t.waitForTimeout(600);
+await t.getByText("Zinger Burger", { exact: false }).first().click().catch(() => {}); await shot(t, "11-pos-order", 800);
+await t.getByRole("button", { name: /Pay/ }).first().click().catch(() => {}); await shot(t, "12-pos-payment", 1500);
+await t.keyboard.press("Escape");
+
+const k = await b.newPage({ viewport: { width: 1366, height: 768 } }); wire(k, "kitchen");
+await k.goto(WEB + "/pos/pair"); await k.waitForSelector("button", { timeout: 60000 });
+for (const d of kds.j.pairing_code) await k.getByRole("button", { name: d, exact: true }).first().click();
+await k.getByRole("button", { name: "Pair" }).click(); await k.waitForURL(/\/pos\/pin/, { timeout: 20000 }).catch(() => {});
+for (const d of "3333") await k.getByRole("button", { name: d, exact: true }).first().click();
+await k.waitForURL(/\/kitchen/, { timeout: 20000 }).catch(() => {}); await shot(k, "13-kitchen", 2500);
+
+const m = await b.newPage({ viewport: { width: 390, height: 844 }, isMobile: true }); wire(m, "phone");
+await m.goto(WEB + "/rider/pair"); await shot(m, "14-rider-pair", 1200);
+await m.goto(WEB + "/store/demo-cafe"); await shot(m, "15-storefront-phone", 2000);
+await m.goto(WEB + "/"); await shot(m, "16-site-phone", 1500);
+await b.close();
+console.log("errors:", errs.length); for (const e of errs.slice(0, 10)) console.log(" ", e);
