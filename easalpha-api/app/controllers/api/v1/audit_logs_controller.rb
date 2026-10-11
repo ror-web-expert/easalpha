@@ -25,7 +25,7 @@ module Api
           total: scope.count,
           by_action: scope.group(:action).order(Arel.sql("count_all desc")).count,
           by_entity: scope.group(:table_name).order(Arel.sql("count_all desc")).limit(30).count,
-          by_actor: by_user.sort_by { |_, n| -n }.first(30).map { |id, n| { user_id: id, name: names[id] || (id ? "Unknown" : "System"), count: n } },
+          by_actor: by_user.sort_by { |id, n| [ -n, id.nil? ? 1 : 0, id.to_s ] }.first(30).map { |id, n| { user_id: id, name: names[id] || (id ? "Unknown" : "System"), count: n } },
           by_day: scope.group(Arel.sql("date_trunc('day', occurred_at)")).order(Arel.sql("date_trunc('day', occurred_at)")).count.transform_keys { |d| d.to_date.iso8601 }
         }
       end

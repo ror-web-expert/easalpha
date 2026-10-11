@@ -13,6 +13,10 @@ module Audited
   HIDDEN_ATTRIBUTES = %w[pin_digest password_digest token_digest otp_digest secret webhook_secret].freeze
 
   included do
+    # The actor is read while the change is made (inside the transaction, where Tenancy::Context has set Current) and
+    # used after commit; by commit time the context that made the change may already be gone.
+    after_save :audit_remember_actor
+    after_destroy :audit_remember_actor
     after_commit :audit_create, on: :create
     after_commit :audit_update, on: :update
     after_commit :audit_delete, on: :destroy
@@ -24,9 +28,13 @@ module Audited
 
   private
 
+  def audit_remember_actor
+    @audit_actor = { user_id: Current.user_id, branch_id: Current.branch_id, device_id: Current.device&.id, ip: Current.ip }
+  end
+
   def audit_create
     return unless self.class.audited?
-    AuditLog.record_change(self, action: ledger_action || "create", after: audit_snapshot(attributes))
+    AuditLog.record_change(self, action: ledger_action || "create", after: audit_snapshot(attributes), actor: @audit_actor)
   end
 
   def audit_update
@@ -35,12 +43,12 @@ module Audited
     return if changes.empty?
     before = changes.transform_values(&:first)
     after = changes.transform_values(&:last)
-    AuditLog.record_change(self, action: update_action(changes), before: audit_snapshot(before), after: audit_snapshot(after))
+    AuditLog.record_change(self, action: update_action(changes), before: audit_snapshot(before), after: audit_snapshot(after), actor: @audit_actor)
   end
 
   def audit_delete
     return unless self.class.audited?
-    AuditLog.record_change(self, action: "delete", before: audit_snapshot(attributes))
+    AuditLog.record_change(self, action: "delete", before: audit_snapshot(attributes), actor: @audit_actor)
   end
 
   # SPEC action names: delete for an archive, cancel, receive and status_change for a status move.

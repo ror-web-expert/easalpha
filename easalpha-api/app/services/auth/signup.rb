@@ -12,7 +12,8 @@ module Auth
           name: business_name, slug: Business.generate_slug(business_name), country: country, currency: currency,
           time_zone: time_zone, phone: phone, email: email, plan: plan, trial_ends_on: Business::TRIAL_DAYS.days.from_now.to_date, status: "trial"
         )
-        Tenancy::Context.with(business) do
+        # The new owner is the actor of every setup row (branch, roles, payment methods) in the audit log.
+        Tenancy::Context.with(business, user: user) do
           branch = Branch.create!(business: business, name: "Main", code: "B1", time_zone: time_zone, is_main: true)
           roles = RoleTemplate.create_for(business)
           owner_role = roles.find(&:owner?)
@@ -21,8 +22,7 @@ module Auth
           SetupChecklistItem.create_defaults_for(business)
           Customer.walk_in
           PaymentMethod.seed_defaults!(business)
-          Tenancy::Context.with(business) { Finance::Chart.seed! }
-          Current.user = user
+          Tenancy::Context.with(business, user: user) { Finance::Chart.seed! }
           AuditLog.record(action: "create", record: business, after: { name: business.name, plan: plan.code }, business: business)
           Result.new(user: user, business: business, membership: membership, branch: branch)
         end
