@@ -33,7 +33,7 @@ export function StorefrontNotFound({ slug }: { slug: string }) {
 export function StorefrontView({ slug, data }: { slug: string; data: Storefront }) {
   const cfg = data.config;
   const identity = cfg.identity ?? {};
-  const theme = str(identity.theme_color) || "#1976d2";
+  const theme = str(identity.theme_color) || "#10294d";
   const onTheme = readableOn(theme);
   const pages = cfg.pages ?? {};
   const contact = cfg.contact ?? {};
@@ -141,7 +141,7 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
           </section>
         ) : null}
 
-        {pages.reviews !== false ? <ReviewsSection slug={slug} data={data} theme={theme} onTheme={onTheme} /> : null}
+        {pages.reviews !== false ? <ReviewsSection slug={slug} data={data} /> : null}
       </div>
 
       <footer className="border-t bg-card">
@@ -160,7 +160,7 @@ function Stars({ rating, size = "h-4 w-4" }: { rating: number; size?: string }) 
   return <span className="inline-flex" aria-label={`${rating} out of 5`}>{[1, 2, 3, 4, 5].map((n) => <Star key={n} className={`${size} ${n <= rating ? "fill-current text-accent" : "text-border"}`} />)}</span>;
 }
 
-function ReviewsSection({ slug, data, theme, onTheme }: { slug: string; data: Storefront; theme: string; onTheme: string }) {
+function ReviewsSection({ slug, data }: { slug: string; data: Storefront }) {
   const s = data.reviews.summary;
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -202,7 +202,7 @@ function ReviewsSection({ slug, data, theme, onTheme }: { slug: string; data: St
         <label className="block"><span className="mb-1 block text-xs font-medium tracking-[0.4px] text-fg-secondary">Comment (optional)</span><textarea className="min-h-20 w-full rounded-[4px] border border-border-strong bg-transparent px-3 py-2.5 text-base focus-visible:border-primary focus-visible:outline-none" maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} /></label>
         <label className="block"><span className="mb-1 block text-xs font-medium tracking-[0.4px] text-fg-secondary">Order number (optional)</span><input className="h-10 w-full rounded-[4px] border border-border-strong bg-transparent px-3 font-mono text-base focus-visible:border-primary focus-visible:outline-none" value={orderLabel} onChange={(e) => setOrderLabel(e.target.value)} placeholder="#1042" /></label>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
-        <button type="submit" disabled={!rating || submit.isPending} className="inline-flex h-12 w-full items-center justify-center rounded-full text-base font-medium disabled:opacity-40 sm:w-auto sm:px-8" style={{ backgroundColor: theme, color: onTheme }}>{submit.isPending ? "Sending" : "Send review"}</button>
+        <button type="submit" disabled={!rating || submit.isPending} className="inline-flex h-12 w-full items-center justify-center rounded-full bg-cta text-base font-semibold text-cta-fg hover:bg-cta-hover disabled:opacity-40 sm:w-auto sm:px-8">{submit.isPending ? "Sending" : "Send review"}</button>
       </form>
     </section>
   );

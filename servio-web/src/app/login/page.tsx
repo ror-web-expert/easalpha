@@ -53,15 +53,15 @@ export default function LoginPage() {
 
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#002e68] p-12 text-white lg:flex lg:flex-col">
-        <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#1a73e8]/45 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-40 -left-24 h-[26rem] w-[26rem] rounded-full bg-[#adc7ff]/15 blur-3xl" />
+      <section className="relative hidden overflow-hidden bg-navy-deep p-12 text-white lg:flex lg:flex-col">
+        <div className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-cta/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-40 -left-24 h-[26rem] w-[26rem] rounded-full bg-white/10 blur-3xl" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
         <Link href="/" className="relative flex items-center" aria-label="Servio home">
           <Image src="/brand/logo-white.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
         </Link>
         <div className="relative mt-auto max-w-md">
-          <h2 className="text-4xl leading-[44px]">Run every counter, kitchen and branch from one place.</h2>
+          <h2 className="text-4xl leading-[44px] text-white">Run every counter, kitchen and branch from one place.</h2>
           <p className="mt-4 text-base leading-6 tracking-[0.5px] text-white/75">Orders, stock, suppliers, staff and reports for Pakistani restaurants. Tills keep selling when the internet drops.</p>
           <div className="mt-10 grid grid-cols-3 gap-3">
             {[["Offline", "till sales sync later"], ["FBR", "tax invoices"], ["Urdu", "receipts and screens"]].map(([a, b]) => (
@@ -76,7 +76,7 @@ export default function LoginPage() {
 
       <section className="relative flex items-center justify-center px-4 py-12">
         <div className="absolute right-4 top-4"><ThemeToggle /></div>
-        <div className="w-full max-w-[360px]">
+        <div className="w-full max-w-[360px] rounded-[28px] bg-card p-8 shadow-[var(--elev-1)] lg:shadow-none">
           <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="Servio home">
             <Image src="/brand/logo.svg" alt="Servio" width={150} height={37} priority unoptimized className="h-9 w-auto" />
           </Link>

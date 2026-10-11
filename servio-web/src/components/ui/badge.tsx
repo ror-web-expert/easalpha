@@ -4,13 +4,14 @@ import { cn } from "@/lib/utils";
 const badge = cva("inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-medium leading-4 tracking-[0.5px] whitespace-nowrap", {
   variants: {
     variant: {
-      neutral: "bg-muted text-fg-secondary",
+      neutral: "bg-primary-soft/60 text-fg-secondary",
       primary: "bg-primary-soft text-primary-ink",
       success: "bg-success-soft text-success-ink",
       danger: "bg-danger-soft text-danger-ink",
       warning: "bg-warning-soft text-warning-ink",
-      info: "bg-info-soft text-info-ink",
+      info: "bg-primary-soft text-primary",
       accent: "bg-accent-soft text-accent-ink",
+      brand: "bg-cta-soft text-cta-ink",
       outline: "border border-border-strong text-fg-secondary",
     },
   },

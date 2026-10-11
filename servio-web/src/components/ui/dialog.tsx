@@ -28,11 +28,11 @@ export function Dialog({ open, onClose, title, description, children, footer, si
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/32 p-0 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" className={cn("animate-in flex max-h-[95vh] w-full flex-col rounded-t-[28px] bg-high shadow-[var(--shadow-pop)] sm:rounded-[28px]", sizes[size], className)}>
+      <div role="dialog" aria-modal="true" className={cn("animate-in flex max-h-[95vh] w-full flex-col rounded-t-[28px] border-t-[3px] border-t-cta bg-high shadow-[var(--shadow-pop)] sm:rounded-[28px]", sizes[size], className)}>
         {(title || description) && (
           <div className="flex items-start justify-between gap-3 px-6 pb-4 pt-6">
             <div>
-              {title ? <h2 className="text-2xl leading-8">{title}</h2> : null}
+              {title ? <h2 className="text-2xl leading-8 text-heading">{title}</h2> : null}
               {description ? <p className="mt-2 text-sm text-fg-secondary">{description}</p> : null}
             </div>
             <Button variant="ghost" size="icon" className="-mr-2 -mt-1" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></Button>

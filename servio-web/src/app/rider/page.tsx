@@ -55,18 +55,18 @@ export default function RiderHomePage() {
   };
   return (
     <main className="flex min-h-screen flex-col pb-8">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-page/95 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-2 bg-navy px-4 py-3 text-white">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-fg"><Bike className="h-5 w-5" /></span>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-cta text-cta-fg"><Bike className="h-5 w-5" /></span>
           <div className="min-w-0">
             <div className="truncate font-medium">{rider?.name ?? session?.user?.name ?? "Rider"}</div>
-            <div className="truncate text-xs text-fg-muted">{openCount} open · {deliveries.dataUpdatedAt ? `updated ${formatAgo(new Date(deliveries.dataUpdatedAt))}` : "loading"}</div>
+            <div className="truncate text-xs text-white/70">{openCount} open · {deliveries.dataUpdatedAt ? `updated ${formatAgo(new Date(deliveries.dataUpdatedAt))}` : "loading"}</div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label="Refresh" onClick={() => { refresh(); deliveries.refetch(); }}><RefreshCw className={`h-5 w-5 ${deliveries.isFetching ? "animate-spin" : ""}`} /></Button>
-          <ThemeToggle />
-          <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => { signOut(); router.replace("/rider/pin"); }}><LogOut className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" aria-label="Refresh" onClick={() => { refresh(); deliveries.refetch(); }}><RefreshCw className={`h-5 w-5 ${deliveries.isFetching ? "animate-spin" : ""}`} /></Button>
+          <ThemeToggle className="text-white/85 hover:bg-white/10" />
+          <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" aria-label="Sign out" onClick={() => { signOut(); router.replace("/rider/pin"); }}><LogOut className="h-5 w-5" /></Button>
         </div>
       </header>
 

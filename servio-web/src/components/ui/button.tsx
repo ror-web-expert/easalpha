@@ -5,15 +5,16 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Material Design 3 common buttons: full-radius, 40px, Label Large (14px medium, 0.1px tracking).
-// primary = filled, secondary = outlined, soft = tonal, ghost = text / standard icon button.
+// primary = filled in the orange CTA (the one action on a screen), secondary = navy outline, soft = tonal,
+// ghost = text / standard icon button.
 // Hover and press use M3 state layers (8% and 10% of the content colour).
 const button = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium tracking-[0.1px] transition-[background-color,box-shadow,color] disabled:pointer-events-none disabled:opacity-40 select-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        primary: "bg-primary text-primary-fg hover:bg-primary-hover hover:shadow-[var(--elev-1)] active:shadow-none",
-        secondary: "border border-border-strong text-primary hover:bg-primary/8 active:bg-primary/10",
+        primary: "bg-cta font-semibold text-cta-fg hover:bg-cta-hover hover:shadow-[var(--elev-1)] active:shadow-none focus-visible:outline-cta",
+        secondary: "border border-primary text-primary hover:bg-primary-soft active:bg-primary/15",
         ghost: "text-fg-secondary hover:bg-fg/8 active:bg-fg/10",
         destructive: "bg-danger text-danger-fg hover:shadow-[var(--elev-1)] hover:brightness-110",
         soft: "bg-primary-soft text-primary-ink hover:shadow-[var(--elev-1)] active:shadow-none",

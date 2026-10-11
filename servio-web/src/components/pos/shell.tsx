@@ -62,21 +62,21 @@ export function PosShell({ children, title }: { children: React.ReactNode; title
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="no-print flex h-16 shrink-0 items-center gap-2 border-b bg-page px-3">
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-primary text-lg font-medium text-primary-fg">S</span>
+      <header className="no-print flex h-16 shrink-0 items-center gap-2 bg-navy px-3 text-white">
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-cta text-lg font-semibold text-cta-fg">S</span>
         <div className="hidden min-w-0 md:block">
-          <div className="truncate text-base font-medium leading-tight">{branch?.name}</div>
-          <div className="truncate text-xs tracking-[0.4px] text-fg-secondary">{session?.user?.name} · {session?.membership?.role?.name}</div>
+          <div className="truncate text-base font-medium leading-tight text-white">{branch?.name}</div>
+          <div className="truncate text-xs tracking-[0.4px] text-white/70">{session?.user?.name} · {session?.membership?.role?.name}</div>
         </div>
         <nav className="ml-2 flex gap-1">
           {tabs.map((t) => (
-            <Link key={t.href} href={t.href} className={cn("relative flex h-10 items-center gap-2 rounded-full px-4 text-sm font-medium tracking-[0.1px]", pathname === t.href ? "bg-sidebar-active-bg text-sidebar-active" : "text-fg-secondary hover:bg-fg/8")}>
+            <Link key={t.href} href={t.href} className={cn("relative flex h-10 items-center gap-2 rounded-full px-4 text-sm font-medium tracking-[0.1px]", pathname === t.href ? "bg-sidebar-active-bg text-sidebar-active" : "text-white/85 hover:bg-white/10")}>
               <t.icon className="h-5 w-5" /><span className="hidden lg:inline">{t.label}</span>
               {t.href === "/pos/qr" && qrCount ? <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-medium text-danger-fg tabular" aria-label={`${qrCount} waiting`}>{qrCount}</span> : null}
             </Link>
           ))}
         </nav>
-        <div className="min-w-0 flex-1 truncate px-2 text-sm text-fg-secondary">{title}</div>
+        <div className="min-w-0 flex-1 truncate px-2 text-sm text-white/70">{title}</div>
         {reminder && reminder.count > 0 ? (
           <Link href="/pos/orders" title={reminder.tone === "red" ? "Closing time is near and orders are still open" : "Pending orders"} aria-label={reminder.text} className={cn("hidden h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:flex", reminder.tone === "red" ? "bg-danger text-danger-fg" : "bg-warning-soft text-warning-ink")}>
             <Clock className="h-4 w-4" /><span className="truncate">{reminder.text}</span>
@@ -84,10 +84,10 @@ export function PosShell({ children, title }: { children: React.ReactNode; title
         ) : null}
         <Link href="/pos/shift" className={cn("hidden h-8 items-center rounded-lg px-3 text-sm font-medium sm:flex", shift ? "bg-success-soft text-success-ink" : "bg-warning-soft text-warning-ink")}>{shift ? "Shift open" : "No shift"}</Link>
         <SyncBadge />
-        {session?.permissions?.includes("app.admin") ? <Link href="/admin" className="hidden h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8 lg:grid" title="Admin"><LayoutDashboard className="h-5 w-5" /></Link> : null}
-        {can("PRINTERS", "settings.manage") ? <button onClick={openPrinters} className="grid h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8" title="Printers" aria-label="Printers"><Printer className="h-5 w-5" /></button> : null}
-        <ThemeToggle />
-        <button onClick={() => (reminder && reminder.count > 0 ? setLockOpen(true) : doLock())} className="grid h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8" title="Lock" aria-label="Lock"><Lock className="h-5 w-5" /></button>
+        {session?.permissions?.includes("app.admin") ? <Link href="/admin" className="hidden h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10 lg:grid" title="Admin"><LayoutDashboard className="h-5 w-5" /></Link> : null}
+        {can("PRINTERS", "settings.manage") ? <button onClick={openPrinters} className="grid h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10" title="Printers" aria-label="Printers"><Printer className="h-5 w-5" /></button> : null}
+        <ThemeToggle className="text-white/85 hover:bg-white/10" />
+        <button onClick={() => (reminder && reminder.count > 0 ? setLockOpen(true) : doLock())} className="grid h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10" title="Lock" aria-label="Lock"><Lock className="h-5 w-5" /></button>
       </header>
       <div className="min-h-0 flex-1">{children}</div>
       <Dialog open={printersOpen} onClose={() => setPrintersOpen(false)} title="Printers" size="sm" footer={<Button onClick={() => setPrintersOpen(false)}>Done</Button>}>

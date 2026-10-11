@@ -8,7 +8,7 @@ import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input, MoneyInput
 // SPEC Website Config: a full site builder with one screen per section. Each section is a flat key/value hash on the
 // API; the control for a key is decided by websiteFieldType so a new key on the API shows up without a screen change.
 
-const THEME_PRESETS = ["#1976d2", "#005bbf", "#2e7d32", "#c62828", "#ef6c00", "#6a1b9a", "#00838f", "#191c23"];
+const THEME_PRESETS = ["#10294d", "#ff7a1a", "#2e7d32", "#c62828", "#ef6c00", "#6a1b9a", "#00838f", "#191c23"];
 
 const SECTION_HINTS: Record<string, string> = {
   identity: "Name, URL slug, description, theme colour, logo, cover image and favicon. These shape every page.",
@@ -80,8 +80,8 @@ function SectionField({ section, name, value, onChange }: { section: string; nam
         <div className="sm:col-span-2">
           <Field label={label}>
             <div className="flex flex-wrap items-center gap-2">
-              <input type="color" aria-label={label} value={/^#[0-9a-f]{6}$/i.test(str) ? str : "#1976d2"} onChange={(e) => onChange(e.target.value)} className="h-10 w-12 cursor-pointer rounded-[4px] border border-border-strong bg-transparent p-1" />
-              <Input className="w-32 font-mono" value={str} onChange={(e) => onChange(e.target.value)} placeholder="#1976d2" />
+              <input type="color" aria-label={label} value={/^#[0-9a-f]{6}$/i.test(str) ? str : "#10294d"} onChange={(e) => onChange(e.target.value)} className="h-10 w-12 cursor-pointer rounded-[4px] border border-border-strong bg-transparent p-1" />
+              <Input className="w-32 font-mono" value={str} onChange={(e) => onChange(e.target.value)} placeholder="#10294d" />
               <div className="flex flex-wrap gap-1.5">
                 {THEME_PRESETS.map((c) => <button key={c} type="button" aria-label={`Preset ${c}`} onClick={() => onChange(c)} className={cn("h-7 w-7 rounded-full border-2", str.toLowerCase() === c ? "border-fg" : "border-transparent")} style={{ backgroundColor: c }} />)}
               </div>

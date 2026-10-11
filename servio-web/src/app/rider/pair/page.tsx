@@ -31,7 +31,7 @@ export default function RiderPairPage() {
       <div className="absolute right-4 top-4"><ThemeToggle /></div>
       <div className="w-full max-w-sm space-y-6 text-center">
         <div>
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-primary text-primary-fg"><Bike className="h-7 w-7" /></span>
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-cta text-cta-fg"><Bike className="h-7 w-7" /></span>
           <h1 className="mt-4 text-2xl font-semibold">Pair this phone</h1>
           <p className="mt-1 text-fg-secondary">Enter the 6-digit code from Admin, Riders, Rider App.</p>
           {device ? <p className="mt-1 text-xs text-fg-muted">This phone was {device.name}; pairing again replaces it.</p> : null}

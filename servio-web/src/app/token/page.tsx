@@ -36,21 +36,21 @@ function Screen() {
   }, [ready.data, sound, beep]);
   const list = ready.data ?? [];
   return (
-    <div className="flex h-screen flex-col bg-page text-fg">
-      <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
-        <Megaphone className="h-6 w-6 text-primary" /><span className="text-lg font-semibold">Ready for pickup</span>
+    <div className="flex h-screen flex-col bg-navy-deep text-white">
+      <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-4">
+        <Megaphone className="h-6 w-6 text-cta" /><span className="text-lg font-semibold">Ready for pickup</span>
         <div className="flex-1" />
-        <Button variant="ghost" size="icon" onClick={() => setSound(!sound)} aria-label="Sound">{sound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
+        <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" onClick={() => setSound(!sound)} aria-label="Sound">{sound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
       </header>
-      {flash ? <div className="animate-in bg-success px-6 py-10 text-center text-success-fg"><div className="text-2xl">Order</div><div className="text-[12vw] font-black leading-none tabular">{flash}</div><div className="text-3xl font-semibold">ready</div></div> : null}
+      {flash ? <div className="animate-in bg-cta px-6 py-10 text-center text-cta-fg"><div className="text-2xl">Order</div><div className="text-[12vw] font-black leading-none tabular">{flash}</div><div className="text-3xl font-semibold">ready</div></div> : null}
       <div className={cn("grid flex-1 auto-rows-min gap-4 overflow-y-auto p-6", list.length > 6 ? "grid-cols-3 lg:grid-cols-4" : "grid-cols-2 lg:grid-cols-3")}>
         {list.map((o) => (
-          <div key={o.id} className="flex flex-col items-center justify-center rounded-xl border-2 border-success bg-card p-6 text-center">
+          <div key={o.id} className="flex flex-col items-center justify-center rounded-xl border-2 border-cta bg-card p-6 text-center text-fg">
             <div className="text-[8vw] font-black leading-none tabular lg:text-7xl">{o.label}</div>
-            <div className="mt-2 text-xl text-fg-secondary">{titleCase(o.order_type)} · ready</div>
+            <div className="mt-2 text-xl text-cta-ink">{titleCase(o.order_type)} · ready</div>
           </div>
         ))}
-        {!list.length && !flash ? <div className="col-span-full py-24 text-center text-3xl text-fg-muted">No orders waiting</div> : null}
+        {!list.length && !flash ? <div className="col-span-full py-24 text-center text-3xl text-white/60">No orders waiting</div> : null}
       </div>
     </div>
   );

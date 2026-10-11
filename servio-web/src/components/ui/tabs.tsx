@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export interface TabItem<T extends string = string> { value: T; label: React.ReactNode; count?: number }
 
-/** Material Design 3 segmented buttons: outlined pill group, selected segment in the secondary container with a check. */
+/** Material Design 3 segmented buttons: outlined pill group, selected segment filled navy with a check. */
 export function Tabs<T extends string>({ value, onChange, items, className, size = "md" }: { value: T; onChange: (v: T) => void; items: TabItem<T>[]; className?: string; size?: "md" | "lg" }) {
   return (
     <div role="tablist" className={cn("flex w-fit max-w-full overflow-x-auto rounded-full border border-border-strong", className)}>
@@ -19,12 +19,12 @@ export function Tabs<T extends string>({ value, onChange, items, className, size
             className={cn(
               "flex flex-1 items-center justify-center gap-2 whitespace-nowrap border-l border-border-strong px-4 font-medium tracking-[0.1px] transition-colors first:border-l-0",
               size === "lg" ? "h-12 text-base" : "h-10 text-sm",
-              selected ? "bg-sidebar-active-bg text-sidebar-active" : "text-fg hover:bg-fg/8",
+              selected ? "bg-primary text-primary-fg" : "text-fg hover:bg-fg/8",
             )}
           >
             {selected ? <Check className="h-4 w-4" /> : null}
             {it.label}
-            {it.count !== undefined ? <span className="rounded-full bg-fg/8 px-1.5 text-xs tabular">{it.count}</span> : null}
+            {it.count !== undefined ? <span className={cn("rounded-full px-1.5 text-xs tabular", selected ? "bg-white/15" : "bg-fg/8")}>{it.count}</span> : null}
           </button>
         );
       })}

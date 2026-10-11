@@ -58,7 +58,7 @@ export function healthBucketVariant(bucket: DeductionHealthBucket | string | nul
 /** SummaryCard tone for a bucket: the badge tone, with accent folded into info. */
 export function healthBucketTone(bucket: DeductionHealthBucket | string): "primary" | "success" | "danger" | "warning" | "info" | "neutral" {
   const v = healthBucketVariant(bucket);
-  return v === "accent" ? "info" : v === "outline" ? "neutral" : v;
+  return v === "accent" || v === "brand" ? "info" : v === "outline" ? "neutral" : v;
 }
 
 export function healthBucketLabel(bucket: DeductionHealthBucket | string): string {

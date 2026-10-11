@@ -64,7 +64,7 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
                 return (
                   <li key={it.href}>
                     <Link href={it.href} onClick={onNavigate} aria-current={active ? "page" : undefined}
-                      className={cn("flex h-10 items-center gap-3 rounded-full px-4 text-sm font-medium tracking-[0.1px] text-sidebar-text transition-colors hover:bg-fg/8", active && "bg-sidebar-active-bg text-sidebar-active hover:bg-sidebar-active-bg")}>
+                      className={cn("relative flex h-10 items-center gap-3 rounded-full px-4 text-sm font-medium tracking-[0.1px] text-sidebar-text transition-colors hover:bg-white/10", active && "bg-sidebar-active-bg text-sidebar-active hover:bg-sidebar-active-bg before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-cta")}>
                       <it.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
                       <span className="truncate">{it.label}</span>
                     </Link>
@@ -80,14 +80,15 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
               onClick={() => setOpen(expanded ? null : group.label)}
               aria-expanded={expanded}
               className={cn(
-                "group flex h-10 w-full items-center gap-3 rounded-full px-4 text-sm font-medium tracking-[0.1px] text-sidebar-text transition-colors hover:bg-fg/8",
-                hasActive && !expanded && "bg-sidebar-active-bg text-sidebar-active",
+                "group relative flex h-10 w-full items-center gap-3 rounded-full px-4 text-sm font-medium tracking-[0.1px] text-white/60 transition-colors hover:bg-white/10 hover:text-white/85",
+                expanded && "text-white/85",
+                hasActive && !expanded && "bg-sidebar-active-bg text-sidebar-active before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-cta",
               )}
             >
               <group.icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
               <span className="flex-1 truncate text-left">{group.label}</span>
-              {allSoon ? <span className="rounded-full bg-muted px-2 text-[11px] font-medium tracking-[0.5px] text-fg-secondary">Soon</span> : null}
-              <ChevronRight className={cn("h-4 w-4 text-fg-secondary transition-transform", expanded && "rotate-90")} />
+              {allSoon ? <span className="rounded-full bg-white/10 px-2 text-[11px] font-medium tracking-[0.5px] text-white/70">Soon</span> : null}
+              <ChevronRight className={cn("h-4 w-4 text-white/60 transition-transform", expanded && "rotate-90")} />
             </button>
             {expanded ? (
               <ul className="mb-2 mt-0.5 space-y-0.5">
@@ -96,9 +97,9 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
                   if (it.soon) {
                     return (
                       <li key={it.href + it.label}>
-                        <span className="flex h-9 cursor-default items-center gap-2 rounded-full pl-12 pr-4 text-sm text-fg-muted" title="Not built yet">
+                        <span className="flex h-9 cursor-default items-center gap-2 rounded-full pl-12 pr-4 text-sm text-white/50" title="Not built yet">
                           <span className="truncate">{it.label}</span>
-                          <span className="ml-auto rounded-full bg-muted px-2 text-[11px] font-medium tracking-[0.5px]">Soon</span>
+                          <span className="ml-auto rounded-full bg-white/10 px-2 text-[11px] font-medium tracking-[0.5px] text-white/70">Soon</span>
                         </span>
                       </li>
                     );
@@ -110,8 +111,8 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
                         onClick={onNavigate}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "flex h-9 items-center rounded-full pl-12 pr-4 text-sm text-sidebar-text transition-colors hover:bg-fg/8",
-                          active && "bg-sidebar-active-bg font-medium text-sidebar-active hover:bg-sidebar-active-bg",
+                          "relative flex h-9 items-center rounded-full pl-12 pr-4 text-sm text-sidebar-text transition-colors hover:bg-white/10",
+                          active && "bg-sidebar-active-bg font-medium text-sidebar-active hover:bg-sidebar-active-bg before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-cta",
                         )}
                       >
                         <span className="truncate">{it.label}</span>
@@ -152,18 +153,18 @@ function BusinessSwitcher() {
   };
   return (
     <div className="relative px-3 pb-2 pt-3">
-      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 rounded-full py-2 pl-2 pr-4 text-left transition-colors hover:bg-fg/8" disabled={busy}>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-base font-medium text-primary-fg">
+      <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 rounded-full py-2 pl-2 pr-4 text-left text-white transition-colors hover:bg-white/10" disabled={busy}>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-cta text-base font-semibold text-cta-fg">
           {session.business.name.slice(0, 1).toUpperCase()}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-base font-medium tracking-[0.15px] text-fg">{session.business.name}</span>
-          <span className="block truncate text-xs tracking-[0.4px] text-fg-secondary">{session.membership.role.name}</span>
+          <span className="block truncate text-base font-medium tracking-[0.15px] text-white">{session.business.name}</span>
+          <span className="block truncate text-xs tracking-[0.4px] text-white/70">{session.membership.role.name}</span>
         </span>
-        {others.length > 1 ? <ChevronsUpDown className="h-4 w-4 text-fg-secondary" /> : null}
+        {others.length > 1 ? <ChevronsUpDown className="h-4 w-4 text-white/70" /> : null}
       </button>
       {open && others.length > 1 ? (
-        <div className="absolute left-3 right-3 z-20 mt-1 rounded-[4px] bg-high py-2 shadow-[var(--shadow-pop)]">
+        <div className="absolute left-3 right-3 z-20 mt-1 rounded-[4px] bg-high py-2 text-fg shadow-[var(--shadow-pop)]">
           {others.map((b) => (
             <button key={b.id} onClick={() => switchTo(b.id)} className={cn("block h-12 w-full px-3 text-left text-sm hover:bg-fg/8", b.id === session.business.id && "font-medium text-primary")}>
               {b.name} <span className="text-xs text-fg-muted">· {b.role}</span>
@@ -189,10 +190,10 @@ function BranchPicker() {
   };
   if (!session) return null;
   return (
-    <label className="relative flex h-8 items-center rounded-lg border border-border-strong pl-2 hover:bg-fg/8">
-      <Building2 className="h-[18px] w-[18px] text-primary" />
+    <label className="relative flex h-8 items-center rounded-full bg-white/10 pl-3 text-white hover:bg-white/15">
+      <Building2 className="h-[18px] w-[18px] text-white/85" />
       <select
-        className="h-full max-w-[160px] appearance-none bg-transparent pl-2 pr-8 text-sm font-medium tracking-[0.1px] outline-none"
+        className="h-full max-w-[160px] appearance-none bg-transparent pl-2 pr-8 text-sm font-medium tracking-[0.1px] text-white outline-none [&>option]:bg-card [&>option]:text-fg"
         value={branchId ?? session.branch?.id ?? ""}
         onFocus={load}
         onChange={(e) => { setBranch(e.target.value || null); window.location.reload(); }}
@@ -270,13 +271,13 @@ function UserFooter({ onLogout }: { onLogout: () => void }) {
   const user = useAuthStore((s) => s.session?.user);
   const initials = (user?.name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div className="flex items-center gap-3 border-t px-4 py-3">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-medium text-primary-ink">{initials}</span>
+    <div className="flex items-center gap-3 border-t border-white/15 px-4 py-3 text-white">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/15 text-sm font-medium text-white">{initials}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium tracking-[0.1px]">{user?.name}</span>
-        <span className="block truncate text-xs tracking-[0.4px] text-fg-secondary">{user?.email ?? user?.phone}</span>
+        <span className="block truncate text-xs tracking-[0.4px] text-white/70">{user?.email ?? user?.phone}</span>
       </span>
-      <Button variant="ghost" size="icon" onClick={onLogout} title="Log out" aria-label="Log out">
+      <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" onClick={onLogout} title="Log out" aria-label="Log out">
         <LogOut className="h-5 w-5" />
       </Button>
     </div>
@@ -295,10 +296,10 @@ function DayBar() {
   if (!session) return null;
   const window_ = session.branch?.business_day_window;
   return (
-    <div className="hidden items-center gap-2 text-xs text-fg-secondary md:flex">
+    <div className="hidden items-center gap-2 text-xs text-white/85 md:flex">
       {now ? <span className="tabular whitespace-nowrap" suppressHydrationWarning>{format(now, "EEE d MMM yyyy · HH:mm")}</span> : null}
-      {window_ ? <span className="whitespace-nowrap" title="Daily reports and the dashboard use this window, not midnight to midnight">Business day {window_}</span> : null}
-      <Badge variant="primary">{session.business.plan?.name ?? "Trial"}</Badge>
+      {window_ ? <span className="whitespace-nowrap rounded-full bg-white/10 px-2.5 py-0.5 text-white" title="Daily reports and the dashboard use this window, not midnight to midnight">Business day {window_}</span> : null}
+      <Badge className="bg-white/10 text-white">{session.business.plan?.name ?? "Trial"}</Badge>
     </div>
   );
 }
@@ -311,7 +312,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const clear = useAuthStore((s) => s.clear);
   const groups = useVisibleNav();
   const current = useCurrent(groups);
-  // M3 top app bar: flat at rest, surface container once content scrolls under it.
+  // M3 top app bar in brand navy: flat at rest, a shadow once content scrolls under it.
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 4);
@@ -335,11 +336,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="px-3 pb-3">
         <button
           onClick={() => { setMobileOpen(false); setSearchOpen(true); }}
-          className="flex h-12 w-full items-center gap-3 rounded-full bg-high px-4 text-base text-fg-secondary transition-colors hover:bg-fg/8"
+          className="flex h-12 w-full items-center gap-3 rounded-full bg-white/10 px-4 text-base text-white/85 transition-colors hover:bg-white/15"
         >
           <Search className="h-5 w-5" />
           <span className="flex-1 truncate text-left">Search pages</span>
-          <kbd className="rounded border border-border-strong px-1 text-[11px] font-medium">Ctrl K</kbd>
+          <kbd className="rounded border border-white/30 px-1 text-[11px] font-medium">Ctrl K</kbd>
         </button>
       </div>
       <NavLinks groups={groups} onNavigate={() => setMobileOpen(false)} />
@@ -356,26 +357,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className={cn("no-print sticky top-0 z-30 flex h-16 items-center gap-2 px-4 transition-colors md:px-6", scrolled ? "bg-muted" : "bg-page")}>
-          <Button variant="ghost" size="icon" className="-ml-2 lg:hidden" onClick={() => setMobileOpen((o) => !o)} aria-label="Menu">
+        <header className={cn("no-print sticky top-0 z-30 flex h-16 items-center gap-2 bg-navy px-4 text-white transition-shadow md:px-6", scrolled && "shadow-[var(--elev-1)]")}>
+          <Button variant="ghost" size="icon" className="-ml-2 text-white hover:bg-white/10 lg:hidden" onClick={() => setMobileOpen((o) => !o)} aria-label="Menu">
             {mobileOpen ? <X className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
           </Button>
           <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
             {current ? (
               <>
-                <span className="hidden text-fg-secondary sm:inline">{current.group.label}</span>
-                <ChevronDown className="hidden h-4 w-4 -rotate-90 text-fg-secondary sm:inline" />
-                <span className="truncate font-medium tracking-[0.1px]">{current.item.label}</span>
+                <span className="hidden text-white/70 sm:inline">{current.group.label}</span>
+                <ChevronDown className="hidden h-4 w-4 -rotate-90 text-white/70 sm:inline" />
+                <span className="truncate font-medium tracking-[0.1px] text-white">{current.item.label}</span>
               </>
             ) : null}
           </div>
-          <button onClick={() => setSearchOpen(true)} className="grid h-10 w-10 place-items-center rounded-full text-fg-secondary hover:bg-fg/8 lg:hidden" aria-label="Search pages">
+          <button onClick={() => setSearchOpen(true)} className="grid h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10 lg:hidden" aria-label="Search pages">
             <Search className="h-6 w-6" />
           </button>
           <HeaderPills />
           <BranchPicker />
           <DayBar />
-          <ThemeToggle />
+          <ThemeToggle className="text-white/85 hover:bg-white/10" />
         </header>
         <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-8 pt-2 md:px-6">{children}</main>
       </div>

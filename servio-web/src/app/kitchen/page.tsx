@@ -104,27 +104,27 @@ function Board() {
   }, [list, alerts.timeoutMinutes, alerts.redSound, beep]);
   const changed = tickets.data ?? [];
   return (
-    <div className="flex h-screen flex-col bg-page text-fg">
-      <header className="flex h-14 items-center gap-3 border-b bg-card px-3">
-        <ChefHat className="h-6 w-6 text-primary" />
+    <div className="flex h-screen flex-col bg-navy-deep text-white">
+      <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-3">
+        <ChefHat className="h-6 w-6 text-cta" />
         <span className="text-lg font-semibold">Kitchen</span>
-        <Select className="h-11 w-48 text-base" value={station} onChange={(e) => setStation(e.target.value)} aria-label="Station"><option value="">All stations</option>{stations.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
-        <span className="text-sm text-fg-secondary">{list.length} orders{alerts.timeoutMinutes ? ` · red after ${alerts.timeoutMinutes} min` : ""}</span>
+        <Select className="h-11 w-48 border-white/30 text-base text-white hover:border-white [&>option]:bg-card [&>option]:text-fg" value={station} onChange={(e) => setStation(e.target.value)} aria-label="Station"><option value="">All stations</option>{stations.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
+        <span className="text-sm text-white/70">{list.length} orders{alerts.timeoutMinutes ? ` · red after ${alerts.timeoutMinutes} min` : ""}</span>
         <div className="flex-1" />
-        <span className={cn("flex items-center gap-1 text-sm", live ? "text-success" : "text-fg-muted")}>{live ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}{live ? "Live" : "Polling"}</span>
+        <span className={cn("flex items-center gap-1 text-sm", live ? "text-white" : "text-white/60")}>{live ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}{live ? "Live" : "Polling"}</span>
         <PushToggle app="kitchen" label="Push" className="hidden md:inline-flex" />
         {alerts.newOrderSound
-          ? <Button variant="ghost" size="icon" onClick={() => setDeviceSound(!deviceSound)} aria-label="Sound" title={deviceSound ? "Mute new-order sound on this screen" : "Unmute new-order sound on this screen"}>{deviceSound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
-          : <Button variant="ghost" size="icon" disabled aria-label="Sound off" title="New-order sound is off in Settings, Point of Sale, KDS Alerts"><VolumeX className="h-5 w-5" /></Button>}
+          ? <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" onClick={() => setDeviceSound(!deviceSound)} aria-label="Sound" title={deviceSound ? "Mute new-order sound on this screen" : "Unmute new-order sound on this screen"}>{deviceSound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
+          : <Button variant="ghost" size="icon" className="text-white/85" disabled aria-label="Sound off" title="New-order sound is off in Settings, Point of Sale, KDS Alerts"><VolumeX className="h-5 w-5" /></Button>}
       </header>
       {changed.length ? (
-        <div className="flex gap-2 overflow-x-auto border-b bg-warning-soft px-3 py-2">
+        <div className="flex gap-2 overflow-x-auto border-b border-white/10 bg-warning-soft px-3 py-2 text-warning-ink">
           {changed.map((t) => <div key={t.id} className={cn("shrink-0 rounded-md border px-3 py-1 text-sm", t.kind === "cancelled" ? "border-danger bg-danger-soft" : "border-warning")}><b className="uppercase">{t.kind}</b> #{t.serial ?? "?"}{t.table_code ? ` · ${t.table_code}` : ""}: {(t.lines ?? []).map((l) => `${(l as { quantity?: string }).quantity ?? ""} ${(l as { name?: string }).name ?? ""}`).join(", ")} <span className="text-fg-muted">{formatTime(t.created_at)}</span></div>)}
         </div>
       ) : null}
       <div className="grid flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {list.map((o) => (
-          <article key={o.id} className={cn("flex flex-col rounded-lg border-2 bg-card shadow-sm", o.status === "preparing" ? "border-info" : o.status === "ready" ? "border-success" : "border-border")}>
+          <article key={o.id} className={cn("flex flex-col rounded-lg border-2 bg-card text-fg shadow-sm", o.status === "preparing" ? "border-info" : o.status === "ready" ? "border-success" : "border-cta")}>
             <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
               <div className="flex items-center gap-2"><span className="text-2xl font-bold">{o.label}</span><Badge variant={orderTypeVariant(o.order_type)}>{titleCase(o.order_type)}</Badge>{o.table_code ? <Badge>Table {o.table_code}</Badge> : null}</div>
               <Timer start={o.placed_at} elapsed={o.elapsed_seconds} timeout={alerts.timeoutMinutes} />
@@ -148,7 +148,7 @@ function Board() {
             </footer>
           </article>
         ))}
-        {!list.length ? <div className="col-span-full py-24 text-center text-xl text-fg-muted">{orders.isLoading ? "Loading…" : orders.error ? errorMessage(orders.error) : "No orders in the kitchen"}</div> : null}
+        {!list.length ? <div className="col-span-full py-24 text-center text-xl text-white/60">{orders.isLoading ? "Loading…" : orders.error ? errorMessage(orders.error) : "No orders in the kitchen"}</div> : null}
       </div>
     </div>
   );
