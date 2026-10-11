@@ -3,11 +3,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Menu, MessageCircle, Phone, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLangStore } from "./lang-store";
 import { Txt } from "./txt";
-import { CONTACT, telLink, whatsappLink, type UiKey } from "./site-helpers";
+import { type UiKey } from "./site-helpers";
 
 const NAV: { href: string; k: UiKey }[] = [
   { href: "/features", k: "nav.features" },
@@ -15,23 +14,11 @@ const NAV: { href: string; k: UiKey }[] = [
   { href: "/contact", k: "nav.contact" },
 ];
 
-function LangToggle({ className }: { className?: string }) {
-  const lang = useLangStore((s) => s.lang);
-  const setLang = useLangStore((s) => s.setLang);
-  return (
-    <div role="radiogroup" aria-label="Language" className={cn("inline-flex items-center rounded-full border border-white/25 bg-white/10 p-0.5 text-xs font-semibold", className)}>
-      <button type="button" role="radio" aria-checked={lang === "en"} onClick={() => setLang("en")} className={cn("rounded-full px-2.5 py-1 transition", lang === "en" ? "bg-white text-[#0B1F3A]" : "text-white/85 hover:text-white")}>ENG</button>
-      <button type="button" role="radio" aria-checked={lang === "ur"} lang="ur" onClick={() => setLang("ur")} className={cn("rounded-full px-2.5 py-1 transition", lang === "ur" ? "bg-white text-[#0B1F3A]" : "text-white/85 hover:text-white")}>اردو</button>
-    </div>
-  );
-}
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
-  const init = useLangStore((s) => s.init);
-  useEffect(() => { init(); }, [init]);
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -54,14 +41,10 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
-          <LangToggle />
-          <a href={telLink()} aria-label={`Call ${CONTACT.whatsappDisplay}`} title={`Call ${CONTACT.whatsappDisplay}`} className="grid h-10 w-10 place-items-center rounded-full bg-[#FF7A1A] text-white transition hover:bg-[#E0640C]"><Phone className="h-4 w-4" /></a>
-          <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp" title="Chat on WhatsApp" className="grid h-10 w-10 place-items-center rounded-full bg-[#128C7E] text-white transition hover:bg-[#0e7366]"><MessageCircle className="h-4 w-4" /></a>
           <Link href="/login" className="rounded-full px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"><Txt k="cta.login" /></Link>
           <Link href="/signup" className="rounded-full bg-[#FF7A1A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#E0640C] hover:shadow-md"><Txt k="cta.start" /></Link>
         </div>
         <div className="flex items-center gap-2 lg:hidden">
-          <LangToggle />
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="site-menu" aria-label={open ? "Close menu" : "Open menu"} className="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -73,10 +56,6 @@ export function SiteHeader() {
             <Link key={n.href} href={n.href} className="rounded-lg px-3 py-2.5 text-base font-medium text-white hover:bg-white/10"><Txt k={n.k} /></Link>
           ))}
           <Link href="/login" className="rounded-lg px-3 py-2.5 text-base font-medium text-white hover:bg-white/10"><Txt k="cta.login" /></Link>
-          <div className="mt-2 flex gap-2">
-            <a href={telLink()} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#FF7A1A] text-sm font-semibold text-white"><Phone className="h-4 w-4" />Call</a>
-            <a href={whatsappLink()} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-[#128C7E] text-sm font-semibold text-white"><MessageCircle className="h-4 w-4" />WhatsApp</a>
-          </div>
           <Link href="/signup" className="mt-2 rounded-full border border-white/30 px-5 py-3 text-center text-base font-semibold text-white hover:bg-white/10"><Txt k="cta.start" /></Link>
         </nav>
       </div>

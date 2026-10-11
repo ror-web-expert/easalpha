@@ -25,9 +25,13 @@ const staff = await api("/staff", { method: "POST", token: T, body: { name: "E2E
 step("kitchen staff created", staff.status === 201, String(staff.status));
 const existing = await api("/devices", { token: T });
 for (const d of existing.j?.data || []) if (/^E2E /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
-const till = await api("/devices", { method: "POST", token: T, body: { name: "E2E till", kind: "till" } });
+let till = await api("/devices", { method: "POST", token: T, body: { name: "E2E till", kind: "till" } });
+if (till.status !== 201) { // the trial plan allows three tills: reuse the seeded Counter till with a fresh code
+  const counter = (existing.j?.data || []).find((d) => d.name === "Counter till");
+  if (counter) till = await api(`/devices/${counter.id}/regenerate_code`, { method: "POST", token: T });
+}
 const kds = await api("/devices", { method: "POST", token: T, body: { name: "E2E kitchen", kind: "kitchen" } });
-step("devices created", till.status === 201 && kds.status === 201, `${till.j?.pairing_code} ${kds.j?.pairing_code}`);
+step("devices created", !!till.j?.pairing_code && kds.status === 201, `${till.j?.pairing_code} ${kds.j?.pairing_code}`);
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 function wire(page, label) {
