@@ -36,11 +36,12 @@ Every feature, screen and behaviour in `docs/SPEC.md` (the ARFAPOS Clone spec, t
 ## How to run
 
 ```bash
-docker start servio-pg                                   # PostgreSQL 16 on port 5434
-cd servio-api && bin/dev                                 # API on 3001 with the job worker
-cd servio-web && pnpm build && pnpm start -p 3000        # admin, POS, kitchen, rider app, storefront
-cd servio-desktop && npm run dist                        # Windows and Linux installers for the desktop POS
+scripts/dev-up.sh          # everything locally: PostgreSQL, API with jobs, WhatsApp gateway, web; prints URLs and logins
+scripts/dev-down.sh        # stop
+cd servio-desktop && pnpm dist:linux   # or dist:win: installers for the desktop POS
 ```
+
+On a server: `deploy/docker-compose.yml` with `deploy/.env` (see `deploy/README.md`).
 
 Demo login: demo@servio.pk / password123. Manager PIN 9999, cashier PIN 1111. Pair a till, a tablet, a kitchen display or a rider phone from Settings, Devices.
 
@@ -53,6 +54,8 @@ Demo login: demo@servio.pk / password123. Manager PIN 9999, cashier PIN 1111. Pa
 ## Left for later (not in the SPEC, or needing outside services)
 
 - A real LLM behind the AI reports: the rules engine fills the same payload today.
+- A fingerprint reader driver: the kiosk endpoint and enrolment exist; a reader feeds it the fingerprint id. Manual taps work today.
+- A native customer mobile app: the storefront is an installable web page; the SPEC's Mobile App section of Website Config holds the store links.
+- The Windows desktop installer is built on Windows (`pnpm dist:win`); the Linux AppImage and deb are built.
 - WhatsApp sends either from a phone linked by QR (run `servio-whatsapp/`, then scan in Settings, WhatsApp) or through the Meta Cloud API with credentials; with neither, messages are logged, not sent.
 - PRA e-IMS filing uses the configured sandbox; production needs the PRA registration.
-- The opening and closing checklist screen under Settings is a Servio extra still marked Soon.

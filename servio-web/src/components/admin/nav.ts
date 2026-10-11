@@ -220,7 +220,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/settings/devices", label: "Signed-in devices", icon: Printer, perms: ["devices.manage", "settings.manage"] },
       { href: "/admin/settings/qr", label: "QR ordering", icon: QrCode, perms: SETTINGS },
       { href: "/admin/settings/checklist", label: "Setup checklist", icon: ListChecks },
-      { href: "/admin/settings/checklists", label: "Opening and closing", icon: ClipboardCheck, perms: ["settings.manage", "shifts.any", "shifts.own"], soon: true },
+      { href: "/admin/settings/checklists", label: "Opening and closing", icon: ClipboardCheck, perms: ["settings.manage", "shifts.any", "shifts.own"] },
       { href: "/admin/settings/needs-attention", label: "Needs attention", icon: RefreshCw },
       { href: "/admin/settings/integrations", label: "Integrations", icon: Plug, perms: ["settings.manage", "finance.view"] },
     ],
