@@ -46,8 +46,8 @@ describe("download page", () => {
     const ids = new Set(installers("1.0.0").map((i) => i.id));
     for (const g of PLATFORM_GUIDES) {
       expect(g.installerIds.every((id) => ids.has(id))).toBe(true);
-      expect(g.requirements.length).toBeGreaterThan(1);
-      expect(g.install.length).toBeGreaterThan(1);
+      expect(g.needs.length).toBeGreaterThan(5);
+      expect(g.install).toHaveLength(3);
       expect(g.issues.length).toBeGreaterThan(1);
     }
     expect(MOBILE_GUIDES.map((g) => g.os)).toEqual(["ios", "android"]);
