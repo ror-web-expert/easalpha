@@ -54,7 +54,7 @@ module Demo
       owner_user = user
       created = false
       if user
-        membership = Membership.joins(:role).where(user_id: user.id, roles: { system_key: "owner" }).first or raise "#{email} exists but owns no business"
+        membership = Tenancy::Context.unscoped { Membership.joins(:role).where(user_id: user.id, roles: { system_key: "owner" }).first } or raise "#{email} exists but owns no business"
         business = membership.business
       else
         r = Auth::Signup.call(name: OWNER_NAME, business_name: business_name, email: email, password: password, country: country,
