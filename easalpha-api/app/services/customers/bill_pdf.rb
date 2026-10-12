@@ -25,11 +25,21 @@ module Customers
       pdf.font_families.update("DejaVu" => { normal: FONT_DIR.join("DejaVuSans.ttf").to_s, bold: FONT_DIR.join("DejaVuSans-Bold.ttf").to_s })
       pdf.font("DejaVu")
       pdf.font_size(9)
-      @bills.each_with_index do |bill, i|
+      ranges = @bills.each_with_index.map do |bill, i|
         pdf.start_new_page if i.positive?
+        first = pdf.page_number
         draw(pdf, bill)
+        [ bill, first..pdf.page_number ]
       end
-      pdf.number_pages("Page <page> of <total>", at: [ pdf.bounds.right - 120, -20 ], width: 120, align: :right, size: 7, color: MUTED)
+      # Page numbers count within each customer's bill, so a page handed to one customer never says "page 3 of 40".
+      ranges.each do |bill, pages|
+        pages.each_with_index do |page, i|
+          pdf.go_to_page(page)
+          pdf.fill_color MUTED
+          pdf.draw_text "#{bill[:number]} · page #{i + 1} of #{pages.count}", at: [ pdf.bounds.right - 160, -20 ], size: 7
+        end
+      end
+      pdf.fill_color "000000"
       pdf.render
     end
 
@@ -73,8 +83,9 @@ module Customers
 
       # Summary tiles
       t = b[:totals]
+      opening = b[:entries].any? { |e| e[:kind] == "opening" }
       tiles = [ [ "Previous balance", b[:brought_forward_minor] ], [ "Purchases", t[:charges_minor] ], [ "Payments", t[:payments_minor] ],
-                [ "Adjustments", t[:adjustments_minor] - t[:refunds_minor] + t[:paid_out_minor] ], [ "Amount due", [ b[:closing_balance_minor], 0 ].max ] ]
+                [ opening ? "Opening & adjustments" : "Adjustments", t[:adjustments_minor] - t[:refunds_minor] + t[:paid_out_minor] ], [ "Amount due", [ b[:closing_balance_minor], 0 ].max ] ]
       w = pdf.bounds.width / tiles.size
       y = pdf.cursor
       tiles.each_with_index do |(label, v), i|
@@ -90,7 +101,7 @@ module Customers
       pdf.move_cursor_to y - 52
 
       # Entries
-      rows = [ [ "Date", "Details", "Purchases", "Payments", "Balance" ] ]
+      rows = [ [ "Date", "Details", "Charges", "Credits", "Balance" ] ]
       rows << [ date(b[:from]), "Balance brought forward", "", "", money(b[:brought_forward_minor]) ]
       b[:entries].each do |e|
         debit = e[:amount_minor].positive? ? money(e[:amount_minor]) : ""
@@ -131,7 +142,8 @@ module Customers
       when "charge" then [ "Order #{e[:order_label]}", e[:items].presence ].compact.join(": ")
       when "payment" then [ "Payment", e[:method_name], e[:reference].presence ].compact.join(", ")
       when "refund" then [ "Refund #{e[:order_label]}", e[:reason].presence ].compact.join(": ")
-      else [ KIND_LABEL.fetch(e[:kind], e[:kind].to_s.humanize), e[:reason].presence, e[:reverses_label] && "(reverses #{e[:reverses_label]})" ].compact.join(": ")
+      when "reversal" then [ "Reversal of #{e[:reverses_label]}", e[:reason].presence ].compact.join(": ")
+      else [ KIND_LABEL.fetch(e[:kind], e[:kind].to_s.humanize), e[:reason].presence ].compact.join(": ")
       end
     end
 
