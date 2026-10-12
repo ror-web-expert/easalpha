@@ -11,7 +11,7 @@ import { SITE_URL } from "@/app/sitemap";
 
 export const metadata: Metadata = {
   title: "Download",
-  description: "EasAlpha POS for Windows, Linux and Mac: the till with receipt printing and the print server for tablets. Phones and tablets install the web app.",
+  description: "EasAlpha POS for Windows, macOS and Linux with setup guides, requirements and fixes for each; iPhone, iPad and Android run the web app from the home screen.",
   alternates: { canonical: "/download" },
 };
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyManifest, detectOs, downloadsBase, installers, installerUrl, ordered, originFromHeaders } from "./download-helpers";
+import { AFTER_INSTALL, applyManifest, detectOs, downloadsBase, installers, installerUrl, MOBILE_GUIDES, ordered, originFromHeaders, PLATFORM_GUIDES } from "./download-helpers";
 
 describe("download page", () => {
   it("detects the operating system from the user agent", () => {
@@ -34,11 +34,23 @@ describe("download page", () => {
     expect(originFromHeaders(h({ host: "web:3000", "x-forwarded-host": "pos.easalpha.com", "x-forwarded-proto": "https" }), "https://x")).toBe("https://pos.easalpha.com");
     expect(originFromHeaders(h({}), "https://easalpha.com/")).toBe("https://easalpha.com");
   });
-  it("offers only the installers the manifest says are uploaded, at the manifest's version", () => {
+  it("keeps every installer and marks which ones the manifest says are uploaded, at the manifest's version", () => {
     const base = installers("0.1.0");
-    expect(applyManifest(base, null)).toEqual({ version: null, list: base });
+    expect(applyManifest(base, null).list.every((i) => i.available)).toBe(true);
     const r = applyManifest(base, { version: "0.3.0", files: [{ file: "EasAlpha POS-0.3.0.AppImage" }, { file: "EasAlpha POS Setup 0.3.0.exe" }] });
     expect(r.version).toBe("0.3.0");
-    expect(r.list.map((i) => i.id)).toEqual(["win", "appimage"]);
+    expect(r.list.map((i) => [i.id, i.available])).toEqual([["win", true], ["appimage", true], ["deb", false], ["mac-intel", false], ["mac-arm", false]]);
+  });
+  it("has a guide with requirements, steps and known issues for every kind of computer and phone", () => {
+    expect(PLATFORM_GUIDES.map((g) => g.os)).toEqual(["windows", "mac", "linux"]);
+    const ids = new Set(installers("1.0.0").map((i) => i.id));
+    for (const g of PLATFORM_GUIDES) {
+      expect(g.installerIds.every((id) => ids.has(id))).toBe(true);
+      expect(g.requirements.length).toBeGreaterThan(1);
+      expect(g.install.length).toBeGreaterThan(1);
+      expect(g.issues.length).toBeGreaterThan(1);
+    }
+    expect(MOBILE_GUIDES.map((g) => g.os)).toEqual(["ios", "android"]);
+    expect(AFTER_INSTALL.length).toBeGreaterThan(2);
   });
 });
