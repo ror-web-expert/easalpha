@@ -27,22 +27,31 @@ module Payroll
         run = p.payroll_run
         earned = p.base_minor + p.earnings_minor - p.deductions_minor - p.absence_minor - p.late_fines_minor
         rows << { date: run.month.end_of_month, at: run.created_at, kind: "salary", label: "Salary #{run.month.strftime('%B %Y')}", ref: run.label, credit_minor: earned, debit_minor: 0,
-                  detail: "Gross #{(p.base_minor + p.earnings_minor) / 100}, deductions #{(p.deductions_minor + p.absence_minor + p.late_fines_minor) / 100}" }
+                  detail: "Gross #{rs(p.base_minor + p.earnings_minor)}, deductions #{rs(p.deductions_minor + p.absence_minor + p.late_fines_minor)}" }
         next unless p.paid_at
         rows << { date: p.paid_at.to_date, at: p.paid_at, kind: "salary_paid", label: "Salary paid", ref: run.label, credit_minor: 0, debit_minor: p.net_minor, recovered_minor: p.advances_recovered_minor,
-                  detail: p.advances_recovered_minor.positive? ? "Advance recovered #{p.advances_recovered_minor / 100}" : nil }
+                  detail: p.advances_recovered_minor.positive? ? "Advance recovered #{rs(p.advances_recovered_minor)}" : nil }
       end
       WagePayment.where(employee_id: employee.id, status: "paid").each do |w|
         period = w.period_from == w.period_to ? w.period_from.strftime("%-d %b") : "#{w.period_from.strftime('%-d %b')} to #{w.period_to.strftime('%-d %b')}"
         rows << { date: w.period_to, at: w.paid_at || w.created_at, kind: "wage", label: "Wage #{period}", ref: w.label, credit_minor: w.gross_minor + w.bonus_minor - w.deductions_minor, debit_minor: 0,
-                  detail: "#{w.days_worked.to_f} day(s)#{w.bonus_minor.positive? ? ", bonus #{w.bonus_minor / 100}" : ''}#{w.deductions_minor.positive? ? ", deductions #{w.deductions_minor / 100}" : ''}" }
+                  detail: [ days(w.days_worked), (w.bonus_minor.positive? ? "bonus #{rs(w.bonus_minor)}" : nil), (w.deductions_minor.positive? ? "deductions #{rs(w.deductions_minor)}" : nil) ].compact.join(", ") }
         rows << { date: (w.paid_at || w.created_at).to_date, at: (w.paid_at || w.created_at) + 1, kind: "wage_paid", label: "Wage paid", ref: w.label, credit_minor: 0, debit_minor: w.net_minor,
-                  recovered_minor: w.advance_recovered_minor, detail: w.advance_recovered_minor.positive? ? "Advance recovered #{w.advance_recovered_minor / 100}" : nil }
+                  recovered_minor: w.advance_recovered_minor, detail: w.advance_recovered_minor.positive? ? "Advance recovered #{rs(w.advance_recovered_minor)}" : nil }
       end
       Advance.where(employee_id: employee.id, status: %w[paid repaid]).where.not(paid_at: nil).each do |a|
         rows << { date: a.paid_at.to_date, at: a.paid_at, kind: "advance", label: "Advance #{a.label}", ref: a.label, credit_minor: 0, debit_minor: a.amount_minor, detail: a.reason }
       end
       rows.sort_by { |e| [ e[:date], e[:at] ] }
+    end
+
+    def rs(minor) = "Rs #{Customers::Notify.rupees(minor)}"
+
+    # 1 day, 0.5 day, 6 days
+    def days(d)
+      n = d.to_d
+      n = n.to_i if n.frac.zero?
+      "#{n} #{n == 1 || (n.is_a?(BigDecimal) && n < 1) ? 'day' : 'days'}"
     end
   end
 end

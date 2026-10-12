@@ -66,7 +66,7 @@ export default function ModulesPage() {
                     <Switch checked={on} disabled={!isOwner || busy === name} onChange={(v) => void toggle(name, v)} label={on ? "On" : "Off"} />
                   </div>
                   <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
-                    {info.screens.map((s) => <li key={s} className="flex items-center gap-2 text-fg-secondary"><CheckCircle2 className={on ? "h-4 w-4 text-success" : "h-4 w-4 text-fg-muted"} />{s}</li>)}
+                    {info.screens.map((s) => <li key={s} className="flex items-center gap-2 text-fg-secondary"><CheckCircle2 className={on ? "h-4 w-4 shrink-0 text-success" : "h-4 w-4 shrink-0 text-fg-muted"} />{s}</li>)}
                   </ul>
                   {on ? <Link href={FIRST_STEP[name].href} className="text-sm font-medium text-primary hover:underline">{FIRST_STEP[name].label}</Link> : null}
                 </CardBody>

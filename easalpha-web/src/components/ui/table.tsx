@@ -22,7 +22,8 @@ export function TH({ className, right, ...props }: React.ThHTMLAttributes<HTMLTa
   return <th className={cn("h-12 whitespace-nowrap px-4 align-middle font-semibold first:pl-5 last:pr-5", right && "text-right", className)} {...props} />;
 }
 export function TD({ className, right, ...props }: React.TdHTMLAttributes<HTMLTableCellElement> & { right?: boolean }) {
-  return <td className={cn("h-12 px-4 align-middle first:pl-5 last:pr-5", right && "text-right tabular", className)} {...props} />;
+  // Numbers (right-aligned) never break across lines; the table scrolls sideways instead.
+  return <td className={cn("h-12 px-4 align-middle first:pl-5 last:pr-5", right && "whitespace-nowrap text-right tabular", className)} {...props} />;
 }
 
 export function EmptyRow({ colSpan, children }: { colSpan: number; children?: React.ReactNode }) {
