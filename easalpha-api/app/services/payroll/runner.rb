@@ -13,7 +13,8 @@ module Payroll
       # SPEC: the run snapshots the divisor, the fines and the allowances it used, so later rule changes never move a paid month.
       run = PayrollRun.create!(branch: branch, month: month, notes: notes, generated_by_membership_id: actor&.id,
                                settings_snapshot: { salary_method: defaults.absent_rule, fixed_divisor: defaults.fixed_divisor, rules_enabled: defaults.rules_enabled, defaults: PayrollSerializers.rule(defaults) })
-      employees = Employee.active.select { |e| e.active_on?(from) || e.active_on?(to) }
+      # Daily and weekly employees are paid as wages (Payroll::Wages), not in the monthly run.
+      employees = Employee.active.where(pay_frequency: "monthly").select { |e| e.active_on?(from) || e.active_on?(to) }
       employees = employees.select { |e| e.branch_id.nil? || e.branch_id == branch.id } if branch
       main_branch = branch || Branch.active.order(is_main: :desc).first
       commissions = Reports::Commissions.run(branch: main_branch, from: from, to: to)[:rows].group_by { |r| r[:membership_id] }
@@ -73,6 +74,7 @@ module Payroll
         run.update!(status: "paid", paid_at: Time.current, paid_by_membership_id: actor&.id)
         AuditLog.record(action: "payroll_pay", record: run, after: { net_minor: run.net_minor, method: method_code })
       end
+      run.payslips.includes(:employee).each { |p| Payroll::Notify.salary_paid!(p, run) if p.paid_at }
       run
     end
   end

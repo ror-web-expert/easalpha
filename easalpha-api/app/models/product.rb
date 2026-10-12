@@ -4,6 +4,7 @@ class Product < ApplicationRecord
   DISCOUNT_TYPES = %w[percent amount].freeze
   has_many :order_type_consumables, dependent: :destroy
   has_many :quick_add_items, dependent: :destroy
+  has_many :barcodes, -> { order(:created_at) }, class_name: "ProductBarcode", dependent: :delete_all
   validates :discount_type, inclusion: { in: DISCOUNT_TYPES }
   validates :discount_value, numericality: { greater_than_or_equal_to: 0 }
   validates :discount_value, numericality: { less_than_or_equal_to: 100 }, if: -> { discount_type == "percent" }

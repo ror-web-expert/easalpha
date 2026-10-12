@@ -18,6 +18,7 @@ module Payroll
       category = ExpenseCategory.active.find_by(name: "Advance") || ExpenseCategory.active.find_by(name: "Salaries") || ExpenseCategory.create!(name: "Salaries")
       e = Expenses::Recorder.create!({ category_id: category.id, amount_minor: advance.amount_minor, method_code: method_code, paid_to: advance.employee.name, note: "Advance #{advance.label}" }, actor: actor, branch: branch, shift: shift, source: "payroll_sync")
       advance.update!(status: "paid", paid_at: Time.current, expense_id: e.id, payment_account_id: e.payment_account_id)
+      Payroll::Notify.advance_paid!(advance)
       advance
     end
   end

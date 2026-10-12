@@ -57,7 +57,7 @@ module Api
         raise Api::Errors::Forbidden.new("permission.denied", "Only the cashier or a manager can close this shift") unless shift.cashier_membership_id == current_membership.id || current_membership.can?("shifts.any")
         approver = current_membership.can?("shifts.any") ? nil : (params[:approver_pin].present? ? require_approval!("shifts.any") : nil)
         detail = params[:count_detail].respond_to?(:to_unsafe_h) ? params[:count_detail].to_unsafe_h : {}
-        if (emp = Employee.active.find_by(membership_id: shift.cashier_membership_id)) && emp.rule.require_fingerprint_to_close_shift
+        if BusinessModules.on?(current_business, "payroll") && (emp = Employee.active.find_by(membership_id: shift.cashier_membership_id)) && emp.rule.require_fingerprint_to_close_shift
           day = current_branch.business_day_for(Time.current)
           raise Api::Errors::Forbidden.new("shift.fingerprint_required", "Check in with the fingerprint device before closing the shift") unless ::Attendance.exists?(employee_id: emp.id, business_day: day, source: "fingerprint")
         end

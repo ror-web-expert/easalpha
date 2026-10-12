@@ -3,7 +3,7 @@ require "rails_helper"
 # SPEC: settings as a typed key-value store per outlet, grouped as the five settings areas, with seeded defaults and a
 # version stamp the POS compares against.
 RSpec.describe "Settings store", type: :request do
-  let!(:owner) { signup_business }
+  let!(:owner) { signup_business(modules: false) } # a fresh business: no settings written yet
   let(:headers) { auth_headers(owner) }
   let(:cashier) { within(owner.business) { Membership.create!(user: create(:user), role: Role.find_by!(system_key: "cashier"), status: "active") } }
 

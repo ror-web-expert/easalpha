@@ -100,6 +100,9 @@ module Api
         @device&.kind == "tablet" ? "app" : "software"
       end
 
+      # Customer accounts and payroll are modules the owner switches on (BusinessModules).
+      def require_module!(name) = BusinessModules.require!(current_business, name)
+
       def require_app!(app)
         raise Api::Errors::Forbidden.new("app.denied", "You don't have access to this app") unless @membership&.can?("app.#{app}")
       end

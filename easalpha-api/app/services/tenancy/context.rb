@@ -15,7 +15,9 @@ module Tenancy
       EasAlpha::Rls.set_business!(ActiveRecord::Base.connection, business.id)
       yield
     ensure
-      EasAlpha::Rls.reset!(ActiveRecord::Base.connection)
+      # Nested use (a login that reads another business's settings) hands the connection back to the outer business.
+      outer = previous && previous[:business]
+      outer ? EasAlpha::Rls.set_business!(ActiveRecord::Base.connection, outer.id) : EasAlpha::Rls.reset!(ActiveRecord::Base.connection)
       Current.attributes = previous
     end
 

@@ -5,6 +5,7 @@ module EasAlpha
 
     def apply!(conn = ActiveRecord::Base.connection)
       apply_audit_logs!(conn) if conn.table_exists?("audit_logs")
+      apply_customer_adjustments!(conn) if conn.table_exists?("customer_adjustments")
       return unless conn.table_exists?("stock_ledger_entries")
       conn.execute(<<~SQL)
         CREATE OR REPLACE FUNCTION easalpha_block_ledger_change() RETURNS trigger AS $$
@@ -22,6 +23,19 @@ module EasAlpha
         DROP TRIGGER IF EXISTS stock_ledger_insert_only ON stock_ledger_entries;
         CREATE TRIGGER stock_ledger_insert_only BEFORE UPDATE OR DELETE ON stock_ledger_entries
           FOR EACH ROW EXECUTE FUNCTION easalpha_block_ledger_change();
+      SQL
+    end
+
+    # Customer account adjustments (opening balances, corrections) are insert-only: a mistake gets a reversal row.
+    def apply_customer_adjustments!(conn)
+      conn.execute(<<~SQL)
+        CREATE OR REPLACE FUNCTION easalpha_block_customer_adjustment_change() RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'customer_adjustments is insert-only; add a reversal instead';
+        END $$ LANGUAGE plpgsql;
+        DROP TRIGGER IF EXISTS customer_adjustments_insert_only ON customer_adjustments;
+        CREATE TRIGGER customer_adjustments_insert_only BEFORE UPDATE OR DELETE ON customer_adjustments
+          FOR EACH ROW EXECUTE FUNCTION easalpha_block_customer_adjustment_change();
       SQL
     end
 

@@ -31,3 +31,7 @@ group :test do
 end
 
 gem "web-push", "~> 3.0" # browser push notifications (VAPID)
+
+gem "prawn", "~> 2.5", require: false # server-side PDFs: customer bills sent on WhatsApp
+gem "prawn-table", "~> 0.2.2", require: false
+gem "matrix" # prawn needs it on Ruby 3.1+

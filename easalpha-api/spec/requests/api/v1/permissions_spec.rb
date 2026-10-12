@@ -15,7 +15,7 @@ RSpec.describe "Per-user permissions", type: :request do
       spec = json[:data].select { |p| p[:spec] }
       expect(spec.size).to eq(57)
       expect(spec.map { |p| p[:module] }.uniq.size).to eq(12)
-      expect(json[:data].reject { |p| p[:spec] }.size).to eq(46)
+      expect(json[:data].reject { |p| p[:spec] }.size).to eq(48) # 46 + khata.adjust and wages.pay (12 Oct 2026)
       printers = json[:data].find { |p| p[:code] == "PRINTERS" }
       expect(printers[:surface]).to eq("software")
       expect(json[:data].find { |p| p[:code] == "REQUIRE_PIN_FOR_ORDER_UPDATE" }[:restriction]).to be true

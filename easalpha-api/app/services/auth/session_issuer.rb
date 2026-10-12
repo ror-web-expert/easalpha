@@ -18,6 +18,7 @@ module Auth
         branch: branch && Serializers.branch(branch),
         membership: Serializers.membership(membership),
         permissions: membership.permission_codes,
+        modules: Tenancy::Context.with(business) { BusinessModules.all(business) },
         businesses: Membership.all_for_user(user.id).map { |m| { id: m.business.id, name: m.business.name, slug: m.business.slug, role: m.role.name, membership_id: m.id } }
       }
     end

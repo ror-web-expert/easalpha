@@ -43,6 +43,10 @@ production:
     class: PreorderDueJob
     queue: messages
     schedule: every 10 minutes
+  monthly_bills:
+    class: MonthlyBillsJob
+    queue: messages
+    schedule: every day at 09:30 Asia/Karachi
 development:
   stock_safety_net:
     class: StockSafetyNetJob

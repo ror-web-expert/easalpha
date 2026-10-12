@@ -4,6 +4,7 @@ module Api
       before_action :authenticate!
       before_action -> { require_permission!("payroll.manage", "PAYROLL", "staff.manage", "shifts.any", "app.pos") }, except: :scan
       before_action -> { require_permission!("payroll.manage", "PAYROLL", "staff.manage", "shifts.any", "app.pos", "app.kitchen") }, only: :scan
+      before_action -> { require_module!("payroll") }
       before_action :read_only_guard!, except: %i[index summary today scans ledger reports enrolled]
 
       # GET /attendance/today  SPEC Today: total scans, currently in, checked out, not checked in and late, against the business date

@@ -31,11 +31,21 @@ class WhatsappDeliveryJob < ApplicationJob
   def deliver_through_linked_phone(msg, business)
     Tenancy::Context.with(business) do
       text = msg.variables["text"].presence || render_template(msg)
-      id = Whatsapp::Gateway.send_text!(business, to: msg.to_phone, text: text)
+      doc = document_for(msg)
+      id = doc ? Whatsapp::Gateway.send_document!(business, to: msg.to_phone, text: text, filename: doc[:filename], data: doc[:data]) : Whatsapp::Gateway.send_text!(business, to: msg.to_phone, text: text)
       msg.update!(status: "sent", sent_at: Time.current, provider_message_id: id)
     end
   rescue StandardError => e
     msg.update!(status: "failed", error: e.message.to_s[0, 500])
+  end
+
+  # A message can carry a document to attach, described rather than stored: the bill is rebuilt from the ledger.
+  def document_for(msg)
+    d = msg.variables["document"]
+    return nil unless d.is_a?(Hash) && d["kind"] == "customer_bill"
+    customer = Customer.find_by(id: d["customer_id"]) or return nil
+    bill = Customers::Bill.build(customer, from: Date.parse(d["from"]), to: Date.parse(d["to"]), due_on: d["due_on"].present? ? Date.parse(d["due_on"]) : nil)
+    { filename: bill[:filename], data: Customers::BillPdf.render([ bill ]) }
   end
 
   def render_template(msg)

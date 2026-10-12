@@ -42,6 +42,7 @@ module Permission
     "customers.view" => "View customers",
     "customers.manage" => "Add and edit customers",
     "khata.collect" => "Collect khata payments",
+    "khata.adjust" => "Adjust customer balances and enter opening balances",
     "staff.manage" => "Manage staff and roles",
     "devices.manage" => "Pair and revoke devices",
     "settings.manage" => "Change business settings",
@@ -59,6 +60,7 @@ module Permission
     "expenses.manage" => "Record expenses",
     "finance.view" => "View finance and accounts",
     "payroll.manage" => "Manage payroll",
+    "wages.pay" => "Pay daily and weekly wages",
     "audit.view" => "View the audit log"
   }.freeze
 

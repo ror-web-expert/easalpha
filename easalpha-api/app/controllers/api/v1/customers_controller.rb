@@ -3,9 +3,9 @@ require "csv"
 module Api
   module V1
     class CustomersController < BaseController
-      before_action -> { require_permission!("customers.view", "customers.manage", "orders.create") }, only: %i[index show lookup orders]
-      before_action -> { require_permission!("customers.manage") }, except: %i[index show lookup orders]
-      before_action :read_only_guard!, except: %i[index show lookup orders]
+      before_action -> { require_permission!("customers.view", "customers.manage", "orders.create") }, only: %i[index show lookup orders duplicates]
+      before_action -> { require_permission!("customers.manage") }, except: %i[index show lookup orders duplicates]
+      before_action :read_only_guard!, except: %i[index show lookup orders duplicates]
 
       # GET /customers?q=&status=&group_id=&with_balance=true
       def index
@@ -53,6 +53,13 @@ module Api
         render json: { message_id: msg&.id, status: msg&.status, to: c.phone }, status: :created
       end
 
+      # GET /customers/duplicates?name=&phone=&member_no=&guardian_phone=&exclude_id=
+      # Possible duplicates shown before a customer is saved: same phone, same roll or ID number, same guardian phone,
+      # the same name written differently, or a name containing every word typed.
+      def duplicates
+        render json: { data: Customers::Duplicates.find(name: params[:name], phone: params[:phone], member_no: params[:member_no], guardian_phone: params[:guardian_phone], exclude_id: params[:exclude_id]) }
+      end
+
       # GET /customers/lookup?phone=  exact match by phone with the last order, for one-tap repeat on the till
       def lookup
         phone = User.normalize_phone(params[:phone])
@@ -72,10 +79,21 @@ module Api
         render_page(rows, cursor) { |o| OrderSerializers.summary(o) }
       end
 
+      # POST /customers  ... plus opening_balance_minor (and opening_reason, opening_on, approver_pin) to carry over what a
+      # customer already owes from a paper register. The opening balance needs khata.adjust or a manager PIN.
       def create
-        c = Customer.create!(customer_params.merge(source: params[:source].presence || "in_store"))
-        create_addresses!(c)
-        audit!("create", record: c, after: { name: c.name, phone: c.phone })
+        opening = params[:opening_balance_minor].presence && Integer(params[:opening_balance_minor].to_s)
+        approver = opening && opening != 0 ? require_approval!("khata.adjust") : nil
+        c = nil
+        Customer.transaction do
+          c = Customer.create!(customer_params.merge(source: params[:source].presence || "in_store"))
+          create_addresses!(c)
+          audit!("create", record: c, after: { name: c.name, phone: c.phone })
+          if opening && opening != 0
+            Customers::Accounts.adjust!(c, kind: "opening", amount_minor: opening, reason: params[:opening_reason].presence || "Opening balance", effective_on: params[:opening_on],
+                                           actor: current_membership, approver: approver == current_membership ? nil : approver, branch: current_branch)
+          end
+        end
         render json: CustomerSerializers.customer(c.reload, full: true), status: :created
       rescue ActiveRecord::RecordInvalid => e
         raise Api::Errors::Conflict.new("customer.phone_exists", "A customer with this phone already exists") if e.record.errors[:phone].any? { |m| m.include?("taken") }
@@ -118,39 +136,72 @@ module Api
         head :no_content
       end
 
-      # POST /customers/import  data: CSV with name, phone, email, company, group, address, notes, khata_no?
+      # POST /customers/import  data: CSV with name, phone, email, company, group, address, notes, room, roll_no (or
+      # member_no), guardian_name, guardian_phone, credit_limit, opening_balance (in rupees; negative means in advance).
+      # A row matches an existing customer by phone, then by roll number. Opening balances need the customer accounts
+      # module and khata.adjust, and are skipped for a customer who already has one.
       def import
-        created = updated = 0
+        created = updated = openings = 0
         errors = []
-        CSV.parse(params.require(:data).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each_with_index do |row, i|
+        rows = CSV.parse(params.require(:data).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" /", "__") })
+        wants_opening = rows.headers.include?("opening_balance") && rows.any? { |r| r["opening_balance"].to_s.strip.present? }
+        if wants_opening
+          BusinessModules.require!(current_business, "customer_accounts")
+          raise Api::Errors::Forbidden.new("permission.denied", "Missing permission: khata.adjust (needed for opening balances)") unless current_membership.can?("khata.adjust")
+        end
+        day = today
+        rows.each_with_index do |row, i|
           name = row["name"].to_s.strip
           phone = User.normalize_phone(row["phone"])
+          member_no = (row["roll_no"].presence || row["member_no"].presence || row["roll_id_no"].presence).to_s.strip.presence
           if name.blank?
             errors << { line: i + 2, error: "name is missing" }
             next
           end
-          group = row["group"].present? ? (CustomerGroup.active.find_by(name: row["group"]) || CustomerGroup.create!(name: row["group"])) : nil
-          existing = phone && Customer.active.find_by(phone: phone)
-          attrs = { name: name, phone: phone, email: row["email"].presence, company: row["company"].presence, group: group, notes: row["notes"].presence }.compact
-          if existing
-            existing.update!(attrs)
-            updated += 1
-          else
-            c = Customer.create!(attrs.merge(source: "import"))
-            c.addresses.create!(line1: row["address"], is_default: true) if row["address"].present?
-            created += 1
+          limit = row["credit_limit"].to_s.strip.delete(",").presence && (BigDecimal(row["credit_limit"].to_s.strip.delete(",")) * 100).round
+          opening = row["opening_balance"].to_s.strip.delete(",").presence && (BigDecimal(row["opening_balance"].to_s.strip.delete(",")) * 100).round
+          outcome = nil
+          Customer.transaction do
+            group = row["group"].present? ? (CustomerGroup.active.find_by(name: row["group"]) || CustomerGroup.create!(name: row["group"])) : nil
+            existing = (phone && Customer.active.find_by(phone: phone)) || (member_no && Customer.active.find_by(member_no: member_no))
+            attrs = { name: name, phone: phone, email: row["email"].presence, company: row["company"].presence, group: group, notes: row["notes"].presence,
+                      room: row["room"].presence, member_no: member_no, guardian_name: row["guardian_name"].presence, guardian_phone: row["guardian_phone"].presence,
+                      credit_limit_minor: limit }.compact
+            c = existing
+            if existing
+              existing.update!(attrs)
+              outcome = { updated: true }
+            else
+              c = Customer.create!(attrs.merge(source: "import"))
+              c.addresses.create!(line1: row["address"], is_default: true) if row["address"].present?
+              outcome = { created: true }
+            end
+            if opening && opening != 0
+              if Customers::Accounts.open_opening(c).exists?
+                errors << { line: i + 2, error: "#{c.name} already has an opening balance; it was not changed" }
+              else
+                Customers::Accounts.adjust!(c, kind: "opening", amount_minor: opening, reason: "Opening balance (import)", effective_on: day, actor: current_membership, branch: current_branch)
+                outcome[:opening] = true
+              end
+            end
           end
+          created += 1 if outcome[:created]
+          updated += 1 if outcome[:updated]
+          openings += 1 if outcome[:opening]
         rescue ActiveRecord::RecordInvalid => e
           errors << { line: i + 2, error: e.record.errors.full_messages.to_sentence }
+        rescue ArgumentError
+          errors << { line: i + 2, error: "opening_balance or credit_limit is not a number" }
         end
-        audit!("create", table_name: "customers", after: { import: { created: created, updated: updated, errors: errors.size } }) if created.positive? || updated.positive?
-        render json: { created: created, updated: updated, error_rows: errors }
+        audit!("create", table_name: "customers", after: { import: { created: created, updated: updated, openings: openings, errors: errors.size } }) if created.positive? || updated.positive?
+        render json: { created: created, updated: updated, openings: openings, error_rows: errors }
       end
 
       private
 
       def customer_params
-        params.permit(:name, :phone, :email, :company, :group_id, :status, :credit_limit_minor, :birthday, :whatsapp_opt_in, :notes).tap do |p|
+        params.permit(:name, :phone, :email, :company, :group_id, :status, :credit_limit_minor, :birthday, :whatsapp_opt_in, :notes,
+                      :room, :member_no, :guardian_name, :guardian_phone, :notify_guardian).tap do |p|
           if p.key?(:whatsapp_opt_in)
             on = ActiveModel::Type::Boolean.new.cast(p[:whatsapp_opt_in])
             p[:opt_in_at] = on ? Time.current : nil

@@ -12,6 +12,7 @@ end
 if Rails.env.development? && !User.exists?(email: "demo@easalpha.com")
   r = Auth::Signup.call(name: "Demo Owner", business_name: "Demo Cafe", email: "demo@easalpha.com", password: "password123")
   Tenancy::Context.with(r.business, user: r.user, membership: r.membership) do
+    Setting.write!(r.business, { "modules.customer_accounts" => true, "modules.payroll" => true }) # the demo shows every module
     Branch.first.update!(tax_registration: { "authority" => "pra", "ntn" => "0000000-0", "pos_id" => "DEMO" })
     manager = Membership.create!(user: User.create!(name: "Demo Manager", email: "manager@easalpha.com", password: "password123"), role: Role.find_by!(system_key: "manager"), status: "active")
     manager.set_pin!("9999")

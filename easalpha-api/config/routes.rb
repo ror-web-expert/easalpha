@@ -72,8 +72,17 @@ Rails.application.routes.draw do
           get :consumables
           put :consumables, action: :set_consumables
         end
-        collection { post :reorder }
-        member { post :favourite }
+        collection do
+          post :reorder
+          get :barcodes
+          get :barcode_lookup
+          post "barcodes/generate", action: :generate_barcodes
+        end
+        member do
+          post :favourite
+          post :barcodes, action: :add_barcode
+          delete "barcodes/:barcode_id", action: :remove_barcode
+        end
       end
       resources :modifier_groups, only: %i[index show create update destroy]
       resources :deals, only: %i[index show create update destroy]
@@ -205,6 +214,28 @@ Rails.application.routes.draw do
         end
       end
       get "customers/aging", to: "customer_ledger#aging"
+      get "customers/duplicates", to: "customers#duplicates"
+      get "customers/:id/adjustments", to: "customer_accounts#adjustments"
+      post "customers/:id/adjustments", to: "customer_accounts#create_adjustment"
+      post "customer_adjustments/:id/reverse", to: "customer_accounts#reverse"
+      get "customers/:id/bill.pdf", to: "customer_accounts#bill_pdf", format: false
+      get "customers/:id/bill", to: "customer_accounts#bill"
+      post "customers/:id/send_bill", to: "customer_accounts#send_bill"
+      get "customer_bills.pdf", to: "customer_accounts#bills_pdf", format: false
+      get "customer_bills", to: "customer_accounts#index"
+      get "bill_runs", to: "customer_accounts#runs"
+      get "bill_runs/:id", to: "customer_accounts#show_run"
+      post "bill_runs", to: "customer_accounts#create_run"
+      get "wages/due", to: "wages#due"
+      get "wages/preview", to: "wages#preview"
+      get "wages", to: "wages#index"
+      post "wages", to: "wages#pay"
+      post "wages/batch", to: "wages#pay_batch"
+      post "wages/:id/void", to: "wages#void"
+      get "employees/:id/statement", to: "wages#statement"
+      post "employees/:id/send_statement", to: "wages#send_statement"
+      get "public/bills/:token", to: "public_bills#show"
+      get "public/bills/:token/pdf", to: "public_bills#pdf"
       get "customers/ledger_summary", to: "customer_ledger#summary"
       resources :customers, only: %i[index show create update destroy] do
         collection do

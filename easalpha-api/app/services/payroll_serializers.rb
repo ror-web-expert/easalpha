@@ -3,7 +3,7 @@ module PayrollSerializers
 
   def employee(e)
     { id: e.id, branch_id: e.branch_id, membership_id: e.membership_id, department_id: e.department_id, department: e.department&.name, name: e.name, phone: e.phone, cnic: e.cnic, designation: e.designation,
-      base_salary_minor: e.base_salary_minor, pay_frequency: e.pay_frequency, joined_on: e.joined_on, left_on: e.left_on, fingerprint_enrolled: e.fingerprint_enrolled, fingerprint_id: e.fingerprint_id, fingerprint_enrolled_at: e.fingerprint_enrolled_at, fingerprint_revoked_at: e.fingerprint_revoked_at, shares_tips: e.shares_tips, notes: e.notes, archived_at: e.archived_at,
+      base_salary_minor: e.base_salary_minor, pay_frequency: e.pay_frequency, joined_on: e.joined_on, left_on: e.left_on, fingerprint_enrolled: e.fingerprint_enrolled, fingerprint_id: e.fingerprint_id, fingerprint_enrolled_at: e.fingerprint_enrolled_at, fingerprint_revoked_at: e.fingerprint_revoked_at, shares_tips: e.shares_tips, notes: e.notes, whatsapp_notify: e.whatsapp_notify, archived_at: e.archived_at,
       components: e.employee_salary_components.map { |c| { id: c.id, salary_component_id: c.salary_component_id, name: c.salary_component.name, kind: c.salary_component.kind, amount_minor: c.amount_minor, percent: c.percent&.to_f } } }
   end
 

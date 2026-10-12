@@ -11,6 +11,7 @@ module Api
           branches: Branch.active.order(:created_at).map { |b| Serializers.branch(b) },
           membership: Serializers.membership(current_membership, include_user: false),
           permissions: current_membership.permission_codes,
+          modules: BusinessModules.all(current_business),
           limits: current_membership.role.role_permissions.where.not(limit_value: nil).pluck(:permission_code, :limit_value).to_h,
           device: current_device && Serializers.device(current_device),
           businesses: Membership.all_for_user(current_user.id).map { |m| { id: m.business.id, name: m.business.name, slug: m.business.slug, role: m.role.name } },

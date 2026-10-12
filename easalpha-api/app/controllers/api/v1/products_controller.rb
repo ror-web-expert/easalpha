@@ -1,22 +1,24 @@
 module Api
   module V1
     class ProductsController < BaseController
-      before_action -> { require_permission!("menu.view", "menu.edit") }, only: %i[index show]
-      before_action -> { require_permission!("menu.edit") }, except: %i[index show]
-      before_action :read_only_guard!, except: %i[index show]
+      before_action -> { require_permission!("menu.view", "menu.edit") }, only: %i[index show barcodes]
+      before_action -> { require_permission!("menu.view", "menu.edit", "orders.create") }, only: %i[barcode_lookup]
+      before_action -> { require_permission!("orders.create", "menu.edit") }, only: %i[add_barcode]
+      before_action -> { require_permission!("menu.edit") }, except: %i[index show barcodes barcode_lookup add_barcode]
+      before_action :read_only_guard!, except: %i[index show barcodes barcode_lookup]
 
       def index
-        scope = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups).order(:sort_order, :name)
+        scope = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups, :barcodes).order(:sort_order, :name)
         scope = scope.where(category_id: params[:category_id]) if params[:category_id].present?
         scope = scope.where(is_favourite: true) if params[:favourites] == "true"
         scope = scope.where(active: true) unless params[:include_inactive] == "true"
-        scope = scope.where("products.name ILIKE :q OR products.sku ILIKE :q OR products.name_ur ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("products.name ILIKE :q OR products.sku ILIKE :q OR products.name_ur ILIKE :q OR products.id IN (SELECT product_id FROM product_barcodes WHERE code = :code)", q: "%#{params[:q]}%", code: params[:q].to_s.strip) if params[:q].present?
         rows, cursor = paginate(scope)
         render_page(rows, cursor) { |p| MenuSerializers.product(p, full: true) }
       end
 
       def show
-        render json: MenuSerializers.product(Product.includes(:variants, :product_prices, :product_modifier_groups).find(params[:id]), full: true)
+        render json: MenuSerializers.product(Product.includes(:variants, :product_prices, :product_modifier_groups, :barcodes).find(params[:id]), full: true)
       end
 
       def create
@@ -48,6 +50,7 @@ module Api
       def destroy
         product = Product.find(params[:id])
         product.update!(archived_at: Time.current, active: false)
+        product.barcodes.delete_all # an archived product frees its codes for reuse
         audit!("update", record: product, after: { archived_at: product.archived_at })
         head :no_content
       end
@@ -86,6 +89,51 @@ module Api
         codes
       end
 
+      # GET /products/barcodes?q=  every barcode with its product and size, for the label printer and the codes panel
+      def barcodes
+        scope = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product, :variant).order("products.name", :code)
+        scope = scope.where("product_barcodes.code ILIKE :q OR products.name ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        render json: { data: scope.limit(2000).map { |b| barcode_row(b) } }
+      end
+
+      # GET /products/barcode_lookup?code=  what a scanned code adds: exact code first, then a weighing-scale label
+      def barcode_lookup
+        code = params.require(:code).to_s.strip
+        b = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product, :variant).find_by(code: code)
+        raise Api::Errors::NotFound.new("barcode.unknown", "No product has the code #{code}") unless b
+        render json: barcode_row(b).merge(product: MenuSerializers.product(b.product, full: true))
+      end
+
+      # POST /products/:id/barcodes { code, variant_id?, quantity?, approver_pin? }  attach a code, from the product
+      # form or from the till when an unknown code is scanned (a cashier needs a manager PIN).
+      def add_barcode
+        product = Product.where(archived_at: nil).find(params[:id])
+        approver = require_approval!("menu.edit")
+        code = params.require(:code).to_s.strip
+        if (taken = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product).find_by(code: code))
+          raise Api::Errors::Conflict.new("barcode.taken", "#{code} is already on #{taken.product.name}")
+        end
+        b = product.barcodes.create!(code: code, variant_id: params[:variant_id].presence, quantity: params[:quantity].presence || 1)
+        audit!("update", record: product, approved_by: approver == current_membership ? nil : approver, after: { barcode_added: code, variant_id: b.variant_id, quantity: b.quantity.to_s })
+        render json: { barcode: MenuSerializers.barcode(b), product: MenuSerializers.product(product.reload, full: true) }, status: :created
+      end
+
+      # DELETE /products/:id/barcodes/:barcode_id
+      def remove_barcode
+        product = Product.find(params[:id])
+        b = product.barcodes.find(params[:barcode_id])
+        b.destroy!
+        product.touch
+        audit!("update", record: product, after: { barcode_removed: b.code })
+        head :no_content
+      end
+
+      # POST /products/barcodes/generate { count? }  free in-store EAN-13 codes (prefix 20) for items without a printed code
+      def generate_barcodes
+        count = params[:count].to_i.clamp(1, 200)
+        render json: { codes: Catalog::Barcodes.generate(count) }
+      end
+
       def favourite
         product = Product.find(params[:id])
         product.update!(is_favourite: ActiveModel::Type::Boolean.new.cast(params[:value]))
@@ -93,6 +141,11 @@ module Api
       end
 
       private
+
+      def barcode_row(b)
+        { id: b.id, code: b.code, quantity: b.quantity.to_s, product_id: b.product_id, product_name: b.product.name, variant_id: b.variant_id, variant_name: b.variant&.name,
+          price_minor: b.variant&.price_minor || b.product.base_price_minor, format: Catalog::Barcodes.format_of(b.code) }
+      end
 
       def product_params
         params.permit(:name, :name_ur, :description, :sku, :image_key, :base_price_minor, :tax_rate_id, :is_favourite, :show_online, :active,
@@ -108,8 +161,11 @@ module Api
             row = v[:id].present? ? product.variants.find(v[:id]).tap { |r| r.update!(attrs) } : product.variants.create!(attrs)
             keep << row.id
           end
-          product.variants.where.not(id: keep).update_all(archived_at: Time.current)
+          gone = product.variants.where.not(id: keep).pluck(:id)
+          product.variants.where(id: gone).update_all(archived_at: Time.current)
+          ProductBarcode.where(variant_id: gone).delete_all if gone.any?
         end
+        apply_barcodes!(product) if params[:barcodes].is_a?(Array)
         if params[:prices].is_a?(Array)
           product.product_prices.delete_all
           params[:prices].each do |pr|
@@ -122,6 +178,27 @@ module Api
             product.product_modifier_groups.create!(modifier_group: ModifierGroup.active.find(gid), sort_order: i)
           end
         end
+      end
+
+      # barcodes: [{ code, variant_id? | variant_name?, quantity? }] replaces the product's codes. A new size is named
+      # rather than referenced by id, since it has no id until this request creates it.
+      def apply_barcodes!(product)
+        rows = params[:barcodes].map { |b| b.respond_to?(:permit) ? b.permit(:code, :variant_id, :variant_name, :quantity).to_h : b.to_h }
+        codes = rows.map { |r| r["code"].to_s.strip }.reject(&:blank?)
+        dupes = codes.tally.select { |_, n| n > 1 }.keys
+        raise Api::Errors::BadRequest.new("barcode.duplicate", "#{dupes.first} is listed twice") if dupes.any?
+        taken = ProductBarcode.joins(:product).where(code: codes, products: { archived_at: nil }).where.not(product_id: product.id).includes(:product).first
+        raise Api::Errors::Conflict.new("barcode.taken", "#{taken.code} is already on #{taken.product.name}") if taken
+        ProductBarcode.where(code: codes).where.not(product_id: product.id).delete_all # codes left behind on archived products
+        product.barcodes.delete_all
+        variants = product.variants.reload
+        rows.each do |r|
+          code = r["code"].to_s.strip
+          next if code.blank?
+          variant = r["variant_id"].present? ? variants.find { |v| v.id == r["variant_id"] } : (r["variant_name"].present? ? variants.find { |v| v.name.casecmp?(r["variant_name"].to_s) } : nil)
+          product.barcodes.create!(code: code, variant: variant, quantity: r["quantity"].presence || 1)
+        end
+        product.touch
       end
     end
   end

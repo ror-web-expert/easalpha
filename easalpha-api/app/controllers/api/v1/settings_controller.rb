@@ -21,11 +21,14 @@ module Api
         values = params.require(:values).to_unsafe_h
         unknown = values.keys - Settings::Registry.keys
         raise Api::Errors::BadRequest.new("settings.unknown_key", "Unknown settings: #{unknown.join(', ')}") if unknown.any?
+        if values.keys.any? { |k| k.start_with?("modules.") } && !current_membership.owner?
+          raise Api::Errors::Forbidden.new("modules.owner_only", "Only the owner can switch modules on or off")
+        end
         before = Setting.effective(current_business).slice(*values.keys)
         version = Setting.write!(current_business, values, user: current_user)
         after = Setting.effective(current_business).slice(*values.keys)
         audit!("settings_change", record: current_business, before: mask(before), after: mask(after))
-        render json: { version: version, values: mask(after) }
+        render json: { version: version, values: mask(after), modules: BusinessModules.all(current_business.reload) }
       end
 
       # GET /settings/version  works with a user token or a paired-device token, so a till can check cheaply.

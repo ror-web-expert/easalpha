@@ -3,6 +3,7 @@ module Api
     class PayrollController < BaseController
       before_action :authenticate!
       before_action -> { require_permission!("payroll.manage", "PAYROLL") }
+      before_action -> { require_module!("payroll") }
       before_action :read_only_guard!, except: %i[runs show_run advances payslip overview ledger reports settings]
 
       # GET /payroll/overview  SPEC: total employees, pending advances, whether this month's payroll is generated, outstanding advances

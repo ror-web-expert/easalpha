@@ -4,6 +4,7 @@ module Api
     class EmployeesController < BaseController
       before_action :authenticate!
       before_action -> { require_permission!("payroll.manage", "staff.manage") }
+      before_action -> { require_module!("payroll") }
       before_action :read_only_guard!, except: %i[index show departments components rules leaves holidays]
 
       def index
@@ -98,7 +99,7 @@ module Api
 
       private
 
-      def employee_params = params.permit(:name, :phone, :cnic, :designation, :department_id, :branch_id, :membership_id, :base_salary_minor, :pay_frequency, :joined_on, :left_on, :fingerprint_enrolled, :shares_tips, :notes)
+      def employee_params = params.permit(:name, :phone, :cnic, :designation, :department_id, :branch_id, :membership_id, :base_salary_minor, :pay_frequency, :joined_on, :left_on, :fingerprint_enrolled, :shares_tips, :notes, :whatsapp_notify)
 
       def set_components!(emp, comps)
         emp.employee_salary_components.destroy_all

@@ -12,7 +12,7 @@ module Sync
         branch: Serializers.branch(branch),
         menus: changed.call(Menu.all).map { |m| MenuSerializers.menu(m) },
         categories: changed.call(Category.all).map { |c| MenuSerializers.category(c) },
-        products: changed.call(Product.all).includes(:variants, :product_prices, :product_modifier_groups).map { |p| MenuSerializers.product(p, full: true) },
+        products: changed.call(Product.all).includes(:variants, :product_prices, :product_modifier_groups, :barcodes).map { |p| MenuSerializers.product(p, full: true) },
         modifier_groups: changed.call(ModifierGroup.all).includes(:modifiers).map { |g| MenuSerializers.modifier_group(g) },
         deals: changed.call(Deal.all).includes(:deal_items).map { |d| MenuSerializers.deal(d) },
         promotions: changed.call(Promotion.all).map { |p| MenuSerializers.promotion(p) },

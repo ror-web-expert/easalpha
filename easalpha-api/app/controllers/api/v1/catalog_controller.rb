@@ -8,12 +8,13 @@ module Api
       def show
         since = params[:since].present? ? Time.iso8601(params[:since]) : nil
         branch_id = current_branch&.id
-        products = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups)
+        products = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups, :barcodes)
         products = products.where("products.updated_at > ?", since) if since
         render json: {
           generated_at: Time.current,
           business: { id: current_business.id, name: current_business.name, currency: current_business.currency, time_zone: current_business.time_zone,
-                      phone: current_business.phone, logo_key: current_business.logo_key, settings: current_business.settings },
+                      phone: current_business.phone, logo_key: current_business.logo_key,
+                      settings: current_business.settings.merge(Setting.effective(current_business, branch: current_branch)) },
           branch: current_branch && Serializers.branch(current_branch),
           tax_rates: TaxRate.active.map { |t| MenuSerializers.tax_rate(t) },
           stations: (branch_id ? Station.active.where(branch_id: branch_id) : Station.active).map { |s| MenuSerializers.station(s) },

@@ -79,6 +79,7 @@ module Demo
         Current.membership = owner
         Current.user = owner.user
         @branch = Branch.order(:created_at).first
+        Setting.write!(@business, { "modules.customer_accounts" => true, "modules.payroll" => true }) unless BusinessModules.all(@business).values.all?
         staff!
         menu! if Product.active.none?
         tables!

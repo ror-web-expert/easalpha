@@ -35,14 +35,22 @@ module Whatsapp
       r[:message_id]
     end
 
+    # Sends a file (a customer bill PDF) with the text as its caption; returns the provider message id or raises.
+    def send_document!(business, to:, text:, filename:, data:, mimetype: "application/pdf")
+      r = request(:post, "/sessions/#{session_id(business)}/send", { to: to.to_s.delete("+"), text: text,
+                                                                      document: { base64: Base64.strict_encode64(data), filename: filename, mimetype: mimetype } }, read_timeout: 60)
+      raise Api::Errors::Conflict.new("whatsapp.gateway", r[:last_error] || "The linked phone could not send") unless r[:ok]
+      r[:message_id]
+    end
+
     def unavailable(msg) = { status: "unavailable", qr: nil, phone: nil, last_error: msg }
 
-    def request(verb, path, body = nil)
+    def request(verb, path, body = nil, read_timeout: 15)
       uri = URI("#{url}#{path}")
       req = verb == :get ? Net::HTTP::Get.new(uri) : Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
       req["Authorization"] = "Bearer #{token}" if token.present?
       req.body = body.to_json if body
-      res = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: 15) { |http| http.request(req) }
+      res = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", open_timeout: 5, read_timeout: read_timeout) { |http| http.request(req) }
       data = JSON.parse(res.body) rescue {}
       data.transform_keys(&:to_sym).merge(ok: res.is_a?(Net::HTTPSuccess))
     rescue StandardError => e

@@ -66,7 +66,16 @@ module Payments
           AuditLog.record(action: "create", record: @order, after: { paid_minor: @order.paid_minor, methods: @order.payment_method_summary }, table_name: "payments")
         end
       end
+      notify_khata!(created)
       Result.new(order: @order.reload, payments: created, change_minor: change_total)
+    end
+
+    # A sale put on a customer account is messaged to the customer on WhatsApp (setting khata.notify_each_sale).
+    def notify_khata!(created)
+      return unless created.any? { |p| p.method_code == "khata" && p.previously_new_record? }
+      Customers::Notify.sale!(@order.reload)
+    rescue StandardError => e
+      Rails.logger.error("[khata] sale message failed for #{@order.id}: #{e.message}")
     end
 
     private
@@ -82,6 +91,7 @@ module Payments
 
     def handle_khata!(method, amount)
       return unless method.khata?
+      BusinessModules.require!(@business, "customer_accounts")
       raise Api::Errors::Conflict.new("khata.no_customer", "Choose a customer to put this order on account") if @order.customer_id.blank?
       customer = Customer.active.lock.find(@order.customer_id)
       raise Api::Errors::Conflict.new("khata.walk_in", "Walk-in customers cannot buy on account") if customer.is_walk_in

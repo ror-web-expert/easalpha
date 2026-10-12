@@ -29,6 +29,7 @@ module MenuSerializers
       h[:variants] = p.variants.map { |v| variant(v) }
       h[:prices] = p.product_prices.map { |pp| { id: pp.id, variant_id: pp.variant_id, branch_id: pp.branch_id, order_type: pp.order_type, price_minor: pp.price_minor } }
       h[:modifier_group_ids] = p.product_modifier_groups.map(&:modifier_group_id)
+      h[:barcodes] = p.barcodes.map { |b| barcode(b) }
     end
     h
   end
@@ -41,6 +42,10 @@ module MenuSerializers
   def quick_add_item(q)
     { id: q.id, product_id: q.product_id, variant_id: q.variant_id, position: q.position, name: q.product.name, variant_name: q.variant&.name,
       price_minor: q.variant&.price_minor.presence || q.product.base_price_minor, image_key: q.product.image_key, active: q.product.active && q.product.archived_at.nil? }
+  end
+
+  def barcode(b)
+    { id: b.id, code: b.code, variant_id: b.variant_id, quantity: b.quantity.to_s }
   end
 
   def variant(v)

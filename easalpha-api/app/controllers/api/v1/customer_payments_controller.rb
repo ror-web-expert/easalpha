@@ -2,6 +2,7 @@ module Api
   module V1
     class CustomerPaymentsController < BaseController
       before_action -> { require_permission!("khata.collect", "customers.manage") }
+      before_action -> { require_module!("customer_accounts") }
       before_action :read_only_guard!, except: %i[index]
 
       # GET /customers/:customer_id/payments

@@ -75,6 +75,8 @@ module Demo
         begin
           Rails.logger.level = Logger::WARN # a seed run writes a few hundred thousand queries; keep them out of the log
           ActiveRecord::Base.logger = nil
+          # The demo shows everything: customer accounts and payroll are modules a real business switches on.
+          Setting.write!(@business, { "modules.customer_accounts" => true, "modules.payroll" => true }) unless BusinessModules.all(@business).values.all?
           setup_people!
           setup_devices_and_tables!
           setup_settings!

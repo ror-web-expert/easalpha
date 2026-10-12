@@ -86,7 +86,7 @@ async function logout(id) {
 }
 
 const app = express();
-app.use(express.json({ limit: "64kb" }));
+app.use(express.json({ limit: "12mb" })); // room for a PDF bill sent as a document
 app.use((req, res, next) => {
   if (TOKEN && req.headers.authorization !== `Bearer ${TOKEN}`) return res.status(401).json({ error: "unauthorized" });
   next();
@@ -102,8 +102,16 @@ app.post("/sessions/:id/send", async (req, res) => {
   const to = String(req.body?.to || "").replace(/\D/g, "");
   const text = String(req.body?.text || "").slice(0, 4000);
   if (!to || !text) return res.status(400).json({ ok: false, last_error: "to and text are required" });
+  // Optional document (a customer bill PDF): { base64, filename, mimetype }; the text becomes its caption.
+  const doc = req.body?.document;
+  let content = { text };
+  if (doc && doc.base64) {
+    const buf = Buffer.from(String(doc.base64), "base64");
+    if (!buf.length || buf.length > 10 * 1024 * 1024) return res.status(400).json({ ok: false, last_error: "document must be between 1 byte and 10 MB" });
+    content = { document: buf, mimetype: String(doc.mimetype || "application/pdf"), fileName: String(doc.filename || "document.pdf").slice(0, 120), caption: text };
+  }
   try {
-    const r = await s.sock.sendMessage(`${to}@s.whatsapp.net`, { text });
+    const r = await s.sock.sendMessage(`${to}@s.whatsapp.net`, content);
     res.json({ ok: true, message_id: r?.key?.id || null });
   } catch (e) {
     res.status(502).json({ ok: false, last_error: e.message });
