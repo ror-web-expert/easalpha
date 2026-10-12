@@ -525,3 +525,28 @@ export function BillRunResults({ results }: { results: BillRunResult[] }) {
     </Table>
   );
 }
+
+/** Khata on one customer: allowed with no limit (null), allowed up to a limit (above 0) or not allowed (0). The till
+ *  refuses a sale on account that would pass the limit; a customer added at the till starts with no limit. */
+export function KhataLimitField({ value, onChange, className }: { value: number | null | undefined; onChange: (v: number | null) => void; className?: string }) {
+  const mode = value === null || value === undefined ? "open" : value === 0 ? "off" : "limit";
+  return (
+    <div className={cn("grid gap-3 sm:grid-cols-2", className)}>
+      <Field label="Buying on account (khata)">
+        <Select value={mode} onChange={(e) => onChange(e.target.value === "open" ? null : e.target.value === "off" ? 0 : value && value > 0 ? value : 500_000)}>
+          <option value="open">Allowed, no limit</option>
+          <option value="limit">Allowed up to a limit</option>
+          <option value="off">Not allowed</option>
+        </Select>
+      </Field>
+      {mode === "limit" ? <Field label="Credit limit" hint="A sale on account that goes past this is refused at the till."><MoneyInput value={value ?? 0} min={1} onChange={(v) => onChange(Math.max(100, Math.abs(v)))} /></Field> : null}
+    </div>
+  );
+}
+
+/** What a customer's limit means, for summaries. */
+export function khataLimitText(limitMinor: number | null | undefined): string {
+  if (limitMinor === null || limitMinor === undefined) return "No credit limit";
+  if (limitMinor === 0) return "Khata not allowed";
+  return `Limit ${formatMoney(limitMinor)}`;
+}

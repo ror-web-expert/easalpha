@@ -12,7 +12,7 @@ import { useModules } from "@/lib/modules";
 import { Cards, FilterBar, LoadMore, PageHeader, SearchInput } from "@/components/admin/page";
 import { useAction, useList } from "@/components/admin/crud";
 import { balanceLabel, balanceVariant, customerSourceLabel, customerStatusLabel, customerStatusVariant } from "@/components/admin/marketing-helpers";
-import { DuplicateWarning, usePinRetry } from "@/components/admin/customer-accounts";
+import { DuplicateWarning, usePinRetry, KhataLimitField } from "@/components/admin/customer-accounts";
 import { cleanPhone, isFutureDay, openingAmount } from "@/components/admin/customer-accounts-helpers";
 import { Badge, Button, Checkbox, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, SummaryCard, Switch, Table, TBody, TD, TH, THead, TR, Tabs, Textarea } from "@/components/ui";
 
@@ -23,12 +23,13 @@ import { Badge, Button, Checkbox, Dialog, EmptyRow, Field, Input, Loading, Money
 // khata.adjust or a manager PIN). Possible duplicates show while the name, phone, roll or guardian phone is typed.
 
 interface Form {
-  name: string; phone: string; email: string; company: string; group_id: string; credit_limit_minor: number; whatsapp_opt_in: boolean; notes: string;
+  name: string; phone: string; email: string; company: string; group_id: string; credit_limit_minor: number | null; whatsapp_opt_in: boolean; notes: string;
   room: string; member_no: string; guardian_name: string; guardian_phone: string; notify_guardian: boolean;
   opening_minor: number; opening_advance: boolean; opening_reason: string; opening_on: string;
 }
 const blank = (): Form => ({
-  name: "", phone: "+92", email: "", company: "", group_id: "", credit_limit_minor: 0, whatsapp_opt_in: true, notes: "",
+  // A new customer may buy on account with no limit, the same as one added at the till; the owner can set a limit or turn it off.
+  name: "", phone: "+92", email: "", company: "", group_id: "", credit_limit_minor: null, whatsapp_opt_in: true, notes: "",
   room: "", member_no: "", guardian_name: "", guardian_phone: "", notify_guardian: false,
   opening_minor: 0, opening_advance: false, opening_reason: "Opening balance", opening_on: isoDay(),
 });
@@ -156,7 +157,7 @@ export default function CustomersPage() {
             <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
             <Field label="Company"><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></Field>
             <Field label="Group"><Select value={form.group_id} onChange={(e) => setForm({ ...form, group_id: e.target.value })}><option value="">None</option>{groups.data?.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</Select></Field>
-            {khata ? <Field label="Credit limit" hint="0 = no khata"><MoneyInput value={form.credit_limit_minor} onChange={(v) => setForm({ ...form, credit_limit_minor: v })} /></Field> : null}
+            {khata ? <KhataLimitField className="sm:col-span-2" value={form.credit_limit_minor} onChange={(v) => setForm({ ...form, credit_limit_minor: v })} /> : null}
             {khata ? (
               <div className="rounded-xl border px-4 py-3 sm:col-span-2">
                 <div className="mb-2 text-sm font-semibold text-heading">Opening balance</div>

@@ -50,6 +50,8 @@ const adminPages = ["/admin", "/admin/orders", "/admin/products/menus", "/admin/
   "/admin/customers", "/admin/customers/groups", "/admin/customers/import", "/admin/customers/ar-aging", "/admin/tables", "/admin/staff/admin-staff", "/admin/staff/roles", "/admin/settings/devices", "/admin/finance/shifts", "/admin/finance/day-close", "/admin/finance/tax-invoices",
   "/admin/finance/payment-accounts", "/admin/settings/needs-attention", "/admin/reports", "/admin/settings/store", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/settings/audit-logs", "/admin/inventory/stock-in-hand", "/admin/inventory/items", "/admin/inventory/items/import", "/admin/inventory/stock-actions", "/admin/inventory/stock-actions/new", "/admin/inventory-reports/daily-stock-sheet", "/admin/inventory-reports/waste-adjustments", "/admin/inventory/settings", "/admin/inventory/sections", "/admin/inventory/units", "/admin/inventory/recipes", "/admin/inventory/recipes/new", "/admin/inventory/food-cost", "/admin/inventory/production", "/admin/inventory/order-inventory", "/admin/inventory-reports/consumption", "/admin/inventory-reports/deduction-health", "/admin/purchasing/payables-aging", "/admin/suppliers", "/admin/suppliers/import", "/admin/purchasing/purchase-orders", "/admin/purchasing/purchase-orders/new", "/admin/purchasing/goods-received", "/admin/purchasing/goods-received/new", "/admin/purchasing/purchase-returns", "/admin/purchasing/purchase-returns/new", "/admin/inventory/demand", "/admin/purchasing/purchases-report", "/admin/expenses", "/admin/expenses/categories", "/admin/expenses/overheads", "/admin/riders/delivery-board", "/admin/riders/manage", "/admin/riders/zones", "/admin/orders/qr", "/admin/settings/qr", "/admin/reports/schedules",
   "/admin/staff/cashiers", "/admin/staff/order-takers", "/admin/staff/sessions", "/admin/staff/roles", "/admin/settings/business-hours", "/admin/settings/point-of-sale", "/admin/settings/charges-tax", "/admin/settings/security-cash", "/admin/settings/store-management", "/admin/settings/payment-methods", "/admin/settings/checklist", "/admin/products/quick-add", "/admin/orders/pending", "/admin/inventory-reports/stock-ledger", "/admin/inventory-reports/actual-vs-theoretical", "/admin/inventory-reports/valuation-cogs", "/admin/purchasing/price-history", "/admin/suppliers/ledger", "/admin/suppliers/insights", "/admin/suppliers/payments", "/admin/finance/dashboard", "/admin/finance/combined-ledger", "/admin/finance/journal-voucher", "/admin/finance/chart-of-accounts", "/admin/finance/fixed-assets", "/admin/finance/liabilities", "/admin/finance/equity", "/admin/finance/balance-sheet", "/admin/finance/trial-balance", "/admin/payroll/overview", "/admin/payroll/employees", "/admin/payroll/advances", "/admin/payroll/run", "/admin/payroll/ledger", "/admin/payroll/fingerprint", "/admin/payroll/reports", "/admin/payroll/settings", "/admin/reports/cashier-till", "/admin/reports/delivery-riders", "/admin/riders/reports", "/admin/riders/manage", "/admin/reports/grand", "/admin/reports/sales", "/admin/reports/sales-calendar", "/admin/reports/financial", "/admin/reports/products-deals", "/admin/reports/categories", "/admin/reports/order-takers", "/admin/reports/cashiers", "/admin/reports/customers", "/admin/reports/customer-ledger", "/admin/reports/operations", "/admin/reports/cancelled-modified", "/admin/reports/vouchers", "/admin/reports/loyalty-points", "/admin/reports/regular-discounts", "/admin/reports/ai-pricing", "/admin/inventory-reports/ai-stock-forecast", "/admin/customers/ledger", "/admin/customers/insights", "/admin/customers/payments", "/admin/customers/account", "/admin/settings/regular-discounts", "/admin/settings/vouchers", "/admin/settings/reviews", "/admin/settings/whatsapp", "/admin/settings/notifications", "/admin/settings/website", "/admin/settings/plan", "/admin/settings/branding", "/admin/support"];
+// 12 Oct 2026: customer accounts, wages, barcodes and modules.
+adminPages.push("/admin/settings/modules", "/admin/customers/ledger", "/admin/customers/bills", "/admin/customers/payments", "/admin/customers/account", "/admin/payroll/wages", "/admin/payroll/statement", "/admin/products/labels");
 for (const p of adminPages) {
   const before = report.consoleErrors.length, beforeF = report.failedRequests.length;
   const resp = await a.goto(WEB + p, { waitUntil: "networkidle", timeout: 60000 }).catch(() => null);
@@ -332,6 +334,105 @@ const ktext = await k.evaluate(() => document.body.innerText); step("kitchen sho
 const tok = await kctx.newPage(); wire(tok, "token"); await tok.goto(WEB + "/token"); await tok.waitForTimeout(2000); await shot(tok, "token");
 const q = await kctx.newPage(); wire(q, "queue"); await q.goto(WEB + "/queue"); await q.waitForTimeout(2500); await shot(q, "queue");
 const qtext = await q.evaluate(() => document.body.innerText); step("queue screen shows preparing or ready", /Preparing|Ready/i.test(qtext || ""), (qtext || "").slice(0, 80).replace(/\s+/g, " "));
+
+// ---- 12 Oct 2026: modules, customer accounts, wages, barcodes (WhatsApp must only log here: run the API without WHATSAPP_GATEWAY_URL).
+{
+  const tag = String(Date.now()).slice(-6);
+  const field = (scope, label) => scope.locator("div").filter({ has: a.locator(`label:text-is("${label}")`) }).last().locator("input, select, textarea").first();
+  const navLink = (label) => a.locator("nav a", { hasText: new RegExp(`^${label}$`) });
+  // Modules: the owner switches customer accounts off and on; the sidebar and the page follow.
+  await a.goto(WEB + "/admin/settings/modules", { waitUntil: "networkidle" });
+  const khataSwitch = a.locator('[data-module="customer_accounts"] [role="switch"]');
+  if ((await khataSwitch.getAttribute("aria-checked")) === "true") { await khataSwitch.click(); await a.waitForTimeout(1500); }
+  await a.goto(WEB + "/admin/customers/ledger", { waitUntil: "networkidle" }); await a.waitForTimeout(800);
+  step("oct12: module off hides Customer Ledger and explains it", (await navLink("Customer Ledger").count()) === 0 && /switched off/i.test(await a.evaluate(() => document.body.innerText)), "");
+  await shot(a, "oct12-module-off");
+  await a.goto(WEB + "/admin/settings/modules", { waitUntil: "networkidle" });
+  await a.locator('[data-module="customer_accounts"] [role="switch"]').click(); await a.waitForTimeout(1500);
+  await a.goto(WEB + "/admin/customers", { waitUntil: "networkidle" });
+  step("oct12: module back on shows Customer Ledger again", (await navLink("Customer Ledger").count()) > 0, "");
+  // New student: the duplicate warning, then an opening balance.
+  const seeded = (await api("/customers?with_balance=true", { token: T })).j?.data?.[0];
+  await a.getByRole("button", { name: /New customer/ }).first().click();
+  const dlg = a.locator('[role="dialog"]');
+  await field(dlg, "Name").fill(seeded?.name || "Ahmed Butt"); await a.waitForTimeout(1500);
+  step("oct12: new customer dialog warns about a possible duplicate", /Possible duplicates/i.test(await dlg.innerText()), seeded?.name || "");
+  await shot(a, "oct12-duplicate-warning");
+  const student = `E2E Student ${tag}`;
+  await field(dlg, "Name").fill(student);
+  await field(dlg, "Phone").fill(`0300${tag}1`);
+  await field(dlg, "Room / unit").fill("C-7"); await field(dlg, "Roll / ID no.").fill(`R-${tag}`);
+  await field(dlg, "Guardian name").fill("E2E Guardian"); await field(dlg, "Guardian phone").fill(`0311${tag}2`);
+  await field(dlg, "Opening balance (already owes)").fill("1500"); await a.waitForTimeout(300);
+  await dlg.getByRole("button", { name: /^Save$/ }).click(); await a.waitForTimeout(2000);
+  const created = (await api(`/customers?q=${encodeURIComponent(`R-${tag}`)}`, { token: T })).j?.data?.[0];
+  step("oct12: student saved with room, roll, guardian and opening balance Rs 1,500", created?.room === "C-7" && created?.balance_minor === 150000, JSON.stringify({ room: created?.room, balance: created?.balance_minor }));
+  if (created) { // a student added from the admin form can buy on account at once (no limit unless one is set)
+    const p0 = (cat.j?.products || []).find((x) => x.active && !(x.variants || []).length && !(x.modifier_group_ids || []).length);
+    const o = await api("/orders", { method: "POST", token: T, body: { order_type: "takeaway", customer_id: created.id, lines: [{ product_id: p0.id, quantity: 1 }], place: true } });
+    const k = await api(`/orders/${o.j.id}/payments`, { method: "POST", token: T, body: { payments: [{ method_code: "khata", amount_minor: o.j.total_minor }] } });
+    step("oct12: the new student can buy on account straight away", k.status === 201, `${k.status} ${k.j?.error?.code || ""}`);
+    if (k.status === 201) await api(`/customers/${created.id}/adjustments`, { method: "POST", token: T, body: { kind: "adjustment", amount_minor: -o.j.total_minor, reason: "E2E: keep the balance at Rs 1,500 for the bill check" } });
+  }
+  // Correction from the customer page.
+  if (created) {
+    await a.goto(WEB + `/admin/customers/${created.id}`, { waitUntil: "networkidle" }); await a.waitForTimeout(800);
+    await a.getByRole("button", { name: /Adjust balance/ }).first().click();
+    const adj = a.locator('[role="dialog"]');
+    await field(adj, "Change").selectOption("decrease");
+    await field(adj, "Amount").fill("100");
+    await adj.getByPlaceholder("Charged twice, mess fee, discount agreed").fill("E2E correction");
+    await shot(a, "oct12-adjust-dialog");
+    await adj.getByRole("button", { name: "Save adjustment" }).click(); await a.waitForTimeout(2000);
+    const after = (await api(`/customers/${created.id}`, { token: T })).j;
+    step("oct12: Adjust balance reduces the balance by Rs 100 with a reason", after?.balance_minor === 140000, String(after?.balance_minor));
+    await shot(a, "oct12-customer-account");
+    // Monthly Bills: this month's bill for the student, sent (logged, not sent, in this run).
+    await a.goto(WEB + "/admin/customers/bills", { waitUntil: "networkidle" });
+    await a.getByLabel("Period").first().selectOption("this_month").catch(() => {}); await a.waitForTimeout(2000);
+    const row = a.locator("tr", { hasText: student });
+    step("oct12: Monthly Bills lists the student with Rs 1,400 due", (await row.count()) > 0 && /1,400/.test(await row.first().innerText()), "");
+    if (await row.count()) {
+      await row.first().locator('input[type="checkbox"]').check();
+      await a.getByRole("button", { name: /Send to selected|^Send bills/ }).first().click();
+      await a.getByRole("button", { name: /^Send 1 bill$/ }).click(); await a.waitForTimeout(3000);
+      const result = await a.locator('[role="dialog"]').last().innerText().catch(() => "");
+      step("oct12: Send bills reports the student's bill as sent", new RegExp(student).test(result) && /sent/i.test(result), result.replace(/\s+/g, " ").slice(0, 120));
+      await shot(a, "oct12-bills-sent");
+      await a.keyboard.press("Escape");
+    }
+    const bill = (await api(`/customers/${created.id}/bill?from=${new Date().toISOString().slice(0, 8)}01&to=${new Date().toISOString().slice(0, 10)}`, { token: T })).j;
+    const pub = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true }); const pp = await pub.newPage(); wire(pp, "public bill");
+    await pp.goto(WEB + bill.link.replace(/^https?:\/\/[^/]+/, ""), { waitUntil: "networkidle" }); await pp.waitForTimeout(800);
+    step("oct12: the public bill link opens on a phone without login", /Amount due/i.test(await pp.evaluate(() => document.body.innerText)), "");
+    await shot(pp, "oct12-public-bill"); await pub.close();
+  }
+  // Pay Wages: a daily employee paid from the screen.
+  const emp = await api("/employees", { method: "POST", token: T, body: { name: `E2E Helper ${tag}`, base_salary_minor: 100000, pay_frequency: "daily" } });
+  await a.goto(WEB + "/admin/payroll/wages", { waitUntil: "networkidle" }); await a.waitForTimeout(1200);
+  const box = a.getByLabel(`Pay E2E Helper ${tag}`);
+  if (await box.count()) {
+    await box.check(); await a.getByRole("button", { name: /Pay selected/ }).click();
+    await a.locator('[role="dialog"]').getByRole("button", { name: /^Pay Rs/ }).click(); await a.waitForTimeout(2500);
+  }
+  const paidWages = (await api(`/wages?employee_id=${emp.j?.id}`, { token: T })).j?.data || [];
+  step("oct12: Pay Wages pays the daily helper Rs 1,000", paidWages[0]?.net_minor === 100000, `${paidWages.length} payment(s)`);
+  await shot(a, "oct12-wages-paid");
+  // Barcodes: a code scanned at the till (a fast keyboard burst ending in Enter) adds the item, offline-capable.
+  await api("/settings", { method: "PATCH", token: T, body: { values: { "pos.barcode_scanning.enabled": true } } });
+  const prod = (cat.j?.products || []).find((x) => x.active && !(x.variants || []).length && !(x.modifier_group_ids || []).length) || (await api("/catalog", { token: T })).j.products[0];
+  const code = (await api("/products/barcodes/generate", { method: "POST", token: T, body: { count: 1 } })).j.codes[0];
+  await api(`/products/${prod.id}/barcodes`, { method: "POST", token: T, body: { code } });
+  await t.goto(WEB + "/pos"); await t.waitForTimeout(4000);
+  const before = await t.locator("ul.flex-1 > li.border-b").count();
+  await t.locator("body").click({ position: { x: 5, y: 300 } }).catch(() => {});
+  await t.keyboard.type(code, { delay: 8 }); await t.keyboard.press("Enter"); await t.waitForTimeout(1500);
+  const lines = await t.locator("ul.flex-1 > li.border-b").allInnerTexts();
+  step("oct12: scanning a barcode at the till adds the product", lines.length > before && lines.some((l) => l.includes(prod.name)), `${prod.name} via ${code}`);
+  await shot(t, "oct12-scanned");
+  await api("/settings", { method: "PATCH", token: T, body: { values: { "pos.barcode_scanning.enabled": false } } });
+  await api(`/products/${prod.id}/barcodes/${((await api(`/products/barcode_lookup?code=${code}`, { token: T })).j || {}).id}`, { method: "DELETE", token: T });
+}
 
 // "Set up this device": a manager signs in on the machine, picks a role, and the device is paired without a code.
 const sctx = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const sp = await sctx.newPage(); wire(sp, "setup");

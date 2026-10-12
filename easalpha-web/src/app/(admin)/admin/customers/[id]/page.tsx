@@ -16,8 +16,7 @@ import { useList, useSave } from "@/components/admin/crud";
 import { loyaltyKindVariant } from "@/components/admin/phase3";
 import { balanceLabel, balanceVariant } from "@/components/admin/marketing-helpers";
 import {
-  AdjustBalanceDialog, AdjustmentsTable, BillActions, DuplicateWarning, OpeningBalanceDialog, ReverseAdjustmentDialog, useAdjustments, type ReversibleAdjustment,
-} from "@/components/admin/customer-accounts";
+  AdjustBalanceDialog, AdjustmentsTable, BillActions, DuplicateWarning, OpeningBalanceDialog, ReverseAdjustmentDialog, useAdjustments, type ReversibleAdjustment, KhataLimitField, khataLimitText } from "@/components/admin/customer-accounts";
 import { canReverseEntry, cleanPhone, entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, signedMoney } from "@/components/admin/customer-accounts-helpers";
 import { useApproval } from "@/components/approval";
 import { toast } from "@/store/toast";
@@ -73,13 +72,13 @@ export default function CustomerDetailPage() {
   const adjustmentRows = adjustments.data?.data ?? [];
   const accountable = khata && !c.is_walk_in;
   const startEdit = () => setEdit({
-    name: c.name, phone: c.phone ?? "", email: c.email ?? "", company: c.company ?? "", group_id: c.group_id ?? "", credit_limit_minor: c.credit_limit_minor ?? 0, notes: c.notes ?? "",
+    name: c.name, phone: c.phone ?? "", email: c.email ?? "", company: c.company ?? "", group_id: c.group_id ?? "", credit_limit_minor: c.credit_limit_minor ?? null, notes: c.notes ?? "",
     whatsapp_opt_in: c.whatsapp_opt_in, room: c.room ?? "", member_no: c.member_no ?? "", guardian_name: c.guardian_name ?? "", guardian_phone: c.guardian_phone ?? "", notify_guardian: !!c.notify_guardian,
   });
   const saveEdit = () => {
     if (!edit) return;
-    // No limit (null) shows as 0 in the field, and 0 means no khata: only send the limit when it was changed.
-    const limitChanged = (edit.credit_limit_minor ?? 0) !== (c.credit_limit_minor ?? 0);
+    // No limit is null, not allowed is 0: send the limit only when it was changed.
+    const limitChanged = (edit.credit_limit_minor ?? null) !== (c.credit_limit_minor ?? null);
     editM.mutate({
       ...edit, id, group_id: edit.group_id || (null as unknown as string),
       room: edit.room?.trim() || null, member_no: edit.member_no?.trim() || null, guardian_name: edit.guardian_name?.trim() || null, guardian_phone: cleanPhone(edit.guardian_phone),
@@ -97,7 +96,7 @@ export default function CustomerDetailPage() {
         </>} />
       {khata ? (
         <Cards>
-          <SummaryCard label="Balance owed" value={formatMoney(c.balance_minor)} sub={c.credit_limit_minor ? `Limit ${formatMoney(c.credit_limit_minor)}` : "No credit limit"} tone={c.balance_minor > 0 ? "danger" : "success"} />
+          <SummaryCard label="Balance owed" value={formatMoney(c.balance_minor)} sub={khataLimitText(c.credit_limit_minor)} tone={c.balance_minor > 0 ? "danger" : "success"} />
           <SummaryCard label="Orders" value={c.orders_count} sub={c.last_order_at ? `Last ${formatDateTime(c.last_order_at)}` : "No orders yet"} />
           <SummaryCard label="Net spent" value={formatMoney(c.net_spent_minor)} tone="neutral" />
           <SummaryCard label="Overdue (31+ days)" value={formatMoney((a?.["31_60"] ?? 0) + (a?.["61_90"] ?? 0) + (a?.over_90 ?? 0))} sub={a ? `Current ${formatMoney(a.current)} · 31–60 ${formatMoney(a["31_60"])} · 61–90 ${formatMoney(a["61_90"])} · 90+ ${formatMoney(a.over_90)}` : ""} tone="warning" />
@@ -239,7 +238,7 @@ export default function CustomerDetailPage() {
             <Field label="Email"><Input value={edit.email ?? ""} onChange={(e) => setEdit({ ...edit, email: e.target.value })} /></Field>
             <Field label="Company"><Input value={edit.company ?? ""} onChange={(e) => setEdit({ ...edit, company: e.target.value })} /></Field>
             <Field label="Group"><Select value={edit.group_id ?? ""} onChange={(e) => setEdit({ ...edit, group_id: e.target.value })}><option value="">None</option>{groups.data?.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</Select></Field>
-            {khata ? <Field label="Credit limit" hint={c.credit_limit_minor === null ? "No limit now. 0 = no khata." : "0 = no khata"}><MoneyInput value={edit.credit_limit_minor ?? 0} onChange={(v) => setEdit({ ...edit, credit_limit_minor: v })} /></Field> : null}
+            {khata ? <KhataLimitField className="sm:col-span-2" value={edit.credit_limit_minor} onChange={(v) => setEdit({ ...edit, credit_limit_minor: v })} /> : null}
             <Field label="Notes" className="sm:col-span-2"><Textarea value={edit.notes ?? ""} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></Field>
             <Checkbox label="WhatsApp opt-in" checked={!!edit.whatsapp_opt_in} onChange={(e) => setEdit({ ...edit, whatsapp_opt_in: e.target.checked })} />
           </div>
