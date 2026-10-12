@@ -6,6 +6,7 @@ import { useDeviceStore } from "@/store/device";
 import { useThemeStore } from "@/store/theme";
 import { Toaster } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
+import { UpdateNotice } from "@/components/update-notice";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={client}>
       {children}
       <Toaster />
+      <UpdateNotice />
     </QueryClientProvider>
   );
 }
