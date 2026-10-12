@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   allowedOrderTypes, canTakeOrderType, confirmationPopup, customerRequired, defaultPaymentMethod, directUnpaidAllowed,
-  kdsAlerts, kdsTimeoutMinutes, kdsTone, minutesUntilDayEnd, parsePaymentSummary, pendingReminderState,
-} from "./pos-rules";
+  kdsAlerts, kdsTimeoutMinutes, kdsTone, minutesUntilDayEnd, parsePaymentSummary, pendingReminderState, reconcilePayments } from "./pos-rules";
 
 const at = (h: number, m: number) => new Date(2026, 9, 10, h, m);
 
@@ -116,5 +115,22 @@ describe("defaultPaymentMethod", () => {
   it("parses the payment summary largest first", () => {
     expect(parsePaymentSummary("cash:4500,khata:2000")).toEqual([{ code: "cash", amount_minor: 4500 }, { code: "khata", amount_minor: 2000 }]);
     expect(parsePaymentSummary(null)).toEqual([]);
+  });
+});
+
+describe("paying against the server's total (13 Oct 2026 fix)", () => {
+  const cash = (amount: number, tendered = amount) => ({ method_code: "cash", amount_minor: amount, tendered_minor: tendered });
+  it("sends the payments unchanged when the totals agree or it is a part payment", () => {
+    expect(reconcilePayments([cash(125280)], 125280, 125280)).toEqual([cash(125280)]);
+    expect(reconcilePayments([cash(50000)], 125280, 126672)).toEqual([cash(50000)]); // part payment: the rest stays due
+  });
+  it("moves the last payment by a paisa-rounding gap under Rs 1", () => {
+    expect(reconcilePayments([cash(125280, 130000)], 125280, 125281)).toEqual([cash(125281, 130000)]);
+    expect(reconcilePayments([{ method_code: "khata", amount_minor: 125280 }], 125280, 125279)).toEqual([{ method_code: "khata", amount_minor: 125279 }]);
+    expect(reconcilePayments([cash(125280, 125280)], 125280, 125290)).toEqual([cash(125290, 125290)]); // tendered covers the new amount
+  });
+  it("stops a full payment when the total moved by Rs 1 or more, so nothing is charged against a total nobody saw", () => {
+    expect(reconcilePayments([cash(125280)], 125280, 126672)).toBeNull(); // the regular-discount case: Rs 13.92 more
+    expect(reconcilePayments([cash(60000), { method_code: "khata", amount_minor: 65280 }], 125280, 120000)).toBeNull();
   });
 });

@@ -9,7 +9,7 @@ import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
 import type { BarcodeMatch } from "@/lib/barcode";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment } from "@/lib/pos-actions";
+import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, localToCart, TotalChangedError } from "@/lib/pos-actions";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
@@ -275,8 +275,9 @@ function SellScreen() {
       setPayOpen(false);
       const fullyPaid = ["paid", "closed"].includes(r.local.status) || r.local.paid_minor >= r.local.total_minor;
       if (!fullyPaid) {
-        // SPEC part payment: the order stays open as Pending with the remaining due on the panel.
-        patch({ saved: true, local_only: r.local.local_only, status: r.local.status, label: r.local.label, paid_minor: r.local.paid_minor });
+        // SPEC part payment: the order stays open as Pending with the remaining due on the panel. The panel takes the
+        // server's order (lines, discounts, paid), so the due it shows is the one still owed.
+        loadCart({ ...localToCart(r.local), customer: cart.customer });
         toast.info("Part payment taken", `${formatMoney(r.local.total_minor - r.local.paid_minor, currency)} still due on ${r.local.label}. The order stays open until it is paid.`);
         return;
       }
@@ -288,7 +289,13 @@ function SellScreen() {
         toast.success(`${r.receipt.order.label} paid${r.change_minor ? ` · change ${formatMoney(r.change_minor, currency)}` : ""}`);
         newOrder();
       }
-    } catch (e) { toast.error("Payment failed", errorMessage(e)); }
+    } catch (e) {
+      if (e instanceof TotalChangedError) {
+        // Nothing was paid: show the order as the server prices it and leave the payment screen open on the new total.
+        loadCart(e.cart);
+        toast.info("Total updated", `The total is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
+      } else toast.error("Payment failed", errorMessage(e));
+    }
     finally { setBusy(false); }
   };
   /** SPEC "Direct Unpaid Orders": place (or complete) without the payment screen. */

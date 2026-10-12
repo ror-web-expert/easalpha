@@ -135,3 +135,22 @@ export function defaultPaymentMethod(settings: Settings, order?: { reopened?: bo
   const code = settingValue<unknown>(settings, "pos.order_behavior.default_payment_method", null);
   return typeof code === "string" && code.trim() ? code.trim() : null;
 }
+
+/**
+ * What to send when the server's total differs from the till's: the same payments when they match or when this is
+ * a part payment; the last payment moved by the difference when it is under Rs 1 (paisa rounding); and null when the
+ * difference is Rs 1 or more on a full payment, so the cashier sees the new total before any money is taken.
+ */
+export function reconcilePayments<P extends { amount_minor: number; tendered_minor?: number | null }>(payments: P[], tillDueMinor: number, serverDueMinor: number): P[] | null {
+  const diff = serverDueMinor - tillDueMinor;
+  if (diff === 0 || !payments.length) return payments;
+  const paying = payments.reduce((s, p) => s + p.amount_minor, 0);
+  const full = paying + 100 >= tillDueMinor; // within Rs 1 of everything due: the cashier meant to settle the order
+  if (!full) return payments;
+  if (Math.abs(diff) >= 100) return null;
+  const last = payments[payments.length - 1];
+  const amount = Math.max(0, last.amount_minor + diff);
+  const tendered = last.tendered_minor != null ? Math.max(last.tendered_minor, amount) : last.tendered_minor;
+  return [...payments.slice(0, -1), { ...last, amount_minor: amount, ...(tendered != null ? { tendered_minor: tendered } : {}) }];
+}
+

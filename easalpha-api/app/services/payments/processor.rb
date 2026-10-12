@@ -57,14 +57,7 @@ module Payments
         @order.payment_method_summary = Payment.where(order_id: @order.id, status: "captured").group(:method_code).sum(:amount_minor).map { |k, v| "#{k}:#{v}" }.join(",")
         Orders::Pricing.recalculate!(@order)
         @order.save!
-        if @order.payment_status == "paid"
-          @order.receipt_number ||= "#{@order.business_day&.strftime('%y%m%d')}-#{@order.branch.code}-#{@order.serial}"
-          Orders::Transitions.mark_paid!(@order, actor: @actor, device: @device)
-          update_customer_stats!
-          Loyalty.earn!(@order)
-          Tax::Invoicer.enqueue_for(@order)
-          AuditLog.record(action: "create", record: @order, after: { paid_minor: @order.paid_minor, methods: @order.payment_method_summary }, table_name: "payments")
-        end
+        finalize_paid! if @order.payment_status == "paid"
       end
       notify_khata!(created)
       Result.new(order: @order.reload, payments: created, change_minor: change_total)
@@ -76,6 +69,17 @@ module Payments
       Customers::Notify.sale!(@order.reload)
     rescue StandardError => e
       Rails.logger.error("[khata] sale message failed for #{@order.id}: #{e.message}")
+    end
+
+    # What happens once an order is paid in full: receipt number, Paid status, customer stats, loyalty points, the tax
+    # invoice and the audit row. Also used to complete an order whose payments already cover a corrected total.
+    def finalize_paid!
+      @order.receipt_number ||= "#{@order.business_day&.strftime('%y%m%d')}-#{@order.branch.code}-#{@order.serial}"
+      Orders::Transitions.mark_paid!(@order, actor: @actor, device: @device)
+      update_customer_stats!
+      Loyalty.earn!(@order)
+      Tax::Invoicer.enqueue_for(@order)
+      AuditLog.record(action: "create", record: @order, after: { paid_minor: @order.paid_minor, methods: @order.payment_method_summary }, table_name: "payments")
     end
 
     private

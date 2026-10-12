@@ -24,13 +24,18 @@ module Marketing
       existing.each(&:destroy!)
       order.discounts.reset
       return unless tier
+      # The base is each line after its own product discount only. line_discount_minor also holds the order-level
+      # discounts already allocated (this regular discount among them), so using it shrank the discount on every save:
+      # 10% of Rs 1,200 became 10% of Rs 1,080 when the till saved the order again at payment.
       base = order.items.reject(&:cancelled?).reject { |i| tier.excluded_product_ids.include?(i.product_id) || (i.product && tier.excluded_category_ids.include?(i.product.category_id)) }
-                  .sum { |i| i.line_subtotal_minor - i.line_discount_minor }
+                  .sum { |i| i.line_subtotal_minor - product_discount(i) }
       amount = tier.discount_for(base)
       return if amount <= 0
       order.discounts.create!(kind: "regular", value: BigDecimal(amount.to_s) / 100, reason: "Regular discount: #{tier.name}", regular_discount_tier_id: tier.id)
       order.discounts.reset
     end
+
+    def product_discount(item) = item.product && !item.price_overridden ? item.product.discount_minor_for(item.line_subtotal_minor, item.quantity) : 0
 
     def report(branch:, from:, to:)
       rows = DiscountApplied.joins(:order).where(kind: "regular", orders: { branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded] })

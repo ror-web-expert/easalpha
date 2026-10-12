@@ -4,6 +4,7 @@ import { api, ApiError } from "@/lib/api";
 import { db, kvGet, kvSet, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, patchQueued, processQueue } from "@/lib/sync";
 import { cashRounding, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
+import { reconcilePayments } from "@/lib/pos-rules";
 import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
 import { businessDayFor } from "@/lib/business-day";
 import { uuid } from "@/lib/utils";
@@ -181,6 +182,18 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
  * Take one or more payments (a part payment is allowed; the order then stays open with payment_status "partial").
  * Returns the receipt (server-built when online, local otherwise). `pin` is the order-update PIN for a reopened order.
  */
+/**
+ * Thrown by payOrder when the server's total for the order differs from the one the cashier was paying (a discount
+ * re-checked on the server, a price changed). Nothing was paid; `cart` is the order as the server has it now, so the
+ * payment screen can show the right total and the cashier presses Pay again.
+ */
+export class TotalChangedError extends Error {
+  constructor(public cart: Cart, public fromMinor: number, public toMinor: number) {
+    super(`The total changed from ${fromMinor} to ${toMinor}`);
+    this.name = "TotalChangedError";
+  }
+}
+
 export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor = 0, approver_pin?: string, opts: { pin?: string } = {}): Promise<{ receipt: Receipt; change_minor: number; offline: boolean; local: LocalOrder }> {
   const { settings, membershipId } = ctx();
   let current = cart;
@@ -189,10 +202,17 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
     if (!current.local_only) {
       try {
         // Always sync the cart to the server first so the payment applies to the latest lines.
+        const tillDue = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor }).total_minor - (cart.paid_minor ?? 0);
         const saved = await saveOrder(current, { approver_pin, pin: opts.pin });
         current = saved.cart;
         if (saved.offline) throw new ApiError("network", "Offline", 0);
-        const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: payments.map((p) => ({ ...p, id: p.id ?? uuid() })), tip_minor } });
+        // The server prices the order again on this save (a regular customer's discount, a price change). Never take
+        // money against a total the cashier did not see: a gap under Rs 1 is paisa rounding and moves the payment;
+        // a bigger gap stops here with the new total.
+        const serverDue = saved.local.total_minor - saved.local.paid_minor;
+        const toSend = reconcilePayments(payments, tillDue, serverDue);
+        if (!toSend) throw new TotalChangedError({ ...current, customer: cart.customer }, tillDue, serverDue);
+        const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: toSend.map((p) => ({ ...p, id: p.id ?? uuid() })), tip_minor } });
         const prev = await db.orders.get(current.id);
         const local = await saveLocal({ ...serverToLocal(res.order, prev), payments: [...(prev?.payments ?? []), ...res.payments.map((p) => ({ id: p.id, method_code: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? undefined, change_minor: p.change_minor, reference: p.reference ?? undefined, client_created_at: p.received_at }))] });
         const receipt = res.receipt ?? buildLocalReceipt(local);
