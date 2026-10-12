@@ -24,9 +24,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, script: "dist:linux", glob: "release/*.{AppImage,deb,yml,blockmap}" }
-          - { os: windows-latest, script: "dist:win", glob: "release/*.{exe,yml,blockmap}" }
-          - { os: macos-latest, script: "dist:mac", glob: "release/*.{dmg,zip,yml,blockmap}" }
+          # One pattern per line: the upload action's glob has no {a,b} braces.
+          - { os: ubuntu-latest, script: "dist:linux", files: "easalpha-desktop/release/*.AppImage\neasalpha-desktop/release/*.deb\neasalpha-desktop/release/*.yml\neasalpha-desktop/release/*.blockmap" }
+          - { os: windows-latest, script: "dist:win", files: "easalpha-desktop/release/*.exe\neasalpha-desktop/release/*.yml\neasalpha-desktop/release/*.blockmap" }
+          - { os: macos-latest, script: "dist:mac", files: "easalpha-desktop/release/*.dmg\neasalpha-desktop/release/*.zip\neasalpha-desktop/release/*.yml\neasalpha-desktop/release/*.blockmap" }
     runs-on: ${{ matrix.os }}
     defaults: { run: { working-directory: easalpha-desktop } }
     env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
@@ -38,12 +39,13 @@ jobs:
         with: { node-version: 20, cache: pnpm, cache-dependency-path: easalpha-desktop/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      - run: pnpm ${{ matrix.script }} -- -c.publish.url=${{ vars.PUBLIC_URL && format('{0}/downloads', vars.PUBLIC_URL) || format('https://github.com/{0}/releases/latest/download', github.repository) }}
+      # --publish never: the feed URL is baked in, but electron-builder must not try to upload on a tag; the publish job does that.
+      - run: pnpm ${{ matrix.script }} -- --publish never -c.publish.url=${{ vars.PUBLIC_URL && format('{0}/downloads', vars.PUBLIC_URL) || format('https://github.com/{0}/releases/latest/download', github.repository) }}
       - uses: actions/upload-artifact@v4
-        with: { name: "easalpha-pos-${{ matrix.os }}", path: "easalpha-desktop/${{ matrix.glob }}", retention-days: 30 }
+        with: { name: "easalpha-pos-${{ matrix.os }}", path: "${{ matrix.files }}", retention-days: 30, if-no-files-found: error }
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
-        with: { files: "easalpha-desktop/${{ matrix.glob }}" }
+        with: { files: "${{ matrix.files }}" }
 
   publish:
     # Gather the three builds and put them on the website: deploy/downloads on the server, served at /downloads.
