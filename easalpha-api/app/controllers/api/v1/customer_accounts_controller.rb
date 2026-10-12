@@ -65,6 +65,7 @@ module Api
         from, to = period
         scope = Customer.active.where(is_walk_in: false).order(:khata_no)
         scope = Customer.lookup(params[:q]).where(is_walk_in: false).order(:khata_no) if params[:q].present?
+        scope = with_account_activity(scope, from, to) unless params[:all] == "true"
         rows = scope.map do |c|
           st = Customers::Ledger.statement(c, from: from, to: to)
           next nil if params[:all] != "true" && st[:entries].empty? && st[:closing_balance_minor].zero?
@@ -83,7 +84,7 @@ module Api
       def bills_pdf
         from, to = period
         scope = Customer.active.where(is_walk_in: false).order(:khata_no)
-        scope = scope.where(id: Array(params[:customer_ids])) if params[:customer_ids].present?
+        scope = params[:customer_ids].present? ? scope.where(id: Array(params[:customer_ids])) : with_account_activity(scope, from, to)
         bills = scope.map { |c| build_bill(c) }.reject { |b| params[:customer_ids].blank? && b[:entries].empty? && b[:closing_balance_minor].zero? }
         raise Api::Errors::Conflict.new("bills.empty", "No customer has anything on account in this period") if bills.empty?
         send_data Customers::BillPdf.render(bills), filename: "bills-#{to.strftime('%Y-%m')}.pdf", type: "application/pdf"
@@ -127,6 +128,16 @@ module Api
       def due_on
         return @due_on if defined?(@due_on)
         @due_on = params[:due_on].present? ? Date.parse(params[:due_on]) : Customers::Bill.due_on_for(current_business, today)
+      end
+
+      # Customers with a balance today or any account history up to the end of the period (an old balance paid off
+      # later still shows on that month's bill). Customers who never used an account are skipped, which keeps the
+      # screen fast for a restaurant with thousands of walk-in customers on file.
+      def with_account_activity(scope, _from, to)
+        active_ids = Payment.where(method_code: "khata", status: "captured", business_day: ..to).select(:customer_id)
+        paid_ids = CustomerPayment.where(business_day: ..to).select(:customer_id)
+        adj_ids = CustomerAdjustment.where(effective_on: ..to).select(:customer_id)
+        scope.where("customers.balance_minor <> 0").or(scope.where(id: active_ids)).or(scope.where(id: paid_ids)).or(scope.where(id: adj_ids))
       end
 
       def build_bill(customer) = Customers::Bill.build(customer, from: period[0], to: period[1], due_on: due_on, issued_on: today)

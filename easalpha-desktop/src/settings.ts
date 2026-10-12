@@ -72,6 +72,8 @@ export function loadSettings(): Settings {
       ? (raw.printers.map(sanitizePrinter).filter(Boolean) as PrinterConfig[])
       : [],
     ...(updateUrl ? { updateUrl } : {}),
+    ...(raw.fullScreen === true ? { fullScreen: true } : {}),
+    ...(raw.kiosk === true ? { kiosk: true } : {}),
   };
 }
 

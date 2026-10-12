@@ -55,6 +55,10 @@ export type Settings = {
   printers: PrinterConfig[];
   /** Release feed for self-update (a folder holding latest.yml and the installers). Empty = the feed built into the app. */
   updateUrl?: string;
+  /** Touch terminals: open full screen at launch. */
+  fullScreen?: boolean;
+  /** Touch terminals: kiosk mode (full screen, no window controls); Ctrl+Shift+K leaves it. */
+  kiosk?: boolean;
 };
 
 export type PrintServerStatus = { host: string; port: number; running: boolean };

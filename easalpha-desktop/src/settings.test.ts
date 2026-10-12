@@ -44,3 +44,19 @@ test("updateUrl is kept only when it is an http(s) address", () => {
   saveSettings({ updateUrl: "not a url" });
   assert.equal(loadSettings().updateUrl, undefined);
 });
+
+test("touch terminal options: full screen and kiosk are kept only when true", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "easalpha-settings-"));
+  initSettings(dir);
+  assert.equal(loadSettings().fullScreen, undefined);
+  assert.equal(loadSettings().kiosk, undefined);
+  saveSettings({ fullScreen: true, kiosk: true });
+  assert.equal(loadSettings().fullScreen, true);
+  assert.equal(loadSettings().kiosk, true);
+  saveSettings({ kiosk: false });
+  assert.equal(loadSettings().kiosk, undefined);
+  fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ fullScreen: "yes", kiosk: 1 }));
+  assert.equal(loadSettings().fullScreen, undefined); // only a real true counts
+  assert.equal(loadSettings().kiosk, undefined);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

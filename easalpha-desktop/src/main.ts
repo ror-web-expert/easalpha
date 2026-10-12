@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, shell, type MenuItemConstructorOptions } from "electron";
 import path from "node:path";
 import { getSettingsPath, initSettings, loadSettings, newId, saveSettings } from "./settings";
 import { listPrinters, print, testPrint } from "./printers";
@@ -13,6 +13,10 @@ const UI_DIR = path.join(__dirname, "..", "ui");
 
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+
+// Touch screens: Chromium exposes touch events even when it does not detect the panel at launch (some all-in-one
+// terminals register late), so the till's swipe and tap handling works on every touch POS.
+app.commandLine.appendSwitch("touch-events", "enabled");
 
 // One running copy per machine: the print server owns a port and the till is one screen.
 if (!app.requestSingleInstanceLock()) {
@@ -42,11 +46,17 @@ function offlinePageUrl(): string {
 }
 
 function createMainWindow(): void {
+  // Many touch POS terminals are 1024 x 768. The window fits the screen it opens on and may shrink to 800 x 600; the
+  // till lays itself out for the width it gets. Smaller screens open maximized.
+  const work = screen.getPrimaryDisplay().workAreaSize;
+  const s = loadSettings();
   mainWindow = new BrowserWindow({
-    width: 1366,
-    height: 800,
-    minWidth: 1366,
-    minHeight: 800,
+    width: Math.min(1366, work.width),
+    height: Math.min(800, work.height),
+    minWidth: Math.min(800, work.width),
+    minHeight: Math.min(600, work.height),
+    fullscreen: !!s.fullScreen && !s.kiosk,
+    kiosk: !!s.kiosk,
     title: "EasAlpha POS",
     backgroundColor: "#ffffff",
     icon: path.join(__dirname, "..", "build", "icon.png"),
@@ -61,8 +71,11 @@ function createMainWindow(): void {
 
   // Show the plain offline page only when the first load fails; after that the
   // web app's own offline queue takes over and we keep whatever is on screen.
+  if (work.width < 1366 || work.height < 800) mainWindow.maximize();
   let loadedOnce = false;
   mainWindow.webContents.on("did-finish-load", () => {
+    // A two-finger pinch never zooms the till (View > Zoom in still scales it on purpose for small screens).
+    void mainWindow?.webContents.setVisualZoomLevelLimits(1, 1);
     const url = mainWindow?.webContents.getURL() ?? "";
     if (!url.startsWith("file://")) loadedOnce = true;
   });
@@ -166,6 +179,19 @@ function buildMenu(): void {
           type: "checkbox",
           checked: mainWindow?.isFullScreen() ?? false,
           click: (item) => mainWindow?.setFullScreen(item.checked),
+        },
+        {
+          label: "Open full screen at launch",
+          type: "checkbox",
+          checked: !!loadSettings().fullScreen,
+          click: (item) => { saveSettings({ fullScreen: item.checked }); },
+        },
+        {
+          label: "Kiosk mode (touch terminal)",
+          accelerator: "CmdOrCtrl+Shift+K",
+          type: "checkbox",
+          checked: !!loadSettings().kiosk,
+          click: (item) => { saveSettings({ kiosk: item.checked }); mainWindow?.setKiosk(item.checked); },
         },
         { type: "separator" },
         { label: "Printers", accelerator: "CmdOrCtrl+Shift+P", click: openPrinterSettings },
