@@ -1,0 +1,15 @@
+Hello <%= @user.name %>,
+
+<%= @business.name %> is set up on EasAlpha. Your free trial runs until <%= @trial_ends.strftime("%-d %B %Y") %>; nothing is charged before then.
+
+Log in: <%= @site %>/login
+
+Three things to do first:
+1. Add your menu: Products, then Categories and Products (or import a CSV).
+2. Set up the till: install EasAlpha POS from <%= @site %>/download, or open <%= @site %>/setup on any computer and sign in once.
+3. Add your team: Staff, then Users. Each person gets a PIN for the till.
+
+Questions? Reply to this email or write to <%= @support %>. We answer every day during restaurant hours.
+
+The EasAlpha team
+<%= @site %>

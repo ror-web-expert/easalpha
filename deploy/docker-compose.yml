@@ -36,6 +36,13 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:support@example.pk}
+      SMTP_ADDRESS: ${SMTP_ADDRESS:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-plain}
+      MAIL_FROM: ${MAIL_FROM:-EasAlpha <no-reply@easalpha.com>}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-hello@easalpha.com}
     depends_on: { db: { condition: service_healthy } }
     ports: ["3001:3001"]
     volumes: ["storage:/rails/storage"]

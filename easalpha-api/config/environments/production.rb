@@ -61,7 +61,21 @@ Rails.application.configure do
   cable_origins = ENV.fetch("CORS_ORIGINS", "").split(",").map(&:strip).reject(&:empty?)
   config.action_cable.allowed_request_origins = cable_origins if cable_origins.any?
 
-  # Specify outgoing SMTP server. Remember to add smtp/* credentials via rails credentials:edit.
+  # Outgoing mail: any SMTP provider (Resend, Postmark, Brevo, SES) through SMTP_* in deploy/.env. Without SMTP_ADDRESS
+  # nothing is sent and mailers are skipped, so a LAN install without internet mail still works.
+  if ENV["SMTP_ADDRESS"].present?
+    config.action_mailer.delivery_method = :smtp
+    config.action_mailer.perform_deliveries = true
+    config.action_mailer.raise_delivery_errors = true
+    config.action_mailer.smtp_settings = {
+      address: ENV["SMTP_ADDRESS"], port: ENV.fetch("SMTP_PORT", "587").to_i,
+      user_name: ENV["SMTP_USERNAME"], password: ENV["SMTP_PASSWORD"],
+      authentication: ENV.fetch("SMTP_AUTHENTICATION", "plain").to_sym, enable_starttls_auto: true, open_timeout: 10, read_timeout: 10
+    }
+  else
+    config.action_mailer.perform_deliveries = false
+  end
+  # The old placeholder block, kept for reference:
   # config.action_mailer.smtp_settings = {
   #   user_name: Rails.application.credentials.dig(:smtp, :user_name),
   #   password: Rails.application.credentials.dig(:smtp, :password),

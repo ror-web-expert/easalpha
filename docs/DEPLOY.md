@@ -117,6 +117,10 @@ curl -s https://api.easalpha.com/api/v1/health
   `docker compose exec -T db pg_dump -U postgres easalpha_production | gzip > ~/backups/easalpha-$(date +%F).sql.gz`
   plus the volumes `easalpha_storage` (uploads) and `easalpha_wasessions`. Restore:
   `gunzip -c FILE | docker compose exec -T db psql -U postgres easalpha_production`.
+- **Email**: the API sends a welcome email at signup and scheduled reports only when `SMTP_ADDRESS` is set in `.env`
+  (with `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM`). Create an account at a transactional provider (Resend, Postmark,
+  Brevo or Amazon SES), verify the easalpha.com domain there (two DNS records they show you), paste the SMTP values and
+  `docker compose up -d api jobs`. Check with `docker compose logs -f jobs` after a signup.
 - **Resources**: the stack uses about 1 GB RAM next to the other app; `docker stats` shows it. `docker system prune -f`
   reclaims build layers and old images (the deploy job already prunes dangling images).
 

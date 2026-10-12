@@ -24,6 +24,8 @@ module Auth
           PaymentMethod.seed_defaults!(business)
           Tenancy::Context.with(business, user: user) { Finance::Chart.seed! }
           AuditLog.record(action: "create", record: business, after: { name: business.name, plan: plan.code }, business: business)
+          # After commit so the job finds the rows; skipped on a server with no outgoing mail configured.
+          WelcomeMailer.signup(user: user, business: business).deliver_later if email.present? && ApplicationMailer.enabled?
           Result.new(user: user, business: business, membership: membership, branch: branch)
         end
       end
