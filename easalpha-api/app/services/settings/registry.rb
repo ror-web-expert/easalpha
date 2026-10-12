@@ -22,7 +22,7 @@ module Settings
       [ "khata.monthly_bills.enabled", "store", "Customer Accounts", "boolean", false, "Send every customer who owes money their bill for last month on WhatsApp" ],
       [ "khata.monthly_bills.day", "store", "Customer Accounts", "integer", 1, "Day of the month the bills go out (1 to 28); each bill covers the previous month" ],
       [ "khata.monthly_bills.due_days", "store", "Customer Accounts", "integer", 10, "Days after the bill date the payment is due" ],
-      [ "khata.monthly_bills.min_balance_minor", "store", "Customer Accounts", "integer", 100, "Skip customers who owe less than this, in paisa" ],
+      [ "khata.monthly_bills.min_balance", "store", "Customer Accounts", "integer", 1, "Skip customers who owe less than this many rupees" ],
       [ "khata.monthly_bills.attach_pdf", "store", "Customer Accounts", "boolean", true, "Attach the bill as a PDF when a phone is linked by QR" ],
       [ "payroll.whatsapp.advance_paid", "store", "Payroll Notifications", "boolean", true, "WhatsApp the employee when an advance is paid" ],
       [ "payroll.whatsapp.wage_paid", "store", "Payroll Notifications", "boolean", true, "WhatsApp the employee when a daily or weekly wage is paid" ],

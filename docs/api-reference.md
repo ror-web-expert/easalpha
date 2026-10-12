@@ -1051,3 +1051,43 @@ Tables: `support_requests` (tenant, RLS), `platform_settings` (key, jsonb value;
 | GET | /api/v1/qr_orders (?source=qr or online) | the accept-or-reject queue now holds website orders beside QR table orders; rows carry `address_text` and `notes` |
 
 Error codes: online.closed, online.maintenance, online.no_delivery, online.order_type, online.empty, online.name, online.phone, online.address, online.min_order. A new order raises a notification of kind `online_order`.
+
+## Customer accounts, barcodes, wages and modules (12 Oct 2026)
+
+Modules: `modules.customer_accounts` and `modules.payroll` in the settings store; only the owner may change them (403 `modules.owner_only`). Login and `GET /me` return `modules: { customer_accounts, payroll }`; `PATCH /settings` returns the new `modules`. While a module is off its endpoints answer 403 `module.disabled` and the till refuses khata payments.
+
+| Method | Path | Action |
+|---|---|---|
+| GET | /api/v1/customers/duplicates?name=&phone=&member_no=&guardian_phone=&exclude_id= | possible duplicates with reasons |
+| POST | /api/v1/customers | also room, member_no, guardian_name, guardian_phone, notify_guardian, opening_balance_minor, opening_reason, opening_on, approver_pin |
+| POST | /api/v1/customers/import | CSV adds room, roll_no, guardian_name, guardian_phone, credit_limit, opening_balance |
+| GET | /api/v1/customers/:id/ledger?from=&to= | entries with running balance; a period adds brought_forward_minor, totals, closing_balance_minor |
+| GET | /api/v1/customers/:id/adjustments | adjustments and the open opening balance |
+| POST | /api/v1/customers/:id/adjustments | { kind: opening or adjustment, amount_minor (signed), reason, effective_on?, approver_pin? } (khata.adjust or a manager PIN) |
+| POST | /api/v1/customer_adjustments/:id/reverse | { reason, approver_pin? } |
+| GET | /api/v1/customers/:id/bill?from=&to=&due_on= | bill JSON with the public link (default: last month) |
+| GET | /api/v1/customers/:id/bill.pdf | the bill as an A4 PDF |
+| POST | /api/v1/customers/:id/send_bill | WhatsApp to the customer (and guardian) with the PDF attached through a linked phone |
+| GET | /api/v1/customer_bills?from=&to=&min_balance_minor=&q=&all= | one summary row per customer |
+| GET | /api/v1/customer_bills.pdf?from=&to=&customer_ids[]= | every bill in one PDF |
+| GET | /api/v1/bill_runs | bill run history |
+| GET | /api/v1/bill_runs/:id | one run with per-customer results |
+| POST | /api/v1/bill_runs | send bills now { from, to, due_on?, customer_ids?, min_balance_minor? } |
+| GET | /api/v1/public/bills/:token | public bill (signed token, 120 days) |
+| GET | /api/v1/public/bills/:token/pdf | public bill PDF |
+| GET | /api/v1/products/barcodes?q= | every barcode with product, size, price and format |
+| GET | /api/v1/products/barcode_lookup?code= | what a scanned code adds (404 barcode.unknown) |
+| POST | /api/v1/products/:id/barcodes | attach a code { code, variant_id?, quantity?, approver_pin? } |
+| DELETE | /api/v1/products/:id/barcodes/:barcode_id | remove a code |
+| POST | /api/v1/products/barcodes/generate | { count } free in-store EAN-13 codes |
+| PUT | /api/v1/products/:id | also barcodes: [{ code, variant_id? or variant_name?, quantity? }] (replaces) |
+| GET | /api/v1/wages/due?day= | daily and weekly staff with suggested wage and what is paid |
+| GET | /api/v1/wages/preview?employee_id=&from=&to= | suggested wage for a period |
+| GET | /api/v1/wages?employee_id=&from=&to=&status= | wage payments with totals |
+| POST | /api/v1/wages | pay one wage |
+| POST | /api/v1/wages/batch | pay a day's wages, row by row |
+| POST | /api/v1/wages/:id/void | { reason } |
+| GET | /api/v1/employees/:id/statement?from=&to= | employee statement |
+| POST | /api/v1/employees/:id/send_statement | WhatsApp the statement summary |
+
+New settings keys: `khata.notify_each_sale`, `khata.notify_adjustments`, `khata.monthly_bills.enabled|day|due_days|min_balance (rupees)|attach_pdf`, `payroll.whatsapp.advance_paid|wage_paid|salary_paid`, `pos.barcode_scanning.prefix|suffix|terminator|min_length|max_key_interval_ms|beep|camera|unknown_code|scale_barcodes|scale_prefixes|scale_item_digits|scale_value|scale_decimals`. New permissions: `khata.adjust`, `wages.pay`. New job: `MonthlyBillsJob` daily at 09:30 Asia/Karachi.

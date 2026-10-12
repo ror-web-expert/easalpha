@@ -50,7 +50,7 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
         {c ? (
           <div className="space-y-3 rounded-lg border p-3">
             <div className="flex items-start justify-between">
-              <div><div className="text-lg font-semibold">{c.name}</div><div className="text-sm text-fg-secondary">{c.phone}{c.khata_no ? ` · khata ${c.khata_no}` : ""} · {c.orders_count} orders</div></div>
+              <div><div className="text-lg font-semibold">{c.name}</div><div className="text-sm text-fg-secondary">{c.phone}{c.khata_no ? ` · khata ${c.khata_no}` : ""}{c.member_no ? ` · roll ${c.member_no}` : ""}{c.room ? ` · room ${c.room}` : ""} · {c.orders_count} orders</div></div>
               {c.balance_minor > 0 ? <Badge variant="warning">owes {formatMoney(c.balance_minor)}</Badge> : null}
             </div>
             {c.status !== "active" ? <p className="text-sm text-danger">This customer is {c.status.replace("_", " ")}.</p> : null}

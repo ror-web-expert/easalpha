@@ -12,7 +12,7 @@ module Customers
       due_on = Customers::Bill.due_on_for(business, today) if due_on == :default
       run = BillRun.create!(period_from: from, period_to: to, due_on: due_on, trigger: trigger, status: "running", by_membership_id: actor&.id)
       scope = Customer.active.where(is_walk_in: false)
-      scope = customer_ids.present? ? scope.where(id: customer_ids) : scope.where("balance_minor >= ?", [ min_balance_minor || business.setting("khata.monthly_bills.min_balance_minor").to_i, 1 ].max)
+      scope = customer_ids.present? ? scope.where(id: customer_ids) : scope.where("balance_minor >= ?", [ min_balance_minor || business.setting("khata.monthly_bills.min_balance").to_i * 100, 1 ].max)
       attach = ActiveModel::Type::Boolean.new.cast(business.setting("khata.monthly_bills.attach_pdf")) != false
       results = scope.order(:khata_no).map do |c|
         bill = Customers::Bill.build(c, from: from, to: to, due_on: due_on, issued_on: today)
