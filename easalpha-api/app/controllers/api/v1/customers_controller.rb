@@ -3,9 +3,9 @@ require "csv"
 module Api
   module V1
     class CustomersController < BaseController
-      before_action -> { require_permission!("customers.view", "customers.manage", "orders.create") }, only: %i[index show lookup orders duplicates]
-      before_action -> { require_permission!("customers.manage") }, except: %i[index show lookup orders duplicates]
-      before_action :read_only_guard!, except: %i[index show lookup orders duplicates]
+      before_action -> { require_permission!("customers.view", "customers.manage", "orders.create") }, only: %i[index show lookup orders duplicates search]
+      before_action -> { require_permission!("customers.manage") }, except: %i[index show lookup orders duplicates search]
+      before_action :read_only_guard!, except: %i[index show lookup orders duplicates search]
 
       # GET /customers?q=&status=&group_id=&with_balance=true
       def index
@@ -58,6 +58,11 @@ module Api
       # the same name written differently, or a name containing every word typed.
       def duplicates
         render json: { data: Customers::Duplicates.find(name: params[:name], phone: params[:phone], member_no: params[:member_no], guardian_phone: params[:guardian_phone], exclude_id: params[:exclude_id]) }
+      end
+
+      # GET /customers/search?q=&limit=  the till's search box: a name or a number, best matches first (Customers::Search)
+      def search
+        render json: { data: Customers::Search.call(params[:q], limit: params[:limit] || 8).includes(:group).map { |c| CustomerSerializers.customer(c) } }
       end
 
       # GET /customers/lookup?phone=  exact match by phone with the last order, for one-tap repeat on the till

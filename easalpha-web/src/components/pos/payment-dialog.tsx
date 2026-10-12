@@ -6,10 +6,12 @@ import { formatMoney } from "@/lib/money";
 import { cashRounding } from "@/lib/pricing";
 import { defaultPaymentMethod } from "@/lib/pos-rules";
 import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, totalsWithCharges, type ChargeState } from "@/lib/pos-charges";
-import type { Cart } from "@/store/cart";
+import type { Cart, CartCustomer } from "@/store/cart";
 import { discountRows } from "@/lib/pos-discounts";
 import { DiscountsPanel, type DiscountRunner } from "./discounts-panel";
 import { moduleOn } from "@/lib/modules";
+import { accountSummary, toCartCustomer } from "@/lib/pos-customers";
+import { CustomerSearch } from "./customer-search";
 import { useCatalogStore } from "@/store/catalog";
 import { useSyncStore } from "@/store/sync";
 import { Button, Dialog, Field, Input, MoneyInput, Tabs } from "@/components/ui";
@@ -25,6 +27,8 @@ interface Props {
   onTaxChoice?: (choice: TaxChoiceInput) => Promise<void>;
   /** SPEC discounts: vouchers, loyalty points and redemption options, applied on the server. Online only. */
   onDiscount?: DiscountRunner;
+  /** Khata without a customer: the cashier searches and attaches the customer here, without leaving payment. */
+  onCustomer?: (c: CartCustomer) => void;
 }
 
 interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: number; reference: string }
@@ -37,7 +41,8 @@ interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: n
  * fixed amount and can be changed or removed here. SPEC "Tax": a No Tax / rate choice appears only when the selected
  * method's finance account is linked to a tax rate.
  */
-export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onTaxChoice, onDiscount }: Props) {
+export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onTaxChoice, onDiscount, onCustomer }: Props) {
+  const [changingCustomer, setChangingCustomer] = useState(false);
   const methods = useCatalogStore((s) => s.paymentMethods);
   const catalog = useCatalogStore((s) => s.catalog);
   const status = useSyncStore((s) => s.status);
@@ -71,7 +76,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
 
   useEffect(() => {
     if (!open) return;
-    setTip(0); setSplits([]);
+    setTip(0); setSplits([]); setChangingCustomer(false);
     const { settings: s, cart: c, status: st } = latest.current;
     const code = defaultPaymentMethod(s, c);
     const usable = (m: PaymentMethod) => st !== "offline" || m.works_offline;
@@ -141,8 +146,26 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
               {draft.method.needs_reference || draft.method.kind === "card" || draft.method.kind === "wallet" || draft.method.kind === "bank" ? (
                 <Field label={`Reference${draft.method.needs_reference ? " (required)" : ""}`}><Input value={draft.reference} onChange={(e) => setDraft({ ...draft, reference: e.target.value })} placeholder="Transaction id / last 4 digits" className="h-12 text-base" /></Field>
               ) : null}
-              {khataBlocked ? <p className="text-sm text-danger">Khata needs a customer on the order. Close this and pick one (F3).</p> : null}
-              {draft.method.kind === "khata" && cart.customer ? <p className="text-sm text-fg-secondary">On account of {cart.customer.name}{cart.customer.balance_minor ? ` · owes ${formatMoney(cart.customer.balance_minor, currency)}` : ""}{cart.customer.credit_limit_minor ? ` · limit ${formatMoney(cart.customer.credit_limit_minor, currency)}` : ""}</p> : null}
+              {draft.method.kind === "khata" && onCustomer && (khataBlocked || changingCustomer) ? (
+                <div className="space-y-2 rounded-lg bg-warning-soft/50 p-3">
+                  <p className="text-sm font-semibold">Whose account is this for?</p>
+                  <CustomerSearch autoFocus onPick={(c) => { onCustomer(toCartCustomer(c)); setChangingCustomer(false); }} />
+                  <p className="text-xs text-fg-muted">A new customer: close this, add them with Customer (F3), then pay.</p>
+                </div>
+              ) : khataBlocked ? <p className="text-sm text-danger">Khata needs a customer on the order. Close this and pick one (F3).</p> : null}
+              {draft.method.kind === "khata" && cart.customer && !changingCustomer ? (() => {
+                const acct = accountSummary(cart.customer, draftAmount, currency);
+                return (
+                  <div className="space-y-1 rounded-lg border p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate"><span className="text-fg-secondary">On account of </span><span className="font-semibold">{cart.customer.name}</span></span>
+                      {onCustomer ? <button type="button" className="shrink-0 text-sm font-medium text-primary hover:underline" onClick={() => setChangingCustomer(true)}>Change</button> : null}
+                    </div>
+                    <div className="text-fg-secondary">{acct.owes} · {acct.limitText} · <span className="font-medium text-fg">{acct.afterText}</span></div>
+                    {acct.overText ? <p className="text-danger">{acct.overText}</p> : null}
+                  </div>
+                );
+              })() : null}
               {offlineBlocked ? <p className="text-sm text-danger">{draft.method.name} needs the internet. Use cash or khata while offline.</p> : null}
               {partial ? <Button variant="secondary" className="w-full" size="lg" onClick={addSplit} disabled={needsRef || khataBlocked || !!offlineBlocked || draft.amount <= 0}>Add {formatMoney(draftAmount, currency)} and split the rest</Button> : null}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Phone, Repeat, UserPlus } from "lucide-react";
+import { Repeat, UserPlus } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { Customer, CustomerLookup, DiningTable, Order } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
@@ -8,60 +8,71 @@ import { titleCase } from "@/lib/utils";
 import type { CartCustomer } from "@/store/cart";
 import { Badge, Button, Dialog, Field, Input, MoneyInput, Textarea, tableStatusVariant } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { customerDetails, newCustomerPrefill, toCartCustomer } from "@/lib/pos-customers";
+import { CustomerSearch } from "./customer-search";
 
 export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: boolean; onClose: () => void; onPick: (c: CartCustomer) => void; onRepeat: (o: Order) => void }) {
-  const [phone, setPhone] = useState("+92");
+  // Search by name or number (CustomerSearch), then use the customer or repeat their last order; or add a new one.
+  const [picked, setPicked] = useState<Customer | null>(null);
+  const [lastOrder, setLastOrder] = useState<Order | null>(null);
+  const [adding, setAdding] = useState<{ name: string; phone: string; room: string; member_no: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<CustomerLookup | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  useEffect(() => { if (open) { setResult(null); setError(null); setName(""); } }, [open]);
-  const lookup = async () => {
-    setBusy(true); setError(null);
-    try { setResult(await api<CustomerLookup>("/customers/lookup", { auth: "pos", query: { phone } })); }
-    catch (e) { setError(errorMessage(e)); }
-    finally { setBusy(false); }
+  useEffect(() => { if (open) { setPicked(null); setLastOrder(null); setAdding(null); setError(null); } }, [open]);
+  const choose = async (c: Customer) => {
+    setPicked(c); setLastOrder(null); setError(null);
+    // The last order (for one-tap repeat) comes with the phone lookup; a customer without a phone has none to repeat.
+    if (c.phone) {
+      try { const r = await api<CustomerLookup>("/customers/lookup", { auth: "pos", query: { phone: c.phone } }); if (r.customer?.id === c.id) setLastOrder(r.last_order ?? null); } catch {}
+    }
   };
+  const attach = (c: Customer) => { onPick(toCartCustomer(c)); onClose(); };
   const create = async () => {
+    if (!adding) return;
     setBusy(true); setError(null);
     try {
-      const c = await api<Customer>("/customers", { method: "POST", auth: "pos", body: { name, phone, source: "in_store" } });
-      onPick({ id: c.id, name: c.name, phone: c.phone, balance_minor: c.balance_minor, credit_limit_minor: c.credit_limit_minor });
-      onClose();
+      const phone = adding.phone.replace(/\s/g, "");
+      const c = await api<Customer>("/customers", { method: "POST", auth: "pos", body: { name: adding.name.trim(), phone: phone && phone !== "+92" ? phone : null, room: adding.room.trim() || null, member_no: adding.member_no.trim() || null, source: "in_store" } });
+      attach(c);
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   };
-  const c = result?.customer;
   return (
-    <Dialog open={open} onClose={onClose} title="Customer" description="Look up by phone (F3). One tap repeats the last order." size="sm">
+    <Dialog open={open} onClose={onClose} title="Customer" description="Search by name or number (F3). One tap repeats the last order." size="sm">
       <div className="space-y-4">
-        <form onSubmit={(e) => { e.preventDefault(); lookup(); }} className="flex gap-2">
-          <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-12 text-lg" autoFocus />
-          <Button type="submit" size="lg" loading={busy}><Phone className="h-4 w-4" /> Find</Button>
-        </form>
-        {error ? <p className="text-sm text-danger">{error}</p> : null}
-        {result && !result.found ? (
-          <div className="space-y-3 rounded-lg border p-3">
-            <p className="text-sm text-fg-secondary">No customer with {result.phone}. Add them?</p>
-            <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-base" />
-            <Button className="w-full" size="lg" onClick={create} disabled={!name.trim()} loading={busy}><UserPlus className="h-4 w-4" /> Add customer</Button>
-          </div>
-        ) : null}
-        {c ? (
-          <div className="space-y-3 rounded-lg border p-3">
-            <div className="flex items-start justify-between">
-              <div><div className="text-lg font-semibold">{c.name}</div><div className="text-sm text-fg-secondary">{c.phone}{c.khata_no ? ` · khata ${c.khata_no}` : ""}{c.member_no ? ` · roll ${c.member_no}` : ""}{c.room ? ` · room ${c.room}` : ""} · {c.orders_count} orders</div></div>
-              {c.balance_minor > 0 ? <Badge variant="warning">owes {formatMoney(c.balance_minor)}</Badge> : null}
+        {adding ? (
+          <form onSubmit={(e) => { e.preventDefault(); void create(); }} className="space-y-3 rounded-lg border p-3">
+            <div className="text-sm font-semibold">New customer</div>
+            <Input placeholder="Name" value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} className="h-12 text-base" autoFocus={!adding.name} />
+            <Input type="tel" placeholder="Phone" value={adding.phone} onChange={(e) => setAdding({ ...adding, phone: e.target.value })} className="h-12 text-base" autoFocus={!!adding.name && adding.phone === "+92"} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Room" value={adding.room} onChange={(e) => setAdding({ ...adding, room: e.target.value })} className="h-12 text-base" />
+              <Input placeholder="Roll / ID no." value={adding.member_no} onChange={(e) => setAdding({ ...adding, member_no: e.target.value })} className="h-12 text-base" />
             </div>
-            {c.status !== "active" ? <p className="text-sm text-danger">This customer is {c.status.replace("_", " ")}.</p> : null}
-            <Button className="w-full" size="lg" onClick={() => { onPick({ id: c.id, name: c.name, phone: c.phone, balance_minor: c.balance_minor, credit_limit_minor: c.credit_limit_minor }); onClose(); }}>Use this customer</Button>
-            {result?.last_order ? (
-              <Button className="w-full" size="lg" variant="secondary" onClick={() => { onPick({ id: c.id, name: c.name, phone: c.phone, balance_minor: c.balance_minor, credit_limit_minor: c.credit_limit_minor }); onRepeat(result.last_order!); onClose(); }}>
-                <Repeat className="h-4 w-4" /> Repeat last order · {formatMoney(result.last_order.total_minor)} · {result.last_order.items?.length} items
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" size="lg" onClick={() => setAdding(null)}>Back</Button>
+              <Button type="submit" size="lg" className="flex-1" disabled={!adding.name.trim()} loading={busy}><UserPlus className="h-4 w-4" /> Add customer</Button>
+            </div>
+          </form>
+        ) : picked ? (
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0"><div className="text-lg font-semibold">{picked.name}</div><div className="text-sm text-fg-secondary">{customerDetails(picked) || "No phone"} · {picked.orders_count} orders</div></div>
+              {picked.balance_minor > 0 ? <Badge variant="warning">owes {formatMoney(picked.balance_minor)}</Badge> : null}
+            </div>
+            {picked.status !== "active" ? <p className="text-sm text-danger">This customer is {picked.status.replace("_", " ")}.</p> : null}
+            <Button className="w-full" size="lg" onClick={() => attach(picked)}>Use this customer</Button>
+            {lastOrder ? (
+              <Button className="w-full" size="lg" variant="secondary" onClick={() => { onPick(toCartCustomer(picked)); onRepeat(lastOrder); onClose(); }}>
+                <Repeat className="h-4 w-4" /> Repeat last order · {formatMoney(lastOrder.total_minor)} · {lastOrder.items?.length} items
               </Button>
             ) : null}
+            <Button className="w-full" variant="ghost" onClick={() => setPicked(null)}>Search again</Button>
           </div>
-        ) : null}
+        ) : (
+          <CustomerSearch autoFocus onPick={(c) => void choose(c)} onAddNew={(q) => setAdding({ ...newCustomerPrefill(q), room: "", member_no: "" })} />
+        )}
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
       </div>
     </Dialog>
   );

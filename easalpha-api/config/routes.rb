@@ -241,6 +241,7 @@ Rails.application.routes.draw do
       resources :customers, only: %i[index show create update destroy] do
         collection do
           get :lookup
+          get :search
           get :insights
           post :import
         end

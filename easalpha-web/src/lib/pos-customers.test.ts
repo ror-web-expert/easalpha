@@ -1,0 +1,37 @@
+import { describe, expect, it } from "vitest";
+import { accountSummary, customerDetails, newCustomerPrefill, searchReady, toCartCustomer } from "./pos-customers";
+
+describe("till customer search helpers", () => {
+  it("searches after two letters or any digit", () => {
+    expect(searchReady("a")).toBe(false);
+    expect(searchReady("al")).toBe(true);
+    expect(searchReady("7")).toBe(true);
+    expect(searchReady("  ")).toBe(false);
+  });
+
+  it("starts a new customer from what was typed", () => {
+    expect(newCustomerPrefill("0300 1234567")).toEqual({ name: "", phone: "0300 1234567" });
+    expect(newCustomerPrefill("Hamza Raza")).toEqual({ name: "Hamza Raza", phone: "+92" });
+    expect(newCustomerPrefill("12")).toEqual({ name: "12", phone: "+92" }); // too short for a phone: a name or roll
+  });
+
+  it("describes a customer with whatever is known", () => {
+    expect(customerDetails({ khata_no: "12", member_no: "R-12", room: "C-7", phone: "+923001112233", guardian_phone: null })).toBe("Khata 12 · Roll R-12 · Room C-7 · +923001112233");
+    expect(customerDetails({ khata_no: null, member_no: null, room: null, phone: null, guardian_phone: "+923119998877" })).toBe("Guardian +923119998877");
+  });
+
+  it("keeps what the cart needs", () => {
+    expect(toCartCustomer({ id: "c1", name: "Ali", phone: null, balance_minor: 500, credit_limit_minor: null })).toEqual({ id: "c1", name: "Ali", phone: null, balance_minor: 500, credit_limit_minor: null });
+  });
+
+  it("explains the account and warns before the limit is passed", () => {
+    const open = accountSummary({ balance_minor: 300_000, credit_limit_minor: null }, 58_000);
+    expect(open).toMatchObject({ owes: "owes Rs 3,000", limitText: "no limit", after: 358_000, over: false, overText: null });
+    expect(open.afterText).toBe("Rs 3,580 after this sale");
+    const capped = accountSummary({ balance_minor: 450_000, credit_limit_minor: 500_000 }, 80_000);
+    expect(capped.over).toBe(true);
+    expect(capped.overText).toContain("by Rs 300");
+    expect(accountSummary({ balance_minor: 0, credit_limit_minor: 0 }, 100).overText).toContain("not allowed");
+    expect(accountSummary({ balance_minor: -20_000, credit_limit_minor: null }, 0).owes).toBe("Rs 200 in advance");
+  });
+});
