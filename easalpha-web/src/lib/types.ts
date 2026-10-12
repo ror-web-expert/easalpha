@@ -123,7 +123,12 @@ export interface Session {
   user: User; business: Business; branch: Branch | null; membership: Membership; permissions: string[]; businesses: BusinessRef[];
   /** GET /me only: the SPEC top-bar pills. */
   pills?: HeaderPills | null;
+  /** Modules the owner switches on (Settings, Modules). Missing on sessions saved before 12 Oct 2026: read through useModules. */
+  modules?: BusinessModules;
 }
+/** Optional parts of EasAlpha, off for a new business. */
+export interface BusinessModules { customer_accounts: boolean; payroll: boolean }
+export type BusinessModule = keyof BusinessModules;
 
 // ---- Menu ----
 export interface TaxRate { id: ID; name: string; rate: number; inclusive: boolean; authority: string | null; active: boolean; is_default: boolean; payment_account_id?: ID | null }
@@ -143,12 +148,18 @@ export interface Product {
   base_price_minor: number; tax_rate_id: ID | null; is_favourite: boolean; show_online: boolean; active: boolean; sold_by_weight: boolean;
   weight_unit: string | null; allergens: string[] | null; dietary_tags: string[] | null; station_id: ID | null; sort_order: number;
   archived_at: string | null; updated_at: string; variants?: Variant[]; prices?: ProductPrice[]; modifier_group_ids?: ID[];
+  /** Barcodes and QR codes that add this product (or one of its sizes) on the POS; quantity is the pack size, a decimal string. */
+  barcodes?: ProductBarcode[];
   /** SPEC Basic Info: Discount with a %/Rs switch. discount_value is a decimal string ("10" or "50.00"); null type = no discount. */
   discount_value?: string | null; discount_type?: DiscountType | null;
   /** SPEC: PCT code for PRA e-IMS tax reporting. */
   pct_code?: string | null;
 }
 export type DiscountType = "percent" | "amount";
+export interface ProductBarcode { id?: ID; code: string; variant_id: ID | null; quantity: string; /** product form only: names a size created in the same save */ variant_name?: string }
+/** GET /products/barcodes and /products/barcode_lookup */
+export type BarcodeFormat = "ean13" | "upca" | "ean8" | "code128" | "qr";
+export interface BarcodeRow { id: ID; code: string; quantity: string; product_id: ID; product_name: string; variant_id: ID | null; variant_name: string | null; price_minor: number; format: BarcodeFormat }
 export interface Modifier { id: ID; name: string; name_ur: string | null; price_minor: number; sort_order: number; active: boolean }
 export interface ModifierGroup { id: ID; name: string; min_select: number; max_select: number | null; required: boolean; sort_order: number; modifiers: Modifier[] }
 export interface DealItem { id?: ID; product_id: ID; variant_id: ID | null; quantity: number; choice_group: string | null }
@@ -349,13 +360,49 @@ export interface Customer {
   is_walk_in: boolean; credit_limit_minor: number | null; balance_minor: number; loyalty_points: number; birthday: string | null; whatsapp_opt_in: boolean;
   orders_count: number; net_spent_minor: number; last_order_at: string | null; notes: string | null; archived_at: string | null; created_at: string;
   addresses?: Address[]; group?: { id: ID; name: string; discount_percent: number } | null;
+  /** Hostel, canteen and office accounts: room or unit, roll or ID number, guardian; notify_guardian sends account messages to the guardian too. */
+  room?: string | null; member_no?: string | null; guardian_name?: string | null; guardian_phone?: string | null; notify_guardian?: boolean;
 }
+/** GET /customers/duplicates */
+export interface DuplicateCustomer {
+  id: ID; name: string; khata_no: string | number | null; phone: string | null; member_no: string | null; room: string | null; guardian_name: string | null; guardian_phone: string | null;
+  balance_minor: number; last_order_at: string | null; reasons: string[];
+}
+export type AdjustmentKind = "opening" | "adjustment" | "reversal";
+export interface CustomerAdjustment {
+  id: ID; number: number; label: string; customer_id: ID; kind: AdjustmentKind; amount_minor: number; reason: string; effective_on: string; business_day: string;
+  by_membership_id: ID | null; approved_by_membership_id: ID | null; reverses_id: ID | null; reverses_label: string | null; reversed: boolean; reversed_by_label: string | null; created_at: string;
+}
+export interface LedgerTotals { charges_minor: number; payments_minor: number; refunds_minor: number; paid_out_minor: number; adjustments_minor: number }
+export interface CustomerBill {
+  from: string; to: string; number: string; period_label: string; bill_date: string; due_on: string | null; filename: string;
+  brought_forward_minor: number; closing_balance_minor: number; totals: LedgerTotals; entries: LedgerEntry[];
+  customer: { id: ID; name: string; khata_no: number; member_no: string | null; room: string | null; phone: string | null; guardian_name: string | null; guardian_phone: string | null; company: string | null; credit_limit_minor: number | null };
+  business: { name: string; phone: string | null; currency: string; address: string | null; footer: string | null };
+  /** admin: the public link sent on WhatsApp */ link?: string;
+  /** public page: the PDF and the balance today */ pdf_url?: string; balance_now_minor?: number;
+}
+export interface CustomerBillsRow { customer: Customer; brought_forward_minor: number; closing_balance_minor: number; totals: LedgerTotals; entries_count: number; phones: string[] }
+export interface BillRunResult { customer_id: ID; name: string; khata_no: number; status: "sent" | "failed" | "skipped"; due_minor?: number; to?: string[]; error?: string }
+export interface BillRun {
+  id: ID; period_from: string; period_to: string; due_on: string | null; trigger: "auto" | "manual"; status: "running" | "done"; customers_count: number;
+  sent_count: number; failed_count: number; skipped_count: number; by_membership_id: ID | null; created_at: string; results?: BillRunResult[];
+}
+export interface CustomerBillsResponse { from: string; to: string; due_on: string | null; rows: CustomerBillsRow[]; totals: { customers: number; due_minor: number; charges_minor: number; payments_minor: number }; last_run: BillRun | null }
 export interface CustomerGroup { id: ID; name: string; discount_percent: number; customer_count: number | null; archived_at: string | null }
 export interface LedgerEntry {
-  at: string; kind: string; amount_minor: number; order_id?: ID; order_label?: string; business_day: string; ref: ID; number?: string; method?: string | null; reference?: string | null; balance_minor: number;
+  at: string; kind: string; amount_minor: number; order_id?: ID; order_label?: string; business_day: string; ref: ID; number?: string | number; method?: string | null; reference?: string | null; balance_minor: number;
+  /** The date the entry counts on (adjustments: their effective date). */
+  date?: string;
+  /** charge: "2x Chai, 1x Samosa"; adjustments: label, reason and reversal links; payments: method name. */
+  items?: string; label?: string; reason?: string; reverses_label?: string | null; reversed?: boolean; method_name?: string | null;
 }
 export interface Aging { current: number; "31_60": number; "61_90": number; over_90: number; total: number }
-export interface Ledger { customer: Customer; balance_minor: number; aging: Aging; entries: LedgerEntry[] }
+export interface Ledger {
+  customer: Customer; balance_minor: number; aging: Aging; entries: LedgerEntry[];
+  /** ?from=&to= gives a period: the balance before it, totals inside it and the balance at its end. */
+  from?: string; to?: string; brought_forward_minor?: number; closing_balance_minor?: number; totals?: LedgerTotals;
+}
 export interface AgingReport { as_of: string; rows: { customer: Customer; aging: Aging }[]; totals: Aging; customers_with_due: number }
 export interface CustomerLookup { found: boolean; phone?: string | null; customer?: Customer; last_order?: Order | null }
 
@@ -692,6 +739,27 @@ export interface EmployeeComponent { id?: ID; salary_component_id: ID; name?: st
 export interface Employee {
   id: ID; branch_id: ID | null; membership_id: ID | null; department_id: ID | null; department: string | null; name: string; phone: string | null; cnic: string | null; designation: string | null;
   base_salary_minor: number; pay_frequency: string; joined_on: string | null; left_on: string | null; fingerprint_enrolled: boolean; shares_tips: boolean; notes: string | null; archived_at: string | null; components: EmployeeComponent[];
+  /** Messages to this employee on WhatsApp (advance, wage, salary paid). */
+  whatsapp_notify?: boolean;
+}
+/** base_salary_minor is the pay for one period: a month's salary, a week's wage or a day's wage. */
+export type PayFrequency = "monthly" | "weekly" | "daily";
+export interface WagePayment {
+  id: ID; number: number; label: string; employee_id: ID; employee_name: string | null; period_from: string; period_to: string; days_worked: number; rate_minor: number;
+  gross_minor: number; bonus_minor: number; deductions_minor: number; advance_recovered_minor: number; net_minor: number; method_code: string | null; expense_id: ID | null;
+  note: string | null; status: "paid" | "voided"; void_reason: string | null; voided_at: string | null; by_membership_id: ID | null; paid_at: string | null;
+}
+/** GET /wages/preview and each row of GET /wages/due */
+export interface WagePreview {
+  employee_id: ID; employee_name: string; pay_frequency: PayFrequency; from: string; to: string; period_days: number; attendance_tracked: boolean;
+  attendance: { day: string; status: string }[]; days_worked: number; rate_minor: number; gross_minor: number; advances_outstanding_minor: number;
+  already_paid: WagePayment[]; phone: string | null; /** due only */ paid?: WagePayment | null;
+}
+export interface EmployeeStatementEntry { date: string; at: string; kind: "salary" | "salary_paid" | "wage" | "wage_paid" | "advance"; label: string; ref: string; credit_minor: number; debit_minor: number; recovered_minor?: number; detail?: string | null; balance_minor: number }
+export interface EmployeeStatement {
+  employee: { id: ID; name: string; phone: string | null; designation: string | null; pay_frequency: PayFrequency; rate_minor: number };
+  from: string; to: string; brought_forward_minor: number; closing_balance_minor: number; entries: EmployeeStatementEntry[];
+  totals: { earned_minor: number; paid_minor: number; advances_minor: number; recovered_minor: number }; advances_outstanding_minor: number;
 }
 export type AbsentRule = "calendar_days" | "fixed_26";
 export interface AttendanceRule {

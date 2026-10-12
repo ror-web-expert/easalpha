@@ -30,6 +30,9 @@ const SELECT_OPTIONS: [suffix: string, options: ControlSpec["options"]][] = [
     { value: "cash", label: "Cash" }, { value: "card", label: "Card" }, { value: "easypaisa", label: "Easypaisa" }, { value: "jazzcash", label: "JazzCash" }, { value: "bank", label: "Bank transfer" }, { value: "khata", label: "Khata (credit)" },
   ]],
   ["default_order_type", ORDER_TYPES],
+  [".terminator", [{ value: "enter", label: "Enter (most scanners)" }, { value: "tab", label: "Tab" }, { value: "none", label: "Nothing (timing only)" }]],
+  [".unknown_code", [{ value: "ask", label: "Offer to attach it to a product" }, { value: "ignore", label: "Only show Not found" }]],
+  [".scale_value", [{ value: "weight", label: "Weight" }, { value: "price", label: "Price" }]],
 ];
 /** String keys whose value is a secret the API masks as "set"; shown as a password field like a pin, any length. */
 const SECRET_SUFFIXES = [".access_code", ".bearer_token", ".token"];

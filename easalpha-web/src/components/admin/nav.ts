@@ -1,6 +1,8 @@
-import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, Barcode, FileText, HandCoins as Wage, ToggleRight, type LucideIcon } from "lucide-react";
+import type { BusinessModule } from "@/lib/types";
 
-export interface NavItem { href: string; label: string; icon: LucideIcon; perms?: string[]; soon?: boolean; exact?: boolean }
+/** module: shown only while the owner has that module switched on (Settings, Modules). */
+export interface NavItem { href: string; label: string; icon: LucideIcon; perms?: string[]; soon?: boolean; exact?: boolean; module?: BusinessModule }
 /** flat: items render at the top level with no group header (the SPEC's four standalone screens). */
 export interface NavGroup { label: string; icon: LucideIcon; items: NavItem[]; flat?: boolean }
 
@@ -37,6 +39,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/products/deals", label: "Deals", icon: Gift, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/promotions", label: "Promotions", icon: Percent, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/quick-add", label: "Quick Add Menu", icon: Zap, perms: ["menu.view", "menu.edit"] },
+      { href: "/admin/products/labels", label: "Barcode Labels", icon: Barcode, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/categories", label: "Categories", icon: Layers, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/modifier-groups", label: "Modifier groups", icon: SlidersHorizontal, perms: ["menu.view", "menu.edit"] },
       { href: "/admin/products/tax-rates", label: "Tax rates", icon: Tag },
@@ -101,11 +104,12 @@ export const NAV: NavGroup[] = [
     icon: Users,
     items: [
       { href: "/admin/customers", label: "Customers", icon: Users, exact: true, perms: PEOPLE },
-      { href: "/admin/customers/ledger", label: "Customer Ledger", icon: BookOpen, perms: PEOPLE },
+      { href: "/admin/customers/ledger", label: "Customer Ledger", icon: BookOpen, perms: PEOPLE, module: "customer_accounts" },
+      { href: "/admin/customers/bills", label: "Monthly Bills", icon: FileText, perms: PEOPLE, module: "customer_accounts" },
       { href: "/admin/customers/insights", label: "Customer Insights", icon: Lightbulb, perms: PEOPLE },
-      { href: "/admin/customers/payments", label: "Customer Payments", icon: Coins, perms: PEOPLE },
-      { href: "/admin/customers/account", label: "Customer Account", icon: Wallet, perms: PEOPLE },
-      { href: "/admin/customers/ar-aging", label: "AR Aging", icon: PiggyBank, perms: [...PEOPLE, "reports.view_all", "finance.view"] },
+      { href: "/admin/customers/payments", label: "Customer Payments", icon: Coins, perms: PEOPLE, module: "customer_accounts" },
+      { href: "/admin/customers/account", label: "Customer Account", icon: Wallet, perms: PEOPLE, module: "customer_accounts" },
+      { href: "/admin/customers/ar-aging", label: "AR Aging", icon: PiggyBank, perms: [...PEOPLE, "reports.view_all", "finance.view"], module: "customer_accounts" },
       { href: "/admin/customers/campaigns", label: "Campaigns", icon: Megaphone, perms: ["customers.manage", "settings.manage", "MARKETING_CAMPAIGN"] },
       { href: "/admin/customers/reservations", label: "Reservations", icon: CalendarDays, perms: ["orders.create", "tables.manage", "customers.manage"] },
       { href: "/admin/orders/qr", label: "Online & QR orders", icon: QrCode, perms: ["orders.create", "kitchen.view", "WEB_ORDERS"] },
@@ -147,14 +151,16 @@ export const NAV: NavGroup[] = [
     label: "Payroll",
     icon: BadgeDollarSign,
     items: [
-      { href: "/admin/payroll/overview", label: "Overview", icon: Gauge, perms: ["payroll.manage", "PAYROLL"] },
-      { href: "/admin/payroll/employees", label: "Employees", icon: Contact, perms: ["payroll.manage", "staff.manage", "PAYROLL"] },
-      { href: "/admin/payroll/advances", label: "Advances", icon: CircleDollarSign, perms: ["payroll.manage", "PAYROLL"] },
-      { href: "/admin/payroll/run", label: "Run Payroll", icon: BadgeDollarSign, perms: ["payroll.manage", "PAYROLL"] },
-      { href: "/admin/payroll/ledger", label: "Ledger", icon: BookOpen, perms: ["payroll.manage", "PAYROLL"] },
-      { href: "/admin/payroll/fingerprint", label: "Fingerprint", icon: Fingerprint, perms: ["payroll.manage", "staff.manage", "PAYROLL"] },
-      { href: "/admin/payroll/reports", label: "Reports", icon: BarChart3, perms: ["payroll.manage", "PAYROLL"] },
-      { href: "/admin/payroll/settings", label: "Settings", icon: Wallet2, perms: ["payroll.manage", "settings.manage"] },
+      { href: "/admin/payroll/overview", label: "Overview", icon: Gauge, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/employees", label: "Employees", icon: Contact, perms: ["payroll.manage", "staff.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/advances", label: "Advances", icon: CircleDollarSign, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/run", label: "Run Payroll", icon: BadgeDollarSign, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/wages", label: "Pay Wages", icon: Wage, perms: ["payroll.manage", "PAYROLL", "wages.pay"], module: "payroll" },
+      { href: "/admin/payroll/statement", label: "Employee Statement", icon: FileText, perms: ["payroll.manage", "PAYROLL", "wages.pay"], module: "payroll" },
+      { href: "/admin/payroll/ledger", label: "Ledger", icon: BookOpen, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/fingerprint", label: "Fingerprint", icon: Fingerprint, perms: ["payroll.manage", "staff.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/reports", label: "Reports", icon: BarChart3, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
+      { href: "/admin/payroll/settings", label: "Settings", icon: Wallet2, perms: ["payroll.manage", "settings.manage"], module: "payroll" },
     ],
   },
   {
@@ -203,6 +209,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/admin/settings/store", label: "Store", icon: Store, perms: SETTINGS },
       { href: "/admin/settings/branding", label: "Branding", icon: Palette, perms: SETTINGS },
+      { href: "/admin/settings/modules", label: "Modules", icon: ToggleRight, perms: SETTINGS },
       { href: "/admin/settings/store-management", label: "Store Management", icon: Building2, perms: SETTINGS },
       { href: "/admin/settings/business-hours", label: "Business Hours", icon: Timer, perms: SETTINGS },
       { href: "/admin/settings/point-of-sale", label: "Point of Sale", icon: MonitorSmartphone, perms: SETTINGS },

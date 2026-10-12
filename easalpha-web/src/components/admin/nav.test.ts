@@ -34,6 +34,16 @@ describe("SPEC sidebar", () => {
     expect(NAV.find((g) => g.label === "Settings")!.items.find((i) => i.label === "Branding")?.href).toBe("/admin/settings/branding");
   });
 
+  it("ties customer-account and payroll screens to their modules, and keeps the plain customer list always on", () => {
+    const all = NAV.flatMap((g) => g.items);
+    const byLabel = (l: string, group?: string) => (group ? NAV.find((g) => g.label === group)!.items : all).find((i) => i.label === l)!;
+    for (const l of ["Customer Ledger", "Monthly Bills", "Customer Payments", "Customer Account", "AR Aging"]) expect(byLabel(l, "Customers").module, l).toBe("customer_accounts");
+    for (const l of ["Overview", "Employees", "Advances", "Run Payroll", "Pay Wages", "Employee Statement", "Fingerprint"]) expect(byLabel(l, "Payroll").module, l).toBe("payroll");
+    expect(byLabel("Customers", "Customers").module).toBeUndefined();
+    expect(byLabel("Modules", "Settings").href).toBe("/admin/settings/modules");
+    expect(byLabel("Barcode Labels", "Products").href).toBe("/admin/products/labels");
+  });
+
   it("uses the SPEC route roots", () => {
     const hrefs = NAV.flatMap((g) => g.items.map((i) => i.href.split("#")[0]));
     for (const h of hrefs) expect(h).toMatch(/^\/admin(\/(products|inventory|inventory-reports|purchasing|suppliers|customers|staff|finance|payroll|reports|riders|settings|orders|expenses|tables)(\/.*)?)?$/);

@@ -9,6 +9,7 @@ import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resol
 import type { Cart } from "@/store/cart";
 import { discountRows } from "@/lib/pos-discounts";
 import { DiscountsPanel, type DiscountRunner } from "./discounts-panel";
+import { moduleOn } from "@/lib/modules";
 import { useCatalogStore } from "@/store/catalog";
 import { useSyncStore } from "@/store/sync";
 import { Button, Dialog, Field, Input, MoneyInput, Tabs } from "@/components/ui";
@@ -45,7 +46,9 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const [tip, setTip] = useState(0);
   const [splits, setSplits] = useState<Split[]>([]);
   const [draft, setDraft] = useState<{ method: PaymentMethod | null; amount: number; tendered: number; reference: string }>({ method: null, amount: 0, tendered: 0, reference: "" });
-  const active = useMemo(() => methods.filter((m) => m.active).sort((a, b) => a.sort_order - b.sort_order), [methods]);
+  // Khata only while the owner has customer accounts switched on (Settings, Modules); the API refuses it otherwise.
+  const khataOn = moduleOn(useCatalogStore((s) => s.catalog?.business.settings), "customer_accounts");
+  const active = useMemo(() => methods.filter((m) => m.active && (m.kind !== "khata" || khataOn)).sort((a, b) => a.sort_order - b.sort_order), [methods, khataOn]);
   const service = resolveServiceCharge(cart, settings);
   const delivery = resolveDeliveryCharge(cart, settings);
   const base = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: tip, discount_minor: cart.discount_minor });

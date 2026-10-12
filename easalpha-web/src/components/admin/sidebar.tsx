@@ -13,6 +13,7 @@ import { Badge, Button, ThemeToggle } from "@/components/ui";
 import { format } from "date-fns";
 import { toast } from "@/store/toast";
 import { HeaderPills } from "./dashboard-pills";
+import { MODULE_INFO, useModules } from "@/lib/modules";
 import { AnnouncementBanner, NeedHelpFab, PoweredBy } from "./help-support";
 
 function isActive(it: NavItem, pathname: string) {
@@ -24,9 +25,10 @@ function isActive(it: NavItem, pathname: string) {
 /** Groups and items this user may see, in nav order. */
 function useVisibleNav(): NavGroup[] {
   const perms = useAuthStore((s) => s.session?.permissions);
+  const modules = useModules();
   return useMemo(
-    () => NAV.map((g) => ({ ...g, items: g.items.filter((it) => !it.perms || hasPermission(perms, ...it.perms)) })).filter((g) => g.items.length),
-    [perms],
+    () => NAV.map((g) => ({ ...g, items: g.items.filter((it) => (!it.perms || hasPermission(perms, ...it.perms)) && (!it.module || modules[it.module])) })).filter((g) => g.items.length),
+    [perms, modules],
   );
 }
 
@@ -305,6 +307,29 @@ function DayBar() {
   );
 }
 
+/** A page that belongs to a switched-off module (opened from a bookmark or an old link) explains where to switch it on
+ *  instead of showing the API's module.disabled error. */
+function ModuleGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const modules = useModules();
+  const isOwner = useAuthStore((s) => s.session?.membership.role.system_key === "owner");
+  const item = useMemo(() => {
+    let best: NavItem | null = null;
+    for (const g of NAV) for (const it of g.items) if (it.module && isActive(it, pathname) && (!best || it.href.length > best.href.length)) best = it;
+    return best;
+  }, [pathname]);
+  if (!item?.module || !modules.loaded || modules[item.module]) return <>{children}</>;
+  const info = MODULE_INFO[item.module];
+  return (
+    <div className="mx-auto mt-12 max-w-lg rounded-2xl border bg-card p-8 text-center" data-module-off={item.module}>
+      <h1 className="text-xl font-medium">{info.title} is switched off</h1>
+      <p className="mt-2 text-sm text-fg-secondary">{info.summary}</p>
+      <p className="mt-4 text-sm">{isOwner ? "Switch it on to use this page." : "Ask the owner to switch it on in Settings, Modules."}</p>
+      {isOwner ? <Link href="/admin/settings/modules" className="mt-5 inline-flex h-10 items-center rounded-full bg-primary px-6 text-sm font-medium text-primary-fg">Open Modules</Link> : null}
+    </div>
+  );
+}
+
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -383,7 +408,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 pb-8 pt-4 sm:px-6">
           <AnnouncementBanner />
           <NeedHelpFab />
-          {children}
+          <ModuleGate>{children}</ModuleGate>
         </main>
       </div>
       <PageSearch groups={groups} open={searchOpen} onClose={() => setSearchOpen(false)} />
