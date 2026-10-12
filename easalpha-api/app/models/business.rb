@@ -31,7 +31,7 @@ class Business < ApplicationRecord
   DEFAULT_SETTINGS = {
     "service_charge_percent" => 0, "service_charge_order_types" => [ "dine_in" ], "cash_rounding" => 0,
     "staff_meal_requires_approval" => true, "discount_requires_reason" => true, "kitchen_ticket_print" => true,
-    "default_order_type" => "walk_in", "receipt" => { "header" => "", "footer" => "Thank you", "show_logo" => true, "language" => "en", "paper" => "80" }
+    "default_order_type" => "dine_in", "receipt" => { "header" => "", "footer" => "Thank you", "show_logo" => true, "language" => "en", "paper" => "80" }
   }.freeze
 
   # The settings table (SPEC store) wins; the legacy jsonb and defaults are the fallback.

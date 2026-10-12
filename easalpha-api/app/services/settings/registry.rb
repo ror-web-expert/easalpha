@@ -109,7 +109,7 @@ module Settings
       [ "staff_meal_requires_approval", "point_of_sale", "Order Behavior", "boolean", true, "A staff meal needs a manager PIN" ],
       [ "discount_requires_reason", "point_of_sale", "Order Behavior", "boolean", true, "A discount needs a reason" ],
       [ "kitchen_ticket_print", "point_of_sale", "KDS Alerts", "boolean", true, "Print kitchen tickets as well as showing the KDS" ],
-      [ "default_order_type", "point_of_sale", "Order Behavior", "string", "walk_in", "Order type the POS opens on" ],
+      [ "default_order_type", "point_of_sale", "Order Behavior", "string", "dine_in", "Order type the POS opens on (Dine-in unless you choose another)" ],
       [ "big_void_alert_minor", "security_cash", "Cashier PIN", "integer", 500_000, "WhatsApp the owner when a void is above this amount, in paisa" ],
       [ "cash_short_alert_minor", "security_cash", "Cashier Drawer", "integer", 100_000, "WhatsApp the owner when a till is short by more than this, in paisa" ]
     ].freeze

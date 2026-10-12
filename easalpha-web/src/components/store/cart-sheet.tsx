@@ -11,6 +11,7 @@ import { useStorefrontCart } from "@/store/storefront-cart";
 import {
   canDeliver, checkoutProblems, count, deliveryEnabled, deliveryLine, isFinalStage, stageLabel, subtotal, trackingSteps, type DeliverySettings,
 } from "./cart-helpers";
+import { themeInk } from "./storefront-helpers";
 
 // The guest's cart on the public storefront: a right-hand sheet with the lines, the checkout form and, once an order is
 // placed, a live tracking view polled every 10 s until the order is done, rejected or cancelled. The sheet renders in a
@@ -33,13 +34,14 @@ export function ThemeButton({ theme, onTheme, className, style, ...props }: Them
 export function QtyStepper({ quantity, onIncrement, onDecrement, theme, size = "md", label }: { quantity: number; onIncrement: () => void; onDecrement: () => void; theme: string; size?: "sm" | "md"; label?: string }) {
   const h = size === "sm" ? "h-8" : "h-9";
   const w = size === "sm" ? "w-8" : "w-9";
+  const ink = themeInk(theme); // a light brand colour would vanish as icon colour on white
   return (
     <div className={cn("inline-flex items-center rounded-full border-2 bg-card", h)} style={{ borderColor: theme }} role="group" aria-label={label ? `${label} quantity` : "Quantity"}>
-      <button type="button" onClick={onDecrement} aria-label={quantity === 1 ? "Remove" : "Decrease quantity"} className={cn("grid place-items-center rounded-full hover:bg-fg/8", h, w)} style={{ color: theme }}>
+      <button type="button" onClick={onDecrement} aria-label={quantity === 1 ? "Remove" : "Decrease quantity"} className={cn("grid place-items-center rounded-full hover:bg-fg/8", h, w)} style={{ color: ink }}>
         {quantity === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
       </button>
       <span className="min-w-6 text-center text-sm font-semibold tabular" aria-live="polite">{quantity}</span>
-      <button type="button" onClick={onIncrement} aria-label="Increase quantity" className={cn("grid place-items-center rounded-full hover:bg-fg/8", h, w)} style={{ color: theme }}>
+      <button type="button" onClick={onIncrement} aria-label="Increase quantity" className={cn("grid place-items-center rounded-full hover:bg-fg/8", h, w)} style={{ color: ink }}>
         <Plus className="h-4 w-4" />
       </button>
     </div>
@@ -55,13 +57,13 @@ export function CartBar({ currency, theme, onTheme, onOpen }: { currency: string
   const n = count(lines);
   if (!n && !lastOrder) return null;
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 shadow-[0_-8px_30px_-12px_rgb(0_0_0/0.25)] backdrop-blur" style={themeVars({ theme, onTheme })}>
-      <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3">
+    <div className="fixed inset-x-0 bottom-0 z-40 sm:bottom-5 sm:px-4" style={themeVars({ theme, onTheme })}>
+      <div className="mx-auto flex max-w-2xl items-center gap-3 border-t bg-card/95 px-4 py-3 shadow-[0_-8px_30px_-12px_rgb(0_0_0/0.25)] backdrop-blur sm:rounded-2xl sm:border sm:px-5 sm:shadow-[0_24px_60px_-24px_rgb(0_0_0/0.45)]">
         {n ? (
           <>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold">{n} item{n === 1 ? "" : "s"} · {formatMoney(subtotal(lines), currency)}</div>
-              <div className="text-xs text-fg-secondary">Delivery charge is added at checkout</div>
+              <div className="truncate text-xs text-fg-secondary">Delivery charge added at checkout</div>
             </div>
             <ThemeButton theme={theme} onTheme={onTheme} size="lg" onClick={() => onOpen("cart")}><ShoppingBag className="h-5 w-5" /> View cart</ThemeButton>
           </>

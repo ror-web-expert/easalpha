@@ -53,7 +53,8 @@ export interface Cart {
   tax_rate_id?: string | null;
 }
 
-const fresh = (orderType: OrderType = "walk_in"): Cart => ({
+// A new order starts as Dine-in unless the business chose another type (Settings, Point of Sale, Order Behavior).
+const fresh = (orderType: OrderType = "dine_in"): Cart => ({
   id: uuid(), saved: false, local_only: false, status: "draft", order_type: orderType, lines: [], customer: null, table_id: null, table_code: null,
   guest_name: "", covers: null, notes: "", is_staff_meal: false, staff_meal_reason: "", label: null, client_created_at: new Date().toISOString(),
 });
@@ -74,7 +75,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       cart: fresh(),
-      defaultType: "walk_in",
+      defaultType: "dine_in",
       reset: (orderType) => set({ cart: fresh(orderType ?? get().defaultType) }),
       load: (cart) => set({ cart }),
       patch: (p) => set({ cart: { ...get().cart, ...p } }),

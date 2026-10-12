@@ -1,19 +1,20 @@
 "use client";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { themeInk } from "./storefront-helpers";
 
 // Every menu row shows a picture: the product's own image, or this cloche mark in the storefront's theme colour on a soft
 // tint when there is none. DishImage falls back to the placeholder on a load error so a broken-image icon never appears.
 
-/** A plate under a cloche, drawn in `color`. Fills its 56x56 (or any square) box. */
+/** A plate under a cloche, drawn in `color` (or near-black when that is too light to see). Scales with its box (56x56 by default). */
 export function DishPlaceholder({ color = "#10294d", className }: { color?: string; className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={cn("grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-lg", className)}
-      style={{ backgroundColor: `${color}1a`, color }}
+      style={{ backgroundColor: `${color}1a`, color: themeInk(color) }}
     >
-      <svg viewBox="0 0 48 48" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <svg viewBox="0 0 48 48" className="h-[58%] max-h-24 w-[58%] max-w-24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         {/* cloche */}
         <path d="M8 30a16 16 0 0 1 32 0" />
         <path d="M24 14v-3" />

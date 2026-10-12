@@ -157,3 +157,78 @@ describe("StorefrontView ordering", () => {
     expect(within(progress).getAllByRole("listitem")).toHaveLength(5);
   });
 });
+
+describe("StorefrontView branded site", () => {
+  const bigMenu = (): Storefront => {
+    const base = storefront({ social: { facebook: "https://facebook.com/democafe", instagram: "demo.cafe" }, documents: { terms: "Orders are final once the kitchen starts.", privacy: null, refund: null } });
+    return {
+      ...base,
+      categories: [{ id: "c1", name: "Mains", subtitle: null, menu_id: null }, { id: "c2", name: "Drinks", subtitle: "Cold and hot", menu_id: null }],
+      products: [
+        ...base.products,
+        ...["Mint Margarita", "Chai", "Lassi", "Cold Coffee"].map((n, i) => ({ id: `d${i}`, name: n, description: null, category_id: "c2", price_minor: 30000 + i * 1000, image_key: null, variants: [] })),
+        ...["Seekh Kabab", "Biryani"].map((n, i) => ({ id: `m${i}`, name: n, description: i ? "Sindhi style, with raita" : null, category_id: "c1", price_minor: 55000, image_key: null, variants: [] })),
+      ],
+    };
+  };
+
+  it("shows the brand card, delivery facts, category tabs and profile links", () => {
+    renderStore(bigMenu());
+    expect(screen.getByRole("heading", { level: 1, name: "Demo Cafe" })).toBeInTheDocument();
+    expect(screen.getByText("Open for orders")).toBeInTheDocument();
+    expect(screen.getByText("About 45 min")).toBeInTheDocument();
+    expect(screen.getByText("Rs 500")).toBeInTheDocument(); // minimum order fact
+    expect(screen.getByRole("link", { name: /Order online/ })).toHaveAttribute("href", "#menu");
+    const tabs = screen.getByRole("navigation", { name: "Menu categories" });
+    expect(within(tabs).getAllByRole("button").map((b) => b.textContent)).toEqual(["Mains4", "Drinks4"]);
+    expect(screen.getByText("Cold and hot")).toBeInTheDocument();
+    // Once in Visit us and once in the footer, both to the profile built from the bare handle.
+    expect(screen.getAllByRole("link", { name: "Instagram" }).map((a) => a.getAttribute("href"))).toEqual(["https://instagram.com/demo.cafe", "https://instagram.com/demo.cafe"]);
+    expect(screen.getAllByRole("link", { name: /Facebook/ })[0]).toHaveAttribute("href", "https://facebook.com/democafe");
+    expect(screen.getByRole("link", { name: "Get directions" })).toHaveAttribute("href", "https://www.google.com/maps/search/?api=1&query=1%20Mall%20Road");
+  });
+
+  it("filters the menu by search and offers to clear an empty result", () => {
+    renderStore(bigMenu());
+    const search = screen.getByRole("searchbox", { name: "Search the menu" });
+    fireEvent.change(search, { target: { value: "raita" } });
+    expect(screen.getByText("Biryani")).toBeInTheDocument();
+    expect(screen.queryByText("Chai")).toBeNull();
+    expect(screen.queryByText("Chicken Karahi")).toBeNull();
+    fireEvent.change(search, { target: { value: "sushi" } });
+    expect(screen.getByText(/Nothing on the menu matches/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show the whole menu" }));
+    expect(search).toHaveValue("");
+    expect(screen.getByText("Chai")).toBeInTheDocument();
+    expect(screen.getByText("Chicken Karahi")).toBeInTheDocument();
+  });
+
+  it("opens a policy from the footer in a dialog", () => {
+    renderStore(bigMenu());
+    fireEvent.click(screen.getByRole("button", { name: "Terms of service" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Orders are final once the kitchen starts.")).toBeInTheDocument();
+  });
+
+  it("keeps the site light while it is open and gives the theme back after", () => {
+    document.documentElement.setAttribute("data-theme", "dark");
+    const view = renderStore();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    view.unmount();
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    document.documentElement.removeAttribute("data-theme");
+  });
+
+  it("says ordering is off in the brand card and points the main button at the menu", () => {
+    renderStore(storefront({ availability: { online_ordering: false, closed_message: "Back at 6 pm" } }));
+    expect(screen.getByText("Not taking orders now")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /See the menu/ })).toHaveAttribute("href", "#menu");
+    expect(screen.queryByRole("link", { name: /Order now/ })).toBeNull();
+  });
+
+  it("draws the brand backdrop and the first letter when there is no cover or logo", () => {
+    const { container } = renderStore(storefront({ identity: { name: "Zaiqa House", theme_color: "#b91c1c" } }));
+    expect(screen.getByRole("img", { name: "Zaiqa House logo" })).toHaveTextContent("Z");
+    expect(container.querySelector("section[aria-label='Zaiqa House'] img")).toBeNull();
+  });
+});
