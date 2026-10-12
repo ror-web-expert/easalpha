@@ -127,6 +127,61 @@ export interface SignupInput {
   phone: string;
   password: string;
   agree: boolean;
+  /** ISO 3166 code from COUNTRIES; sets the dialling code, currency and time zone of the new business. */
+  country: string;
+}
+
+export interface Country { code: string; name: string; dial: string; currency: string; timeZone: string }
+
+/** Where a restaurant can sign up from. The list sets sensible defaults only; everything is editable in Settings. */
+export const COUNTRIES: Country[] = [
+  { code: "PK", name: "Pakistan", dial: "+92", currency: "PKR", timeZone: "Asia/Karachi" },
+  { code: "AE", name: "United Arab Emirates", dial: "+971", currency: "AED", timeZone: "Asia/Dubai" },
+  { code: "SA", name: "Saudi Arabia", dial: "+966", currency: "SAR", timeZone: "Asia/Riyadh" },
+  { code: "QA", name: "Qatar", dial: "+974", currency: "QAR", timeZone: "Asia/Qatar" },
+  { code: "OM", name: "Oman", dial: "+968", currency: "OMR", timeZone: "Asia/Muscat" },
+  { code: "KW", name: "Kuwait", dial: "+965", currency: "KWD", timeZone: "Asia/Kuwait" },
+  { code: "BH", name: "Bahrain", dial: "+973", currency: "BHD", timeZone: "Asia/Bahrain" },
+  { code: "GB", name: "United Kingdom", dial: "+44", currency: "GBP", timeZone: "Europe/London" },
+  { code: "IE", name: "Ireland", dial: "+353", currency: "EUR", timeZone: "Europe/Dublin" },
+  { code: "US", name: "United States", dial: "+1", currency: "USD", timeZone: "America/New_York" },
+  { code: "CA", name: "Canada", dial: "+1", currency: "CAD", timeZone: "America/Toronto" },
+  { code: "AU", name: "Australia", dial: "+61", currency: "AUD", timeZone: "Australia/Sydney" },
+  { code: "NZ", name: "New Zealand", dial: "+64", currency: "NZD", timeZone: "Pacific/Auckland" },
+  { code: "DE", name: "Germany", dial: "+49", currency: "EUR", timeZone: "Europe/Berlin" },
+  { code: "FR", name: "France", dial: "+33", currency: "EUR", timeZone: "Europe/Paris" },
+  { code: "NL", name: "Netherlands", dial: "+31", currency: "EUR", timeZone: "Europe/Amsterdam" },
+  { code: "ES", name: "Spain", dial: "+34", currency: "EUR", timeZone: "Europe/Madrid" },
+  { code: "IT", name: "Italy", dial: "+39", currency: "EUR", timeZone: "Europe/Rome" },
+  { code: "TR", name: "Turkey", dial: "+90", currency: "TRY", timeZone: "Europe/Istanbul" },
+  { code: "EG", name: "Egypt", dial: "+20", currency: "EGP", timeZone: "Africa/Cairo" },
+  { code: "NG", name: "Nigeria", dial: "+234", currency: "NGN", timeZone: "Africa/Lagos" },
+  { code: "KE", name: "Kenya", dial: "+254", currency: "KES", timeZone: "Africa/Nairobi" },
+  { code: "ZA", name: "South Africa", dial: "+27", currency: "ZAR", timeZone: "Africa/Johannesburg" },
+  { code: "IN", name: "India", dial: "+91", currency: "INR", timeZone: "Asia/Kolkata" },
+  { code: "BD", name: "Bangladesh", dial: "+880", currency: "BDT", timeZone: "Asia/Dhaka" },
+  { code: "LK", name: "Sri Lanka", dial: "+94", currency: "LKR", timeZone: "Asia/Colombo" },
+  { code: "NP", name: "Nepal", dial: "+977", currency: "NPR", timeZone: "Asia/Kathmandu" },
+  { code: "MY", name: "Malaysia", dial: "+60", currency: "MYR", timeZone: "Asia/Kuala_Lumpur" },
+  { code: "SG", name: "Singapore", dial: "+65", currency: "SGD", timeZone: "Asia/Singapore" },
+  { code: "ID", name: "Indonesia", dial: "+62", currency: "IDR", timeZone: "Asia/Jakarta" },
+  { code: "PH", name: "Philippines", dial: "+63", currency: "PHP", timeZone: "Asia/Manila" },
+  { code: "TH", name: "Thailand", dial: "+66", currency: "THB", timeZone: "Asia/Bangkok" },
+  { code: "JP", name: "Japan", dial: "+81", currency: "JPY", timeZone: "Asia/Tokyo" },
+  { code: "BR", name: "Brazil", dial: "+55", currency: "BRL", timeZone: "America/Sao_Paulo" },
+  { code: "MX", name: "Mexico", dial: "+52", currency: "MXN", timeZone: "America/Mexico_City" },
+];
+
+export const DEFAULT_COUNTRY = "PK";
+
+export function countryByCode(code: string | null | undefined): Country {
+  return COUNTRIES.find((c) => c.code === (code ?? "").toUpperCase()) ?? COUNTRIES[0];
+}
+
+/** The country a browser locale such as "en-GB" or "ar-AE" points at, when it is one we list. */
+export function detectCountry(locale: string | null | undefined): string {
+  const region = (locale ?? "").split(/[-_]/)[1]?.toUpperCase();
+  return region && COUNTRIES.some((c) => c.code === region) ? region : DEFAULT_COUNTRY;
 }
 
 export type SignupErrors = Partial<Record<keyof SignupInput, string>>;
@@ -140,21 +195,26 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Normalises a Pakistani phone number to +92XXXXXXXXXX.
- * Accepts "0300 1234567", "0300-1234567", "92 300 1234567", "+92 300 1234567" and "00923001234567".
- * Returns the trimmed input unchanged when it does not look Pakistani so validation can reject it.
+ * Normalises a phone number to international form, +<country code><number>, for the given dialling code.
+ * Accepts "0300 1234567" (local, leading zero dropped), "92 300 1234567", "+92 (300) 1234567" and "00923001234567".
+ * Returns the stripped input when it does not fit, so validation can reject it.
  */
-export function normalizePhone(raw: string): string {
+export function normalizePhone(raw: string, dial = "+92"): string {
   let s = raw.replace(/[\s\-()]/g, "");
   if (s.startsWith("00")) s = `+${s.slice(2)}`;
-  if (/^0\d{10}$/.test(s)) return `+92${s.slice(1)}`;
-  if (/^92\d{10}$/.test(s)) return `+${s}`;
+  if (/^0\d{6,12}$/.test(s)) return `${dial}${s.slice(1)}`;
+  if (/^\d{8,15}$/.test(s) && s.startsWith(dial.slice(1))) return `+${s}`;
   return s;
+}
+
+/** An international mobile number: a plus sign, then 8 to 15 digits (E.164). */
+export function isValidPhone(raw: string, dial = "+92"): boolean {
+  return /^\+[1-9]\d{7,14}$/.test(normalizePhone(raw, dial));
 }
 
 /** A Pakistani number in international format: +92 followed by ten digits. */
 export function isValidPakistaniPhone(raw: string): boolean {
-  return /^\+92\d{10}$/.test(normalizePhone(raw));
+  return /^\+92\d{10}$/.test(normalizePhone(raw, "+92"));
 }
 
 export type PasswordStrength = "too short" | "weak" | "good" | "strong";
@@ -176,7 +236,8 @@ export function validateSignup(input: SignupInput): SignupErrors {
   if (input.name.trim().length < 2) errors.name = "Enter your name.";
   if (input.businessName.trim().length < 2) errors.businessName = "Enter your restaurant's name.";
   if (!isValidEmail(input.email)) errors.email = "Enter a valid email address.";
-  if (!isValidPakistaniPhone(input.phone)) errors.phone = "Enter a Pakistani mobile number such as +92 300 1234567.";
+  const dial = countryByCode(input.country).dial;
+  if (!isValidPhone(input.phone, dial)) errors.phone = `Enter a mobile number with its country code, such as ${dial} 300 1234567.`;
   if (input.password.length < PASSWORD_MIN) errors.password = `Use at least ${PASSWORD_MIN} characters.`;
   if (!input.agree) errors.agree = "Please accept the terms to continue.";
   return errors;
@@ -188,12 +249,16 @@ export function isSignupValid(input: SignupInput): boolean {
 
 /** The body for POST /auth/signup. */
 export function signupPayload(input: SignupInput) {
+  const c = countryByCode(input.country);
   return {
     name: input.name.trim(),
     business_name: input.businessName.trim(),
     email: input.email.trim().toLowerCase(),
     password: input.password,
-    phone: normalizePhone(input.phone),
+    phone: normalizePhone(input.phone, c.dial),
+    country: c.code,
+    currency: c.currency,
+    time_zone: c.timeZone,
   };
 }
 
@@ -276,7 +341,7 @@ export const UI = {
   "nav.contact": { en: "Contact", ur: "رابطہ" },
   "nav.download": { en: "Download", ur: "ڈاؤن لوڈ" },
   "sec.tour": { en: "Everything a restaurant runs on, in one account", ur: "ریسٹورنٹ کی ہر ضرورت، ایک اکاؤنٹ میں" },
-  "sec.pk": { en: "The details that only matter here, done right", ur: "پاکستان کی ضروریات، درست طریقے سے" },
+  "sec.pk": { en: "The local details, done right", ur: "مقامی ضروریات، درست طریقے سے" },
   "sec.surfaces": { en: "Every screen your staff touch", ur: "آپ کے عملے کی ہر اسکرین" },
   "sec.pricing": { en: "Simple monthly plans in rupees", ur: "روپوں میں سادہ ماہانہ پلان" },
   "sec.faq": { en: "Before you start", ur: "شروع کرنے سے پہلے" },

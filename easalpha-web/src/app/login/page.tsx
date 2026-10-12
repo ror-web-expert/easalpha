@@ -62,9 +62,9 @@ export default function LoginPage() {
         </Link>
         <div className="relative mt-auto max-w-md">
           <h2 className="text-4xl leading-[44px] text-white">Run every counter, kitchen and branch from one place.</h2>
-          <p className="mt-4 text-base leading-6 tracking-[0.5px] text-white/75">Orders, stock, suppliers, staff and reports for Pakistani restaurants. Tills keep selling when the internet drops.</p>
+          <p className="mt-4 text-base leading-6 tracking-[0.5px] text-white/75">Orders, stock, suppliers, staff and reports for restaurants anywhere. Tills keep selling when the internet drops.</p>
           <div className="mt-10 grid grid-cols-3 gap-3">
-            {[["Offline", "till sales sync later"], ["FBR", "tax invoices"], ["Urdu", "receipts and screens"]].map(([a, b]) => (
+            {[["Offline", "till sales sync later"], ["Any currency", "and local taxes"], ["2 languages", "on receipts and screens"]].map(([a, b]) => (
               <div key={a} className="rounded-xl bg-white/[0.08] p-4">
                 <div className="text-base font-medium">{a}</div>
                 <div className="mt-0.5 text-xs tracking-[0.4px] text-white/70">{b}</div>

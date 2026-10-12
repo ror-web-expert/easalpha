@@ -21,7 +21,7 @@ export default function AppsPage() {
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-fg font-bold">S</span>
           <span className="text-xl font-semibold text-fg">EasAlpha</span>
         </div>
-        <p className="mt-2 text-fg-secondary">Restaurant POS for Pakistan. Pick the screen for this device.</p>
+        <p className="mt-2 text-fg-secondary">Restaurant POS. Pick the screen for this device.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {links.map((l) => (

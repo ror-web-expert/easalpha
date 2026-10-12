@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLANS, TRIAL_DAYS, displayPriceMinor, formatMoney, isValidEmail, isValidPakistaniPhone, mailtoLink, monthlyMinor, normalizePhone, passwordStrength, signupPayload, toggleCurrency, validateSignup, whatsappLink, yearlyMinor, yearlyPerMonthMinor, yearlySavingMinor, type SignupInput, UI, t, toggleLang, isLang, telLink, contactFromPlatform, displayPhone, CONTACT } from "./site-helpers";
+import { COUNTRIES, countryByCode, detectCountry, isValidPhone, PLANS, TRIAL_DAYS, displayPriceMinor, formatMoney, isValidEmail, isValidPakistaniPhone, mailtoLink, monthlyMinor, normalizePhone, passwordStrength, signupPayload, toggleCurrency, validateSignup, whatsappLink, yearlyMinor, yearlyPerMonthMinor, yearlySavingMinor, type SignupInput, UI, t, toggleLang, isLang, telLink, contactFromPlatform, displayPhone, CONTACT } from "./site-helpers";
 
 const starter = PLANS[0];
 const pro = PLANS[1];
@@ -92,6 +92,24 @@ describe("phone", () => {
     expect(isValidPakistaniPhone("")).toBe(false);
     expect(isValidPakistaniPhone("+92300123456789")).toBe(false);
   });
+  it("normalises and accepts numbers from any country by its dialling code", () => {
+    expect(normalizePhone("07700 900123", "+44")).toBe("+447700900123");
+    expect(normalizePhone("44 7700 900123", "+44")).toBe("+447700900123");
+    expect(normalizePhone("050 123 4567", "+971")).toBe("+971501234567");
+    expect(isValidPhone("+1 (415) 555-0132", "+1")).toBe(true);
+    expect(isValidPhone("0501234567", "+971")).toBe(true);
+    expect(isValidPhone("12345", "+44")).toBe(false);
+    expect(isValidPhone("", "+44")).toBe(false);
+  });
+  it("knows the countries' dialling codes, currencies and time zones", () => {
+    expect(COUNTRIES[0].code).toBe("PK");
+    expect(countryByCode("ae")).toMatchObject({ dial: "+971", currency: "AED", timeZone: "Asia/Dubai" });
+    expect(countryByCode("zz").code).toBe("PK");
+    expect(detectCountry("en-GB")).toBe("GB");
+    expect(detectCountry("ar_AE")).toBe("AE");
+    expect(detectCountry("en")).toBe("PK");
+    expect(detectCountry("xx-QQ")).toBe("PK");
+  });
 });
 
 describe("password", () => {
@@ -104,17 +122,17 @@ describe("password", () => {
 });
 
 describe("validateSignup", () => {
-  const good: SignupInput = { name: "Ali Raza", businessName: "Karachi Grill", email: "ali@karachigrill.pk", phone: "0300 1234567", password: "spicy-biryani-1", agree: true };
+  const good: SignupInput = { name: "Ali Raza", businessName: "Karachi Grill", email: "ali@karachigrill.pk", phone: "0300 1234567", password: "spicy-biryani-1", agree: true, country: "PK" };
   it("passes a complete form", () => {
     expect(validateSignup(good)).toEqual({});
   });
   it("reports every missing field", () => {
-    const errors = validateSignup({ name: "", businessName: "K", email: "nope", phone: "123", password: "1234567", agree: false });
+    const errors = validateSignup({ name: "", businessName: "K", email: "nope", phone: "123", password: "1234567", agree: false, country: "PK" });
     expect(Object.keys(errors).sort()).toEqual(["agree", "businessName", "email", "name", "password", "phone"]);
   });
   it("builds the API payload with a normalised phone and lower-case email", () => {
     expect(signupPayload({ ...good, email: " Ali@KarachiGrill.pk " })).toEqual({
-      name: "Ali Raza", business_name: "Karachi Grill", email: "ali@karachigrill.pk", password: "spicy-biryani-1", phone: "+923001234567",
+      name: "Ali Raza", business_name: "Karachi Grill", email: "ali@karachigrill.pk", password: "spicy-biryani-1", phone: "+923001234567", country: "PK", currency: "PKR", time_zone: "Asia/Karachi",
     });
   });
 });

@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/lib/types";
 import { Button, Field, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { PASSWORD_MIN, PLANS, type SignupErrors, type SignupInput, passwordStrength, signupPayload, validateSignup } from "./site-helpers";
+import { COUNTRIES, DEFAULT_COUNTRY, PASSWORD_MIN, PLANS, type SignupErrors, type SignupInput, countryByCode, detectCountry, passwordStrength, signupPayload, validateSignup } from "./site-helpers";
 
 const STRENGTH: Record<ReturnType<typeof passwordStrength>, { width: string; color: string; text: string }> = {
   "too short": { width: "w-1/4", color: "bg-slate-300", text: `At least ${PASSWORD_MIN} characters` },
@@ -25,7 +25,19 @@ export function SignupForm() {
   const setSession = useAuthStore((s) => s.setSession);
   const session = useAuthStore((s) => s.session);
   const hydrated = useAuthStore((s) => s.hydrated);
-  const [form, setForm] = useState<SignupInput>({ name: "", businessName: "", email: "", phone: "+92", password: "", agree: false });
+  const [form, setForm] = useState<SignupInput>({ name: "", businessName: "", email: "", phone: "+92 ", password: "", agree: false, country: DEFAULT_COUNTRY });
+  // The browser's locale picks the country on first paint; the dialling code follows it until the owner types a number.
+  useEffect(() => {
+    const code = detectCountry(typeof navigator === "undefined" ? null : navigator.language);
+    if (code !== DEFAULT_COUNTRY) setForm((f) => ({ ...f, country: code, phone: `${countryByCode(code).dial} ` }));
+  }, []);
+  const changeCountry = (code: string) => {
+    setForm((f) => {
+      const prevDial = countryByCode(f.country).dial;
+      const untouched = f.phone.trim() === "" || f.phone.trim() === prevDial;
+      return { ...f, country: code, phone: untouched ? `${countryByCode(code).dial} ` : f.phone };
+    });
+  };
   const [touched, setTouched] = useState<Partial<Record<keyof SignupInput, boolean>>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -66,15 +78,22 @@ export function SignupForm() {
           <Input value={form.name} onChange={(e) => set("name", e.target.value)} onBlur={() => blur("name")} autoComplete="name" placeholder="Ali Raza" required className="h-12" aria-invalid={!!show("name")} />
         </Field>
         <Field label="Restaurant name" error={show("businessName")}>
-          <Input value={form.businessName} onChange={(e) => set("businessName", e.target.value)} onBlur={() => blur("businessName")} autoComplete="organization" placeholder="Karachi Grill" required className="h-12" aria-invalid={!!show("businessName")} />
+          <Input value={form.businessName} onChange={(e) => set("businessName", e.target.value)} onBlur={() => blur("businessName")} autoComplete="organization" placeholder="Downtown Grill" required className="h-12" aria-invalid={!!show("businessName")} />
         </Field>
       </div>
       <Field label="Email" error={show("email")} hint="You log in with this and we send your invoices here.">
-        <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} onBlur={() => blur("email")} autoComplete="email" placeholder="you@restaurant.pk" required className="h-12" aria-invalid={!!show("email")} />
+        <Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} onBlur={() => blur("email")} autoComplete="email" placeholder="you@restaurant.com" required className="h-12" aria-invalid={!!show("email")} />
       </Field>
-      <Field label="Mobile number" error={show("phone")} hint="Pakistani number in +92 format, e.g. +92 300 1234567. Used for WhatsApp login codes.">
-        <Input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} onBlur={() => blur("phone")} autoComplete="tel" inputMode="tel" placeholder="+92 300 1234567" required className="h-12" aria-invalid={!!show("phone")} />
-      </Field>
+      <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <Field label="Country" hint="Sets your currency and time zone; both can be changed later.">
+          <select value={form.country} onChange={(e) => changeCountry(e.target.value)} autoComplete="country" className="h-12 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-[#FF7A1A] focus:outline-none focus:ring-2 focus:ring-[#FF7A1A]/30">
+            {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.currency})</option>)}
+          </select>
+        </Field>
+        <Field label="Mobile number" error={show("phone")} hint="With country code. Used for WhatsApp login codes.">
+          <Input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} onBlur={() => blur("phone")} autoComplete="tel" inputMode="tel" placeholder={`${countryByCode(form.country).dial} 300 1234567`} required className="h-12" aria-invalid={!!show("phone")} />
+        </Field>
+      </div>
       <Field label="Password" error={show("password")}>
         <div className="relative">
           <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => set("password", e.target.value)} onBlur={() => blur("password")} autoComplete="new-password" minLength={PASSWORD_MIN} required className="h-12 pr-12" aria-invalid={!!show("password")} aria-describedby="password-strength" />

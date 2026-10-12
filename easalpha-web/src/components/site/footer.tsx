@@ -16,7 +16,7 @@ export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
         <div>
           <Image src="/brand/logo-white.svg" alt="EasAlpha" width={130} height={32} unoptimized className="h-8 w-auto" />
-          <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">The complete restaurant POS for Pakistan: till, kitchen, stock, money, people, riders and customers in one account.</p>
+          <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">The complete restaurant POS for any country: till, kitchen, stock, money, people, riders and customers in one account.</p>
         </div>
         {COLUMNS.map((c) => (
           <div key={c.title}>
@@ -39,7 +39,7 @@ export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-5 text-xs text-white/60 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>&copy; {new Date().getFullYear()} EasAlpha. All rights reserved.</span>
-          <span>Built in Pakistan for Pakistani restaurants. Prices in PKR, taxes per FBR and PRA rules.</span>
+          <span>Built in Pakistan, used worldwide. Your currency, your tax rules, your languages.</span>
         </div>
       </div>
     </footer>

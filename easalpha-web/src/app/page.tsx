@@ -10,8 +10,8 @@ import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "EasAlpha: restaurant POS built for Pakistan",
-  description: "One system for every counter, kitchen and branch. Offline till, kitchen display, inventory with recipe deduction, supplier and khata ledgers, payroll, riders, WhatsApp receipts, FBR and PRA tax and 27 reports. Start free for 90 days.",
+  title: "EasAlpha: restaurant POS for every country",
+  description: "One system for every counter, kitchen and branch. Offline till, kitchen display, inventory with recipe deduction, supplier and customer ledgers, payroll, riders, WhatsApp receipts, local tax rules and 27 reports, in any currency. Start free for 90 days.",
   alternates: { canonical: "/" },
 };
 
@@ -19,7 +19,7 @@ const STATS = [
   { to: 27, label: "reports", sub: "each with CSV and PDF" },
   { to: 58, label: "permissions", sub: "granted per user" },
   { to: 7, label: "screens for your team", sub: "till to rider app" },
-  { to: 1, label: "price in PKR", sub: "no per-order fees" },
+  { to: 1, label: "flat price", sub: "any currency, no per-order fees" },
 ];
 
 const QUOTES = [
@@ -29,13 +29,13 @@ const QUOTES = [
 ];
 
 const PAKISTAN = [
-  { icon: CloudOff, title: "Works through load-shedding", text: "The till and kitchen keep running when the internet drops. Orders queue locally and sync when it returns; nothing is lost silently." },
-  { icon: Receipt, title: "FBR and PRA tax invoices", text: "Tax per item, inclusive or exclusive, PCT codes, PRA e-IMS filing and FBR invoices from the same order. SRB and KPRA too." },
-  { icon: ShoppingBag, title: "Foodpanda orders", text: "Aggregator orders land in the same order list with their commission accounted for, so your reports show the real margin." },
+  { icon: CloudOff, title: "Works through power and internet cuts", text: "The till and kitchen keep running when the internet drops. Orders queue locally and sync when it returns; nothing is lost silently." },
+  { icon: Receipt, title: "Your country's tax rules", text: "Tax per item or per payment method, inclusive or exclusive, VAT, GST or sales tax. Pakistan gets FBR and PRA e-invoicing built in; other countries get the rates and invoice fields they need." },
+  { icon: ShoppingBag, title: "Aggregator orders", text: "Foodpanda, Uber Eats or Talabat orders land in the same order list with their commission accounted for, so your reports show the real margin." },
   { icon: MessageCircle, title: "WhatsApp from your own number", text: "Link your restaurant's WhatsApp by scanning a QR. Receipts, statements, OTP codes and campaigns go out from a number your customers know." },
-  { icon: BookOpen, title: "Khata credit done properly", text: "Each customer is a ledger account with a khata number, a credit limit, aging and a statement you can send with one tap." },
-  { icon: Languages, title: "Urdu on receipts and screens", text: "Urdu names for categories, products and modifiers print on receipts and show on the till and storefront." },
-  { icon: Banknote, title: "PKR, JazzCash, EasyPaisa", text: "Payment accounts for cash, cards, bank and mobile wallets. Every payment posts to double-entry accounts automatically." },
+  { icon: BookOpen, title: "Customer credit done properly", text: "Each customer is a ledger account with a credit (khata) number, a credit limit, aging and a statement you can send with one tap." },
+  { icon: Languages, title: "A second language on receipts", text: "Names for categories, products and modifiers in a second language, Urdu, Arabic or any other, print on receipts and show on the till and storefront." },
+  { icon: Banknote, title: "Any currency, local wallets", text: "PKR, USD, AED, GBP or any other currency. Payment accounts for cash, cards, bank and mobile wallets such as JazzCash and EasyPaisa. Every payment posts to double-entry accounts automatically." },
   { icon: Bell, title: "Push alerts for owners", text: "A push when a day closes, a till stays offline too long, stock runs low or an order is cancelled." },
 ];
 
@@ -54,7 +54,7 @@ const FAQ = [
   { q: "How long does setup take?", a: "Most single-branch restaurants are selling the same day. Import your menu from a spreadsheet, pair your till with a code, and follow the setup checklist. Recipes and stock can be added later without stopping sales." },
   { q: "Can I move from my current POS?", a: "You can import products, categories and customers from CSV. If you are on another system today, contact us and we will help map the export." },
   { q: "Is my data mine?", a: "Yes. Every report exports to CSV and PDF, customers and products download as spreadsheets, and we delete your account's data on request. See the privacy policy." },
-  { q: "What does the free trial include?", a: `Every feature of the plan you choose for ${TRIAL_DAYS} days, with no card required. At the end you pick a plan and pay by JazzCash, EasyPaisa, bank transfer or card.` },
+  { q: "What does the free trial include?", a: `Every feature of the plan you choose for ${TRIAL_DAYS} days, with no card required. At the end you pick a plan and pay by card or bank transfer, or JazzCash and EasyPaisa in Pakistan.` },
 ];
 
 function GlassCard({ icon: Icon, title, text, className }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string; className?: string }) {
@@ -162,11 +162,11 @@ export default function HomePage() {
         </div>
       </Section>
 
-      {/* Built for Pakistan */}
+      {/* Built for where you are */}
       <Section tone="navy" className="relative overflow-hidden">
         <div aria-hidden className="pointer-events-none absolute -right-40 top-0 h-[30rem] w-[30rem] rounded-full bg-[#FF7A1A]/15 blur-3xl" />
         <div className="relative">
-          <SectionHeading dark eyebrow="Built for Pakistan" title="The details that only matter here, done right" titleKey="sec.pk" text="Most POS products are built elsewhere and adapted. EasAlpha starts from how restaurants in Pakistan actually run." />
+          <SectionHeading dark eyebrow="Built for where you are" title="The local details, done right" titleKey="sec.pk" text="Currency, taxes, languages, wallets and delivery apps differ by country. EasAlpha runs in any of them, and was shaped by restaurants that run on patchy power and internet." />
           <div className="mt-16 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {PAKISTAN.map((f, i) => (
               <Reveal key={f.title} delay={(i % 4) * 70} className="rounded-[20px] border border-white/10 bg-white/[0.06] p-6 transition-[transform,background-color] duration-300 hover:-translate-y-1 hover:bg-white/[0.1]">
@@ -223,7 +223,7 @@ export default function HomePage() {
             <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>
             <div className={`mt-8 flex items-center gap-4 p-5 ${CARD}`}>
               <span className={TILE_ORANGE}><MessageCircle className="h-6 w-6" /></span>
-              <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, every day during restaurant hours.</div>
+              <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, every day during restaurant hours, wherever you are.</div>
             </div>
           </div>
           <FaqList items={FAQ} />

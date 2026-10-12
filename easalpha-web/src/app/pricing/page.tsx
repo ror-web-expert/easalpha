@@ -8,12 +8,12 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: `EasAlpha plans in PKR and USD: Starter Rs 2,500, Pro Rs 4,999 and Business Rs 8,999 a month. Yearly billing is ten months' price. Every plan starts with a ${TRIAL_DAYS}-day free trial.`,
+  description: `EasAlpha plans in USD or PKR: Starter, Pro and Business, billed monthly or yearly. Yearly billing is ten months' price. Every plan starts with a ${TRIAL_DAYS}-day free trial.`,
   alternates: { canonical: "/pricing" },
 };
 
 const FAQ = [
-  { q: "How do I pay?", a: "JazzCash, EasyPaisa, bank transfer or a debit or credit card. Pakistani customers are billed in rupees; customers outside Pakistan are billed in US dollars." },
+  { q: "How do I pay?", a: "Debit or credit card or bank transfer anywhere; JazzCash and EasyPaisa in Pakistan. Customers in Pakistan are billed in rupees, everyone else in US dollars." },
   { q: "What happens when the trial ends?", a: `Your trial lasts ${TRIAL_DAYS} days with every feature of the plan you picked. Near the end we remind you by email and WhatsApp. If you do not pick a plan, the account goes read-only: you can still log in and export everything, and nothing is deleted without your say.` },
   { q: "Is yearly billing really two months free?", a: "Yes. A year is charged at ten times the monthly price. The cards above show the yearly amount spread over twelve months so plans compare easily." },
   { q: "Can I change plans?", a: "Any time. Upgrades apply immediately and you pay the difference for the rest of the period. Downgrades apply at the next renewal." },
@@ -30,7 +30,7 @@ export default function PricingPage() {
         visual={<HeroStack chips={[{ icon: CalendarCheck, title: `${TRIAL_DAYS}-day free trial`, text: "every plan, every feature" }, { icon: Banknote, title: "Prices in rupees", text: "no per-order fees" }, { icon: BadgeCheck, title: "Cancel any time", text: "no contract, no card to start" }]} />} />
       <Section className="pt-16 sm:pt-20 lg:pt-24">
         <PricingTable />
-        <p className="mt-6 text-center text-sm text-slate-500">Prices exclude sales tax where it applies. USD prices are for customers billed outside Pakistan.</p>
+        <p className="mt-6 text-center text-sm text-slate-500">Prices exclude sales tax where it applies. Customers outside Pakistan are billed in US dollars.</p>
       </Section>
       <Section tone="tint">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr]">
