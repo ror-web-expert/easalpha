@@ -51,6 +51,7 @@ module Demo
 
     def self.seed!(email:, password:, business_name: "Demo Cafe", country: "PK", log: nil)
       user = User.find_by(email: email)
+      owner_user = user
       created = false
       if user
         membership = Membership.joins(:role).where(user_id: user.id, roles: { system_key: "owner" }).first or raise "#{email} exists but owns no business"
@@ -59,11 +60,12 @@ module Demo
         r = Auth::Signup.call(name: OWNER_NAME, business_name: business_name, email: email, password: password, country: country,
                               currency: country == "PK" ? "PKR" : "USD", time_zone: country == "PK" ? "Asia/Karachi" : "UTC")
         business = r.business
+        owner_user = r.user
         created = true
         log&.call("Created #{business_name} (#{business.slug}) for #{email}")
       end
       new(business, log: log).seed!
-      Result.new(business: business, owner: user || business.memberships.first.user, created: created)
+      Result.new(business: business, owner: owner_user, created: created)
     end
 
     def initialize(business, log: nil)
