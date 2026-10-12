@@ -50,6 +50,9 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # The secrets context cannot be read in a step's "if", so the host goes through env first.
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
       - uses: actions/checkout@v4
         with: { sparse-checkout: "easalpha-desktop/package.json\nscripts/downloads-manifest.mjs", sparse-checkout-cone-mode: false }
@@ -60,9 +63,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "easalpha-pos-downloads", path: downloads, retention-days: 30 }
       - name: Upload to the website server
-        if: ${{ secrets.DEPLOY_HOST != '' }}
+        if: ${{ env.DEPLOY_HOST != '' }}
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_DOWNLOADS_PATH: ${{ secrets.DEPLOY_DOWNLOADS_PATH }}
@@ -76,5 +78,5 @@ jobs:
           # Next.js lists public/ files when it starts, so a new installer name is 404 until the web container restarts.
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "cd '$(dirname "$DEPLOY_DOWNLOADS_PATH")' && docker compose restart web" || echo "web restart skipped (no compose project next to the downloads folder)"
           echo "Published $(node -p "require('./easalpha-desktop/package.json').version") to $DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH"
-      - if: ${{ secrets.DEPLOY_HOST == '' }}
+      - if: ${{ env.DEPLOY_HOST == '' }}
         run: echo "DEPLOY_HOST secret not set; installers are in the easalpha-pos-downloads artifact and the GitHub Release only."
