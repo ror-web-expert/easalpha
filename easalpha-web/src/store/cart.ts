@@ -82,7 +82,8 @@ export const useCartStore = create<CartState>()(
         const cart = get().cart;
         // Merge with an identical unsent line (same product/variant, no notes, same modifiers)
         const same = cart.lines.find((l) => !l.sent && !l.open_item && l.product_id && l.product_id === line.product_id && (l.variant_id ?? null) === (line.variant_id ?? null) && !l.notes && !line.notes && !l.price_override_minor && !line.price_override_minor && JSON.stringify(l.modifiers) === JSON.stringify(line.modifiers));
-        if (same) return set({ cart: { ...cart, lines: cart.lines.map((l) => (l === same ? { ...l, quantity: l.quantity + line.quantity } : l)) } });
+        // Weighed items carry decimals (0.45 kg): keep the sum to 3 places so two scans never read 0.9330000000000001.
+        if (same) return set({ cart: { ...cart, lines: cart.lines.map((l) => (l === same ? { ...l, quantity: Math.round((l.quantity + line.quantity) * 1000) / 1000 } : l)) } });
         set({ cart: { ...cart, lines: [...cart.lines, { ...line, key: uuid() }] } });
       },
       updateLine: (key, p) => set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? { ...l, ...p } : l)) } }),

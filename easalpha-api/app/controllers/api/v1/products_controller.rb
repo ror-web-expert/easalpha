@@ -96,10 +96,16 @@ module Api
         render json: { data: scope.limit(2000).map { |b| barcode_row(b) } }
       end
 
-      # GET /products/barcode_lookup?code=  what a scanned code adds: exact code first, then a weighing-scale label
+      # GET /products/barcode_lookup?code=  what a scanned code adds. A 12-digit UPC-A and the same code printed as
+      # EAN-13 with a leading 0 are one product. Weighing-scale labels are read by the till itself (src/lib/barcode.ts),
+      # which then looks up the label's item code here.
       def barcode_lookup
         code = params.require(:code).to_s.strip
-        b = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product, :variant).find_by(code: code)
+        same = [ code ]
+        same << "0#{code}" if code.match?(/\A\d{12}\z/)
+        same << code[1..] if code.match?(/\A0\d{12}\z/)
+        scope = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product, :variant)
+        b = scope.find_by(code: code) || scope.find_by(code: same)
         raise Api::Errors::NotFound.new("barcode.unknown", "No product has the code #{code}") unless b
         render json: barcode_row(b).merge(product: MenuSerializers.product(b.product, full: true))
       end

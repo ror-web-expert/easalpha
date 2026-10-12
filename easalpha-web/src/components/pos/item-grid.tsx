@@ -34,8 +34,16 @@ export function ItemTile({ name, price, imageKey, id, onClick, badge, currency, 
   );
 }
 
-export const ItemGrid = forwardRef<HTMLInputElement, { catalog: Catalog; orderType: string; onProduct: (p: Product) => void; onDeal: (d: Deal) => void; onOpenItem: () => void; canOpenItem: boolean; settings?: BusinessSettings }>(
-  function ItemGrid({ catalog, orderType, onProduct, onDeal, onOpenItem, canOpenItem, settings }, searchRef) {
+interface ItemGridProps {
+  catalog: Catalog; orderType: string; onProduct: (p: Product) => void; onDeal: (d: Deal) => void; onOpenItem: () => void; canOpenItem: boolean; settings?: BusinessSettings;
+  /** Enter in the search box: a barcode in the local catalog adds its item. Returns true when it did. */
+  onCode?: (code: string) => boolean;
+  /** Shown beside the search box (the camera Scan button). */
+  searchAction?: React.ReactNode;
+}
+
+export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
+  function ItemGrid({ catalog, orderType, onProduct, onDeal, onOpenItem, canOpenItem, settings, onCode, searchAction }, searchRef) {
     const [cat, setCat] = useState<string>("fav");
     const [q, setQ] = useState("");
     const currency = catalog.business.currency;
@@ -64,11 +72,22 @@ export const ItemGrid = forwardRef<HTMLInputElement, { catalog: Catalog; orderTy
           {canOpenItem ? <CatButton active={false} onClick={onOpenItem}><PlusSquare className="h-4 w-4" /> Open item</CatButton> : null}
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="relative bg-page p-2">
-            <Search className="pointer-events-none absolute left-6 top-1/2 h-5 w-5 -translate-y-1/2 text-fg-secondary" />
-            <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items (F2)" className="h-12 w-full rounded-full bg-high pl-12 pr-4 text-base transition placeholder:text-fg-secondary focus:outline-none focus:ring-2 focus:ring-primary" onKeyDown={(e) => { if (e.key === "Enter" && shown[0]) { onProduct(shown[0]); setQ(""); } }} />
+          <div className="flex items-center gap-2 bg-page p-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-fg-secondary" />
+              {/* data-scan-target: a scanner typing into this box is caught as a scan (components/pos/scanner.tsx). */}
+              <input ref={searchRef} data-scan-target value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items (F2)" className="h-12 w-full rounded-full bg-high pl-12 pr-4 text-base transition placeholder:text-fg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  if (q.trim() && onCode?.(q.trim())) { setQ(""); return; }
+                  if (shown[0]) { onProduct(shown[0]); setQ(""); }
+                }} />
+            </div>
+            {searchAction}
           </div>
-          <div className="grid flex-1 auto-rows-min gap-2.5 overflow-y-auto p-2.5" style={{ gridTemplateColumns: `repeat(${display.columns}, minmax(0, 1fr))` }}>
+          {/* Tiles per row from Display Settings, but never narrower than 120px: a portrait tablet gets fewer, bigger tiles
+              that a finger can hit, instead of squeezing the same count into slivers. */}
+          <div className="grid flex-1 auto-rows-min gap-2.5 overflow-y-auto p-2.5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(max(7.5rem, calc((100% - ${display.columns - 1} * 0.625rem) / ${display.columns})), 1fr))` }}>
             {shownDeals.map((d) => <ItemTile key={d.id} id={d.id} name={d.name} price={d.price_minor} imageKey={display.images ? d.image_key : null} currency={currency} showPrice={display.showPrices} onClick={() => onDeal(d)} badge={<Gift className="h-4 w-4" />} />)}
             {shown.map((p) => <ItemTile key={p.id} id={p.id} name={p.name} price={priceFor(p, orderType, null, branchId)} imageKey={display.images ? p.image_key : null} currency={currency} showPrice={display.showPrices} onClick={() => onProduct(p)} badge={p.variants?.length ? <span className="rounded bg-card/90 px-1 text-[10px] font-medium text-fg-secondary">{p.variants.length} sizes</span> : null} />)}
             {!shown.length && !showDeals ? <div className="col-span-full py-12 text-center text-fg-muted">{q ? "No items match" : cat === "fav" ? "Star items in the admin to show them here" : "No items in this category"}</div> : null}

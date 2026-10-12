@@ -6,7 +6,8 @@ import { useCartStore, type Cart } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore, usePosCan } from "@/store/device";
 import { ApiError, errorMessage } from "@/lib/api";
-import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt } from "@/lib/types";
+import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
+import type { BarcodeMatch } from "@/lib/barcode";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
 import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment } from "@/lib/pos-actions";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
@@ -18,6 +19,7 @@ import { PosShell } from "@/components/pos/shell";
 import { ItemGrid } from "@/components/pos/item-grid";
 import { QuickAddBar } from "@/components/pos/quick-add-bar";
 import { ModifierSheet } from "@/components/pos/modifier-sheet";
+import { useTillScanner } from "@/components/pos/scanner";
 import { OrderPanel, OrderTypeSwitch } from "@/components/pos/order-panel";
 import { PaymentDialog, type TaxChoiceInput } from "@/components/pos/payment-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
@@ -44,6 +46,8 @@ function SellScreen() {
   const [deal, setDeal] = useState<Deal | null>(null);
   /** Variant a Quick Add item named, pre-selected when its product still needs the modifier sheet. */
   const [quickVariant, setQuickVariant] = useState<string | null>(null);
+  // A scanned pack (6 cans) or a scale label's weight opens the options sheet on that quantity instead of 1.
+  const [quickQty, setQuickQty] = useState<number | null>(null);
   const [editing, setEditing] = useState<CartLine | null>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
@@ -99,16 +103,28 @@ function SellScreen() {
     const price = (p.prices ?? []).find((x) => !x.variant_id && x.order_type === cart.order_type && (x.branch_id === branchId || !x.branch_id))?.price_minor ?? p.base_price_minor;
     addLine({ product_id: p.id, variant_id: null, name: p.name, unit_price_minor: price, quantity: 1, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
   };
+  /** Adds a product (and size) straight to the cart; only a required modifier group opens the sheet first. */
+  const addPicked = (p: Product, variant: Variant | null, quantity = 1) => {
+    if (!catalog) return;
+    const needsChoice = (p.modifier_group_ids ?? []).some((id) => { const g = catalog.modifier_groups.find((x) => x.id === id); return !!g && (g.required || g.min_select > 0); });
+    if (needsChoice) { setEditing(null); setQuickVariant(variant?.id ?? null); setQuickQty(quantity !== 1 ? quantity : null); setProduct(p); return; }
+    const tax = taxFor(p, catalog);
+    addLine({ product_id: p.id, variant_id: variant?.id ?? null, name: variant ? `${p.name} (${variant.name})` : p.name, unit_price_minor: priceFor(p, cart.order_type, variant, catalog.branch?.id), quantity, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
+  };
   // SPEC "Quick Add Menu": one tap adds the pinned product/variant with quantity 1. Only a required modifier group opens the sheet.
   const quickAdd = (item: QuickAddItem) => {
     if (!catalog) return;
     const p = catalog.products.find((x) => x.id === item.product_id);
     if (!p || !p.active || p.archived_at) { toast.error("Not on the menu", `${item.name} is no longer available.`); return; }
-    const variant = item.variant_id ? p.variants?.find((v) => v.id === item.variant_id) ?? null : null;
-    const needsChoice = (p.modifier_group_ids ?? []).some((id) => { const g = catalog.modifier_groups.find((x) => x.id === id); return !!g && (g.required || g.min_select > 0); });
-    if (needsChoice) { setEditing(null); setQuickVariant(variant?.id ?? null); setProduct(p); return; }
-    const tax = taxFor(p, catalog);
-    addLine({ product_id: p.id, variant_id: variant?.id ?? null, name: variant ? `${p.name} (${variant.name})` : p.name, unit_price_minor: priceFor(p, cart.order_type, variant, catalog.branch?.id), quantity: 1, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
+    addPicked(p, item.variant_id ? p.variants?.find((v) => v.id === item.variant_id) ?? null : null);
+  };
+  /** A scanned barcode: its size and pack quantity (or a scale label's weight). A code for "any size" opens the sheet to pick one. */
+  const addScanned = (m: BarcodeMatch): boolean => {
+    const p = m.product;
+    if (!p.active || p.archived_at) { toast.error("Not on sale", `${p.name} is switched off on the menu.`); return false; }
+    if (!m.variant && p.variants?.length) { setEditing(null); setQuickVariant(null); setQuickQty(m.quantity !== 1 ? m.quantity : null); setProduct(p); return true; }
+    addPicked(p, m.variant, m.quantity);
+    return true;
   };
   const editLine = (l: CartLine) => {
     const p = l.product_id ? catalog?.products.find((x) => x.id === l.product_id) : null;
@@ -302,6 +318,8 @@ function SellScreen() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, newOrder]);
+  // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being taken.
+  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: payOpen || !!receipt || !!pinAsk, onMatch: addScanned });
 
   if (!catalog) {
     return (
@@ -315,7 +333,7 @@ function SellScreen() {
       <div className="grid h-full grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
         <div className="flex min-h-0 flex-col">
           <div className="border-b bg-card p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} allowed={allowedTypes} /></div>
-          <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} /></div>
+          <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} onCode={scanner.lookupTyped} searchAction={scanner.cameraButton} /></div>
         </div>
         <div className="flex min-h-0 flex-col border-l">
           <QuickAddBar items={catalog.quick_add_items} currency={currency} showPrices={display.showPrices} onPick={quickAdd} />
@@ -327,7 +345,7 @@ function SellScreen() {
           </div>
         </div>
       </div>
-      <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} initialVariantId={quickVariant} onClose={() => { setProduct(null); setDeal(null); setEditing(null); setQuickVariant(null); }} onAdd={onSheetAdd} />
+      <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} initialVariantId={quickVariant} initialQuantity={quickQty} onClose={() => { setProduct(null); setDeal(null); setEditing(null); setQuickVariant(null); setQuickQty(null); }} onAdd={onSheetAdd} />
       <CustomerDialog open={customerOpen} onClose={() => setCustomerOpen(false)} onPick={(c) => patch({ customer: c })} onRepeat={repeatOrder} />
       <TablePicker open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} current={cart.table_id} onPick={pickTable} onRefresh={refreshTables} />
       <OpenItemDialog open={openItem} onClose={() => setOpenItem(false)} onAdd={(name, price) => { const tax = taxFor(null, catalog); addLine({ name, unit_price_minor: price, quantity: 1, modifiers: [], open_item: { name, price_minor: price }, tax_rate: tax.rate, tax_inclusive: tax.inclusive }); }} />
@@ -340,6 +358,7 @@ function SellScreen() {
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />
+      {scanner.dialogs}
       {pinDialog}
     </PosShell>
   );

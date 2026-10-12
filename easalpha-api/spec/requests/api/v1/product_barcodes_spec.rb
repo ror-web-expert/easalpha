@@ -26,13 +26,16 @@ RSpec.describe "Product barcodes", type: :request do
     expect(json).to include(product_id: m[:burger].id, variant_name: "Double", quantity: "6.0", format: "code128")
     get "/api/v1/products/barcode_lookup", params: { code: "8961000000013" }, headers: headers
     expect(json[:format]).to eq("ean13")
+    api_put "/api/v1/products/#{m[:chai].id}", { barcodes: [ { code: "036000291452" } ] }, headers: headers # UPC-A
+    get "/api/v1/products/barcode_lookup", params: { code: "0036000291452" }, headers: headers # the same code scanned as EAN-13
+    expect(json[:product_id]).to eq(m[:chai].id)
     get "/api/v1/products/barcode_lookup", params: { code: "nope" }, headers: headers
     expect(response).to have_http_status(:not_found)
     expect(json[:error][:code]).to eq("barcode.unknown")
     get "/api/v1/products", params: { q: "8961000000020" }, headers: headers
     expect(json[:data].map { |p| p[:id] }).to eq([ m[:burger].id ])
     get "/api/v1/products/barcodes", headers: headers
-    expect(json[:data].size).to eq(3)
+    expect(json[:data].size).to eq(4) # three on the burger, the UPC-A on chai
 
     # Removing a size frees its code; the same request may not list a code twice or take another product's code.
     api_put "/api/v1/products/#{m[:chai].id}", { barcodes: [ { code: "8961000000013" } ] }, headers: headers

@@ -7,9 +7,9 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { Button, Field, Input, Sheet } from "@/components/ui";
 
-interface Props { product: Product | null; deal: Deal | null; catalog: Catalog; orderType: string; onClose: () => void; onAdd: (line: Omit<CartLine, "key">) => void; editing?: CartLine | null; /** Pre-select this variant (Quick Add items name one). */ initialVariantId?: string | null }
+interface Props { product: Product | null; deal: Deal | null; catalog: Catalog; orderType: string; onClose: () => void; onAdd: (line: Omit<CartLine, "key">) => void; editing?: CartLine | null; /** Pre-select this variant (Quick Add items name one). */ initialVariantId?: string | null; /** Start on this quantity (a scanned pack or a scale label's weight). */ initialQuantity?: number | null }
 
-export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAdd, editing, initialVariantId }: Props) {
+export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAdd, editing, initialVariantId, initialQuantity }: Props) {
   const open = !!product || !!deal;
   const [variant, setVariant] = useState<Variant | null>(null);
   const [qty, setQty] = useState(1);
@@ -20,12 +20,12 @@ export function ModifierSheet({ product, deal, catalog, orderType, onClose, onAd
     if (!open) return;
     const wanted = editing?.variant_id ?? initialVariantId;
     setVariant((wanted ? product?.variants?.find((v) => v.id === wanted) : null) ?? product?.variants?.[0] ?? null);
-    setQty(editing?.quantity ?? 1);
+    setQty(editing?.quantity ?? initialQuantity ?? 1);
     setNotes(editing?.notes ?? "");
     const p: Record<string, number> = {};
     editing?.modifiers.forEach((m) => { p[m.modifier_id] = m.quantity; });
     setPicked(p);
-  }, [open, product, editing, initialVariantId]);
+  }, [open, product, editing, initialVariantId, initialQuantity]);
   const currency = catalog.business.currency;
   const unit = product ? priceFor(product, orderType, variant, catalog.branch?.id) : deal?.price_minor ?? 0;
   const mods: CartModifier[] = groups.flatMap((g) => g.modifiers.filter((m) => m.active && picked[m.id]).map((m) => ({ modifier_id: m.id, name: m.name, price_minor: m.price_minor, quantity: picked[m.id] })));

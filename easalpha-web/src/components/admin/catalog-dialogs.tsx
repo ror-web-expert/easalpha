@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_URL, ApiError, api, errorMessage } from "@/lib/api";
-import type { Menu, MenuImportPreview, MenuImportResult, MenuImportSource, ProductCode, SettingKey } from "@/lib/types";
+import type { BarcodeRow, Menu, MenuImportPreview, MenuImportResult, MenuImportSource, ProductCode, SettingKey } from "@/lib/types";
 import { useAuthStore } from "@/store/auth";
 import { toast } from "@/store/toast";
 import { formatMoney } from "@/lib/money";
@@ -76,11 +76,18 @@ export function DisplaySettingsDialog({ open, onClose }: { open: boolean; onClos
 export function ProductCodesDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ["product_codes"], queryFn: () => api<{ data: ProductCode[] }>("/products/codes"), enabled: open, select: (r) => r.data });
+  // Barcodes are shown read-only here; they are edited on each product.
+  const barcodes = useQuery({ queryKey: ["product_barcodes"], queryFn: () => api<{ data: BarcodeRow[] }>("/products/barcodes"), enabled: open, select: (r) => r.data });
+  const barcodesOf = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const b of barcodes.data ?? []) map.set(b.product_id, [...(map.get(b.product_id) ?? []), b.code]);
+    return map;
+  }, [barcodes.data]);
   const [edits, setEdits] = useState<Record<string, { sku: string; pct_code: string }>>({});
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (!open) { setEdits({}); setQ(""); } }, [open]);
-  const rows = (list.data ?? []).filter((r) => !q || `${r.name} ${r.category} ${r.sku ?? ""} ${r.pct_code ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const rows = (list.data ?? []).filter((r) => !q || `${r.name} ${r.category} ${r.sku ?? ""} ${r.pct_code ?? ""} ${(barcodesOf.get(r.id) ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
   const valueOf = (r: ProductCode) => edits[r.id] ?? { sku: r.sku ?? "", pct_code: r.pct_code ?? "" };
   const changed = (list.data ?? []).filter((r) => { const e = edits[r.id]; return e && (e.sku !== (r.sku ?? "") || e.pct_code !== (r.pct_code ?? "")); });
   const save = async () => {
@@ -95,12 +102,12 @@ export function ProductCodesDialog({ open, onClose }: { open: boolean; onClose: 
     finally { setBusy(false); }
   };
   return (
-    <Dialog open={open} onClose={onClose} title="Product Codes" description="SKU for your own tracking and the PCT code the PRA e-IMS tax report needs." size="lg"
+    <Dialog open={open} onClose={onClose} title="Product Codes" description="SKU for your own tracking and the PCT code the PRA e-IMS tax report needs. Barcodes are edited on each product." size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={save} loading={busy} disabled={!changed.length}>Save {changed.length ? `(${changed.length})` : ""}</Button></>}>
-      <div className="mb-3"><SearchInput value={q} onChange={setQ} placeholder="Product, category, SKU or PCT code" /></div>
+      <div className="mb-3"><SearchInput value={q} onChange={setQ} placeholder="Product, category, SKU, PCT code or barcode" /></div>
       {list.isLoading ? <Loading /> : (
         <Table>
-          <THead><tr><TH>Product</TH><TH>Category</TH><TH>SKU</TH><TH>PCT code</TH></tr></THead>
+          <THead><tr><TH>Product</TH><TH>Category</TH><TH>SKU</TH><TH>PCT code</TH><TH>Barcodes</TH></tr></THead>
           <TBody>
             {rows.length ? rows.map((r) => {
               const v = valueOf(r);
@@ -110,9 +117,10 @@ export function ProductCodesDialog({ open, onClose }: { open: boolean; onClose: 
                   <TD className="text-fg-secondary">{r.category}</TD>
                   <TD className="w-40"><Input className="h-8 font-mono text-xs" value={v.sku} onChange={(e) => setEdits({ ...edits, [r.id]: { ...v, sku: e.target.value } })} /></TD>
                   <TD className="w-40"><Input className="h-8 font-mono text-xs" value={v.pct_code} onChange={(e) => setEdits({ ...edits, [r.id]: { ...v, pct_code: e.target.value } })} /></TD>
+                  <TD className="font-mono text-xs text-fg-secondary">{(barcodesOf.get(r.id) ?? []).map((c) => <div key={c}>{c}</div>)}</TD>
                 </TR>
               );
-            }) : <EmptyRow colSpan={4}>No products match.</EmptyRow>}
+            }) : <EmptyRow colSpan={5}>No products match.</EmptyRow>}
           </TBody>
         </Table>
       )}

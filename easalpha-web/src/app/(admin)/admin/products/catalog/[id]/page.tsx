@@ -1,11 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Package, Plus, Trash2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { ArrowLeft, Package, Plus, Sparkles, Trash2 } from "lucide-react";
+import { api, ApiError, errorMessage } from "@/lib/api";
 import type { Category, DiscountType, ModifierGroup, Product, Station, TaxRate } from "@/lib/types";
+import { FORMAT_LABELS, barcodeFormat, looksLikeBadEan } from "@/lib/barcode";
+import { loadSymbol, svgDataUrl, symbolSvg } from "@/components/admin/barcode-labels";
+import { toast } from "@/store/toast";
 import { formatMoney } from "@/lib/money";
 import { PageHeader } from "@/components/admin/page";
 import { useList, useRemove, useSave } from "@/components/admin/crud";
@@ -14,21 +17,70 @@ import { ConsumablesTab } from "@/components/admin/catalog-consumables";
 import { IngredientsTab } from "@/components/admin/catalog-ingredients";
 import { discountLabel, discountPayload, discountProblem, discountedPriceMinor } from "@/components/admin/catalog-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, ConfirmDialog, Field, Input, Loading, MoneyInput, Select, Tabs, Textarea } from "@/components/ui";
-import { titleCase } from "@/lib/utils";
+import { titleCase, uuid } from "@/lib/utils";
 
 const ORDER_TYPES = ["dine_in", "takeaway", "delivery", "walk_in"];
 type Tab = "basic" | "ingredients" | "inventory";
-interface VariantForm { id?: string; name: string; price_minor: number; sku: string }
+/** cid: a client id (the saved id, or a new one) so a barcode row can point at a size that is not saved yet. */
+interface VariantForm { id?: string; cid: string; name: string; price_minor: number; sku: string }
+/** size: a variant cid, "" for any size. quantity: pack size as typed. */
+interface BarcodeForm { key: string; code: string; size: string; quantity: string }
 interface PriceForm { variant_id: string; order_type: string; price_minor: number }
 interface Form {
   id?: string; name: string; name_ur: string; description: string; sku: string; image_key: string; category_id: string; base_price_minor: number; tax_rate_id: string; station_id: string;
   discount_value: string; discount_type: DiscountType; pct_code: string;
   is_favourite: boolean; show_online: boolean; active: boolean; sold_by_weight: boolean; weight_unit: string; variants: VariantForm[]; prices: PriceForm[]; modifier_group_ids: string[];
+  barcodes: BarcodeForm[];
 }
 const blank: Form = {
   name: "", name_ur: "", description: "", sku: "", image_key: "", category_id: "", base_price_minor: 0, tax_rate_id: "", station_id: "", discount_value: "", discount_type: "percent", pct_code: "",
-  is_favourite: false, show_online: true, active: true, sold_by_weight: false, weight_unit: "kg", variants: [], prices: [], modifier_group_ids: [],
+  is_favourite: false, show_online: true, active: true, sold_by_weight: false, weight_unit: "kg", variants: [], prices: [], modifier_group_ids: [], barcodes: [],
 };
+
+/** Row problems that block saving: a code listed twice, too long, or a pack quantity that is not above 0. Blank rows are dropped on save. */
+function barcodeProblems(rows: BarcodeForm[]): Record<string, string> {
+  const counts = new Map<string, number>();
+  rows.forEach((b) => { const c = b.code.trim(); if (c) counts.set(c, (counts.get(c) ?? 0) + 1); });
+  const out: Record<string, string> = {};
+  for (const b of rows) {
+    const c = b.code.trim();
+    if (!c) continue;
+    if ((counts.get(c) ?? 0) > 1) out[b.key] = "This code is listed twice.";
+    else if (c.length > 128) out[b.key] = "Too long: 128 characters at most.";
+    else if (!(Number(b.quantity) > 0)) out[b.key] = "Pack quantity must be more than 0.";
+  }
+  return out;
+}
+
+/** PUT barcodes: saved sizes by id, sizes added in this save by name (the API creates them first). */
+function barcodePayload(f: Form) {
+  return f.barcodes.filter((b) => b.code.trim()).map((b) => {
+    const v = f.variants.find((x) => x.cid === b.size && x.name.trim());
+    const size = !v ? {} : v.id ? { variant_id: v.id } : { variant_name: v.name.trim() };
+    return { code: b.code.trim(), ...size, quantity: Number(b.quantity) > 0 ? Number(b.quantity) : 1 };
+  });
+}
+
+/** A small picture of the code as it prints (jsbarcode / qrcode load on first use), with its format. */
+function CodePreview({ code }: { code: string }) {
+  const c = code.trim();
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    setSrc(null);
+    if (!c || c.length > 128) return;
+    let live = true;
+    const t = setTimeout(() => { loadSymbol(c).then((sym) => { if (live) setSrc(svgDataUrl(symbolSvg(sym))); }).catch(() => undefined); }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [c]);
+  if (!c) return <span className="text-xs text-fg-muted">Type or scan a code</span>;
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {src ? <img src={src} alt={`Barcode ${c}`} className="h-10 w-auto max-w-32 rounded-sm border" /> : <span className="h-10 w-20 rounded-sm border" aria-hidden />}
+      <Badge variant="outline">{FORMAT_LABELS[barcodeFormat(c)]}</Badge>
+    </div>
+  );
+}
 
 export default function ProductEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +94,8 @@ export default function ProductEditPage() {
   const [tab, setTab] = useState<Tab>("basic");
   const [form, setForm] = useState<Form>(blank);
   const [del, setDel] = useState(false);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
   useEffect(() => {
     const p = q.data;
     if (!p) return;
@@ -49,8 +103,9 @@ export default function ProductEditPage() {
       id: p.id, name: p.name, name_ur: p.name_ur ?? "", description: p.description ?? "", sku: p.sku ?? "", image_key: p.image_key ?? "", category_id: p.category_id, base_price_minor: p.base_price_minor,
       tax_rate_id: p.tax_rate_id ?? "", station_id: p.station_id ?? "", discount_value: p.discount_value && Number(p.discount_value) > 0 ? String(Number(p.discount_value)) : "", discount_type: p.discount_type ?? "percent", pct_code: p.pct_code ?? "",
       is_favourite: p.is_favourite, show_online: p.show_online, active: p.active, sold_by_weight: p.sold_by_weight,
-      weight_unit: p.weight_unit ?? "kg", variants: (p.variants ?? []).map((v) => ({ id: v.id, name: v.name, price_minor: v.price_minor, sku: v.sku ?? "" })),
+      weight_unit: p.weight_unit ?? "kg", variants: (p.variants ?? []).map((v) => ({ id: v.id, cid: v.id, name: v.name, price_minor: v.price_minor, sku: v.sku ?? "" })),
       prices: (p.prices ?? []).map((pr) => ({ variant_id: pr.variant_id ?? "", order_type: pr.order_type, price_minor: pr.price_minor })), modifier_group_ids: p.modifier_group_ids ?? [],
+      barcodes: (p.barcodes ?? []).map((b) => ({ key: b.id ?? uuid(), code: b.code, size: b.variant_id && (p.variants ?? []).some((v) => v.id === b.variant_id) ? b.variant_id : "", quantity: String(Number(b.quantity) > 0 ? Number(b.quantity) : 1) })),
     });
   }, [q.data]);
   useEffect(() => { if (isNew && !form.category_id && cats.data?.[0]) setForm((f) => ({ ...f, category_id: cats.data![0].id })); }, [cats.data, isNew, form.category_id]);
@@ -58,13 +113,30 @@ export default function ProductEditPage() {
   const remove = useRemove(["products"], (pid) => `/products/${pid}`, "Product archived");
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
   const discountError = discountProblem(form.discount_value, form.discount_type, form.base_price_minor);
-  const canSave = !!form.name && !!form.category_id && form.base_price_minor >= 0 && !discountError;
-  const submit = () => save.mutate({
-    ...form, image_key: form.image_key || null, sku: form.sku || null, pct_code: form.pct_code.trim() || null, tax_rate_id: form.tax_rate_id || null, station_id: form.station_id || null,
-    ...discountPayload(form.discount_value, form.discount_type),
-    variants: form.variants.map((v) => ({ ...v, sku: v.sku || null })),
-    prices: form.prices.filter((p) => p.price_minor > 0).map((p) => ({ ...p, variant_id: p.variant_id || null })),
-  });
+  const codeProblems = useMemo(() => barcodeProblems(form.barcodes), [form.barcodes]);
+  const canSave = !!form.name && !!form.category_id && form.base_price_minor >= 0 && !discountError && !Object.keys(codeProblems).length;
+  const submit = () => {
+    setBarcodeError(null);
+    save.mutate({
+      ...form, image_key: form.image_key || null, sku: form.sku || null, pct_code: form.pct_code.trim() || null, tax_rate_id: form.tax_rate_id || null, station_id: form.station_id || null,
+      ...discountPayload(form.discount_value, form.discount_type),
+      variants: form.variants.map((v) => ({ id: v.id, name: v.name, price_minor: v.price_minor, sku: v.sku || null })),
+      prices: form.prices.filter((p) => p.price_minor > 0).map((p) => ({ ...p, variant_id: p.variant_id || null })),
+      barcodes: barcodePayload(form),
+    }, { onError: (e) => { if (e instanceof ApiError && e.code.startsWith("barcode.")) setBarcodeError(e.message); } });
+  };
+  // Barcodes: every change clears the last save error about them.
+  const setBarcodes = (fn: (rows: BarcodeForm[]) => BarcodeForm[]) => { setBarcodeError(null); setForm((f) => ({ ...f, barcodes: fn(f.barcodes) })); };
+  const editBarcode = (key: string, patch: Partial<BarcodeForm>) => setBarcodes((rows) => rows.map((b) => (b.key === key ? { ...b, ...patch } : b)));
+  const generateCode = async () => {
+    setGenerating(true);
+    try {
+      const r = await api<{ codes: string[] }>("/products/barcodes/generate", { method: "POST", body: { count: 1 } });
+      const code = r.codes[0];
+      if (code) setBarcodes((rows) => [...rows, { key: uuid(), code, size: "", quantity: "1" }]);
+    } catch (e) { toast.error("Could not generate a code", errorMessage(e)); }
+    finally { setGenerating(false); }
+  };
   if (!isNew && q.isLoading) return <Loading />;
   const product = q.data;
   const savedVariants = product?.variants ?? [];
@@ -120,14 +192,15 @@ export default function ProductEditPage() {
             </CardBody>
           </Card>
           <Card className="lg:col-span-2">
-            <CardHeader><CardTitle>Variants</CardTitle><Button size="sm" variant="secondary" onClick={() => set("variants", [...form.variants, { name: "", price_minor: form.base_price_minor, sku: "" }])}><Plus className="h-4 w-4" /> Add variant</Button></CardHeader>
+            <CardHeader><CardTitle>Variants</CardTitle><Button size="sm" variant="secondary" onClick={() => set("variants", [...form.variants, { cid: uuid(), name: "", price_minor: form.base_price_minor, sku: "" }])}><Plus className="h-4 w-4" /> Add variant</Button></CardHeader>
             <CardBody className="space-y-2">
               {form.variants.length ? form.variants.map((v, i) => (
-                <div key={v.id ?? `new-${i}`} className="grid grid-cols-[1fr_140px_120px_40px] items-end gap-2">
+                <div key={v.cid} className="grid grid-cols-[1fr_140px_120px_40px] items-end gap-2">
                   <Field label={i === 0 ? "Variant name" : undefined}><Input value={v.name} placeholder="Small, Medium, Large…" onChange={(e) => set("variants", form.variants.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} /></Field>
                   <Field label={i === 0 ? "Price" : undefined}><MoneyInput value={v.price_minor} onChange={(val) => set("variants", form.variants.map((x, j) => (j === i ? { ...x, price_minor: val } : x)))} /></Field>
                   <Field label={i === 0 ? "SKU" : undefined}><Input value={v.sku} className="font-mono" onChange={(e) => set("variants", form.variants.map((x, j) => (j === i ? { ...x, sku: e.target.value } : x)))} /></Field>
-                  <Button variant="ghost" size="icon" onClick={() => set("variants", form.variants.filter((_, j) => j !== i))} aria-label="Remove variant"><Trash2 className="h-4 w-4 text-danger" /></Button>
+                  {/* A barcode for a removed size falls back to any size. */}
+                  <Button variant="ghost" size="icon" onClick={() => setForm((f) => ({ ...f, variants: f.variants.filter((_, j) => j !== i), barcodes: f.barcodes.map((b) => (b.size === v.cid ? { ...b, size: "" } : b)) }))} aria-label="Remove variant"><Trash2 className="h-4 w-4 text-danger" /></Button>
                 </div>
               )) : <p className="text-sm text-fg-muted">No variants: the base price is used. Each variant gets its own recipe on the Ingredients tab.</p>}
             </CardBody>
@@ -143,6 +216,43 @@ export default function ProductEditPage() {
                   <div className="col-span-3"><MoneyInput value={p.price_minor} onChange={(val) => set("prices", form.prices.map((x, j) => (j === i ? { ...x, price_minor: val } : x)))} /></div>
                 </div>
               )) : <p className="text-sm text-fg-muted">Same price for every order type.</p>}
+            </CardBody>
+          </Card>
+          <Card className="lg:col-span-3">
+            <CardHeader className="flex-wrap">
+              <div>
+                <CardTitle>Barcodes</CardTitle>
+                <p className="mt-0.5 text-xs text-fg-muted">Scanning one of these codes on the POS adds this product. Pack quantity is how many one scan adds (6 for a carton of six).</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" onClick={generateCode} loading={generating}><Sparkles className="h-4 w-4" /> Generate in-store code</Button>
+                <Button size="sm" variant="secondary" onClick={() => setBarcodes((rows) => [...rows, { key: uuid(), code: "", size: "", quantity: "1" }])}><Plus className="h-4 w-4" /> Add barcode</Button>
+              </div>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              {barcodeError ? <p className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-ink" role="alert">{barcodeError}</p> : null}
+              {form.barcodes.length ? form.barcodes.map((b, i) => {
+                const problem = codeProblems[b.key] ?? (barcodeError && b.code.trim() && barcodeError.startsWith(`${b.code.trim()} `) ? barcodeError : undefined);
+                const sizes = form.variants.filter((v) => v.name.trim());
+                return (
+                  <div key={b.key} className="grid items-start gap-2 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_110px_minmax(0,1.2fr)_40px]">
+                    <Field label={i === 0 ? "Code" : undefined} error={problem} hint={!problem && looksLikeBadEan(b.code.trim()) ? "The last digit is not a valid check digit; check for a typing mistake." : undefined}>
+                      <Input value={b.code} onChange={(e) => editBarcode(b.key, { code: e.target.value })} className="font-mono" placeholder="Scan or type the code" aria-label="Barcode" maxLength={160} />
+                    </Field>
+                    <Field label={i === 0 ? "Size" : undefined}>
+                      <Select value={sizes.some((v) => v.cid === b.size) ? b.size : ""} onChange={(e) => editBarcode(b.key, { size: e.target.value })} disabled={!sizes.length} aria-label="Size">
+                        <option value="">Any size</option>
+                        {sizes.map((v) => <option key={v.cid} value={v.cid}>{v.name}{v.id ? "" : " (new)"}</option>)}
+                      </Select>
+                    </Field>
+                    <Field label={i === 0 ? "Pack quantity" : undefined}>
+                      <Input type="number" inputMode="decimal" min={0} step="any" value={b.quantity} onChange={(e) => editBarcode(b.key, { quantity: e.target.value })} className="tabular" aria-label="Pack quantity" />
+                    </Field>
+                    <div className={i === 0 ? "sm:pt-5" : undefined}><CodePreview code={b.code} /></div>
+                    <Button variant="ghost" size="icon" className={i === 0 ? "sm:mt-5" : undefined} onClick={() => setBarcodes((rows) => rows.filter((x) => x.key !== b.key))} aria-label="Remove barcode"><Trash2 className="h-4 w-4 text-danger" /></Button>
+                  </div>
+                );
+              }) : <p className="text-sm text-fg-muted">No barcodes. Add the code printed on the pack, or generate an in-store code and print labels from Barcode Labels.</p>}
             </CardBody>
           </Card>
         </div>
