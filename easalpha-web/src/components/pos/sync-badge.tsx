@@ -12,11 +12,11 @@ export function SyncBadge({ className }: { className?: string }) {
     <div className={cn("flex items-center gap-2", className)}>
       <button
         onClick={() => processQueue()}
-        className={cn("flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium", status === "online" ? "bg-success-soft text-success-ink" : status === "offline" ? "bg-warning-soft text-warning-ink" : "bg-info-soft text-info-ink")}
+        className={cn("flex h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium", status === "online" ? "bg-success-soft text-success-ink" : status === "offline" ? "bg-warning-soft text-warning-ink" : "bg-info-soft text-info-ink")}
         title="Tap to sync now"
       >
         <Icon className={cn("h-4 w-4", status === "online" ? "text-success" : status === "offline" ? "text-warning" : "text-info animate-spin")} />
-        {status === "online" ? "Online" : status === "offline" ? "Offline" : "Syncing"}
+        <span className="hidden xl:inline">{status === "online" ? "Online" : status === "offline" ? "Offline" : "Syncing"}</span>
         {pending ? <span className="rounded-full bg-card px-1.5 text-xs tabular">{pending}</span> : null}
       </button>
       {attention ? (

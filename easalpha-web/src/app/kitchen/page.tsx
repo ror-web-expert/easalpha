@@ -104,7 +104,7 @@ function Board() {
   }, [list, alerts.timeoutMinutes, alerts.redSound, beep]);
   const changed = tickets.data ?? [];
   return (
-    <div className="flex h-screen flex-col bg-navy-deep text-white [--heading-color:#fff]">
+    <div className="flex h-dvh flex-col bg-navy-deep text-white [--heading-color:#fff]">
       <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-3 [--heading-color:#fff]">
         <ChefHat className="h-6 w-6 text-cta" />
         <span className="text-lg font-semibold">Kitchen</span>

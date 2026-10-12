@@ -172,6 +172,21 @@ body {
 /* Backdrop for brand logos and favicons so transparent PNGs show their real edges (BrandImage). */
 .brand-checkered { background-color: #fff; background-image: linear-gradient(45deg, #e6ebf2 25%, transparent 25%, transparent 75%, #e6ebf2 75%), linear-gradient(45deg, #e6ebf2 25%, transparent 25%, transparent 75%, #e6ebf2 75%); background-size: 12px 12px; background-position: 0 0, 6px 6px; }
 .till { font-size: 16px; }
+/* Touch screens (tills, kitchen displays): the page never slides, bounces or reloads under a finger, a quick second tap
+   is two taps rather than a zoom, and a long press does not select text or open the callout. Lists inside still
+   scroll, and their scroll does not chain to the page. Inputs keep normal selection. */
+html.touch-ui-root, html.touch-ui-root body { overscroll-behavior: none; height: 100%; overflow: hidden; }
+.touch-ui { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.touch-ui input, .touch-ui textarea, .touch-ui select, .touch-ui [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+.touch-ui .overflow-y-auto, .touch-ui .overflow-auto { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.touch-ui .overflow-x-auto { overscroll-behavior-x: contain; }
+.touch-ui button, .touch-ui a, .touch-ui [role="button"] { touch-action: manipulation; }
+.touch-ui img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+/* Dialogs and sheets are rendered outside the till's root, so they get the same rules. */
+html.touch-ui-root [role="dialog"] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+html.touch-ui-root [role="dialog"] .overflow-y-auto { overscroll-behavior: contain; }
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
 @layer base {
   *, ::before, ::after { border-color: var(--border); }
   /* Headings are navy on light surfaces; a dark container sets --heading-color (for example white) to override.

@@ -102,8 +102,10 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           );
         })}
       </ul>
-      <div className="border-t p-3">
-        <div className="space-y-0.5 text-sm text-fg-secondary">
+      {/* Short screens (a 1024 x 600 tablet): the breakdown folds away and the three buttons share one row, so the
+          order list keeps room for several lines instead of one. The total and every button stay. */}
+      <div className="border-t p-3 [@media(max-height:700px)]:py-2">
+        <div className="space-y-0.5 text-sm text-fg-secondary [@media(max-height:700px)]:hidden">
           <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(t.subtotal_minor, currency)}</span></div>
           {/* SPEC discounts: one row per applied line (voucher with its code, loyalty, the automatic regular discount) plus the item discounts. */}
           {discountRows(cart.discounts, t.discount_minor).map((d) => <div key={d.key} className="flex justify-between gap-2"><span className="truncate">{d.label}</span><span className="shrink-0 tabular">-{formatMoney(d.amount_minor, currency)}</span></div>)}
@@ -113,18 +115,18 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           {paid ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(t.total_minor, currency)}</span></div> : null}
           {paid ? <div className="flex justify-between"><span>Paid</span><span className="tabular">-{formatMoney(paid, currency)}</span></div> : null}
         </div>
-        <div className="mt-1 flex items-baseline justify-between"><span className="text-lg font-semibold">{paid ? "Due" : "Total"}</span><span className="text-3xl font-bold tabular">{formatMoney(paid ? due : t.total_minor, currency)}</span></div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-1 flex items-baseline justify-between [@media(max-height:700px)]:mt-0"><span className="text-lg font-semibold">{paid ? "Due" : "Total"}</span><span className="text-3xl font-bold tabular [@media(max-height:700px)]:text-2xl">{formatMoney(paid ? due : t.total_minor, currency)}</span></div>
+        <div className="mt-3 grid grid-cols-2 gap-2 [@media(max-height:700px)]:mt-2 [@media(max-height:700px)]:grid-cols-3">
           {reopened ? (
-            <Button variant="secondary" size="lg" className="col-span-2" onClick={onSend} disabled={empty || busy}><Send className="h-5 w-5" /> Save changes (F5)</Button>
+            <Button variant="secondary" size="lg" className="col-span-2 [@media(max-height:700px)]:col-span-1" onClick={onSend} disabled={empty || busy}><Send className="h-5 w-5" /> Save<span className="[@media(max-height:700px)]:hidden"> changes (F5)</span></Button>
           ) : (
             <>
-              <Button variant="secondary" size="lg" onClick={onHold} disabled={empty || busy}><Pause className="h-5 w-5" /> Hold (F4)</Button>
-              <Button variant="secondary" size="lg" onClick={onSend} disabled={empty || busy}><Send className="h-5 w-5" /> Kitchen (F5)</Button>
+              <Button variant="secondary" size="lg" onClick={onHold} disabled={empty || busy} title="Hold (F4)"><Pause className="h-5 w-5" /> Hold<span className="[@media(max-height:700px)]:hidden"> (F4)</span></Button>
+              <Button variant="secondary" size="lg" onClick={onSend} disabled={empty || busy} title="Kitchen (F5)"><Send className="h-5 w-5" /> Kitchen<span className="[@media(max-height:700px)]:hidden"> (F5)</span></Button>
             </>
           )}
-          {onPlaceUnpaid && !reopened ? <Button variant="secondary" size="lg" className="col-span-2" onClick={onPlaceUnpaid} disabled={empty || busy} title="Skips the payment screen (Direct Unpaid Orders)"><Receipt className="h-5 w-5" /> {unpaidLabel ?? "Place unpaid"}</Button> : null}
-          <Button size="xl" className="col-span-2 h-14 text-lg" onClick={onPay} disabled={empty || busy} loading={busy}><Banknote className="h-6 w-6" /> {reopened ? "Save and pay (F8)" : "Pay (F8)"}</Button>
+          {onPlaceUnpaid && !reopened ? <Button variant="secondary" size="lg" className="col-span-2 [@media(max-height:700px)]:col-span-3" onClick={onPlaceUnpaid} disabled={empty || busy} title="Skips the payment screen (Direct Unpaid Orders)"><Receipt className="h-5 w-5" /> {unpaidLabel ?? "Place unpaid"}</Button> : null}
+          <Button size="xl" className={cn("col-span-2 h-14 text-lg [@media(max-height:700px)]:h-12", reopened ? "[@media(max-height:700px)]:col-span-2" : "[@media(max-height:700px)]:col-span-1")} onClick={onPay} disabled={empty || busy} loading={busy} title={reopened ? "Save and pay (F8)" : "Pay (F8)"}><Banknote className="h-6 w-6" /> {reopened ? "Save and pay" : "Pay"}<span className="[@media(max-height:700px)]:hidden"> (F8)</span></Button>
         </div>
       </div>
     </div>

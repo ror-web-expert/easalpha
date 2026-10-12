@@ -61,35 +61,40 @@ export function PosShell({ children, title }: { children: React.ReactNode; title
   const tabs = TABS.filter((t) => !t.perms || can(...t.perms));
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="no-print flex h-16 shrink-0 items-center gap-2 bg-navy px-3 text-white">
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-cta text-lg font-semibold text-cta-fg">S</span>
-        <div className="hidden min-w-0 md:block">
+    <div className="flex h-dvh flex-col">
+      {/* The bar never grows wider than the screen: tabs show labels only on wide screens and scroll sideways when
+          they still do not fit, and the pending-orders note shrinks to a count. A wider bar made tablets lay the whole
+          till out wider than the screen, so it shrank and slid sideways under a finger. */}
+      <header className="no-print flex h-16 min-w-0 shrink-0 items-center gap-2 overflow-hidden bg-navy px-3 text-white">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-cta text-lg font-semibold text-cta-fg">S</span>
+        <div className="hidden min-w-0 max-w-40 shrink xl:block">
           <div className="truncate text-base font-medium leading-tight text-white">{branch?.name}</div>
           <div className="truncate text-xs tracking-[0.4px] text-white/70">{session?.user?.name} · {session?.membership?.role?.name}</div>
         </div>
-        <nav className="ml-2 flex gap-1">
+        <nav className="scrollbar-none ml-1 flex min-w-0 shrink gap-1 overflow-x-auto">
           {tabs.map((t) => (
-            <Link key={t.href} href={t.href} className={cn("relative flex h-10 items-center gap-2 rounded-full px-4 text-sm font-medium tracking-[0.1px]", pathname === t.href ? "bg-sidebar-active-bg text-sidebar-active" : "text-white/85 hover:bg-white/10")}>
-              <t.icon className="h-5 w-5" /><span className="hidden lg:inline">{t.label}</span>
+            <Link key={t.href} href={t.href} title={t.label} aria-label={t.label} className={cn("relative flex h-12 min-w-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 text-sm font-medium tracking-[0.1px] 2xl:px-4", pathname === t.href ? "bg-sidebar-active-bg text-sidebar-active" : "text-white/85 hover:bg-white/10")}>
+              <t.icon className="h-5 w-5 shrink-0" /><span className="hidden 2xl:inline">{t.label}</span>
               {t.href === "/pos/qr" && qrCount ? <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-medium text-danger-fg tabular" aria-label={`${qrCount} waiting`}>{qrCount}</span> : null}
             </Link>
           ))}
         </nav>
-        <div className="min-w-0 flex-1 truncate px-2 text-sm text-white/70">{title}</div>
+        <div className="hidden min-w-0 flex-1 truncate px-2 text-sm text-white/70 lg:block">{title}</div>
+        <div className="flex-1 lg:hidden" />
         {reminder && reminder.count > 0 ? (
-          <Link href="/pos/orders" title={reminder.tone === "red" ? "Closing time is near and orders are still open" : "Pending orders"} aria-label={reminder.text} className={cn("hidden h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium sm:flex", reminder.tone === "red" ? "bg-danger text-danger-fg" : "bg-warning-soft text-warning-ink")}>
-            <Clock className="h-4 w-4" /><span className="truncate">{reminder.text}</span>
+          <Link href="/pos/orders" title={reminder.tone === "red" ? "Closing time is near and orders are still open" : "Pending orders"} aria-label={reminder.text} className={cn("flex h-10 min-w-0 shrink items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-medium", reminder.tone === "red" ? "bg-danger text-danger-fg" : "bg-warning-soft text-warning-ink")}>
+            <Clock className="h-4 w-4 shrink-0" /><span className="hidden max-w-80 truncate 2xl:inline">{reminder.text}</span><span className="tabular 2xl:hidden">{reminder.count}</span>
           </Link>
         ) : null}
-        <Link href="/pos/shift" className={cn("hidden h-8 items-center rounded-lg px-3 text-sm font-medium sm:flex", shift ? "bg-success-soft text-success-ink" : "bg-warning-soft text-warning-ink")}>{shift ? "Shift open" : "No shift"}</Link>
-        <SyncBadge />
-        {session?.permissions?.includes("app.admin") ? <Link href="/admin" className="hidden h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10 lg:grid" title="Admin"><LayoutDashboard className="h-5 w-5" /></Link> : null}
-        {can("PRINTERS", "settings.manage") ? <button onClick={openPrinters} className="grid h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10" title="Printers" aria-label="Printers"><Printer className="h-5 w-5" /></button> : null}
-        <ThemeToggle className="text-white/85 hover:bg-white/10" />
-        <button onClick={() => (reminder && reminder.count > 0 ? setLockOpen(true) : doLock())} className="grid h-10 w-10 place-items-center rounded-full text-white/85 hover:bg-white/10" title="Lock" aria-label="Lock"><Lock className="h-5 w-5" /></button>
+        <Link href="/pos/shift" className={cn("hidden h-10 shrink-0 items-center whitespace-nowrap rounded-lg px-3 text-sm font-medium xl:flex", shift ? "bg-success-soft text-success-ink" : "bg-warning-soft text-warning-ink")}>{shift ? "Shift open" : "No shift"}</Link>
+        <SyncBadge className="shrink-0" />
+        {session?.permissions?.includes("app.admin") ? <Link href="/admin" className="hidden h-12 w-12 shrink-0 place-items-center rounded-full text-white/85 hover:bg-white/10 lg:grid" title="Admin"><LayoutDashboard className="h-5 w-5" /></Link> : null}
+        {can("PRINTERS", "settings.manage") ? <button onClick={openPrinters} className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-white/85 hover:bg-white/10" title="Printers" aria-label="Printers"><Printer className="h-5 w-5" /></button> : null}
+        <ThemeToggle className="shrink-0 text-white/85 hover:bg-white/10" />
+        <button onClick={() => (reminder && reminder.count > 0 ? setLockOpen(true) : doLock())} className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-white/85 hover:bg-white/10" title="Lock" aria-label="Lock"><Lock className="h-5 w-5" /></button>
       </header>
-      <div className="min-h-0 flex-1">{children}</div>
+      {/* Pages that are taller than the screen (Shift, Needs attention) scroll here; the Sell screen fits and does not. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       <Dialog open={printersOpen} onClose={() => setPrintersOpen(false)} title="Printers" size="sm" footer={<Button onClick={() => setPrintersOpen(false)}>Done</Button>}>
         <p className="text-sm text-fg-secondary">
           {server
