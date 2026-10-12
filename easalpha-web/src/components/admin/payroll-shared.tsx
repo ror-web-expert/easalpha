@@ -2,8 +2,10 @@
 // Small pieces shared across the Payroll group screens: month picker, employee select, payment method select, the
 // permission guard and the status badges. Nothing here talks to a screen's own state.
 import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
-import type { EmployeeFull, PaymentMethod } from "@/lib/types";
+import type { EmployeeFull, PaymentMethod, WageEmployeesResponse } from "@/lib/types";
 import { useList } from "@/components/admin/crud";
 import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
 import { useAuthStore, useCan } from "@/store/auth";
@@ -38,6 +40,22 @@ export function MonthPicker({ value, onChange, max, className }: { value: string
 
 export function useEmployees(query: Record<string, string | undefined> = {}) {
   return useList<EmployeeFull>("employees", "/employees", query);
+}
+
+/** The wage screens' employee list. Payroll managers get everyone; a user who may only pay wages (wages.pay) gets daily
+ *  and weekly staff, since GET /employees and salary statements need the payroll permission. */
+export function useWageEmployees() {
+  return useQuery({ queryKey: ["wage_employees"], queryFn: () => api<WageEmployeesResponse>("/wages/employees") });
+}
+
+export function WageEmployeeSelect({ value, onChange, allLabel, className }: { value: string; onChange: (id: string) => void; allLabel?: string; className?: string }) {
+  const q = useWageEmployees();
+  return (
+    <Select className={cn("w-auto min-w-48", className)} value={value} onChange={(e) => onChange(e.target.value)} aria-label="Employee">
+      <option value="">{allLabel ?? "Choose an employee"}</option>
+      {(q.data?.data ?? []).map((e) => <option key={e.id} value={e.id}>{e.name}{e.designation ? ` (${e.designation})` : ""}</option>)}
+    </Select>
+  );
 }
 
 export function EmployeeSelect({ value, onChange, allLabel, className, autoSelectFirst }: { value: string; onChange: (id: string) => void; allLabel?: string; className?: string; autoSelectFirst?: boolean }) {

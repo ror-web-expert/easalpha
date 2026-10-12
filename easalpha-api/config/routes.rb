@@ -226,6 +226,7 @@ Rails.application.routes.draw do
       get "bill_runs", to: "customer_accounts#runs"
       get "bill_runs/:id", to: "customer_accounts#show_run"
       post "bill_runs", to: "customer_accounts#create_run"
+      get "wages/employees", to: "wages#employees"
       get "wages/due", to: "wages#due"
       get "wages/preview", to: "wages#preview"
       get "wages", to: "wages#index"

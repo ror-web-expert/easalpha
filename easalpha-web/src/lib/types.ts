@@ -755,6 +755,9 @@ export interface WagePreview {
   attendance: { day: string; status: string }[]; days_worked: number; rate_minor: number; gross_minor: number; advances_outstanding_minor: number;
   already_paid: WagePayment[]; phone: string | null; /** due only */ paid?: WagePayment | null;
 }
+/** GET /wages/employees: who the wage screens may list. scope "wage_staff" = a user who may only pay wages (daily and weekly staff only). */
+export interface WageEmployee { id: ID; name: string; designation: string | null; pay_frequency: PayFrequency; has_phone: boolean; rate_minor: number | null }
+export interface WageEmployeesResponse { scope: "all" | "wage_staff"; data: WageEmployee[] }
 export interface EmployeeStatementEntry { date: string; at: string; kind: "salary" | "salary_paid" | "wage" | "wage_paid" | "advance"; label: string; ref: string; credit_minor: number; debit_minor: number; recovered_minor?: number; detail?: string | null; balance_minor: number }
 export interface EmployeeStatement {
   employee: { id: ID; name: string; phone: string | null; designation: string | null; pay_frequency: PayFrequency; rate_minor: number };

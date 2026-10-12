@@ -132,6 +132,26 @@ RSpec.describe "Wages and the employee statement", type: :request do
     expect(json[:error][:code]).to eq("module.disabled")
   end
 
+  it "gives a manager who only pays wages the wage staff, and keeps salary statements with payroll managers" do
+    daily = employee!
+    monthly = employee!(name: "Saima", pay_frequency: "monthly", base_salary_minor: 3_000_000)
+    clerk = add_member!(biz, "manager")
+    within(biz) { clerk.set_permissions!(%w[app.admin wages.pay]) } # a custom role that may pay wages but not see payroll
+    mh = auth_headers(clerk.reload)
+    get "/api/v1/wages/employees", headers: mh
+    expect(json[:scope]).to eq("wage_staff")
+    expect(json[:data].map { |e| e[:id] }).to eq([ daily[:id] ])
+    get "/api/v1/wages/employees", headers: headers
+    expect(json[:scope]).to eq("all")
+    expect(json[:data].map { |e| e[:name] }).to include("Akram", "Saima")
+    get "/api/v1/employees/#{monthly[:id]}/statement", headers: mh
+    expect(response).to have_http_status(:forbidden)
+    get "/api/v1/employees/#{daily[:id]}/statement", headers: mh
+    expect(response).to have_http_status(:ok)
+    get "/api/v1/employees/#{monthly[:id]}/statement", headers: headers
+    expect(response).to have_http_status(:ok)
+  end
+
   it "accepts only monthly, weekly or daily" do
     api_post "/api/v1/employees", { name: "X", pay_frequency: "hourly" }, headers: headers
     expect(response).to have_http_status(:unprocessable_content)

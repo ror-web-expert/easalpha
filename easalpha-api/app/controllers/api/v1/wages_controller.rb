@@ -6,6 +6,16 @@ module Api
       before_action -> { require_module!("payroll") }
       before_action :read_only_guard!, only: %i[pay pay_batch void send_statement]
 
+      # GET /wages/employees  a light list for the wage screens' pickers. Payroll managers see everyone; a manager who
+      # may only pay wages (wages.pay) sees daily and weekly staff, never monthly salaries.
+      def employees
+        scope = Employee.active.order(:name)
+        scope = scope.where(pay_frequency: %w[daily weekly]) unless full_payroll?
+        render json: { scope: full_payroll? ? "all" : "wage_staff",
+                       data: scope.map { |e| { id: e.id, name: e.name, designation: e.designation, pay_frequency: e.pay_frequency, has_phone: e.phone.present?,
+                                               rate_minor: full_payroll? || e.wage_earner? ? e.base_salary_minor : nil } } }
+      end
+
       # GET /wages/due?day=  daily employees for the day and weekly employees for its week, with what is suggested and what is paid
       def due
         day = params[:day].present? ? Date.parse(params[:day]) : today
@@ -61,19 +71,28 @@ module Api
 
       # GET /employees/:id/statement?from=&to=  (default: this month)
       def statement
-        e = Employee.find(params[:id])
+        e = statement_employee
         render json: Payroll::Statement.build(e, from: range.first, to: range.last)
       end
 
       # POST /employees/:id/send_statement { from?, to? }
       def send_statement
-        e = Employee.find(params[:id])
+        e = statement_employee
         msgs = Payroll::Notify.statement!(e, Payroll::Statement.build(e, from: range.first, to: range.last))
         audit!("create", table_name: "whatsapp_messages", after: { employee_statement: e.name, to: msgs.map(&:to_phone) })
         render json: { sent: msgs.size, to: msgs.map(&:to_phone) }, status: :created
       end
 
       private
+
+      def full_payroll? = current_membership.can?("payroll.manage") || current_membership.can?("PAYROLL")
+
+      # Salary statements stay with payroll managers; wages.pay alone opens daily and weekly staff only.
+      def statement_employee
+        e = Employee.find(params[:id])
+        raise Api::Errors::Forbidden.new("permission.denied", "Salary statements need the payroll permission") if e.monthly? && !full_payroll?
+        e
+      end
 
       def period(e)
         if params[:from].present?

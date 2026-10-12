@@ -1,6 +1,7 @@
 "use client";
 // SPEC Payroll settings hold two decisions: the salary calculation method (Actual Calendar Days vs Fixed Divisor, with
-// the Rs 30,000 worked example) and Require fingerprint to close shift.
+// the Rs 30,000 worked example) and Require fingerprint to close shift. Below them, the Payroll Notifications switches
+// (WhatsApp to staff when an advance, a wage or a salary is paid) from the settings store, with their own Save.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Wallet2, CalendarDays, Divide, Fingerprint } from "lucide-react";
@@ -8,13 +9,30 @@ import { api, errorMessage } from "@/lib/api";
 import type { PayrollSettings, SalaryMethod } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { PageHeader } from "@/components/admin/page";
+import { SettingsScreenCard, useSettings } from "@/components/admin/settings-screen";
 import { PayrollGuard } from "@/components/admin/payroll-shared";
+import { useCan } from "@/store/auth";
 import { formatMoneyExact, perDayMinor } from "@/components/admin/payroll-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Switch } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toast";
 
 interface Form { salary_method: SalaryMethod; fixed_divisor: number; require_fingerprint_to_close_shift: boolean }
+
+/** Registry group "store", screen "Payroll Notifications": payroll.whatsapp.advance_paid, .wage_paid and .salary_paid. */
+function PayrollNotificationsCard() {
+  const settings = useSettings();
+  const can = useCan();
+  const keys = settings.data?.groups.store?.screens["Payroll Notifications"];
+  if (settings.isLoading) return <Card><Loading /></Card>;
+  if (!keys?.length) return null;
+  return (
+    <div>
+      <SettingsScreenCard screen="3. Payroll Notifications" keys={keys} />
+      <p className="mt-2 px-1 text-xs text-fg-secondary">A message goes only to an employee with a phone number whose own &quot;Send WhatsApp messages about pay&quot; switch is on, and only while WhatsApp sending is on in Settings &gt; WhatsApp.{can("settings.manage") ? "" : " Changing these switches needs the Settings permission."}</p>
+    </div>
+  );
+}
 
 function MethodCard({ selected, onSelect, icon: Icon, title, children }: { selected: boolean; onSelect: () => void; icon: React.ComponentType<{ className?: string }>; title: string; children: React.ReactNode }) {
   return (
@@ -44,7 +62,7 @@ export default function PayrollSettingsPage() {
   const fixedDay = perDayMinor(ex.salary_minor, form.fixed_divisor);
   return (
     <PayrollGuard perms={["payroll.manage", "settings.manage"]}>
-      <PageHeader icon={Wallet2} title="Payroll settings" description="Two decisions: how a day of salary is priced, and whether a cashier must scan a fingerprint before closing a shift." actions={<Button onClick={() => save.mutate(form)} loading={save.isPending} disabled={!divisorOk}>Save</Button>} />
+      <PageHeader icon={Wallet2} title="Payroll settings" description="How a day of salary is priced, whether a cashier must scan a fingerprint before closing a shift, and which pay messages staff get on WhatsApp." actions={<Button onClick={() => save.mutate(form)} loading={save.isPending} disabled={!divisorOk}>Save</Button>} />
       <div className="space-y-4">
         <Card>
           <CardHeader><div><CardTitle>1. Salary calculation method</CardTitle><p className="mt-0.5 text-xs text-fg-secondary">Prices a lost day, an unpaid leave day and an absence deduction. Every payroll run snapshots the method it used.</p></div></CardHeader>
@@ -89,6 +107,7 @@ export default function PayrollSettingsPage() {
           </CardBody>
         </Card>
         <div className="flex justify-end"><Button onClick={() => save.mutate(form)} loading={save.isPending} disabled={!divisorOk}>Save</Button></div>
+        <PayrollNotificationsCard />
       </div>
     </PayrollGuard>
   );

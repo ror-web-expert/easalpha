@@ -1,20 +1,34 @@
 "use client";
 // SPEC Payroll > Run Payroll: pick a month, generate the run (one per month; a second attempt answers payroll.exists),
-// review the payslips, then Sync to Expenses behind the manager PIN, or cancel.
+// review the payslips, then Sync to Expenses behind the manager PIN, or cancel. Only monthly staff are in a run; daily
+// and weekly staff are paid from Pay Wages, which the note under the header says and links to.
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeDollarSign, Play } from "lucide-react";
+import { BadgeDollarSign, HandCoins, Play } from "lucide-react";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { PayrollRun, PayrollRunDetail } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { FilterBar, PageHeader } from "@/components/admin/page";
-import { MonthPicker, PayrollGuard, RunBadge } from "@/components/admin/payroll-shared";
+import { MonthPicker, PayrollGuard, RunBadge, useEmployees } from "@/components/admin/payroll-shared";
+import { isWageStaff } from "@/components/admin/wages-helpers";
 import { monthKey, monthLabel } from "@/components/admin/payroll-helpers";
 import { RunDetailPanel } from "@/components/admin/payroll-run";
 import { Button, Card, CardHeader, CardTitle, EmptyRow, Input, Loading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { toast } from "@/store/toast";
+
+function WageStaffNote() {
+  const employees = useEmployees();
+  const count = (employees.data ?? []).filter((e) => isWageStaff(e.pay_frequency)).length;
+  return (
+    <div className="mb-4 flex items-start gap-2 rounded-xl bg-muted px-4 py-3 text-sm text-fg-secondary">
+      <HandCoins className="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{count ? `${count} ${count === 1 ? "employee is" : "employees are"} on a daily or weekly wage and not in the monthly run.` : "Daily and weekly staff are not in the monthly run."} They are paid from <Link href="/admin/payroll/wages" className="font-medium text-primary">Pay Wages</Link>.</span>
+    </div>
+  );
+}
 
 export default function RunPayrollPage() {
   const qc = useQueryClient();
@@ -42,6 +56,7 @@ export default function RunPayrollPage() {
   return (
     <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
       <PageHeader icon={BadgeDollarSign} title="Run Payroll" description="Generate a month, check every payslip, then Sync to Expenses to pay it. The run snapshots the divisor, fines and allowances it used, so later rule changes never move a paid month." />
+      <WageStaffNote />
       <FilterBar>
         <MonthPicker value={month} onChange={setMonth} />
         <Input className="w-64" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" aria-label="Notes" />
