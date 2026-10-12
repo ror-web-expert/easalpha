@@ -10,11 +10,11 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-inter", display: "swap" });
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://easalpha.com").replace(/\/$/, "");
-const DESCRIPTION = "EasAlpha is the complete restaurant POS for any country: an offline desktop till, order-taker tablet, kitchen display, inventory with recipe deduction, purchasing, double-entry accounts, payroll, riders, customer credit, WhatsApp receipts, local tax rules and 27 reports, in your currency.";
+const DESCRIPTION = "EasAlpha is the complete restaurant POS for any restaurant, anywhere: an offline desktop till, order-taker tablet, kitchen display, inventory with recipe deduction, purchasing, double-entry accounts, payroll, riders, customer credit, WhatsApp receipts, local tax rules and 27 reports, in your currency.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: "EasAlpha: restaurant POS for every country", template: "%s | EasAlpha" },
+  title: { default: "EasAlpha: restaurant POS for any restaurant, anywhere", template: "%s | EasAlpha" },
   description: DESCRIPTION,
   applicationName: "EasAlpha",
   keywords: ["restaurant POS", "offline POS", "kitchen display", "restaurant inventory", "multi-currency POS", "restaurant POS Pakistan", "FBR POS", "WhatsApp receipts"],
@@ -22,10 +22,10 @@ export const metadata: Metadata = {
   icons: { icon: [{ url: "/favicon-32.png", sizes: "32x32", type: "image/png" }, { url: "/icon.svg", type: "image/svg+xml" }], apple: "/icon-192.png" },
   openGraph: {
     type: "website", siteName: "EasAlpha", locale: "en_PK", url: SITE_URL,
-    title: "EasAlpha: restaurant POS for every country", description: DESCRIPTION,
+    title: "EasAlpha: restaurant POS for any restaurant, anywhere", description: DESCRIPTION,
     images: [{ url: "/og.png", width: 1200, height: 630, alt: "EasAlpha restaurant POS" }],
   },
-  twitter: { card: "summary_large_image", title: "EasAlpha: restaurant POS for every country", description: DESCRIPTION, images: ["/og.png"] },
+  twitter: { card: "summary_large_image", title: "EasAlpha: restaurant POS for any restaurant, anywhere", description: DESCRIPTION, images: ["/og.png"] },
 };
 
 export const viewport: Viewport = {

@@ -16,7 +16,7 @@ export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
         <div>
           <Image src="/brand/logo-white.svg" alt="EasAlpha" width={130} height={32} unoptimized className="h-8 w-auto" />
-          <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">The complete restaurant POS for any country: till, kitchen, stock, money, people, riders and customers in one account.</p>
+          <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">The complete restaurant POS for any restaurant, anywhere: till, kitchen, stock, money, people, riders and customers in one account.</p>
         </div>
         {COLUMNS.map((c) => (
           <div key={c.title}>

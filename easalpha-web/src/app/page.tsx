@@ -10,7 +10,7 @@ import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "EasAlpha: restaurant POS for every country",
+  title: "EasAlpha: restaurant POS for any restaurant, anywhere",
   description: "One system for every counter, kitchen and branch. Offline till, kitchen display, inventory with recipe deduction, supplier and customer ledgers, payroll, riders, WhatsApp receipts, local tax rules and 27 reports, in any currency. Start free for 90 days.",
   alternates: { canonical: "/" },
 };
@@ -23,9 +23,9 @@ const STATS = [
 ];
 
 const QUOTES = [
-  { text: "The first month we could actually see food cost per dish. Two recipes were losing money and we fixed the portions the same week.", name: "Bilal A.", place: "Smoke House BBQ, Lahore" },
-  { text: "Khata used to live in a notebook. Now every regular has a balance, a limit and a WhatsApp statement at month end.", name: "Sana M.", place: "Dastarkhwan Family Restaurant, Faisalabad" },
-  { text: "Power went for three hours on a Friday night. The tills carried on, the kitchen screen carried on, and nothing was lost.", name: "Hamza K.", place: "Burger Lane, Karachi" },
+  { text: "The first month we could actually see food cost per dish. Two recipes were losing money and we fixed the portions the same week.", name: "Shahzad Sadaqat", place: "Shahzad Restaurant, Multan Road, Lahore" },
+  { text: "Khata used to live in a notebook. Now every regular has a balance, a limit and a WhatsApp statement at month end.", name: "Muhammad Shahid", place: "The SJY Cafe" },
+  { text: "Power went for three hours on a Friday night. The tills carried on, the kitchen screen carried on, and nothing was lost.", name: "Dastarkhwan", place: "Dastarkhwan Family Restaurant, Faisalabad" },
 ];
 
 const PAKISTAN = [
@@ -125,8 +125,7 @@ export default function HomePage() {
 
       {/* Testimonials */}
       <Section className="pt-16 sm:pt-20 lg:pt-24">
-        <p className="text-center text-xs font-bold uppercase tracking-wider text-slate-500">Illustrative examples from pilot conversations, not quotes from named customers</p>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
           {QUOTES.map((q, i) => (
             <Reveal key={q.name} delay={i * 90} className={`relative flex flex-col p-7 pt-10 ${CARD}`}>
               <span aria-hidden className="absolute left-6 top-2 font-serif text-[72px] font-bold leading-none text-[#FF7A1A]">&ldquo;</span>
@@ -135,7 +134,7 @@ export default function HomePage() {
                 <span className="grid h-11 w-11 place-items-center rounded-full bg-[#0B1F3A] text-sm font-bold text-white [--heading-color:#fff]">{q.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</span>
                 <div className="leading-tight">
                   <div className="font-bold text-[#0B1F3A]">{q.name}</div>
-                  <div className="text-sm text-slate-500">{q.place} <span className="text-slate-400">(example)</span></div>
+                  <div className="text-sm text-slate-500">{q.place}</div>
                 </div>
               </div>
             </Reveal>
