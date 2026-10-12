@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Apple, ChevronDown, Clock, Download, Monitor, Smartphone, Terminal } from "lucide-react";
+import { Apple, Check, ChevronDown, Clock, Download, Monitor, Smartphone, Terminal } from "lucide-react";
 import { CARD } from "@/components/site/sections";
 import {
-  AFTER_INSTALL, detectOs, installers, installerUrl, MOBILE_GUIDES, ordered, OS_LABEL, PLATFORM_GUIDES,
+  AFTER_INSTALL, detectOs, installers, installerUrl, MOBILE_GUIDES, PLATFORM_GUIDES,
   type Installer, type Os,
 } from "@/components/site/download-helpers";
 
@@ -12,87 +12,39 @@ const ICON: Record<Os, React.ComponentType<{ className?: string }>> = { windows:
 const BTN_PRIMARY = "inline-flex h-11 items-center gap-2 rounded-full bg-[#FF7A1A] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#E0640C]";
 const BTN_SECONDARY = "inline-flex h-11 items-center gap-2 rounded-full border border-[#0B1F3A]/20 px-5 text-sm font-semibold text-[#0B1F3A] transition hover:bg-[#F4F7FB]";
 
-/** This machine's installer first, then one short card per kind of computer and phone: what it needs in one line, the
- *  download, three steps, and the usual fixes folded away. A build that is not uploaded yet keeps its card. */
+type Guide = { os: Os; key: string; title: string; needs: string; install: string[]; issues: { title: string; fix: string }[]; installerIds?: string[] };
+
+/** Tiles across the top, one per system, with this machine's tile selected on load; one panel underneath with the
+ *  download, three steps and the usual fixes for whichever tile is selected. Phones and tablets get the same below. */
 export function DownloadList({ baseUrl, version, list: given, builtAt }: { baseUrl: string; version: string; list?: Installer[]; builtAt?: string | null }) {
   const [os, setOs] = useState<Os>("other");
+  const [desktop, setDesktop] = useState<Os>("windows");
+  const [phone, setPhone] = useState<Os>("android");
   useEffect(() => {
     const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-    setOs(detectOs(navigator.userAgent, nav.userAgentData?.platform));
+    const detected = detectOs(navigator.userAgent, nav.userAgentData?.platform);
+    setOs(detected);
+    if (detected === "windows" || detected === "mac" || detected === "linux") setDesktop(detected);
+    if (detected === "ios" || detected === "android") setPhone(detected);
   }, []);
   const list = given ?? installers(version);
-  const ready = ordered(os, list).mine.filter((i) => i.available !== false);
-  const Icon = ICON[os];
-  const mobile = os === "android" || os === "ios";
-  const guides = [...PLATFORM_GUIDES].sort((a, b) => Number(b.os === os) - Number(a.os === os));
-  const phones = [...MOBILE_GUIDES].sort((a, b) => Number(b.os === os) - Number(a.os === os));
   const built = builtAt ? new Date(builtAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : null;
+  const mobile = os === "ios" || os === "android";
 
   return (
-    <div className="space-y-12">
-      <section className={`p-6 sm:p-8 ${CARD}`}>
-        <div className="flex items-start gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#0B1F3A] text-white"><Icon className="h-6 w-6" /></span>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[#C2410C]">Recommended for {OS_LABEL[os]}</p>
-            {mobile ? (
-              <>
-                <h2 className="mt-1 text-xl font-bold text-[#0B1F3A]">Nothing to install on a phone or tablet</h2>
-                <p className="mt-2 text-sm text-slate-600">Sign in once on the setup screen and add EasAlpha to the home screen. Three steps below.</p>
-                <Link href="/setup" className={`mt-4 ${BTN_PRIMARY}`}>Open the setup screen</Link>
-              </>
-            ) : ready.length ? (
-              <>
-                <h2 className="mt-1 text-xl font-bold text-[#0B1F3A]">EasAlpha POS {version} for {OS_LABEL[os]}</h2>
-                <p className="mt-2 text-sm text-slate-600">{ready[0].note}</p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {ready.map((i, n) => <DownloadButton key={i.id} i={i} baseUrl={baseUrl} primary={n === 0} />)}
-                </div>
-              </>
-            ) : os !== "other" ? (
-              <>
-                <h2 className="mt-1 text-xl font-bold text-[#0B1F3A]">The {OS_LABEL[os]} build of {version} comes with the next release</h2>
-                <p className="mt-2 text-sm text-slate-600">Until then the till runs in your browser with the same login and screens.</p>
-                <Link href="/setup" className={`mt-4 ${BTN_SECONDARY}`}>Open the setup screen</Link>
-              </>
-            ) : (
-              <>
-                <h2 className="mt-1 text-xl font-bold text-[#0B1F3A]">EasAlpha POS {version}</h2>
-                <p className="mt-2 text-sm text-slate-600">Pick your system below.</p>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-
+    <div className="space-y-14">
       <section>
-        <h2 className="text-2xl font-bold text-[#0B1F3A]">Desktop app</h2>
-        <p className="mt-1 text-sm text-slate-600">Version {version}{built ? `, ${built}` : ""}. One installer per counter; every build updates itself.</p>
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          {guides.map((g) => {
-            const files = g.installerIds.map((id) => list.find((i) => i.id === id)).filter((i): i is Installer => !!i);
-            const ready = files.filter((i) => i.available !== false);
-            const pending = files.filter((i) => i.available === false);
-            return (
-              <GuideCard key={g.key} os={g.os} title={g.title} needs={g.needs} steps={g.install} issues={g.issues} highlight={g.os === os}
-                actions={<>
-                  {ready.map((i, n) => <DownloadButton key={i.id} i={i} baseUrl={baseUrl} primary={n === 0} />)}
-                  {pending.map((i) => <span key={i.id} className="inline-flex h-11 items-center gap-2 rounded-full border border-dashed border-slate-300 px-4 text-sm text-slate-500" title={i.file}><Clock className="h-4 w-4" /> {label(i)}: next release</span>)}
-                </>} />
-            );
-          })}
-        </div>
+        <h2 className="text-2xl font-bold text-[#0B1F3A]">Desktop app for the counter</h2>
+        <p className="mt-1 text-sm text-slate-600">Version {version}{built ? `, ${built}` : ""}. One installer per computer; every build updates itself.{mobile ? " You are on a phone: the section below is for you." : ""}</p>
+        <Picker guides={PLATFORM_GUIDES} selected={desktop} onSelect={setDesktop} detected={os} list={list} cols="sm:grid-cols-3" />
+        <Panel guide={PLATFORM_GUIDES.find((g) => g.os === desktop) ?? PLATFORM_GUIDES[0]} list={list} baseUrl={baseUrl} version={version} />
       </section>
 
       <section>
         <h2 className="text-2xl font-bold text-[#0B1F3A]">Phones and tablets</h2>
-        <p className="mt-1 text-sm text-slate-600">Order-taker tablets, rider phones, kitchen and queue screens run the web app from the home screen. They print through the counter PC.</p>
-        <div className="mt-6 grid gap-6 md:grid-cols-2">
-          {phones.map((g) => (
-            <GuideCard key={g.key} os={g.os} title={g.title} needs={g.needs} steps={g.install} issues={g.issues} highlight={g.os === os}
-              actions={<Link href="/setup" className={BTN_SECONDARY}>Open the setup screen</Link>} />
-          ))}
-        </div>
+        <p className="mt-1 text-sm text-slate-600">Order-taker tablets, rider phones, kitchen and queue screens run the web app from the home screen. Nothing to download; they print through the counter PC.</p>
+        <Picker guides={MOBILE_GUIDES} selected={phone} onSelect={setPhone} detected={os} list={list} cols="sm:grid-cols-2" />
+        <Panel guide={MOBILE_GUIDES.find((g) => g.os === phone) ?? MOBILE_GUIDES[0]} list={list} baseUrl={baseUrl} version={version} />
       </section>
 
       <section className={`p-6 sm:p-8 ${CARD}`}>
@@ -106,37 +58,85 @@ export function DownloadList({ baseUrl, version, list: given, builtAt }: { baseU
   );
 }
 
-function GuideCard({ os, title, needs, steps, issues, actions, highlight }: {
-  os: Os; title: string; needs: string; steps: string[]; issues: { title: string; fix: string }[]; actions: React.ReactNode; highlight: boolean;
-}) {
-  const I = ICON[os];
+function filesFor(guide: Guide, list: Installer[]): Installer[] {
+  return (guide.installerIds ?? []).map((id) => list.find((i) => i.id === id)).filter((i): i is Installer => !!i);
+}
+
+function Picker({ guides, selected, onSelect, detected, list, cols }: { guides: Guide[]; selected: Os; onSelect: (o: Os) => void; detected: Os; list: Installer[]; cols: string }) {
   return (
-    <article className={`flex flex-col p-6 ${CARD} ${highlight ? "ring-2 ring-[#FF7A1A]" : ""}`}>
-      <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#F4F7FB] text-[#0B1F3A]"><I className="h-5 w-5" /></span>
-        <div className="min-w-0">
-          <h3 className="text-lg font-bold text-[#0B1F3A]">{title}</h3>
-          <p className="text-sm text-slate-600">{needs}</p>
+    <div role="tablist" aria-label="Choose your system" className={`mt-6 grid gap-4 ${cols}`}>
+      {guides.map((g) => {
+        const I = ICON[g.os];
+        const active = g.os === selected;
+        const files = filesFor(g, list);
+        const ready = files.length === 0 || files.some((i) => i.available !== false);
+        return (
+          <button key={g.key} type="button" role="tab" aria-selected={active} onClick={() => onSelect(g.os)}
+            className={`relative flex items-start gap-3 rounded-2xl border p-5 text-left transition ${active ? "border-[#FF7A1A] bg-white shadow-md ring-2 ring-[#FF7A1A]" : "border-slate-200 bg-white hover:border-[#0B1F3A]/40 hover:shadow-sm"}`}>
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${active ? "bg-[#0B1F3A] text-white" : "bg-[#F4F7FB] text-[#0B1F3A]"}`}><I className="h-5 w-5" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-bold text-[#0B1F3A]">{g.title}</span>
+              <span className="block text-xs text-slate-600">{g.needs}</span>
+              <span className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold ${ready ? "text-emerald-700" : "text-slate-500"}`}>
+                {ready ? <><Check className="h-3.5 w-3.5" /> {files.length ? "Ready to download" : "Web app, no install"}</> : <><Clock className="h-3.5 w-3.5" /> Next release</>}
+              </span>
+            </span>
+            {g.os === detected ? <span className="absolute -top-2.5 right-4 rounded-full bg-[#FF7A1A] px-2.5 py-0.5 text-[11px] font-semibold text-white">Your device</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Panel({ guide, list, baseUrl, version }: { guide: Guide; list: Installer[]; baseUrl: string; version: string }) {
+  const I = ICON[guide.os];
+  const files = filesFor(guide, list);
+  const ready = files.filter((i) => i.available !== false);
+  const pending = files.filter((i) => i.available === false);
+  const isPhone = guide.os === "ios" || guide.os === "android";
+  return (
+    <div className={`mt-4 p-6 sm:p-8 ${CARD}`} role="tabpanel">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#0B1F3A] text-white"><I className="h-6 w-6" /></span>
+          <div>
+            <h3 className="text-xl font-bold text-[#0B1F3A]">{isPhone ? `EasAlpha on ${guide.title}` : `EasAlpha POS ${version} for ${guide.title}`}</h3>
+            <p className="mt-1 text-sm text-slate-600">{guide.needs}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {isPhone ? <Link href="/setup" className={BTN_PRIMARY}>Open the setup screen</Link> : null}
+          {ready.map((i, n) => <DownloadButton key={i.id} i={i} baseUrl={baseUrl} primary={n === 0} />)}
+          {pending.map((i) => <span key={i.id} className="inline-flex h-11 items-center gap-2 rounded-full border border-dashed border-slate-300 px-4 text-sm text-slate-500" title={i.file}><Clock className="h-4 w-4" /> {label(i)}: next release</span>)}
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">{actions}</div>
-      <ol className="mt-5 list-decimal space-y-1.5 border-t border-slate-100 pl-5 pt-4 text-sm text-slate-700">
-        {steps.map((s) => <li key={s}>{s}</li>)}
-      </ol>
-      <details className="group mt-4 text-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-1 font-semibold text-[#0B1F3A] [&::-webkit-details-marker]:hidden">
-          Problems? <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
-        </summary>
-        <dl className="mt-2 space-y-2">
-          {issues.map((x) => (
-            <div key={x.title}>
-              <dt className="font-semibold text-slate-800">{x.title}</dt>
-              <dd className="text-slate-600">{x.fix}</dd>
-            </div>
-          ))}
-        </dl>
-      </details>
-    </article>
+      {!isPhone && ready.length === 0 ? <p className="mt-4 rounded-xl bg-[#F4F7FB] p-3 text-sm text-slate-700">This build is produced by the next release and appears here on its own. Until then the till runs in your browser: <Link href="/setup" className="font-semibold text-[#C2410C] hover:underline">open the setup screen</Link>.</p> : null}
+
+      <div className="mt-6 grid gap-8 md:grid-cols-2">
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{isPhone ? "Add to the home screen" : "Install"}</h4>
+          <ol className="mt-3 space-y-3 text-sm text-slate-700">
+            {guide.install.map((s, n) => (
+              <li key={s} className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#FF7A1A] text-xs font-bold text-white">{n + 1}</span><span className="pt-0.5">{s}</span></li>
+            ))}
+          </ol>
+        </div>
+        <details className="group text-sm" open>
+          <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 [&::-webkit-details-marker]:hidden">
+            Problems? <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
+          </summary>
+          <dl className="mt-3 space-y-2.5">
+            {guide.issues.map((x) => (
+              <div key={x.title}>
+                <dt className="font-semibold text-slate-800">{x.title}</dt>
+                <dd className="text-slate-600">{x.fix}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      </div>
+    </div>
   );
 }
 
