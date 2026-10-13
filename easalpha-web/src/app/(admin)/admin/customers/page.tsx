@@ -6,14 +6,14 @@ import { Users, Plus, Upload, Check, UserX, UserCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Customer, CustomerGroup, CustomerInsights } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
-import { formatDateTime, isoDay } from "@/lib/dates";
+import { formatDateTime } from "@/lib/dates";
 import { usePagedList, useDebounced } from "@/lib/hooks";
 import { useModules } from "@/lib/modules";
 import { Cards, FilterBar, LoadMore, PageHeader, SearchInput } from "@/components/admin/page";
 import { useAction, useList } from "@/components/admin/crud";
 import { balanceLabel, balanceVariant, customerSourceLabel, customerStatusLabel, customerStatusVariant } from "@/components/admin/marketing-helpers";
-import { DuplicateWarning, usePinRetry, KhataLimitField } from "@/components/admin/customer-accounts";
-import { cleanPhone, isFutureDay, openingAmount } from "@/components/admin/customer-accounts-helpers";
+import { DuplicateWarning, usePinRetry, KhataLimitField, useBusinessToday } from "@/components/admin/customer-accounts";
+import { cleanPhone, effectiveDay, isFutureDay, khataLimitError, openingAmount } from "@/components/admin/customer-accounts-helpers";
 import { Badge, Button, Checkbox, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, SummaryCard, Switch, Table, TBody, TD, TH, THead, TR, Tabs, Textarea } from "@/components/ui";
 
 // SPEC "Customers are ledger accounts": Khata No., balance reading Settled or To Receive, source, and the lifecycle
@@ -31,12 +31,14 @@ const blank = (): Form => ({
   // A new customer may buy on account with no limit, the same as one added at the till; the owner can set a limit or turn it off.
   name: "", phone: "+92", email: "", company: "", group_id: "", credit_limit_minor: null, whatsapp_opt_in: true, notes: "",
   room: "", member_no: "", guardian_name: "", guardian_phone: "", notify_guardian: false,
-  opening_minor: 0, opening_advance: false, opening_reason: "Opening balance", opening_on: isoDay(),
+  // opening_on blank means today: the date field shows the branch's business day, and only a past day is sent.
+  opening_minor: 0, opening_advance: false, opening_reason: "Opening balance", opening_on: "",
 });
 type StatusTab = "" | "active" | "pending_approval" | "deactivated";
 
 export default function CustomersPage() {
   const khata = useModules().customer_accounts;
+  const today = useBusinessToday();
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const dq = useDebounced(q);
@@ -57,14 +59,15 @@ export default function CustomersPage() {
   const by = counts.data ?? {};
   const total = Object.values(by).reduce((a, b) => a + b, 0);
   const opening = form && khata ? openingAmount(form.opening_minor, form.opening_advance) : 0;
-  const openingFuture = !!form && khata && form.opening_minor > 0 && isFutureDay(form.opening_on);
+  const openingFuture = !!form && khata && form.opening_minor > 0 && isFutureDay(form.opening_on, today);
+  const limitError = !!form && khata && !!khataLimitError(form.credit_limit_minor);
   const save = async () => {
     if (!form) return;
     const body = {
       name: form.name.trim(), phone: cleanPhone(form.phone), email: form.email.trim() || null, company: form.company, group_id: form.group_id || null,
       credit_limit_minor: form.credit_limit_minor, whatsapp_opt_in: form.whatsapp_opt_in, notes: form.notes,
       room: form.room.trim() || null, member_no: form.member_no.trim() || null, guardian_name: form.guardian_name.trim() || null, guardian_phone: cleanPhone(form.guardian_phone), notify_guardian: form.notify_guardian,
-      ...(opening ? { opening_balance_minor: opening, opening_reason: form.opening_reason.trim() || "Opening balance", opening_on: form.opening_on || undefined } : {}),
+      ...(opening ? { opening_balance_minor: opening, opening_reason: form.opening_reason.trim() || "Opening balance", opening_on: effectiveDay(form.opening_on, today) } : {}),
     };
     const out = await submit((pin) => api<Customer>("/customers", { method: "POST", body: { ...body, approver_pin: pin } }),
       { label: opening ? `Opening balance ${formatMoney(Math.abs(opening))}${opening < 0 ? " in advance" : ""} for ${body.name}` : `Add customer ${body.name}`, success: "Customer added", failure: "Could not save the customer" });
@@ -143,7 +146,7 @@ export default function CustomersPage() {
         footer={<>
           {form ? <DuplicateWarning fields={form} showBalance={khata} /> : null}
           <Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button>
-          <Button loading={busy} disabled={!form?.name.trim() || openingFuture} onClick={save}>Save</Button>
+          <Button loading={busy} disabled={!form?.name.trim() || openingFuture || limitError} onClick={save}>Save</Button>
         </>}>
         {form ? (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -172,7 +175,7 @@ export default function CustomersPage() {
                   {form.opening_minor > 0 ? (
                     <>
                       <Field label="Reason"><Input value={form.opening_reason} onChange={(e) => setForm({ ...form, opening_reason: e.target.value })} /></Field>
-                      <Field label="Date" error={openingFuture ? "The date cannot be in the future" : undefined}><Input type="date" value={form.opening_on} max={isoDay()} onChange={(e) => setForm({ ...form, opening_on: e.target.value })} /></Field>
+                      <Field label="Date" error={openingFuture ? "The date cannot be in the future" : undefined}><Input type="date" value={form.opening_on || today} max={today} onChange={(e) => setForm({ ...form, opening_on: e.target.value })} /></Field>
                     </>
                   ) : null}
                 </div>

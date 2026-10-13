@@ -12,7 +12,7 @@ import { priceFor } from "@/lib/pricing";
 import { isOnline } from "@/lib/sync";
 import type { BarcodeRow, Catalog, Product, ProductBarcode } from "@/lib/types";
 import {
-  FORMAT_LABELS, barcodeFormat, createScanDetector, findBarcode, parseScaleLabel, scannerConfig, type BarcodeMatch, type ScanResult, type ScaleConfig, type ScannerConfig,
+  FORMAT_LABELS, barcodeFormat, createScanDetector, findBarcode, isPrintableKey, parseScaleLabel, scannerConfig, type BarcodeMatch, type ScanResult, type ScaleConfig, type ScannerConfig,
 } from "@/lib/barcode";
 import { useApproval } from "@/components/approval";
 import { Badge, Button, Dialog, Field, Input, Select, Switch } from "@/components/ui";
@@ -36,6 +36,14 @@ export function acceptsScan(el: EventTarget | null): boolean {
   return !isTypingTarget(el) || (el instanceof HTMLElement && !!el.closest("[data-scan-target]"));
 }
 
+/** A dialog or sheet is open over the page (ui Dialog and Sheet mark themselves aria-modal). */
+export function modalOpen(): boolean {
+  return typeof document !== "undefined" && document.querySelector('[role="dialog"][aria-modal="true"]') !== null;
+}
+
+/** How long after a scan a lone Enter or Tab still counts as the scanner's own, sent after a pause already ended the code. */
+const LATE_END_MS = 300;
+
 /** Takes the scanner's characters back out of the field they were typed into (works with React-controlled inputs). */
 function removeTyped(el: EventTarget | null, typed: string) {
   if (!typed || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
@@ -50,8 +58,9 @@ function removeTyped(el: EventTarget | null, typed: string) {
 /**
  * Listens to every keydown on the window (capture phase) while enabled and calls onScan with each scanned code.
  * Ordinary typing is never blocked: characters still reach the focused field, and only the scan's terminator key is
- * swallowed. A scan typed into the item search (data-scan-target) is caught and the field cleared; scans typed into
- * other text fields are left to that field.
+ * swallowed (also an Enter or Tab the scanner sends late, just after the scan). A scan typed into the item search
+ * (data-scan-target) is caught and the field cleared; scans typed into other text fields are left to that field.
+ * While a dialog or sheet is open the scanner stands aside: the dialog gets every key and nothing is added behind it.
  */
 export function useBarcodeScanner({ config, enabled, onScan, accept = acceptsScan }: { config: ScannerConfig; enabled: boolean; onScan: (code: string) => void; accept?: (target: EventTarget | null) => boolean }) {
   const onScanRef = useRef(onScan);
@@ -62,23 +71,34 @@ export function useBarcodeScanner({ config, enabled, onScan, accept = acceptsSca
     const detector = createScanDetector({ prefix, suffix, terminator, minLength, maxKeyIntervalMs });
     let target: EventTarget | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const take = (r: ScanResult | null, from: EventTarget | null): boolean => {
-      if (!r?.ok || !accept(from)) return false;
+    // When the last scan was taken; the next character ends the wait for a late Enter or Tab.
+    let tookAt = -Infinity;
+    const take = (r: ScanResult | null, from: EventTarget | null, at: number): boolean => {
+      if (!r?.ok || modalOpen() || !accept(from)) return false;
       if (isTypingTarget(from)) removeTyped(from, r.burst.raw);
+      tookAt = at;
       onScanRef.current(r.code);
       return true;
     };
+    const swallow = (e: KeyboardEvent) => { e.preventDefault(); e.stopPropagation(); };
     const onKey = (e: KeyboardEvent) => {
       clearTimeout(timer);
       // Shortcuts (Ctrl+V, Cmd+F), held keys and IME input are a person. Ctrl+Alt is AltGr on some layouts: let it through.
       if (e.isComposing || e.repeat || e.metaKey || (e.ctrlKey && !e.altKey)) { detector.reset(); return; }
-      const from = target;
       // event.timeStamp is when the key was pressed, so a busy page does not stretch the gaps between keys.
       const time = e.timeStamp > 1e12 || !e.timeStamp ? performance.now() : e.timeStamp;
+      const end = e.key === "Enter" || e.key === "Tab";
+      // Enter or Tab just after a scan, with nothing typed since, is the scanner's own, sent after a pause already ended
+      // the code (terminator "none"). Swallow it, or the item search would act on it and add its first tile.
+      if (end && time - tookAt <= LATE_END_MS) { tookAt = -Infinity; swallow(e); return; }
+      if (isPrintableKey(e.key)) tookAt = -Infinity;
+      if (modalOpen()) { detector.reset(); return; }
+      const from = target;
       const r = detector.feed({ key: e.key, time });
       if (detector.length === 1) target = e.target;
-      if (take(r, from) && r!.burst.end !== "pause") { e.preventDefault(); e.stopPropagation(); }
-      if (detector.length) timer = setTimeout(() => take(detector.flush(performance.now()), target), maxKeyIntervalMs + 20);
+      // The Enter or Tab that ended a scan is swallowed, on time or late; a character after a pause starts something new.
+      if (take(r, from, time) && end) swallow(e);
+      if (detector.length) timer = setTimeout(() => { const now = performance.now(); take(detector.flush(now), target, now); }, maxKeyIntervalMs + 20);
     };
     window.addEventListener("keydown", onKey, true);
     return () => { window.removeEventListener("keydown", onKey, true); clearTimeout(timer); };
@@ -228,6 +248,21 @@ interface DetectedBarcode { rawValue: string }
 interface BarcodeDetectorLike { detect(source: HTMLVideoElement): Promise<DetectedBarcode[]> }
 interface BarcodeDetectorClass { new (opts?: { formats?: string[] }): BarcodeDetectorLike; getSupportedFormats?: () => Promise<string[]> }
 const CAMERA_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"];
+/** detect() failures in a row after which the browser's detector is given up and ZXing reads the camera. */
+const DETECT_TRIES = 3;
+
+/**
+ * The browser's BarcodeDetector for the formats the till reads, or null when it is missing or reports none of them
+ * (Android without Google Play services, for one): ZXing reads the camera then.
+ */
+async function nativeDetector(): Promise<BarcodeDetectorLike | null> {
+  const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorClass }).BarcodeDetector;
+  if (!Detector?.getSupportedFormats) return null;
+  const supported = await Detector.getSupportedFormats().catch(() => [] as string[]);
+  const formats = CAMERA_FORMATS.filter((f) => supported.includes(f));
+  if (!formats.length) return null;
+  try { return new Detector({ formats }); } catch { return null; }
+}
 
 function cameraProblem(e: unknown): string {
   const name = (e as { name?: string } | null)?.name;
@@ -238,8 +273,8 @@ function cameraProblem(e: unknown): string {
 }
 
 /**
- * Reads barcodes and QR codes with the rear camera: the browser's BarcodeDetector where it exists (Chrome on Android,
- * Safari), otherwise ZXing, loaded only when this opens. The camera stops when the dialog closes.
+ * Reads barcodes and QR codes with the rear camera: the browser's BarcodeDetector where it works (Chrome on Android,
+ * Safari), otherwise ZXing, loaded only when needed. The camera stops when the dialog closes.
  */
 export function CameraScanDialog({ open, onClose, onCode }: { open: boolean; onClose: () => void; onCode: (code: string) => Promise<BarcodeMatch | null> | void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -278,30 +313,32 @@ export function CameraScanDialog({ open, onClose, onCode }: { open: boolean; onC
         stream = await media.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
       } catch (e) { return fail(cameraProblem(e)); }
       if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
-      video.srcObject = stream;
+      const camera = stream;
+      video.srcObject = camera;
       await video.play().catch(() => undefined);
       setStatus("scanning");
-      const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorClass }).BarcodeDetector;
-      if (Detector) {
-        const supported = (await Detector.getSupportedFormats?.().catch(() => [] as string[])) ?? [];
-        const detector = new Detector({ formats: supported.length ? CAMERA_FORMATS.filter((f) => supported.includes(f)) : CAMERA_FORMATS });
-        const tick = async () => {
-          if (stopped) return;
-          try {
-            if (video.readyState >= 2) { const found = await detector.detect(video); if (found[0]?.rawValue) await report(found[0].rawValue.trim()); }
-          } catch {
-            // A frame that cannot be read; try the next one.
-          }
-          if (!stopped) timer = setTimeout(tick, 120);
-        };
-        void tick();
-      } else {
+      const zxing = async () => {
         const { BrowserMultiFormatReader } = await import("@zxing/browser");
         if (stopped) return;
         const reader = new BrowserMultiFormatReader();
-        controls = await reader.decodeFromStream(stream, video, (result) => { if (result) void report(result.getText().trim()); });
+        controls = await reader.decodeFromStream(camera, video, (result) => { if (result) void report(result.getText().trim()); });
         if (stopped) controls.stop();
-      }
+      };
+      const detector = await nativeDetector();
+      if (stopped) return;
+      if (!detector) return zxing();
+      let misses = 0;
+      const tick = async () => {
+        if (stopped) return;
+        try {
+          if (video.readyState >= 2) { const found = await detector.detect(video); misses = 0; if (found[0]?.rawValue) await report(found[0].rawValue.trim()); }
+        } catch {
+          // A frame that cannot be read: try the next one. Several in a row mean the detector does not work here after all.
+          if (++misses >= DETECT_TRIES) { zxing().catch((e) => fail(cameraProblem(e))); return; }
+        }
+        if (!stopped) timer = setTimeout(tick, 120);
+      };
+      void tick();
     })().catch((e) => fail(cameraProblem(e)));
     return () => {
       stopped = true;

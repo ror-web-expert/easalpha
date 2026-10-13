@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog } from "./dialog";
@@ -38,21 +38,35 @@ export function PinDots({ length, filled }: { length: number; filled: number }) 
   );
 }
 
-/** Manager PIN approval dialog: who is approving and what. Resolves with the PIN. */
+/** Manager PIN approval dialog: who is approving and what. Sends the PIN once, when its 4th digit goes in. */
 export function PinDialog({ open, onClose, onSubmit, title = "Manager approval", what, error, loading }: { open: boolean; onClose: () => void; onSubmit: (pin: string) => void; title?: string; what?: string; error?: string | null; loading?: boolean }) {
   const [pin, setPin] = useState("");
-  useEffect(() => { if (open) setPin(""); }, [open]);
+  const live = useRef({ open, loading, onSubmit });
+  useEffect(() => { live.current = { open, loading, onSubmit }; });
+  // Opening and closing both empty it, so a PIN is never carried into the next approval.
+  useEffect(() => { setPin(""); }, [open]);
+  // Refused: the submit ended, or an error came, with the dialog still open. Clear it for the next try.
+  const wasLoading = useRef(false);
+  useEffect(() => {
+    if (wasLoading.current && !loading && open) setPin("");
+    wasLoading.current = !!loading;
+  }, [loading, open]);
+  useEffect(() => { if (error) setPin(""); }, [error]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (/^\d$/.test(e.key)) setPin((p) => (p.length < 4 ? p + e.key : p));
       if (e.key === "Backspace") setPin((p) => p.slice(0, -1));
-      if (e.key === "Enter" && pin.length === 4) onSubmit(pin);
+      if (e.key === "Enter" && pin.length === 4 && !loading) onSubmit(pin);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, pin, onSubmit]);
-  useEffect(() => { if (pin.length === 4 && open && !loading) onSubmit(pin); }, [pin, open, loading, onSubmit]);
+  }, [open, pin, loading, onSubmit]);
+  // Only a new 4th digit sends: re-sending whenever loading ended looped a wrong PIN until every manager's PIN locked.
+  useEffect(() => {
+    const l = live.current;
+    if (pin.length === 4 && l.open && !l.loading) l.onSubmit(pin);
+  }, [pin]);
   return (
     <Dialog open={open} onClose={onClose} title={title} description={what ? `Approve: ${what}` : "Ask a manager to enter their PIN"} size="sm">
       <div className="space-y-4">

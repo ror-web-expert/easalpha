@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/lib/types";
@@ -10,6 +11,7 @@ import { Button, Field, Input, Tabs, ThemeToggle } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
+  const qc = useQueryClient();
   const setSession = useAuthStore((s) => s.setSession);
   const session = useAuthStore((s) => s.session);
   const hydrated = useAuthStore((s) => s.hydrated);
@@ -24,7 +26,8 @@ export default function LoginPage() {
 
   useEffect(() => { if (hydrated && session) router.replace("/admin"); }, [hydrated, session, router]);
 
-  const finish = (s: Session) => { setSession(s); router.replace("/admin"); };
+  // Nothing cached for an earlier session (an expired one, or another business) carries over to this one.
+  const finish = (s: Session) => { qc.clear(); setSession(s); router.replace("/admin"); };
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();

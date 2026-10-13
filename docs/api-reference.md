@@ -77,7 +77,7 @@ Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1
 | POST | /api/v1/devices/:id/regenerate_code | regenerate_code |
 | POST | /api/v1/devices/pair | pair |
 | POST | /api/v1/devices/register | register: "Set up this device"; a signed-in owner or manager (devices.manage) creates and pairs the machine in one call; returns the pair payload plus `staff` (who can sign in on it, with has_pin) |
-| POST | /api/v1/devices/pin_login | pin_login |
+| POST | /api/v1/devices/pin_login | pin_login | After five wrong PINs on a device, pin.locked (401) for 15 minutes on that device only; manager approvals count wrong tries per asking member the same way.
 | POST | /api/v1/devices/heartbeat | heartbeat |
 | GET | /api/v1/devices | index |
 | POST | /api/v1/devices | create |
@@ -578,7 +578,7 @@ Generated from the Rails routes on 9 Oct 2026 (482 endpoints). Base path /api/v1
 | PATCH | /api/v1/expenses/categories/:id | update_category |
 | DELETE | /api/v1/expenses/categories/:id | destroy_category |
 | GET | /api/v1/expenses/summary | summary |
-| POST | /api/v1/expenses/:id/void | void |
+| POST | /api/v1/expenses/:id/void | void (409 expense.wage for a paid wage's expense: void it with POST /wages/:id/void so a recovered advance is given back) |
 | GET | /api/v1/expenses | index |
 | POST | /api/v1/expenses | create |
 | GET | /api/v1/expenses/:id | show |
@@ -1067,12 +1067,12 @@ Modules: `modules.customer_accounts` and `modules.payroll` in the settings store
 | POST | /api/v1/customer_adjustments/:id/reverse | { reason, approver_pin? } |
 | GET | /api/v1/customers/:id/bill?from=&to=&due_on= | bill JSON with the public link (default: last month) |
 | GET | /api/v1/customers/:id/bill.pdf | the bill as an A4 PDF |
-| POST | /api/v1/customers/:id/send_bill | WhatsApp to the customer (and guardian) with the PDF attached through a linked phone |
+| POST | /api/v1/customers/:id/send_bill | WhatsApp to the customer (and guardian) with the PDF attached through a linked phone; 409 whatsapp.not_connected when no phone is linked (nothing is marked sent) |
 | GET | /api/v1/customer_bills?from=&to=&min_balance_minor=&q=&all= | one summary row per customer |
 | GET | /api/v1/customer_bills.pdf?from=&to=&customer_ids[]= | every bill in one PDF |
 | GET | /api/v1/bill_runs | bill run history |
 | GET | /api/v1/bill_runs/:id | one run with per-customer results |
-| POST | /api/v1/bill_runs | send bills now { from, to, due_on?, customer_ids?, min_balance_minor? } |
+| POST | /api/v1/bill_runs | send bills now { from, to, due_on?, customer_ids?, min_balance_minor? }; 409 whatsapp.not_connected when no phone is linked; a row is "sent" only when its message was queued; GET /bill_runs/:id shows live counts while a run is going; the month-end job sends from the bill day on and carries on a run cut short |
 | GET | /api/v1/public/bills/:token | public bill (signed token, 120 days) |
 | GET | /api/v1/public/bills/:token/pdf | public bill PDF |
 | GET | /api/v1/products/barcodes?q= | every barcode with product, size, price and format |
@@ -1081,13 +1081,14 @@ Modules: `modules.customer_accounts` and `modules.payroll` in the settings store
 | DELETE | /api/v1/products/:id/barcodes/:barcode_id | remove a code |
 | POST | /api/v1/products/barcodes/generate | { count } free in-store EAN-13 codes |
 | PUT | /api/v1/products/:id | also barcodes: [{ code, variant_id? or variant_name?, quantity? }] (replaces) |
-| GET | /api/v1/wages/due?day= | daily and weekly staff with suggested wage and what is paid |
-| GET | /api/v1/wages/preview?employee_id=&from=&to= | suggested wage for a period |
+| GET | /api/v1/wages/due?day= | daily and weekly staff with suggested wage and what is paid; attendance entries carry `recorded` (false for a day filled by the payroll rules: holiday, approved leave, weekly off, else absent unless a no-scan day is not absent); an employee keeps attendance when fingerprint-enrolled or with a scanned or hand-marked day in the period or the 30 days before; working days after today are left out |
+| GET | /api/v1/wages/preview?employee_id=&from=&to= | suggested wage for a period (same attendance rules as /wages/due) |
 | GET | /api/v1/wages?employee_id=&from=&to=&status= | wage payments with totals |
 | POST | /api/v1/wages | pay one wage |
 | POST | /api/v1/wages/batch | pay a day's wages, row by row |
 | POST | /api/v1/wages/:id/void | { reason } |
-| GET | /api/v1/employees/:id/statement?from=&to= | employee statement |
+| GET | /api/v1/employees/:id/statement?from=&to= | employee statement (wage rows dated on the branch business day, never after the pay day) |
+| POST | /api/v1/employees/:id/send_statement | WhatsApp the statement; 409 whatsapp.not_connected when no phone is linked (also for POST /whatsapp/bulk and customer send_statement) |
 | POST | /api/v1/employees/:id/send_statement | WhatsApp the statement summary |
 
 New settings keys: `khata.notify_each_sale`, `khata.notify_adjustments`, `khata.monthly_bills.enabled|day|due_days|min_balance (rupees)|attach_pdf`, `payroll.whatsapp.advance_paid|wage_paid|salary_paid`, `pos.barcode_scanning.prefix|suffix|terminator|min_length|max_key_interval_ms|beep|camera|unknown_code|scale_barcodes|scale_prefixes|scale_item_digits|scale_value|scale_decimals`. New permissions: `khata.adjust`, `wages.pay`. New job: `MonthlyBillsJob` daily at 09:30 Asia/Karachi.

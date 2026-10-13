@@ -34,12 +34,14 @@ module Balances
       touched
     end
 
-    # customers.balance_minor = khata charges minus payments received plus payments made to the customer.
+    # customers.balance_minor = khata charges minus refunds and payments received, plus payments made to the customer and
+    # adjustments: one set of SQL sums for every customer (Customers::Ledger.balances).
     def customers!
+      sums = Customers::Ledger.balances
       touched = 0
       Customer.find_each do |c|
-        bal = Customers::Ledger.entries(c).last&.dig(:balance_minor) || 0
-        next if bal.nil? || c.balance_minor == bal
+        bal = sums[c.id].to_i
+        next if c.balance_minor == bal
         Customer.where(id: c.id).update_all(balance_minor: bal)
         touched += 1
       end

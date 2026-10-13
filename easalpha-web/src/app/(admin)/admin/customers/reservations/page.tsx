@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime, formatTime, isoDay } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { usePagedList } from "@/lib/hooks";
+import { useModules } from "@/lib/modules";
 import { Cards, FilterBar, LoadMore, PageHeader } from "@/components/admin/page";
 import { useList } from "@/components/admin/crud";
 import { CustomerPicker, fromLocalInput, reservationStatusVariant, toLocalInput } from "@/components/admin/phase3";
@@ -27,6 +28,7 @@ export default function ReservationsPage() {
   const methods = useList<PaymentMethod>("payment_methods", "/payment_methods");
   const tables = useList<DiningTable>("tables", "/tables");
   const [form, setForm] = useState<Form | null>(null);
+  const khata = useModules().customer_accounts;
   const [seat, setSeat] = useState<{ r: Reservation; table_id: string } | null>(null);
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["reservations"] }); qc.invalidateQueries({ queryKey: ["tables"] }); };
   const act = useMutation({
@@ -48,7 +50,7 @@ export default function ReservationsPage() {
   const openNew = () => { const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); setForm({ customer: null, guest_name: "", phone: "", party_size: "2", starts_at: mode === "day" && day !== isoDay() ? `${day}T19:00` : toLocalInput(d), duration: "90", table_id: "", deposit_minor: 0, deposit_method_code: "", notes: "" }); };
   return (
     <>
-      <PageHeader icon={CalendarDays} title="Reservations" description="Table bookings with an optional deposit held on the customer's khata. Guests get a WhatsApp confirmation and a reminder two hours before." actions={<Button onClick={openNew}><Plus className="h-4 w-4" /> New reservation</Button>} />
+      <PageHeader icon={CalendarDays} title="Reservations" description={khata ? "Table bookings with an optional deposit held on the customer's khata. Guests get a WhatsApp confirmation and a reminder two hours before." : "Table bookings. Guests get a WhatsApp confirmation and a reminder two hours before. Switch on Customer accounts under Settings, Modules to hold deposits."} actions={<Button onClick={openNew}><Plus className="h-4 w-4" /> New reservation</Button>} />
       <Cards>
         <SummaryCard label="Booked / confirmed" value={counts.live} tone="info" />
         <SummaryCard label="Seated now" value={counts.seated} tone="success" />
@@ -95,7 +97,7 @@ export default function ReservationsPage() {
         footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={create.isPending} disabled={!form || (!form.customer && !form.guest_name.trim()) || !fromLocalInput(form.starts_at)} onClick={() => form && create.mutate(form)}>Book</Button></>}>
         {form ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Customer" hint="Optional; needed to hold a deposit on khata" className="sm:col-span-2"><CustomerPicker value={form.customer} onPick={(c) => setForm({ ...form, customer: c, guest_name: form.guest_name || c.name, phone: form.phone || c.phone || "" })} onClear={() => setForm({ ...form, customer: null })} /></Field>
+            <Field label="Customer" hint={khata ? "Optional; needed to hold a deposit on khata" : "Optional"} className="sm:col-span-2"><CustomerPicker value={form.customer} onPick={(c) => setForm({ ...form, customer: c, guest_name: form.guest_name || c.name, phone: form.phone || c.phone || "" })} onClear={() => setForm({ ...form, customer: null })} /></Field>
             <Field label="Guest name"><Input value={form.guest_name} onChange={(e) => setForm({ ...form, guest_name: e.target.value })} placeholder={form.customer?.name ?? "Name"} /></Field>
             <Field label="Phone" hint="For the WhatsApp confirmation and reminder"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0300 1234567" /></Field>
             <Field label="Party size"><Input type="number" min={1} className="tabular" value={form.party_size} onChange={(e) => setForm({ ...form, party_size: e.target.value })} /></Field>
@@ -107,8 +109,13 @@ export default function ReservationsPage() {
                 {availability.data?.tables.map((t) => <option key={t.id} value={t.id}>{t.code}{t.name ? ` · ${t.name}` : ""} · {t.seats} seats{t.location ? ` · ${t.location}` : ""}</option>)}
               </Select>
             </Field>
-            <Field label="Deposit" hint={form.deposit_minor && !form.customer ? "Pick a customer to record a deposit" : "Recorded as a khata payment; applied at the bill"}><MoneyInput value={form.deposit_minor} onChange={(v) => setForm({ ...form, deposit_minor: v })} /></Field>
-            <Field label="Deposit method"><Select value={form.deposit_method_code} onChange={(e) => setForm({ ...form, deposit_method_code: e.target.value })} disabled={!form.deposit_minor}>{methods.data?.filter((m) => m.active && m.kind !== "khata").map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
+            {/* Deposits sit on the customer's khata, so the fields only show while the Customer accounts module is on. */}
+            {khata ? (
+              <>
+                <Field label="Deposit" hint={form.deposit_minor && !form.customer ? "Pick a customer to record a deposit" : "Recorded as a khata payment; applied at the bill"}><MoneyInput value={form.deposit_minor} onChange={(v) => setForm({ ...form, deposit_minor: v })} /></Field>
+                <Field label="Deposit method"><Select value={form.deposit_method_code} onChange={(e) => setForm({ ...form, deposit_method_code: e.target.value })} disabled={!form.deposit_minor}>{methods.data?.filter((m) => m.active && m.kind !== "khata").map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
+              </>
+            ) : null}
             <Field label="Notes" className="sm:col-span-2"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Window seat, birthday cake, high chair…" /></Field>
           </div>
         ) : null}

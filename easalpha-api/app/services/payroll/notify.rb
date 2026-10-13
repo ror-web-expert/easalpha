@@ -41,6 +41,7 @@ module Payroll
     def statement!(employee, statement)
       Whatsapp::Account.guard!(employee.business)
       raise Api::Errors::BadRequest.new("whatsapp.no_phone", "#{employee.name} has no phone number") if employee.phone.blank?
+      Whatsapp::Provider.require_live!(employee.business) # sent by hand, so it never reports a message that cannot go out as sent
       bal = statement[:closing_balance_minor]
       line = bal.positive? ? "Still to be paid to you: Rs #{rupees(bal)}." : bal.negative? ? "You owe (advances): Rs #{rupees(-bal)}." : "Nothing is due either way."
       t = statement[:totals]

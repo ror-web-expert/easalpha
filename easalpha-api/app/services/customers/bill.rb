@@ -4,8 +4,10 @@ module Customers
   module Bill
     module_function
 
-    def build(customer, from:, to:, due_on: nil, issued_on: nil)
-      st = Customers::Ledger.statement(customer, from: from, to: to)
+    # statement: one already built for many customers at once (Ledger.statements). items: false leaves out the order
+    # lines when only the totals are needed (a WhatsApp message; the PDF is built again when it is sent).
+    def build(customer, from:, to:, due_on: nil, issued_on: nil, items: true, statement: nil)
+      st = statement || Customers::Ledger.statement(customer, from: from, to: to, items: items)
       business = customer.business
       branch = Branch.active.order(is_main: :desc).first
       period_label = from.beginning_of_month == from && to == from.end_of_month ? from.strftime("%B %Y") : "#{from.strftime('%-d %b %Y')} to #{to.strftime('%-d %b %Y')}"

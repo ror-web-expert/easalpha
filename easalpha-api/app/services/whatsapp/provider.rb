@@ -11,5 +11,13 @@ module Whatsapp
       return cloud? if business.nil? || mode(business) == "cloud"
       Gateway.configured? && Gateway.connected?(business)
     end
+
+    # For a person pressing Send: without a live provider each message is only stored ("logged"), so say nothing can go
+    # out instead of reporting it sent.
+    def require_live!(business = Current.business)
+      return if live?(business)
+      message = mode(business) == "cloud" ? "The WhatsApp Cloud API is not set up, so nothing was sent." : "Link a WhatsApp phone in Settings, then send again."
+      raise Api::Errors::Conflict.new("whatsapp.not_connected", message)
+    end
   end
 end

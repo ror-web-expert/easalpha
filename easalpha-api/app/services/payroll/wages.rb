@@ -1,32 +1,55 @@
 module Payroll
   # Daily and weekly wages: employees whose pay frequency is daily or weekly are paid per day or per week instead of in
-  # the monthly payroll run. Days worked come from attendance when it is kept (present or late 1, half day 0.5),
-  # otherwise every day of the period counts; the manager can change the days and the amount before paying. A payment
-  # is a Wages expense from the drawer or an account, can recover outstanding advances, and messages the employee.
+  # the monthly payroll run. Days worked come from attendance when the employee keeps it (present or late 1, half day
+  # 0.5; a day without a row counts as the payroll run would record it), otherwise every day of the period counts; the
+  # manager can change the days and the amount before paying. A payment is a Wages expense from the drawer or an
+  # account, can recover outstanding advances, and messages the employee.
   module Wages
     module_function
 
     DAILY_PAID = { "present" => 1, "late" => 1, "half_day" => 0.5 }.freeze
     WEEKLY_PAID = DAILY_PAID.merge("weekly_off" => 1, "holiday" => 1, "leave" => 1).freeze
 
-    # The suggested wage for an employee and period.
+    # The suggested wage for an employee and period. Read only: it never writes attendance rows.
     def preview(employee, from:, to:)
       raise Api::Errors::Conflict.new("wages.monthly", "#{employee.name} is paid monthly; use Run Payroll") if employee.monthly?
       raise Api::Errors::BadRequest.new("wages.period", "The end date is before the start date") if to < from
       period_days = (to - from).to_i + 1
-      rows = ::Attendance.where(employee_id: employee.id, business_day: from..to).to_a
-      tracked = rows.any?
-      # A daily wage pays the days worked; a weekly wage also pays the weekly off, holidays and approved leave.
+      # Kept or not is decided per employee, so a day without a scan is not mistaken for attendance not being kept. For
+      # someone who keeps none, the only rows are ones a payroll run filled in; they are ignored and every day counts.
+      tracked = Attendance.kept?(employee, from: from, to: to)
+      attendance = tracked ? attendance_days(employee, from: from, to: to) : []
+      # A daily wage pays the days worked; a weekly wage also pays the weekly off, holidays and approved leave, except
+      # approved unpaid leave (the monthly run deducts it too), whether or not a payroll run recorded the day.
       paid_status = employee.pay_frequency == "daily" ? DAILY_PAID : WEEKLY_PAID
-      days = tracked ? rows.sum { |a| paid_status.fetch(a.status, 0) } : (from..to).count { |d| employee.active_on?(d) }
+      unpaid = tracked ? LeaveRequest.where(employee_id: employee.id, status: "approved", kind: "unpaid").where("from_date <= ? AND to_date >= ?", to, from).to_a : []
+      days = if tracked
+        attendance.sum { |a| a[:status] == "leave" && unpaid.any? { |l| l.covers?(a[:day]) } ? 0 : paid_status.fetch(a[:status], 0) }
+      else
+        (from..to).count { |d| employee.active_on?(d) }
+      end
       days = BigDecimal(days.to_s)
       rate = employee.base_salary_minor
       gross = wage_for(employee, days)
       outstanding = Advance.where(employee_id: employee.id, status: "paid").where("outstanding_minor > 0").sum(:outstanding_minor)
       paid = WagePayment.where(employee_id: employee.id, status: "paid").where("period_from <= ? AND period_to >= ?", to, from).order(:period_from).to_a
       { employee_id: employee.id, employee_name: employee.name, pay_frequency: employee.pay_frequency, from: from, to: to, period_days: period_days, attendance_tracked: tracked,
-        attendance: rows.map { |a| { day: a.business_day, status: a.status } }.sort_by { |a| a[:day] }, days_worked: days.to_f, rate_minor: rate, gross_minor: gross,
+        attendance: attendance, days_worked: days.to_f, rate_minor: rate, gross_minor: gross,
         advances_outstanding_minor: outstanding, already_paid: paid.map { |w| serialize(w) }, phone: employee.phone }
+    end
+
+    # Each day of the period as attendance sees it: the day's row, else what fill_absences! would record (recorded false).
+    # A working day after today has not happened yet and is left out; a weekly off, holiday or leave ahead still counts.
+    def attendance_days(employee, from:, to:)
+      rows = ::Attendance.where(employee_id: employee.id, business_day: from..to).index_by(&:business_day)
+      today = Attendance.branch_for(employee).business_day_for(Time.current)
+      cal = Attendance.calendar(employee, from: from, to: to)
+      (from..to).filter_map do |d|
+        if (a = rows[d]) then { day: d, status: a.status, recorded: true }
+        elsif employee.active_on?(d) && (status = Attendance.status_without_row(d, **cal)) && (d <= today || status != "absent")
+          { day: d, status: status, recorded: false }
+        end
+      end
     end
 
     def pay!(employee, from:, to:, actor:, branch:, shift: nil, days_worked: nil, gross_minor: nil, bonus_minor: 0, deductions_minor: 0, advance_recovery_minor: 0, method_code: "cash", note: nil)
@@ -63,13 +86,17 @@ module Payroll
 
     # Voiding reverses the expense and gives back the advance recovered; the row stays with the reason.
     def void!(wp, reason:, actor:)
-      raise Api::Errors::Conflict.new("wages.voided", "#{wp.label} is already voided") unless wp.paid?
-      raise Api::Errors::BadRequest.new("wages.reason", "A reason is required") if reason.to_s.strip.blank?
       WagePayment.transaction do
-        Expenses::Recorder.void!(Expense.find(wp.expense_id), actor: actor, reason: "Wage #{wp.label} voided: #{reason}") if wp.expense_id
+        wp.lock! # a second click must not give the advance back twice
+        raise Api::Errors::Conflict.new("wages.voided", "#{wp.label} is already voided") unless wp.paid?
+        raise Api::Errors::BadRequest.new("wages.reason", "A reason is required") if reason.to_s.strip.blank?
+        # The expense may already be voided from the Expenses screen (before that was refused); the wage still voids.
+        expense = wp.expense_id && Expense.find_by(id: wp.expense_id)
+        expense_was_voided = expense&.voided? || false
+        Expenses::Recorder.void!(expense, actor: actor, reason: "Wage #{wp.label} voided: #{reason}") if expense && !expense_was_voided
         restore_advances!(wp.employee, wp.advance_recovered_minor)
         wp.update!(status: "voided", voided_at: Time.current, void_reason: reason.to_s.strip)
-        AuditLog.record(action: "void", record: wp, after: { reason: reason, net_minor: wp.net_minor })
+        AuditLog.record(action: "void", record: wp, after: { reason: reason, net_minor: wp.net_minor, expense_already_voided: expense_was_voided })
       end
       wp
     end

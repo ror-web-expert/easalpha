@@ -10,7 +10,7 @@ module Serializers
     { id: b.id, name: b.name, slug: b.slug, legal_name: b.legal_name, country: b.country, currency: b.currency, time_zone: b.time_zone,
       phone: b.phone, email: b.email, logo_key: b.logo_key, status: b.status, trial_ends_on: b.trial_ends_on, trial_days_left: b.trial_days_left,
       plan: b.plan && { code: b.plan.code, name: b.plan.name, features: b.plan.features, limits: b.plan.limits },
-      settings: b.settings, settings_version: b.settings_version, read_only: b.read_only?, created_at: b.created_at }
+      settings: Setting.without_secrets(b.settings), settings_version: b.settings_version, read_only: b.read_only?, created_at: b.created_at }
   end
 
   def branch(br)

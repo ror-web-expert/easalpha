@@ -5,7 +5,8 @@ import { needsApproval, errorMessage, ApiError } from "@/lib/api";
 
 /**
  * Runs an action; when the API answers "approval.required" / "permission.denied", opens the manager PIN dialog
- * and retries with approver_pin. Usage: const { run, dialog } = useApproval(); await run((pin) => api(..., { approver_pin: pin }), "Void order #12")
+ * and retries with approver_pin. A wrong PIN keeps the dialog open, empty, for another try; it is never re-sent.
+ * Usage: const { run, dialog } = useApproval(); await run((pin) => api(..., { approver_pin: pin }), "Void order #12")
  */
 export function useApproval() {
   const [open, setOpen] = useState(false);
@@ -52,5 +53,6 @@ export function useApproval() {
   }, []);
 
   const dialog = <PinDialog open={open} onClose={close} onSubmit={submit} what={what} error={error} loading={loading} />;
-  return { run, dialog };
+  // open: the PIN dialog is showing, e.g. for a screen that pauses other input meanwhile.
+  return { run, dialog, open };
 }

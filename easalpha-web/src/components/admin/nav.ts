@@ -178,7 +178,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/reports/cashiers", label: "Cashiers", icon: UserCircle, perms: REPORTS },
       { href: "/admin/reports/cashier-till", label: "Cashier Till", icon: Wallet, perms: [...REPORTS, "shifts.any"] },
       { href: "/admin/reports/customers", label: "Customers", icon: Users, perms: REPORTS },
-      { href: "/admin/reports/customer-ledger", label: "Customer Ledger", icon: BookOpen, perms: REPORTS },
+      { href: "/admin/reports/customer-ledger", label: "Customer Ledger", icon: BookOpen, perms: REPORTS, module: "customer_accounts" },
       { href: "/admin/reports/operations", label: "Operations", icon: Activity, perms: REPORTS },
       { href: "/admin/reports/cancelled-modified", label: "Cancelled & Modified Orders", icon: Undo2, perms: REPORTS },
       { href: "/admin/reports/delivery-riders", label: "Delivery Riders", icon: Bike, perms: REPORTS },

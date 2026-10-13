@@ -10,6 +10,6 @@ cd easalpha-whatsapp && npm install && WHATSAPP_GATEWAY_TOKEN=change-me npm star
 
 Point the API at it: `WHATSAPP_GATEWAY_URL=http://localhost:3010` and the same `WHATSAPP_GATEWAY_TOKEN`. Sessions persist in `./sessions/` so a restart does not need a new scan. One session per business.
 
-Endpoints (bearer token): `GET /sessions/:id`, `POST /sessions/:id/start`, `POST /sessions/:id/logout`, `POST /sessions/:id/send { to, text }`, `GET /health`.
+Endpoints (bearer token): `GET /sessions/:id`, `POST /sessions/:id/start`, `POST /sessions/:id/logout`, `POST /sessions/:id/send { to, text, document? }`, `GET /health`. The optional `document { base64, filename, mimetype }` (a PDF bill, up to 10 MB) is sent with the text as its caption. Errors answer `{ ok: false, last_error }`, the reason the API shows.
 
 Note: this links a normal WhatsApp account the same way WhatsApp Web does. Keep message volume reasonable (receipts, statements, alerts); for bulk marketing at scale use the Meta Cloud API provider instead.

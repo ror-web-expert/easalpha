@@ -53,6 +53,7 @@ module Api
         require_permission!(*SEND)
         customer = Customer.active.find(params[:id])
         Whatsapp::Account.guard!(current_business)
+        Customers::Bills.require_connected!(current_business)
         b = build_bill(customer)
         msgs = Customers::Notify.bill!(customer, bill: b, link: Customers::BillToken.url(customer, from: period[0], to: period[1], due_on: due_on),
                                                  attach_pdf: ActiveModel::Type::Boolean.new.cast(current_business.setting("khata.monthly_bills.attach_pdf")) != false)
@@ -66,12 +67,14 @@ module Api
         scope = Customer.active.where(is_walk_in: false).order(:khata_no)
         scope = Customer.lookup(params[:q]).where(is_walk_in: false).order(:khata_no) if params[:q].present?
         scope = with_account_activity(scope, from, to) unless params[:all] == "true"
-        rows = scope.map do |c|
-          st = Customers::Ledger.statement(c, from: from, to: to)
-          next nil if params[:all] != "true" && st[:entries].empty? && st[:closing_balance_minor].zero?
+        customers = scope.to_a
+        statements = Customers::Ledger.statements(customers, from: from, to: to, items: false)
+        rows = customers.filter_map do |c|
+          st = statements[c.id]
+          next if params[:all] != "true" && st[:entries].empty? && st[:closing_balance_minor].zero?
           { customer: CustomerSerializers.customer(c), brought_forward_minor: st[:brought_forward_minor], closing_balance_minor: st[:closing_balance_minor], totals: st[:totals],
             entries_count: st[:entries].size, phones: c.account_phones }
-        end.compact
+        end
         min = params[:min_balance_minor].to_i
         rows = rows.select { |r| r[:closing_balance_minor] >= min } if params[:min_balance_minor].present?
         render json: { from: from, to: to, due_on: due_on, rows: rows,
@@ -85,7 +88,9 @@ module Api
         from, to = period
         scope = Customer.active.where(is_walk_in: false).order(:khata_no)
         scope = params[:customer_ids].present? ? scope.where(id: Array(params[:customer_ids])) : with_account_activity(scope, from, to)
-        bills = scope.map { |c| build_bill(c) }.reject { |b| params[:customer_ids].blank? && b[:entries].empty? && b[:closing_balance_minor].zero? }
+        customers = scope.to_a
+        statements = Customers::Ledger.statements(customers, from: from, to: to)
+        bills = customers.map { |c| build_bill(c, statement: statements[c.id]) }.reject { |b| params[:customer_ids].blank? && b[:entries].empty? && b[:closing_balance_minor].zero? }
         raise Api::Errors::Conflict.new("bills.empty", "No customer has anything on account in this period") if bills.empty?
         send_data Customers::BillPdf.render(bills), filename: "bills-#{to.strftime('%Y-%m')}.pdf", type: "application/pdf"
       end
@@ -140,7 +145,7 @@ module Api
         scope.where("customers.balance_minor <> 0").or(scope.where(id: active_ids)).or(scope.where(id: paid_ids)).or(scope.where(id: adj_ids))
       end
 
-      def build_bill(customer) = Customers::Bill.build(customer, from: period[0], to: period[1], due_on: due_on, issued_on: today)
+      def build_bill(customer, statement: nil) = Customers::Bill.build(customer, from: period[0], to: period[1], due_on: due_on, issued_on: today, statement: statement)
 
       def serialize(a)
         { id: a.id, number: a.number, label: a.label, customer_id: a.customer_id, kind: a.kind, amount_minor: a.amount_minor, reason: a.reason, effective_on: a.effective_on,

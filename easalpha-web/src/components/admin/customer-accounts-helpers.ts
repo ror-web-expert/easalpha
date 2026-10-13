@@ -59,8 +59,25 @@ export function periodQuery(p: Period): { from?: string; to?: string } {
   return isAllTime(p) ? {} : { from: p.from || undefined, to: p.to || undefined };
 }
 
-export function isFutureDay(value: string, today: Date = new Date()): boolean {
-  return !!value && value > day(today);
+/** today is the branch's business day (YYYY-MM-DD), which the API checks against: at 1 am it is still yesterday. */
+export function isFutureDay(value: string, today: string): boolean {
+  return !!value && value > today;
+}
+
+/** The date to send with an opening balance or adjustment: a past day as picked. Today, or blank, is left out so the
+ *  API dates it by its own business day in the branch's time zone, and a browser clock ahead of it cannot be refused. */
+export function effectiveDay(value: string, today: string): string | undefined {
+  return value && value < today ? value : undefined;
+}
+
+// ---- Khata limit ----
+
+/** The smallest credit limit: Rs 1. A limit of 0 means khata is not allowed. */
+export const MIN_KHATA_LIMIT = 100;
+
+/** Why Save must wait: a limit above 0 but under Rs 1. null (no limit) and 0 (not allowed) are fine. */
+export function khataLimitError(limitMinor: number | null | undefined): string | null {
+  return limitMinor !== null && limitMinor !== undefined && limitMinor > 0 && limitMinor < MIN_KHATA_LIMIT ? "Enter a limit of at least Rs 1" : null;
 }
 
 // ---- Signed amounts ----
@@ -327,7 +344,7 @@ export interface ImportColumn { key: string; help: string; examples: [string, st
 /** CSV columns for POST /customers/import, in template order. khata: only with customer accounts switched on. */
 export const IMPORT_COLUMNS: ImportColumn[] = [
   { key: "name", help: "Required. The customer's full name.", examples: ["Ali Raza", "Sana Khan"] },
-  { key: "phone", help: "Mobile number, 03001234567 or +923001234567. Used to find an existing customer.", examples: ["03001234567", "03451234567"] },
+  { key: "phone", help: "Mobile number, 03001234567 or +923001234567. Used to find an existing customer. In Excel, format the phone columns as Text first, or Excel changes the numbers (it drops the leading 0).", examples: ["03001234567", "03451234567"] },
   { key: "email", help: "Optional.", examples: ["", "sana@example.com"] },
   { key: "company", help: "Office or company, optional.", examples: ["", "Head office"] },
   { key: "group", help: "Customer group. A new group is made when the name is new.", examples: ["Hostel A", "Staff"] },
@@ -336,7 +353,7 @@ export const IMPORT_COLUMNS: ImportColumn[] = [
   { key: "room", help: "Room or unit.", examples: ["B-12", "C-4"] },
   { key: "roll_no", help: "Roll or ID number. Used to find an existing customer when there is no phone match.", examples: ["2024-CS-17", "EMP-203"] },
   { key: "guardian_name", help: "Parent or guardian.", examples: ["Raza Ahmed", ""] },
-  { key: "guardian_phone", help: "Guardian's mobile number.", examples: ["03211234567", ""] },
+  { key: "guardian_phone", help: "Guardian's mobile number. Format it as Text in Excel, like phone.", examples: ["03211234567", ""] },
   { key: "credit_limit", help: "Khata limit in rupees. Leave blank for no limit.", examples: ["10000", "5000"], khata: true },
   { key: "opening_balance", help: "What the customer already owes, in rupees. Negative means paid in advance. Skipped when they already have one.", examples: ["2500", "-1000"], khata: true },
 ];

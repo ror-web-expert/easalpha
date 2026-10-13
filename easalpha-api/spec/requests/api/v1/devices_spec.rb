@@ -85,14 +85,21 @@ RSpec.describe "Devices and PIN login", type: :request do
     end
   end
 
-  it "locks a PIN after five wrong tries" do
+  it "locks the till, not the staff, after five wrong PINs" do
+    allow(Rails).to receive(:cache).and_return(ActiveSupport::Cache::MemoryStore.new) # the test store keeps nothing
     device = within(owner.business) { Device.create!(branch: Branch.first, name: "Till", kind: "till", paired_at: Time.current) }
+    other = within(owner.business) { Device.create!(branch: Branch.first, name: "Till 2", kind: "till", paired_at: Time.current) }
     cashier = add_cashier(pin: "1111")
     5.times { api_post "/api/v1/devices/pin_login", { pin: "9999" }, headers: device_headers(device) }
     expect(response).to have_http_status(:unauthorized)
+    expect(json.dig(:error, :code)).to eq("pin.invalid")
     api_post "/api/v1/devices/pin_login", { pin: "1111" }, headers: device_headers(device)
     expect(response).to have_http_status(:unauthorized)
-    expect(cashier.reload.pin_locked?).to be true
+    expect(json.dig(:error, :code)).to eq("pin.locked")
+    # A stranger's wrong tries on one till never lock the cashier out of the next till.
+    expect(cashier.reload.pin_locked?).to be false
+    api_post "/api/v1/devices/pin_login", { pin: "1111" }, headers: device_headers(other)
+    expect(response).to have_http_status(:ok)
   end
 
   it "blocks a waiter from the kitchen device and a revoked device from everything" do

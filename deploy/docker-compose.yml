@@ -25,6 +25,8 @@ services:
       FORCE_SSL: ${FORCE_SSL:-true}
       PUBLIC_URL: ${PUBLIC_URL}
       CORS_ORIGINS: ${PUBLIC_URL}
+      # Puma threads (and the database pool): bill runs and PDF exports hold a thread for a while.
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-5}
       WHATSAPP_GATEWAY_URL: http://whatsapp:3010
       WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}

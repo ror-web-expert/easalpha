@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, Trash2 } from "lucide-react";
-import type { PaymentInput, PaymentMethod } from "@/lib/types";
+import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
+import { api } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
-import { cashRounding } from "@/lib/pricing";
-import { defaultPaymentMethod } from "@/lib/pos-rules";
-import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, totalsWithCharges, type ChargeState } from "@/lib/pos-charges";
+import { defaultPaymentMethod, payableTotals, roundsCash } from "@/lib/pos-rules";
+import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, type ChargeState } from "@/lib/pos-charges";
 import type { Cart, CartCustomer } from "@/store/cart";
 import { discountRows } from "@/lib/pos-discounts";
 import { DiscountsPanel, type DiscountRunner } from "./discounts-panel";
@@ -20,14 +20,16 @@ import { cn, titleCase } from "@/lib/utils";
 export type TaxChoiceInput = { none: true } | { tax_rate_id: string };
 
 interface Props {
-  open: boolean; onClose: () => void; cart: Cart; onPay: (payments: PaymentInput[], tip_minor: number) => Promise<void>; busy: boolean;
+  // onPay also gets the amount due the screen showed, so the page can check it against what the server will ask for.
+  open: boolean; onClose: () => void; cart: Cart; onPay: (payments: PaymentInput[], tip_minor: number, due_minor: number) => Promise<void>; busy: boolean;
   /** SPEC Charges: the cashier changed or removed the service / delivery charge; the page saves the order and shows the new total. */
   onCharges?: (fields: Partial<Cart>) => Promise<void>;
   /** SPEC Tax: No Tax / linked rate. Online only; the page re-prices through the server. */
   onTaxChoice?: (choice: TaxChoiceInput) => Promise<void>;
   /** SPEC discounts: vouchers, loyalty points and redemption options, applied on the server. Online only. */
   onDiscount?: DiscountRunner;
-  /** Khata without a customer: the cashier searches and attaches the customer here, without leaving payment. */
+  /** Khata without a customer: the cashier searches and attaches the customer here, without leaving payment. Also
+   *  fills in the account figures of a customer that came with a saved order. */
   onCustomer?: (c: CartCustomer) => void;
 }
 
@@ -56,11 +58,13 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const active = useMemo(() => methods.filter((m) => m.active && (m.kind !== "khata" || khataOn)).sort((a, b) => a.sort_order - b.sort_order), [methods, khataOn]);
   const service = resolveServiceCharge(cart, settings);
   const delivery = resolveDeliveryCharge(cart, settings);
-  const base = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: tip, discount_minor: cart.discount_minor });
+  // As the server will charge it: tips already taken plus this one; cash rounding on the first cash payment only,
+  // after which the rounding stored with that payment stays in the total.
+  const cash = roundsCash([...splits.map((s) => s.method.code), draft.method?.code]);
+  const base = payableTotals(cart, { settings, tip_minor: tip, cash });
   const net = base.subtotal_minor - base.discount_minor;
-  const anyCash = splits.some((s) => s.method.kind === "cash") || draft.method?.kind === "cash";
-  const rounding = anyCash ? cashRounding(base.total_minor, settings) : 0;
-  const total = base.total_minor + rounding;
+  const rounding = base.rounding_minor;
+  const total = base.total_minor;
   const paidBefore = cart.paid_minor ?? 0;
   const due = Math.max(0, total - paidBefore);
   const paid = splits.reduce((s, x) => s + x.amount_minor, 0);
@@ -84,6 +88,19 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
     setDraft({ method: pre, amount: 0, tendered: 0, reference: "" });
   }, [open, active]);
   useEffect(() => { setDraft((d) => ({ ...d, amount: remaining, tendered: d.method?.kind === "cash" ? Math.max(d.tendered, remaining) : 0 })); }, [remaining, draft.method?.kind]);
+  // A customer that came with a saved order (a table, a resumed or reopened order) has no account figures on the cart;
+  // fetch them once Khata is picked, so the account line can say what they owe and their limit.
+  const accountId = draft.method?.kind === "khata" && cart.customer && cart.customer.balance_minor === undefined ? cart.customer.id : null;
+  const onCustomerRef = useRef(onCustomer);
+  onCustomerRef.current = onCustomer;
+  useEffect(() => {
+    if (!open || !accountId || !online || !onCustomerRef.current) return;
+    let live = true;
+    api<Customer>(`/customers/${accountId}`, { auth: "pos" })
+      .then((c) => { if (live && latest.current.cart.customer?.id === c.id) onCustomerRef.current?.(toCartCustomer(c)); })
+      .catch(() => {}); // not reachable: the line shows the name only
+    return () => { live = false; };
+  }, [open, accountId, online]);
 
   const pick = (m: PaymentMethod) => setDraft({ method: m, amount: remaining, tendered: m.kind === "cash" ? remaining : 0, reference: "" });
   const offlineBlocked = status === "offline" && draft.method && !draft.method.works_offline;
@@ -103,7 +120,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
     if (remaining > 0 && draft.method && draft.amount > 0) list = [...splits, { method: draft.method, amount_minor: draftAmount, tendered_minor: draft.method.kind === "cash" ? Math.max(draft.tendered, draftAmount) : 0, reference: draft.reference }];
     const sum = list.reduce((s, x) => s + x.amount_minor, 0);
     if (sum <= 0 && !(cart.is_staff_meal && total === 0)) return;
-    await onPay(toInputs(list), tip);
+    await onPay(toInputs(list), tip, due);
   };
   const quick = [remaining, Math.ceil(remaining / 10000) * 10000, Math.ceil(remaining / 50000) * 50000, Math.ceil(remaining / 100000) * 100000].filter((v, i, a) => v >= remaining && v > 0 && a.indexOf(v) === i).slice(0, 4);
   const draftOk = !!draft.method && remaining > 0 && draft.amount > 0 && !needsRef && !khataBlocked && !offlineBlocked && (draft.method.kind !== "cash" || draft.tendered >= draftAmount);
@@ -155,13 +172,14 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
               ) : khataBlocked ? <p className="text-sm text-danger">Khata needs a customer on the order. Close this and pick one (F3).</p> : null}
               {draft.method.kind === "khata" && cart.customer && !changingCustomer ? (() => {
                 const acct = accountSummary(cart.customer, draftAmount, currency);
+                const known = [acct.owes, acct.limitText].filter(Boolean).join(" · ");
                 return (
                   <div className="space-y-1 rounded-lg border p-3 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate"><span className="text-fg-secondary">On account of </span><span className="font-semibold">{cart.customer.name}</span></span>
                       {onCustomer ? <button type="button" className="shrink-0 text-sm font-medium text-primary hover:underline" onClick={() => setChangingCustomer(true)}>Change</button> : null}
                     </div>
-                    <div className="text-fg-secondary">{acct.owes} · {acct.limitText} · <span className="font-medium text-fg">{acct.afterText}</span></div>
+                    {known || acct.afterText ? <div className="text-fg-secondary">{known}{known && acct.afterText ? " · " : ""}{acct.afterText ? <span className="font-medium text-fg">{acct.afterText}</span> : null}</div> : null}
                     {acct.overText ? <p className="text-danger">{acct.overText}</p> : null}
                   </div>
                 );
@@ -193,7 +211,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
             {base.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery {delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}</span><span className="tabular">{formatMoney(base.delivery_charge_minor, currency)}</span></div> : null}
             {base.tax_minor || cart.tax_choice ? <div className="flex justify-between"><span>Tax{cart.tax_choice === "none" ? " (none)" : ""}</span><span className="tabular">{formatMoney(base.tax_minor, currency)}</span></div> : null}
             {rounding ? <div className="flex justify-between"><span>Cash rounding</span><span className="tabular">{formatMoney(rounding, currency)}</span></div> : null}
-            {tip ? <div className="flex justify-between"><span>Tip</span><span className="tabular">{formatMoney(tip, currency)}</span></div> : null}
+            {base.tip_minor ? <div className="flex justify-between"><span>Tip</span><span className="tabular">{formatMoney(base.tip_minor, currency)}</span></div> : null}
             {paidBefore ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(total, currency)}</span></div> : null}
             {paidBefore ? <div className="flex justify-between"><span>Already paid</span><span className="tabular">-{formatMoney(paidBefore, currency)}</span></div> : null}
           </div>

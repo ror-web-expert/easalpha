@@ -19,14 +19,20 @@ module Api
 
       private
 
+      # A link stops working once its business is deleted or its customer is archived, as well as when it expires.
       def with_bill
         t = Customers::BillToken.read(params[:token])
-        return render(json: { error: { code: "bill.link_invalid", message: "This bill link has expired or is not valid. Ask the shop to send it again." } }, status: :not_found) unless t
-        business = Tenancy::Context.unscoped { Business.find(t[:business_id]) }
+        business = t && Tenancy::Context.unscoped { Business.where.not(status: "deleted").find_by(id: t[:business_id]) }
+        return link_invalid unless business
         Tenancy::Context.with(business) do
-          customer = Customer.find(t[:customer_id])
+          customer = Customer.active.find_by(id: t[:customer_id])
+          return link_invalid unless customer
           yield customer, Customers::Bill.build(customer, from: t[:from], to: t[:to], due_on: t[:due_on])
         end
+      end
+
+      def link_invalid
+        render json: { error: { code: "bill.link_invalid", message: "This bill link has expired or is not valid. Ask the shop to send it again." } }, status: :not_found
       end
     end
   end

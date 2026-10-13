@@ -1,5 +1,6 @@
 module Sync
-  # Everything a till needs that changed since its cursor. Staff PIN digests go only to paired devices, for offline PIN login.
+  # Everything a till needs that changed since its cursor. Staff PIN digests go only to paired devices, for offline PIN login;
+  # secret settings never leave the server (Setting.without_secrets).
   module Changes
     module_function
 
@@ -24,7 +25,7 @@ module Sync
         tables: changed.call(DiningTable.where(branch_id: branch.id)).map { |t| CustomerSerializers.table(t) },
         customers: changed.call(Customer.where(archived_at: nil)).order(updated_at: :desc).limit(2000).map { |c| CustomerSerializers.customer(c) },
         staff: staff_payload(branch, device, since),
-        settings: Current.business.settings.merge(Setting.effective(Current.business, branch: branch)), settings_version: Current.business.settings_version, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now))
+        settings: Setting.for_clients(Current.business, branch: branch), settings_version: Current.business.settings_version, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now))
       }
     end
 

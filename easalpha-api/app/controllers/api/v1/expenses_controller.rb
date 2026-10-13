@@ -40,6 +40,10 @@ module Api
 
       def void
         e = Expense.find(params[:id])
+        # A wage is voided with its expense in Pay Wages, which also gives back any advance it recovered and needs the wage permission.
+        if (wage = WagePayment.find_by(expense_id: e.id, status: "paid"))
+          raise Api::Errors::Conflict.new("expense.wage", "This is wage #{wage.label} for #{wage.employee.name}. Void it from Pay Wages so any advance it recovered is given back")
+        end
         approver = require_approval!("expenses.manage")
         Expenses::Recorder.void!(e, actor: current_membership, reason: params.require(:reason))
         audit!("void", record: e, approved_by: approver&.user)

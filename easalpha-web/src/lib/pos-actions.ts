@@ -3,8 +3,8 @@
 import { api, ApiError } from "@/lib/api";
 import { db, kvGet, kvSet, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, patchQueued, processQueue } from "@/lib/sync";
-import { cashRounding, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
-import { reconcilePayments } from "@/lib/pos-rules";
+import { lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
+import { payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
 import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
 import { businessDayFor } from "@/lib/business-day";
 import { uuid } from "@/lib/utils";
@@ -35,7 +35,7 @@ async function nextTillSerial(): Promise<string> {
 
 export function cartToLocal(cart: Cart, status: string, extra: Partial<LocalOrder> = {}): LocalOrder {
   const { settings, membershipId, cashier, branch } = ctx();
-  const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: extra.tip_minor, rounding_minor: extra.rounding_minor, discount_minor: cart.discount_minor });
+  const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: extra.tip_minor ?? cart.tip_minor, rounding_minor: extra.rounding_minor ?? cart.rounding_minor, discount_minor: cart.discount_minor });
   const now = new Date().toISOString();
   return {
     id: cart.id, serial: null, till_serial: null, label: cart.label ?? "draft", status, payment_status: "unpaid", order_type: cart.order_type, table_id: cart.table_id, table_code: cart.table_code,
@@ -82,13 +82,29 @@ function orderLevelDiscount(o: LocalOrder): number | undefined {
   return sum || undefined;
 }
 
+/**
+ * The stored order's discount beyond what its own lines carry. Lines the till stored carry their product discounts
+ * (discount_minor holds both); lines from the server carry none (its discount_minor is the whole discount).
+ */
+function orderLevelPool(o: LocalOrder): number {
+  const onLines = o.lines.filter((l) => l.status !== "cancelled").reduce((s, l) => s + lineTotals(l).line_discount_minor, 0);
+  return Math.max(0, o.discount_minor - onLines);
+}
+
+/** True when the cart has lines, an order type or a customer that the stored copy of the order does not have yet. */
+function unsavedChanges(cart: Cart, stored: LocalOrder | undefined): boolean {
+  if (!stored) return true;
+  const lines = (ls: CartLine[]) => JSON.stringify(ls.filter((l) => l.status !== "cancelled").map(toLineInput));
+  return lines(cart.lines) !== lines(stored.lines) || cart.order_type !== stored.order_type || (cart.customer?.id ?? null) !== (stored.customer_id ?? null);
+}
+
 export function localToCart(o: LocalOrder): Cart {
   return {
     id: o.id, saved: true, local_only: o.local_only, status: o.status, order_type: o.order_type as Cart["order_type"], lines: o.lines.filter((l) => l.status !== "cancelled"),
     customer: o.customer_id ? { id: o.customer_id, name: o.customer_name ?? "Customer", phone: o.customer_phone } : null, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name ?? "", covers: o.covers, notes: o.notes ?? "", is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? "", label: o.label, client_created_at: o.client_created_at,
     discount_minor: orderLevelDiscount(o), discounts: o.order_discounts, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
-    paid_minor: o.paid_minor || undefined,
+    paid_minor: o.paid_minor || undefined, rounding_minor: o.rounding_minor || undefined, tip_minor: o.tip_minor || undefined,
     service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
   };
@@ -179,79 +195,94 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
 }
 
 /**
- * Take one or more payments (a part payment is allowed; the order then stays open with payment_status "partial").
- * Returns the receipt (server-built when online, local otherwise). `pin` is the order-update PIN for a reopened order.
- */
-/**
- * Thrown by payOrder when the server's total for the order differs from the one the cashier was paying (a discount
+ * Thrown by payOrder when the server will ask for a different amount than the payment screen showed (a discount
  * re-checked on the server, a price changed). Nothing was paid; `cart` is the order as the server has it now, so the
- * payment screen can show the right total and the cashier presses Pay again.
+ * payment screen shows the new amount due (`toMinor`, which the next press accepts) and the cashier presses Pay again.
  */
 export class TotalChangedError extends Error {
   constructor(public cart: Cart, public fromMinor: number, public toMinor: number) {
-    super(`The total changed from ${fromMinor} to ${toMinor}`);
+    super(`The amount due changed from ${fromMinor} to ${toMinor}`);
     this.name = "TotalChangedError";
   }
 }
 
-export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor = 0, approver_pin?: string, opts: { pin?: string } = {}): Promise<{ receipt: Receipt; change_minor: number; offline: boolean; local: LocalOrder }> {
+/**
+ * Take one or more payments (a part payment is allowed; the order then stays open with payment_status "partial").
+ * Returns the receipt (server-built when online, local otherwise) and `cart`, the order as the till shows it next.
+ * `pin` is the order-update PIN for a reopened order; `shownDue` is the amount due the payment screen showed, and
+ * `seenDue` the server's figure from a TotalChangedError the cashier was already shown for this order.
+ */
+export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor = 0, approver_pin?: string, opts: { pin?: string; shownDue?: number; seenDue?: number | null } = {}): Promise<{ receipt: Receipt; change_minor: number; offline: boolean; local: LocalOrder; cart: Cart }> {
   const { settings, membershipId } = ctx();
+  const cash = roundsCash(payments.map((p) => p.method_code));
+  // Ids are fixed before anything is sent: a payment the server took but answered too late (a timeout counts as
+  // offline) is queued under the same id, and the server skips it instead of recording it twice.
+  let pays = payments.map((p) => ({ ...p, id: p.id ?? uuid() }));
   let current = cart;
+  let synced = false;
   if (isOnline()) {
     if (current.local_only) { await processQueue(); const o = await db.orders.get(current.id); if (o && !o.local_only) current = { ...current, local_only: false }; }
     if (!current.local_only) {
       try {
         // Always sync the cart to the server first so the payment applies to the latest lines.
-        const tillDue = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor }).total_minor - (cart.paid_minor ?? 0);
+        const shownDue = opts.shownDue ?? Math.max(0, payableTotals(cart, { settings, tip_minor, cash }).total_minor - (cart.paid_minor ?? 0));
         const saved = await saveOrder(current, { approver_pin, pin: opts.pin });
         current = saved.cart;
+        synced = true; // saved on the server, or stored and queued when it could not be reached
         if (saved.offline) throw new ApiError("network", "Offline", 0);
         // The server prices the order again on this save (a regular customer's discount, a price change). Never take
-        // money against a total the cashier did not see: a gap under Rs 1 is paisa rounding and moves the payment;
-        // a bigger gap stops here with the new total.
-        const serverDue = saved.local.total_minor - saved.local.paid_minor;
-        const toSend = reconcilePayments(payments, tillDue, serverDue);
-        if (!toSend) throw new TotalChangedError({ ...current, customer: cart.customer }, tillDue, serverDue);
-        const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: toSend.map((p) => ({ ...p, id: p.id ?? uuid() })), tip_minor } });
+        // money against an amount the cashier did not see: a gap under Rs 1 is paisa rounding and moves the payment;
+        // a bigger gap stops here once with the server's figure, and the next press pays that figure.
+        const serverDue = serverDueForPayment(saved.local, { settings, tip_minor, cash });
+        const toSend = reconcilePayments(pays, shownDue, serverDue, opts.seenDue);
+        if (!toSend) throw new TotalChangedError({ ...current, customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name }, shownDue, serverDue);
+        pays = toSend;
+        const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: pays, tip_minor } });
         const prev = await db.orders.get(current.id);
         const local = await saveLocal({ ...serverToLocal(res.order, prev), payments: [...(prev?.payments ?? []), ...res.payments.map((p) => ({ id: p.id, method_code: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? undefined, change_minor: p.change_minor, reference: p.reference ?? undefined, client_created_at: p.received_at }))] });
         const receipt = res.receipt ?? buildLocalReceipt(local);
-        return { receipt, change_minor: res.change_minor, offline: false, local };
+        const next = { ...localToCart(local), ...reopenFields(res.order), customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name };
+        return { receipt, change_minor: res.change_minor, offline: false, local, cart: next };
       } catch (e) {
         if (!isNetwork(e)) throw e;
       }
     }
   }
-  // Offline: order must be local (queued) or already on the server.
-  const saved = current.saved ? { cart: current } : await saveOrder(current, { place: true });
+  // Offline: order must be local (queued) or already on the server. Lines added since it was last stored (a table
+  // order opened offline, say) are stored and queued first, so the payment covers them, as the online path does.
+  const stored = await db.orders.get(current.id);
+  const saved = synced || (current.saved && !unsavedChanges(current, stored)) ? { cart: current } : await saveOrder(current, { place: !current.saved });
   current = saved.cart;
   const prev = (await db.orders.get(current.id)) ?? cartToLocal(current, "placed");
-  const hasCash = payments.some((p) => p.method_code === "cash");
-  const rounding = prev.paid_minor === 0 && hasCash ? cashRounding(prev.total_minor - prev.rounding_minor, settings) : prev.rounding_minor;
-  const totals = totalsWithCharges(prev.lines, prev, { settings, staffMeal: prev.is_staff_meal, tip_minor: prev.tip_minor + tip_minor, rounding_minor: rounding, discount_minor: prev.discount_minor });
+  // Priced as the server will when the queue reaches it, with the order-level discount once: the lines carry the
+  // product discounts when the till stored the order, and the server's figure holds them when it came from there.
+  const totals = payableTotals({ ...prev, discount_minor: orderLevelPool(prev) }, { settings, tip_minor, cash });
   let due = totals.total_minor - prev.paid_minor;
   let change = 0;
   const now = new Date().toISOString();
   const newPayments: LocalPayment[] = [];
-  for (const p of payments) {
+  for (const p of pays) {
     const applied = Math.min(p.amount_minor, due);
     if (applied <= 0) continue;
     const tendered = p.method_code === "cash" ? Math.max(p.tendered_minor ?? 0, p.amount_minor) : undefined;
     const ch = p.method_code === "cash" ? Math.max((tendered ?? 0) - applied, 0) : 0;
     change += ch;
     due -= applied;
-    newPayments.push({ id: p.id ?? uuid(), method_code: p.method_code, amount_minor: applied, tendered_minor: tendered, change_minor: ch, reference: p.reference, client_created_at: now });
+    newPayments.push({ id: p.id, method_code: p.method_code, amount_minor: applied, tendered_minor: tendered, change_minor: ch, reference: p.reference, client_created_at: now });
   }
   const paid = prev.paid_minor + newPayments.reduce((s, p) => s + p.amount_minor, 0);
   const status = paid >= totals.total_minor ? "paid" : prev.status === "draft" || prev.status === "held" ? "placed" : prev.status;
-  const local = await saveLocal({ ...prev, ...totals, tip_minor: prev.tip_minor + tip_minor, paid_minor: paid, payments: [...prev.payments, ...newPayments], status, payment_status: paid >= totals.total_minor ? "paid" : paid > 0 ? "partial" : "unpaid", receipt_number: prev.receipt_number ?? (paid >= totals.total_minor ? `${prev.till_serial ?? prev.label}` : null) });
-  const merged = await patchQueued(current.id, (p) => ({ ...p, status: "placed", payments: [...((p.payments as unknown[]) ?? []), ...newPayments.map((np) => ({ id: np.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at }))], tip_minor: ((p.tip_minor as number) ?? 0) + tip_minor }));
+  const local = await saveLocal({ ...prev, ...totals, paid_minor: paid, payments: [...prev.payments, ...newPayments], status, payment_status: paid >= totals.total_minor ? "paid" : paid > 0 ? "partial" : "unpaid", receipt_number: prev.receipt_number ?? (paid >= totals.total_minor ? `${prev.till_serial ?? prev.label}` : null) });
+  // Payments ride along only with an order still queued as new; a queued order_update (same id) does not carry them.
+  const merged = await patchQueued(current.id, (p) => ({ ...p, status: "placed", payments: [...((p.payments as unknown[]) ?? []), ...newPayments.map((np) => ({ id: np.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at }))], tip_minor: ((p.tip_minor as number) ?? 0) + tip_minor }), "order");
   if (!merged) {
     for (const np of newPayments) {
       await enqueue({ type: "payment", id: np.id, membership_id: membershipId ?? undefined, payload: { order_id: current.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at, tip_minor } });
     }
   }
-  return { receipt: buildLocalReceipt(local), change_minor: change, offline: true, local };
+  // The cart keeps everything the cashier set (customer, discount lines, reopen state); only the payment moved on.
+  const next: Cart = { ...current, saved: true, local_only: local.local_only, status: local.status, label: local.label, paid_minor: local.paid_minor, rounding_minor: local.rounding_minor || undefined, tip_minor: local.tip_minor || undefined };
+  return { receipt: buildLocalReceipt(local), change_minor: change, offline: true, local, cart: next };
 }
 
 export async function voidOrder(id: string, reason: string, approver_pin?: string): Promise<{ offline: boolean }> {
@@ -268,7 +299,7 @@ export async function voidOrder(id: string, reason: string, approver_pin?: strin
   }
   const prev = await db.orders.get(id);
   if (prev) await saveLocal({ ...prev, status: "voided", void_reason: reason, open: 0 });
-  const merged = await patchQueued(id, (p) => ({ ...p, status: "voided", voided: true, void_reason: reason }));
+  const merged = await patchQueued(id, (p) => ({ ...p, status: "voided", voided: true, void_reason: reason }), "order");
   if (!merged) await enqueue({ type: "void", id: uuid(), membership_id: membershipId ?? undefined, payload: { order_id: id, reason } });
   return { offline: true };
 }

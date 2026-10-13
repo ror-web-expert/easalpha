@@ -26,21 +26,27 @@ export function moduleOn(settings: BusinessSettings | Record<string, unknown> | 
   return (settings as Record<string, unknown> | null | undefined)?.[MODULE_KEYS[name]] === true;
 }
 
+/** Cached per business, so a login to another business in this tab never shows the last one's modules. */
+const modulesKey = (businessId: string | null | undefined) => ["modules", businessId ?? null];
+
+/** Writes the modules into the saved session when it is still that business's. Unlike setSession, it keeps the branch
+ *  picked in the top bar. */
+function saveModules(businessId: string, m: BusinessModules) {
+  useAuthStore.setState((s) => (s.session?.business.id === businessId && JSON.stringify(s.session.modules) !== JSON.stringify(m) ? { session: { ...s.session, modules: m } } : {}));
+}
+
 /** Admin side: the business's modules. Starts from the saved session and refreshes from /me once per page load, so a
  *  change made on another computer shows up; sessions saved before modules existed load them the first time. */
 export function useModules(): BusinessModules & { loaded: boolean } {
   const session = useAuthStore((s) => s.session);
+  const businessId = session?.business.id ?? null;
   const q = useQuery({
-    queryKey: ["modules"],
+    queryKey: modulesKey(businessId),
     queryFn: async () => (await api<Session>("/me", { auth: "admin" })).modules ?? { customer_accounts: false, payroll: false },
     enabled: !!session,
     staleTime: 60_000,
   });
-  useEffect(() => {
-    const m = q.data;
-    const cur = useAuthStore.getState().session;
-    if (m && cur && JSON.stringify(cur.modules) !== JSON.stringify(m)) useAuthStore.getState().setSession({ ...cur, modules: m });
-  }, [q.data]);
+  useEffect(() => { if (q.data && businessId) saveModules(businessId, q.data); }, [q.data, businessId]);
   const m = q.data ?? session?.modules;
   return { customer_accounts: !!m?.customer_accounts, payroll: !!m?.payroll, loaded: !!m };
 }
@@ -49,8 +55,9 @@ export function useModules(): BusinessModules & { loaded: boolean } {
 export function useApplyModules() {
   const qc = useQueryClient();
   return (m: BusinessModules) => {
-    qc.setQueryData(["modules"], m);
-    const cur = useAuthStore.getState().session;
-    if (cur) useAuthStore.getState().setSession({ ...cur, modules: m });
+    const businessId = useAuthStore.getState().session?.business.id;
+    if (!businessId) return;
+    qc.setQueryData(modulesKey(businessId), m);
+    saveModules(businessId, m);
   };
 }

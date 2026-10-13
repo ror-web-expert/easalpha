@@ -46,7 +46,7 @@ module Customers
         adj = CustomerAdjustment.create!(customer: customer, branch_id: branch.id, number: DocumentCounter.next!("customer_adjustment"), kind: kind, amount_minor: amount, reason: reason,
                                          effective_on: on, business_day: today, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, reverses: reverses)
         post_journal!(adj, reverses)
-        AuditLog.record(action: kind == "reversal" ? "reverse" : "create", record: adj, approved_by: approver,
+        AuditLog.record(action: kind == "reversal" ? "reverse" : "create", record: adj, approved_by: approver&.user,
                         after: { customer: customer.name, khata_no: customer.khata_no, kind: kind, amount_minor: amount, reason: reason, effective_on: on, balance_before_minor: previous, balance_after_minor: customer.balance_minor, reverses: reverses&.label })
       end
       Customers::Notify.adjustment!(adj, previous_balance_minor: previous)

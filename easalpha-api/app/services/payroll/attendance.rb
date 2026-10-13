@@ -7,6 +7,9 @@ module Payroll
   module Attendance
     module_function
 
+    # Statuses only a scan or a manager writes; fill_absences! never does.
+    WORKED = %w[present late half_day].freeze
+
     def branch_for(employee, branch = nil) = branch || employee.branch || Branch.first
 
     # Shift start for the day: the employee's rule, else the business hours from Store settings (SPEC fallback).
@@ -127,23 +130,42 @@ module Payroll
     def fill_absences!(from:, to:)
       count = 0
       Employee.active.find_each do |e|
-        rule = e.rule
-        leaves = LeaveRequest.where(employee_id: e.id, status: "approved")
-        hols = Holiday.where("branch_id IS NULL OR branch_id = ?", e.branch_id).pluck(:on_date).to_set
+        cal = calendar(e, from: from, to: to)
         (from..to).each do |d|
           next unless e.active_on?(d)
           next if ::Attendance.exists?(employee_id: e.id, business_day: d)
-          status = if hols.include?(d) then "holiday"
-          elsif leaves.any? { |l| l.covers?(d) } then "leave"
-          elsif rule.weekly_off?(d) then "weekly_off"
-          elsif rule.rules_enabled && !rule.no_scan_counts_absent then next
-          else "absent"
-          end
+          status = status_without_row(d, **cal) or next
           ::Attendance.create!(employee: e, branch_id: e.branch_id, business_day: d, status: status, source: "manual")
           count += 1
         end
       end
       count
+    end
+
+    # What a day with no attendance row counts as, the one rule for fill_absences! and daily and weekly wages: a
+    # holiday, approved leave or weekly off by name, otherwise absent, or nil when the rules say a no-scan day is not absent.
+    def status_without_row(day, rule:, holidays:, leaves:)
+      return "holiday" if holidays.include?(day)
+      return "leave" if leaves.any? { |l| l.covers?(day) }
+      return "weekly_off" if rule.weekly_off?(day)
+      return nil if rule.rules_enabled && !rule.no_scan_counts_absent
+      "absent"
+    end
+
+    # The rule, holidays and approved leave that status_without_row needs for one employee and period.
+    def calendar(employee, from:, to:)
+      { rule: employee.rule,
+        holidays: Holiday.where("branch_id IS NULL OR branch_id = ?", employee.branch_id).where(on_date: from..to).pluck(:on_date).to_set,
+        leaves: LeaveRequest.where(employee_id: employee.id, status: "approved").where("from_date <= ? AND to_date >= ?", to, from).to_a }
+    end
+
+    # Whether an employee keeps attendance: enrolled on the reader, or a day scanned or marked by hand in the period or
+    # the 30 days before it. Rows fill_absences! wrote on its own do not count, so a payroll run never makes someone who
+    # does not scan look absent.
+    def kept?(employee, from:, to:)
+      employee.fingerprint_enrolled ||
+        ::Attendance.where(employee_id: employee.id, business_day: (from - 30)..to)
+                    .where("checked_in_at IS NOT NULL OR marked_by_membership_id IS NOT NULL OR status IN (?)", WORKED).exists?
     end
 
     def month_summary(employee, month)

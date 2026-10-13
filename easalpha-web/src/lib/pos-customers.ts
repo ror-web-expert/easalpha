@@ -31,14 +31,18 @@ export function customerDetails(c: Pick<Customer, "khata_no" | "member_no" | "ro
   ].filter(Boolean).join(" · ");
 }
 
-/** The account line on the payment screen: what they owe now, their limit, and what this sale leaves them owing. */
+/**
+ * The account line on the payment screen: what they owe now, their limit, and what this sale leaves them owing. A
+ * customer that came with a saved order carries no account figures: a missing balance or limit is unknown (null
+ * here), never "owes nothing" or "no limit", and no over-limit warning is given without both.
+ */
 export function accountSummary(c: { balance_minor?: number; credit_limit_minor?: number | null }, saleMinor: number, currency?: string) {
-  const balance = c.balance_minor ?? 0;
-  const after = balance + Math.max(0, saleMinor);
-  const limit = c.credit_limit_minor ?? null;
-  const owes = balance > 0 ? `owes ${formatMoney(balance, currency)}` : balance < 0 ? `${formatMoney(-balance, currency)} in advance` : "owes nothing";
-  const limitText = limit === null ? "no limit" : limit === 0 ? "khata not allowed" : `limit ${formatMoney(limit, currency)}`;
-  const over = limit !== null && after > limit;
-  return { owes, limitText, after, afterText: `${after < 0 ? `${formatMoney(-after, currency)} in advance` : formatMoney(after, currency)} after this sale`, over,
-    overText: over ? (limit === 0 ? "Khata is not allowed for this customer. The till will refuse it." : `This passes the limit of ${formatMoney(limit as number, currency)} by ${formatMoney(after - (limit as number), currency)}. The till will refuse it.`) : null };
+  const balance = c.balance_minor;
+  const limit = c.credit_limit_minor; // null: no limit; undefined: not known
+  const after = balance === undefined ? null : balance + Math.max(0, saleMinor);
+  const owes = balance === undefined ? null : balance > 0 ? `owes ${formatMoney(balance, currency)}` : balance < 0 ? `${formatMoney(-balance, currency)} in advance` : "owes nothing";
+  const limitText = limit === undefined ? null : limit === null ? "no limit" : limit === 0 ? "khata not allowed" : `limit ${formatMoney(limit, currency)}`;
+  const over = after !== null && limit != null && after > limit;
+  return { owes, limitText, after, afterText: after === null ? null : `${after < 0 ? `${formatMoney(-after, currency)} in advance` : formatMoney(after, currency)} after this sale`, over,
+    overText: over ? (limit === 0 ? "Khata is not allowed for this customer. The till will refuse it." : `This passes the limit of ${formatMoney(limit as number, currency)} by ${formatMoney((after as number) - (limit as number), currency)}. The till will refuse it.`) : null };
 }

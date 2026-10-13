@@ -5,7 +5,8 @@ import { AlertTriangle, Copy, Download, ExternalLink, Eye, Send } from "lucide-r
 import { api, API_URL, ApiError, errorCode, errorMessage } from "@/lib/api";
 import type { BillRunResult, Customer, CustomerAdjustment, CustomerBill, DuplicateCustomer } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
-import { formatDate, isoDay } from "@/lib/dates";
+import { formatDate } from "@/lib/dates";
+import { businessDayFor } from "@/lib/business-day";
 import { useDebounced } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 import { useAuthStore, useCan } from "@/store/auth";
@@ -13,8 +14,8 @@ import { toast } from "@/store/toast";
 import { useApproval } from "@/components/approval";
 import { Badge, Button, ConfirmDialog, Dialog, EmptyRow, ErrorState, Field, Input, Loading, MoneyInput, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import {
-  accountPhones, balanceText, billEntryLabel, billFileName, billLines, closingMessage, duplicateQuery, entryDay, entryDetails, entryKindLabel, entryKindVariant, isApprovalCancelled,
-  isFutureDay, openingAmount, periodError, periodFor, periodLabel, periodQuery, presetOf, runStatusLabel, runStatusVariant, sendErrorText, signedAmount, signedMoney,
+  accountPhones, balanceText, billEntryLabel, billFileName, billLines, closingMessage, duplicateQuery, effectiveDay, entryDay, entryDetails, entryKindLabel, entryKindVariant, isApprovalCancelled,
+  isFutureDay, khataLimitError, MIN_KHATA_LIMIT, openingAmount, periodError, periodFor, periodLabel, periodQuery, presetOf, runStatusLabel, runStatusVariant, sendErrorText, signedAmount, signedMoney,
   type Direction, type DuplicateFields, type Period, type PeriodPreset,
 } from "./customer-accounts-helpers";
 
@@ -130,6 +131,12 @@ export function PeriodPicker({ value, onChange, allowAll, className }: { value: 
 type AccountCustomer = Pick<Customer, "id" | "name" | "balance_minor">;
 type AdjustmentResult = { adjustment: CustomerAdjustment; customer: Customer };
 
+/** The branch's business day, the latest date the API takes for a balance: before the day end time (02:01 by
+ *  default) it is still the previous date. */
+export function useBusinessToday(): string {
+  return businessDayFor(useAuthStore((s) => s.session?.branch?.day_end_time ?? null));
+}
+
 export function useAdjustments(customerId: string | null | undefined, enabled = true) {
   return useQuery({
     queryKey: ["customer_adjustments", customerId],
@@ -142,16 +149,18 @@ export function AdjustBalanceDialog({ customer, open, onClose }: { customer: Acc
   const [direction, setDirection] = useState<Direction>("increase");
   const [amount, setAmount] = useState(0);
   const [reason, setReason] = useState("");
-  const [on, setOn] = useState(isoDay());
-  useEffect(() => { if (open) { setDirection("increase"); setAmount(0); setReason(""); setOn(isoDay()); } }, [open]);
+  // Blank means today: the picker shows the branch's business day, and only a past day is sent.
+  const [on, setOn] = useState("");
+  useEffect(() => { if (open) { setDirection("increase"); setAmount(0); setReason(""); setOn(""); } }, [open]);
+  const today = useBusinessToday();
   const { submit, busy, dialog } = usePinRetry();
   const refresh = useRefreshAccounts();
   if (!customer) return null;
   const signed = signedAmount(direction, amount);
-  const future = isFutureDay(on);
+  const future = isFutureDay(on, today);
   const save = async () => {
     const out = await submit(
-      (pin) => api<AdjustmentResult>(`/customers/${customer.id}/adjustments`, { method: "POST", body: { kind: "adjustment", amount_minor: signed, reason: reason.trim(), effective_on: on || undefined, approver_pin: pin } }),
+      (pin) => api<AdjustmentResult>(`/customers/${customer.id}/adjustments`, { method: "POST", body: { kind: "adjustment", amount_minor: signed, reason: reason.trim(), effective_on: effectiveDay(on, today), approver_pin: pin } }),
       { label: `${direction === "increase" ? "Increase" : "Decrease"} ${customer.name}'s balance by ${formatMoney(amount)}`, success: "Balance adjusted", failure: "Could not adjust the balance" },
     );
     if (out) { refresh(); onClose(); }
@@ -170,7 +179,7 @@ export function AdjustBalanceDialog({ customer, open, onClose }: { customer: Acc
           </Field>
           <Field label="Amount"><MoneyInput value={amount} onChange={(v) => setAmount(Math.abs(v))} min={0} autoFocus /></Field>
           <Field label="Reason" hint="Required. Shown on the ledger and the bill."><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Charged twice, mess fee, discount agreed" /></Field>
-          <Field label="Date" error={future ? "The date cannot be in the future" : undefined}><Input type="date" value={on} max={isoDay()} onChange={(e) => setOn(e.target.value)} /></Field>
+          <Field label="Date" error={future ? "The date cannot be in the future" : undefined}><Input type="date" value={on || today} max={today} onChange={(e) => setOn(e.target.value)} /></Field>
           {amount > 0 ? <p className="text-xs text-fg-muted">Balance after: <span className="font-medium text-fg tabular">{balanceText(customer.balance_minor + signed)}</span></p> : null}
         </div>
       </Dialog>
@@ -183,16 +192,17 @@ export function OpeningBalanceDialog({ customer, open, onClose }: { customer: Ac
   const [amount, setAmount] = useState(0);
   const [advance, setAdvance] = useState(false);
   const [reason, setReason] = useState("Opening balance");
-  const [on, setOn] = useState(isoDay());
-  useEffect(() => { if (open) { setAmount(0); setAdvance(false); setReason("Opening balance"); setOn(isoDay()); } }, [open]);
+  const [on, setOn] = useState(""); // blank means today, as in AdjustBalanceDialog
+  useEffect(() => { if (open) { setAmount(0); setAdvance(false); setReason("Opening balance"); setOn(""); } }, [open]);
+  const today = useBusinessToday();
   const { submit, busy, dialog } = usePinRetry();
   const refresh = useRefreshAccounts();
   if (!customer) return null;
   const signed = openingAmount(amount, advance);
-  const future = isFutureDay(on);
+  const future = isFutureDay(on, today);
   const save = async () => {
     const out = await submit(
-      (pin) => api<AdjustmentResult>(`/customers/${customer.id}/adjustments`, { method: "POST", body: { kind: "opening", amount_minor: signed, reason: reason.trim() || "Opening balance", effective_on: on || undefined, approver_pin: pin } }),
+      (pin) => api<AdjustmentResult>(`/customers/${customer.id}/adjustments`, { method: "POST", body: { kind: "opening", amount_minor: signed, reason: reason.trim() || "Opening balance", effective_on: effectiveDay(on, today), approver_pin: pin } }),
       { label: `Opening balance ${formatMoney(amount)}${advance ? " in advance" : ""} for ${customer.name}`, success: "Opening balance saved", failure: "Could not save the opening balance" },
     );
     if (out) { refresh(); onClose(); }
@@ -211,7 +221,7 @@ export function OpeningBalanceDialog({ customer, open, onClose }: { customer: Ac
             </Select>
           </Field>
           <Field label="Reason"><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
-          <Field label="Date" hint="The day the balance counts from." error={future ? "The date cannot be in the future" : undefined}><Input type="date" value={on} max={isoDay()} onChange={(e) => setOn(e.target.value)} /></Field>
+          <Field label="Date" hint="The day the balance counts from." error={future ? "The date cannot be in the future" : undefined}><Input type="date" value={on || today} max={today} onChange={(e) => setOn(e.target.value)} /></Field>
           {amount > 0 ? <p className="text-xs text-fg-muted">Balance after: <span className="font-medium text-fg tabular">{balanceText(customer.balance_minor + signed)}</span></p> : null}
         </div>
       </Dialog>
@@ -526,20 +536,31 @@ export function BillRunResults({ results }: { results: BillRunResult[] }) {
   );
 }
 
-/** Khata on one customer: allowed with no limit (null), allowed up to a limit (above 0) or not allowed (0). The till
- *  refuses a sale on account that would pass the limit; a customer added at the till starts with no limit. */
+/** Khata on one customer: allowed with no limit (null), allowed up to a limit (Rs 1 or more) or not allowed (0). The till
+ *  refuses a sale on account that would pass the limit; a customer added at the till starts with no limit. Save should
+ *  wait while khataLimitError(value) is set. */
 export function KhataLimitField({ value, onChange, className }: { value: number | null | undefined; onChange: (v: number | null) => void; className?: string }) {
   const mode = value === null || value === undefined ? "open" : value === 0 ? "off" : "limit";
+  // The amount as typed, so the field can be emptied and typed over. Under Rs 1 it goes up as at least 1 paisa (0 would
+  // read as Not allowed) for Save to refuse; leaving the field raises it to Rs 1.
+  const [draft, setDraft] = useState<number | null>(null);
+  const error = khataLimitError(value);
   return (
     <div className={cn("grid gap-3 sm:grid-cols-2", className)}>
       <Field label="Buying on account (khata)">
-        <Select value={mode} onChange={(e) => onChange(e.target.value === "open" ? null : e.target.value === "off" ? 0 : value && value > 0 ? value : 500_000)}>
+        <Select value={mode} onChange={(e) => { setDraft(null); onChange(e.target.value === "open" ? null : e.target.value === "off" ? 0 : value && value > 0 ? value : 500_000); }}>
           <option value="open">Allowed, no limit</option>
           <option value="limit">Allowed up to a limit</option>
           <option value="off">Not allowed</option>
         </Select>
       </Field>
-      {mode === "limit" ? <Field label="Credit limit" hint="A sale on account that goes past this is refused at the till."><MoneyInput value={value ?? 0} min={1} onChange={(v) => onChange(Math.max(100, Math.abs(v)))} /></Field> : null}
+      {mode === "limit" ? (
+        <Field label="Credit limit" hint="A sale on account that goes past this is refused at the till." error={error ?? undefined}>
+          <MoneyInput value={draft ?? value ?? 0} min={1} aria-label="Credit limit"
+            onChange={(v) => { setDraft(Math.abs(v)); onChange(Math.max(1, Math.abs(v))); }}
+            onBlur={() => { setDraft(null); if (error) onChange(MIN_KHATA_LIMIT); }} />
+        </Field>
+      ) : null}
     </div>
   );
 }

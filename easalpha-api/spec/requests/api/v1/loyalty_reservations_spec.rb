@@ -80,6 +80,21 @@ RSpec.describe "Loyalty, campaigns, reservations, commissions and checklists", t
     expect { CampaignSweepJob.perform_now }.to have_enqueued_job(CampaignSendJob).once
   end
 
+  it "refuses a deposit while customer accounts are off, because there is no khata to hold it on" do
+    m
+    set_modules!(biz, customer_accounts: false)
+    api_post "/api/v1/customers", { name: "Sana", phone: "03005550002" }, headers: headers
+    cust = json
+    starts = (Time.current + 3.hours).change(min: 0)
+    api_post "/api/v1/reservations", { customer_id: cust[:id], party_size: 2, starts_at: starts.iso8601, deposit_minor: 20_000, deposit_method_code: "cash" }, headers: headers
+    expect(response).to have_http_status(:forbidden)
+    expect(json[:error][:code]).to eq("module.disabled")
+    expect(within(biz) { Reservation.count }).to eq(0)
+    api_post "/api/v1/reservations", { customer_id: cust[:id], party_size: 2, starts_at: starts.iso8601 }, headers: headers
+    expect(response).to have_http_status(:created)
+    expect(within(biz) { Customer.find(cust[:id]).balance_minor }).to eq(0)
+  end
+
   it "books reservations with conflict checks and deposits, reminds, seats onto a table with an order, and lists availability" do
     m
     t1 = within(biz) { DiningTable.create!(branch: branch, code: "T1", seats: 4) }

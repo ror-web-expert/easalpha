@@ -9,11 +9,13 @@ module Marketing
 
     # The tier the customer qualifies for right now, or nil.
     def tier_for(customer, order)
-      return nil unless customer && !customer.is_walk_in && customer.last_order_at
-      return nil if blocked_ids(order.business).include?(customer.id.to_s)
+      return nil unless regular?(customer, order.business)
       days_since = ((Time.current - customer.last_order_at) / 86_400).floor
       RegularDiscountTier.active.order(:within_days).find { |t| days_since <= t.within_days && !t.excludes?(order) }
     end
+
+    # A known customer who has ordered before and is not on the blocked list.
+    def regular?(customer, business) = customer.present? && !customer.is_walk_in && customer.last_order_at.present? && !blocked_ids(business).include?(customer.id.to_s)
 
     # Replaces the order's regular discount with the current best match (or removes it). Idempotent.
     def apply!(order)
@@ -24,16 +26,21 @@ module Marketing
       existing.each(&:destroy!)
       order.discounts.reset
       return unless tier
-      # The base is each line after its own product discount only. line_discount_minor also holds the order-level
-      # discounts already allocated (this regular discount among them), so using it shrank the discount on every save:
-      # 10% of Rs 1,200 became 10% of Rs 1,080 when the till saved the order again at payment.
-      base = order.items.reject(&:cancelled?).reject { |i| tier.excluded_product_ids.include?(i.product_id) || (i.product && tier.excluded_category_ids.include?(i.product.category_id)) }
-                  .sum { |i| i.line_subtotal_minor - product_discount(i) }
-      amount = tier.discount_for(base)
+      amount = tier.discount_for(base_for(order, tier))
       return if amount <= 0
       order.discounts.create!(kind: "regular", value: BigDecimal(amount.to_s) / 100, reason: "Regular discount: #{tier.name}", regular_discount_tier_id: tier.id)
       order.discounts.reset
     end
+
+    # What a tier's discount is worked out from, here and in Orders::RegularDiscountRepair: each line the tier does not
+    # exclude, after its own product discount only. line_discount_minor also holds the order-level discounts already
+    # allocated (this regular discount among them), so using it shrank the discount on every save: 10% of Rs 1,200
+    # became 10% of Rs 1,080 when the till saved the order again at payment.
+    def base_for(order, tier)
+      order.items.reject(&:cancelled?).reject { |i| excluded?(tier, i) }.sum { |i| i.line_subtotal_minor - product_discount(i) }
+    end
+
+    def excluded?(tier, item) = tier.excluded_product_ids.include?(item.product_id) || (item.product && tier.excluded_category_ids.include?(item.product.category_id))
 
     def product_discount(item) = item.product && !item.price_overridden ? item.product.discount_minor_for(item.line_subtotal_minor, item.quantity) : 0
 

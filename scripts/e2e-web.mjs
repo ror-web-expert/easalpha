@@ -303,7 +303,7 @@ await t.goto(WEB + "/pos/pair"); await t.waitForSelector("button", { timeout: 60
 for (const d of till.j.pairing_code) await t.getByRole("button", { name: d, exact: true }).first().click();
 await t.getByRole("button", { name: "Pair" }).click();
 try { await t.waitForURL(/\/pos\/pin/, { timeout: 15000 }); step("till paired", true); } catch { step("till paired", false, t.url()); await shot(t, "pos-pair-fail"); }
-for (const d of "1111") await t.getByRole("button", { name: d, exact: true }).first().click();
+for (const d of (process.env.PIN || "1111")) await t.getByRole("button", { name: d, exact: true }).first().click();
 try { await t.waitForURL(/\/pos$/, { timeout: 15000 }); step("cashier PIN login", true); } catch { step("cashier PIN login", false, t.url()); await shot(t, "pos-pin-fail"); }
 await t.waitForTimeout(2500); await shot(t, "pos-main");
 const posText = await t.evaluate(() => document.body.innerText);
@@ -395,9 +395,14 @@ const qtext = await q.evaluate(() => document.body.innerText); step("queue scree
     if (await row.count()) {
       await row.first().locator('input[type="checkbox"]').check();
       await a.getByRole("button", { name: /Send to selected|^Send bills/ }).first().click();
-      await a.getByRole("button", { name: /^Send 1 bill$/ }).click(); await a.waitForTimeout(3000);
+      const runsBefore = report.failedRequests.length;
+      await a.getByRole("button", { name: /^Send 1 bill$/ }).click(); await a.waitForTimeout(1200);
+      const pageText = await a.evaluate(() => document.body.innerText);
+      await a.waitForTimeout(1800);
       const result = await a.locator('[role="dialog"]').last().innerText().catch(() => "");
-      step("oct12: Send bills reports the student's bill as sent", new RegExp(student).test(result) && /sent/i.test(result), result.replace(/\s+/g, " ").slice(0, 120));
+      // With a linked phone the run reports the bill as sent; with none, the API refuses up front (409 whatsapp.not_connected) instead of pretending.
+      const refused = /Link a WhatsApp phone/.test(pageText + result) || report.failedRequests.slice(runsBefore).some((r) => r.status === 409 && /bill_runs/.test(r.url));
+      step("oct12: Send bills reports the student's bill as sent, or refuses until a phone is linked", (new RegExp(student).test(result) && /sent/i.test(result)) || refused, (refused ? "refused: no phone linked" : result.replace(/\s+/g, " ").slice(0, 120)));
       await shot(a, "oct12-bills-sent");
       await a.keyboard.press("Escape");
     }

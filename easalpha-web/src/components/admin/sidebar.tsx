@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Building2, ChevronDown, ChevronRight, ChevronsUpDown, CornerDownLeft, LogOut, Menu as MenuIcon, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV, type NavGroup, type NavItem } from "./nav";
@@ -336,6 +337,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const session = useAuthStore((s) => s.session);
   const clear = useAuthStore((s) => s.clear);
+  const qc = useQueryClient();
   const groups = useVisibleNav();
   const current = useCurrent(groups);
   // M3 top app bar in brand navy: flat at rest, a shadow once content scrolls under it.
@@ -354,6 +356,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try { await api("/auth/logout", { method: "POST", body: { refresh_token: session?.refresh_token }, auth: "admin" }); } catch {}
     clear();
+    qc.clear(); // the next login in this tab, maybe another business, starts with nothing cached
     router.replace("/login");
   };
   const sidebar = (

@@ -55,8 +55,9 @@ module Api
       # GET /tables/:id/qr  the link printed on the table card
       def qr_card
         t = DiningTable.find(params[:id])
-        base = ENV.fetch("EASALPHA_QR_BASE_URL", current_business.setting("qr_base_url") || "https://order.easalpha.com")
-        render json: { table_id: t.id, code: t.code, token: t.qr_token, url: "#{base}/q/#{t.qr_token}", enabled: current_branch.qr_setting("enabled") }
+        # The guest page lives on this install's own web address at /q/<token> unless the owner points cards elsewhere.
+        base = ENV["EASALPHA_QR_BASE_URL"].presence || current_business.setting("qr_base_url").presence || ENV["PUBLIC_URL"].presence || (Rails.env.production? ? "https://easalpha.com" : "http://localhost:3000")
+        render json: { table_id: t.id, code: t.code, token: t.qr_token, url: "#{base.to_s.chomp('/')}/q/#{t.qr_token}", enabled: current_branch.qr_setting("enabled") }
       end
 
       def regenerate_qr

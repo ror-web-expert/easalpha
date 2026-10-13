@@ -120,7 +120,7 @@ module Api
           raise Api::Errors::Conflict.new("barcode.taken", "#{code} is already on #{taken.product.name}")
         end
         b = product.barcodes.create!(code: code, variant_id: params[:variant_id].presence, quantity: params[:quantity].presence || 1)
-        audit!("update", record: product, approved_by: approver == current_membership ? nil : approver, after: { barcode_added: code, variant_id: b.variant_id, quantity: b.quantity.to_s })
+        audit!("update", record: product, approved_by: approver == current_membership ? nil : approver.user, after: { barcode_added: code, variant_id: b.variant_id, quantity: b.quantity.to_s })
         render json: { barcode: MenuSerializers.barcode(b), product: MenuSerializers.product(product.reload, full: true) }, status: :created
       end
 

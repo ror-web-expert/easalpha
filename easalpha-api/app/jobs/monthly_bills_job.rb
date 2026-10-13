@@ -1,5 +1,6 @@
-# Daily: for every business with customer accounts and monthly bills switched on, sends last month's bills on the
-# chosen day of the month (Customers::Bills.monthly!). A business is skipped when its run for the period exists.
+# Daily: for every business with customer accounts and monthly bills switched on, sends last month's bills from the
+# chosen day of the month on (Customers::Bills.monthly!). A business is skipped once its run for the period is done; a
+# day missed is caught up the next day, and a run cut short is carried on.
 class MonthlyBillsJob < ApplicationJob
   queue_as :messages
 

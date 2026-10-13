@@ -164,6 +164,12 @@ RSpec.describe "Customers phase 7", type: :request do
       api_post "/api/v1/whatsapp/templates", { name: "account_statement", body: "Salam {customer_name}, balance Rs {new_balance} at {business_name}." }, headers: headers
       expect(response).to have_http_status(:created)
       api_post "/api/v1/customers/#{cust.id}/send_statement", {}, headers: headers
+      expect(response).to have_http_status(:conflict) # no phone linked: nothing could go out, so it is not reported sent
+      expect(json[:error][:code]).to eq("whatsapp.not_connected")
+      api_post "/api/v1/whatsapp/bulk", { template: "account_statement", segment: "with_balance" }, headers: headers
+      expect(json[:error][:code]).to eq("whatsapp.not_connected")
+      allow(Whatsapp::Provider).to receive(:live?).and_return(true) # a phone is linked
+      api_post "/api/v1/customers/#{cust.id}/send_statement", {}, headers: headers
       expect(response).to have_http_status(:created)
       within(biz) { expect(WhatsappMessage.where(template_name: "account_statement").last.variables["text"]).to eq("Salam Zara, balance Rs 0 at #{biz.name}.") }
       api_post "/api/v1/whatsapp/bulk", { template: "account_statement", segment: "with_balance" }, headers: headers

@@ -68,17 +68,21 @@ module Api
       def pin_login
         authenticate_device!
         pin = params.require(:pin).to_s
+        throttle = "device:#{current_device.id}"
+        Auth::PinThrottle.check!(throttle)
         candidates = Membership.active.includes(:role, :user).where.not(pin_digest: nil).select { |m| m.branch_allowed?(current_device.branch_id) }
         app = current_device.app # kitchen, rider (SPEC rider app: the rider's phone is a paired device) or pos
         # Two people may share a PIN by accident; prefer the one who may use this device's app.
         matches = candidates.select { |m| m.pin_digest && BCrypt::Password.new(m.pin_digest) == pin && !m.pin_locked? }
         membership = matches.find { |m| m.can?("app.#{app}") } || matches.first
         unless membership
-          candidates.each { |m| m.authenticate_pin(pin) }
+          # Nobody is named by a wrong PIN, so the till that typed it takes the strike, not every member with a PIN.
+          Auth::PinThrottle.failed!(throttle)
           AuditLog.record(action: "pin_failed", after: { device: current_device.code })
           raise Api::Errors::Unauthorized.new("pin.invalid", "Wrong PIN")
         end
         raise Api::Errors::Forbidden.new("app.denied", "You don't have access to this app") unless membership.can?("app.#{app}")
+        Auth::PinThrottle.clear!(throttle)
         membership.update_columns(pin_failed_count: 0, pin_locked_until: nil)
         current_device.update_columns(last_seen_at: Time.current)
         Current.user = membership.user

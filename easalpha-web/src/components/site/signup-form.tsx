@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/lib/types";
@@ -23,6 +24,7 @@ export function SignupForm() {
   const planCode = params.get("plan");
   const plan = PLANS.find((p) => p.code === planCode);
   const setSession = useAuthStore((s) => s.setSession);
+  const qc = useQueryClient();
   const session = useAuthStore((s) => s.session);
   const hydrated = useAuthStore((s) => s.hydrated);
   const [form, setForm] = useState<SignupInput>({ name: "", businessName: "", email: "", phone: "+92 ", password: "", agree: false, country: DEFAULT_COUNTRY });
@@ -59,6 +61,7 @@ export function SignupForm() {
     setBusy(true); setError(null);
     try {
       const s = await api<Session>("/auth/signup", { method: "POST", body: signupPayload(form), auth: "none" });
+      qc.clear(); // as at login: nothing cached for an earlier session carries over to the new business
       setSession(s);
       router.replace("/admin");
     } catch (err) {

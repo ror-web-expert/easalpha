@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, errorMessage } from "@/lib/api";
 import type { Customer, CustomerLedgerSummary, Ledger, Page } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/dates";
@@ -11,7 +11,7 @@ import { titleCase } from "@/lib/utils";
 import { useDebounced } from "@/lib/hooks";
 import { Cards, SearchInput } from "@/components/admin/page";
 import { ReportShell } from "@/components/admin/report-shell";
-import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyRow, EmptyState, Loading, Stat, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyRow, EmptyState, ErrorState, Loading, Stat, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 const KIND_TONE: Record<string, "danger" | "success" | "warning" | "neutral"> = { charge: "danger", payment: "success", refund: "warning", paid_out: "neutral" };
 
@@ -43,15 +43,18 @@ export default function CustomerLedgerReportPage() {
       }}>
       {!picked ? (
         <>
-          <Cards>
-            <SummaryCard label="Outstanding" value={formatMoney(s?.total_outstanding_minor)} sub={`${s?.customers_with_due ?? 0} customers owe`} tone="warning" />
-            <SummaryCard label="Credit customers" value={s?.credit_customers ?? 0} sub={`of ${s?.total_customers ?? 0} customers`} tone="info" />
-            <SummaryCard label="Collected this month" value={formatMoney(s?.collected_this_month_minor)} tone="success" />
-            <SummaryCard label="Aging" value={<Link href="/admin/customers/ar-aging" className="text-base text-primary hover:underline">AR Aging report</Link>} sub="Outstanding balances by age" tone="neutral" />
-          </Cards>
+          {/* A failed summary (customer accounts switched off, say) shows why, not Rs 0 owed. */}
+          {summary.error ? <div className="mb-6"><ErrorState message={errorMessage(summary.error)} onRetry={() => summary.refetch()} /></div> : (
+            <Cards>
+              <SummaryCard label="Outstanding" value={formatMoney(s?.total_outstanding_minor)} sub={`${s?.customers_with_due ?? 0} customers owe`} tone="warning" />
+              <SummaryCard label="Credit customers" value={s?.credit_customers ?? 0} sub={`of ${s?.total_customers ?? 0} customers`} tone="info" />
+              <SummaryCard label="Collected this month" value={formatMoney(s?.collected_this_month_minor)} tone="success" />
+              <SummaryCard label="Aging" value={<Link href="/admin/customers/ar-aging" className="text-base text-primary hover:underline">AR Aging report</Link>} sub="Outstanding balances by age" tone="neutral" />
+            </Cards>
+          )}
           <Card>
             <CardHeader><CardTitle>{dq ? "Matching customers" : "Customers with a balance"}</CardTitle><span className="text-sm text-fg-secondary">Pick one to open their ledger</span></CardHeader>
-            {candidates.isLoading ? <Loading /> : (
+            {candidates.isLoading ? <Loading /> : candidates.error ? <div className="p-5"><ErrorState message={errorMessage(candidates.error)} onRetry={() => candidates.refetch()} /></div> : (
               <Table>
                 <THead><tr><TH>Customer</TH><TH>Phone</TH><TH>Khata no</TH><TH right>Credit limit</TH><TH right>Balance</TH></tr></THead>
                 <TBody>{candidates.data?.length ? candidates.data.map((c) => (
@@ -61,7 +64,7 @@ export default function CustomerLedgerReportPage() {
             )}
           </Card>
         </>
-      ) : ledger.isLoading || !ledger.data ? <Loading /> : (
+      ) : ledger.error ? <ErrorState message={errorMessage(ledger.error)} onRetry={() => ledger.refetch()} /> : ledger.isLoading || !ledger.data ? <Loading /> : (
         <>
           <Cards>
             <SummaryCard label="Balance" value={formatMoney(ledger.data.balance_minor)} sub={ledger.data.balance_minor > 0 ? "Owed to you" : ledger.data.balance_minor < 0 ? "In credit" : "Settled"} tone={ledger.data.balance_minor > 0 ? "danger" : "success"} />

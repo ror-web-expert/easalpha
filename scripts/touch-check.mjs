@@ -1,6 +1,6 @@
 // Touch-screen check for the till: pairs a till, logs in as the cashier and drives it with touch gestures on an
 // emulated Android tablet. Reports whether each list scrolls by swiping, whether a swipe adds an item by mistake,
-// whether the page itself scrolls or zooms, and whether dialogs fit. Usage: node scripts/touch-check.mjs [label]
+// whether the page itself scrolls or zooms, and whether dialogs fit. Usage: node scripts/touch-check.mjs [label] (PIN=, WEB=, SIZES= override)
 import { chromium } from "playwright";
 import fs from "node:fs";
 const API = process.env.API || "http://localhost:3001/api/v1", WEB = process.env.WEB || "http://localhost:3000";
@@ -39,7 +39,7 @@ for (const [w, h] of sizes) {
   }
   await p.waitForSelector("button", { timeout: 30000 });
   if (!/\/pos$/.test(p.url())) {
-    for (const d of "1111") await p.getByRole("button", { name: d, exact: true }).first().tap();
+    for (const d of (process.env.PIN || "1111")) await p.getByRole("button", { name: d, exact: true }).first().tap();
     await p.waitForURL(/\/pos$/, { timeout: 20000 });
   }
   if (!paired) paired = await p.evaluate(() => Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith("easalpha")).map((k) => [k, localStorage.getItem(k)])));

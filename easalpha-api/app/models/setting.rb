@@ -13,6 +13,16 @@ class Setting < ApplicationRecord
     end
   end
 
+  # What a till or a screen may hold: the effective values over the legacy jsonb, without secrets.
+  def self.for_clients(business, branch: nil) = without_secrets(business.settings.merge(effective(business, branch: branch)))
+
+  # Drops what only the server uses (PRA credentials, the expense and report PIN digest, the Foodpanda webhook secret)
+  # from a settings hash. The settings screens show those masked through their own endpoints.
+  def self.without_secrets(values)
+    kept = values.reject { |k, _| Settings::Registry.key(k)&.secret }
+    kept["foodpanda"].is_a?(Hash) ? kept.merge("foodpanda" => kept["foodpanda"].except("secret")) : kept
+  end
+
   # Writes keys, bumps the business version once, mirrors legacy names. Returns the new version.
   def self.write!(business, values, branch: nil, user: nil)
     Setting.transaction do

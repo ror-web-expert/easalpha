@@ -39,13 +39,14 @@ Open http://localhost:3000/setup, sign in as demo@easalpha.com / password123, pi
 9. Reports: each screen, Export CSV and Export PDF.
 10. Customers: account sale, Customer Account, Send bill (WhatsApp); Regular Discounts tier; a voucher; a review from the tablet.
 11. Settings, WhatsApp: Connect a phone (already linked), Templates, Manual Send; Settings, Notifications: Enable on this device, Send test.
-12. Storefront: open the public page, leave a review, see it under Settings, Reviews.
+12. QR ordering: Settings, QR ordering, switch it on for the branch and open a table card link (`/q/<token>`) on a phone. Add a dish and one with sizes, place the order with a name, see it wait on the till's QR orders screen, accept it there, and watch the guest page move to Being prepared. Call a waiter and Ask for the bill show on the till; the Table bill matches the open order.
+13. Storefront: open the public page on a phone and on a computer. Check the cover and brand card, tap a category tab and see the page move to it, search the menu, add a dish and one with sizes, open the cart, leave a review and see it under Settings, Reviews. Turn Online ordering off in Website Config and check the page says ordering is closed and hides the Add buttons.
 
 The browser gate (`node scripts/e2e-web.mjs`) runs all seven phase gates automatically and leaves "E2E" records behind; they are safe to delete.
 
 ## Demo brand images (11 Oct 2026)
 
-The demo business carries a full set of images so every screen can be checked visually: a Demo Cafe logo (also the favicon), a cover image, one image per category and per product, the WhatsApp number +92 343 7172731 and a receipt footer QR pointing at the storefront. They were generated and uploaded through `POST /uploads`, so they live in Active Storage like real uploads. Screens to check: Settings, Branding (receipt, storefront and tab previews), Products, Catalog and Categories (thumbnails), `/store/demo-cafe` (cover, round logo, dish images, favicon and tab title), the till (logo on the receipt). Screenshots from the last walkthrough are in `scripts/shots/walkthrough/`.
+The demo business carries a full set of images so every screen can be checked visually: a Demo Cafe logo (also the favicon), a cover image, one image per category and per product, the WhatsApp number +92 343 7172731 and a receipt footer QR pointing at the storefront. They are generated and uploaded through `POST /uploads` by `python3 scripts/demo-images.py <api base> <owner email> <owner password> [--only-missing]` (Pillow; run it on any demo business, production included), so they live in Active Storage like real uploads. Screens to check: Settings, Branding (receipt, storefront and tab previews), Products, Catalog and Categories (thumbnails), `/store/demo-cafe` (cover, round logo, dish images, favicon and tab title), the till (logo on the receipt). Screenshots from the last walkthrough are in `scripts/shots/walkthrough/`.
 
 ## Customer accounts, barcodes, wages and touch (12 Oct 2026)
 
@@ -55,7 +56,7 @@ Before you start: the demo business has a real phone linked to WhatsApp. To try 
 2. A hostel student: Customers, New customer. Type the name of someone who exists: Possible duplicates appears. Enter room, roll no., guardian and phone, and an opening balance of Rs 3,000 with a reason. Save.
 3. The student's page: Adjust balance, Decrease Rs 50, reason "Tea charged twice". Then Reverse it with a reason. Both rows stay; the ledger and the bill show them.
 4. A sale on account at the till: Customer (F3), type the student's name or any number (phone, khata no., roll no., room, guardian's phone) and pick them; pay with Khata. Or press Pay, choose Khata and search for the student right there. The payment screen shows what they owe, their limit and the balance after this sale. The student gets a WhatsApp message with the items and the new balance.
-5. Bills: Customers, Monthly Bills. Choose This month, tick the student, Send to selected, then Print all. Open the bill link from the message on a phone.
+5. Bills: Customers, Monthly Bills. Choose This month, tick the student, Send to selected, then Print all. Open the bill link from the message on a phone. With no WhatsApp phone linked, Send answers "Link a WhatsApp phone in Settings, then send again" and nothing is marked sent; the month-end run catches up on a later day of the month if the bill day was missed, never twice for one period.
 6. Import: Customers, Import, Download template CSV, fill two students with opening_balance, import, and import again: the second time the opening balance is not entered twice.
 7. Barcodes: open a product, Barcodes, Generate in-store code (or type the code printed on the pack), Save. Products, Barcode Labels: pick it, 3 labels, Download PDF and print at 100%.
 8. Scanner: Settings, Point of Sale, Barcode Scanning on, Save. Test your scanner: click the box and scan; it shows what the scanner sends and what it finds. On the till, scan the label: the item is added. Scan a code that is on no product: the till offers to attach it (manager PIN for a cashier).

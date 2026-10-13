@@ -12,7 +12,7 @@ import { useCan } from "@/store/auth";
 import { Cards, PageHeader } from "@/components/admin/page";
 import { CustomerPicker } from "@/components/admin/customers-picker";
 import { balanceLabel } from "@/components/admin/marketing-helpers";
-import { BillActions, SEND_BILL_PERMS } from "@/components/admin/customer-accounts";
+import { BillActions, khataLimitText, SEND_BILL_PERMS } from "@/components/admin/customer-accounts";
 import { entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, signedMoney } from "@/components/admin/customer-accounts-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyRow, EmptyState, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
@@ -40,7 +40,7 @@ export default function CustomerAccountPage() {
         <>
           {!canSend ? <p className="mb-4 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning-ink">Your role cannot send account bills. Ask an owner for the Send Account Bill or Customer Account permission.</p> : null}
           <Cards>
-            <SummaryCard label={balanceLabel(c.balance_minor)} value={formatMoney(Math.abs(c.balance_minor))} sub={c.credit_limit_minor ? `Limit ${formatMoney(c.credit_limit_minor)}` : "No credit limit"} tone={c.balance_minor > 0 ? "danger" : "success"} />
+            <SummaryCard label={balanceLabel(c.balance_minor)} value={formatMoney(Math.abs(c.balance_minor))} sub={khataLimitText(c.credit_limit_minor)} tone={c.balance_minor > 0 ? "danger" : "success"} />
             <SummaryCard label="Khata No." value={c.khata_no ?? "-"} sub={[c.phone ?? "No phone", c.member_no ? `Roll ${c.member_no}` : null, c.room ? `Room ${c.room}` : null].filter(Boolean).join(" · ")} tone="neutral" />
             <SummaryCard label="Orders" value={c.orders_count} sub={c.last_order_at ? `Last ${formatDateTime(c.last_order_at)}` : "No orders yet"} />
             <SummaryCard label="Overdue (31+ days)" value={formatMoney(q.data ? q.data.aging["31_60"] + q.data.aging["61_90"] + q.data.aging.over_90 : 0)} sub={q.data ? `Current ${formatMoney(q.data.aging.current)}` : ""} tone="warning" />

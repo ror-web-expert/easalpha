@@ -4,8 +4,9 @@ import {
   ALL_TIME, accountPhones, amountDue, balanceText, billEntryLabel, billFileName, billLines, canReverseEntry, cleanPhone, closingFrom, closingMessage, duplicateQuery,
   entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, importColumns, isAllTime, isApprovalCancelled, isFutureDay, ledgerRows, openingAmount, periodError,
   periodFor, periodLabel, periodQuery, presetOf, runCounts, runStatusLabel, runStatusVariant, sendErrorText, signedAmount, signedMoney, templateCsv, toggleAll, toggleId, triggerLabel,
-  billTargets, printIds, templateTable,
+  billTargets, effectiveDay, IMPORT_COLUMNS, khataLimitError, MIN_KHATA_LIMIT, printIds, templateTable,
 } from "./customer-accounts-helpers";
+import { businessDayFor } from "@/lib/business-day";
 
 const today = new Date(2026, 9, 12); // 12 Oct 2026
 const totals = (t: Partial<LedgerTotals> = {}): LedgerTotals => ({ charges_minor: 0, payments_minor: 0, refunds_minor: 0, paid_out_minor: 0, adjustments_minor: 0, ...t });
@@ -42,10 +43,21 @@ describe("periods", () => {
     expect(periodQuery({ from: "2026-09-01", to: "2026-09-30" })).toEqual({ from: "2026-09-01", to: "2026-09-30" });
     expect(isAllTime({ from: "", to: "" })).toBe(true);
   });
-  it("flags a future date", () => {
-    expect(isFutureDay("2026-10-13", today)).toBe(true);
-    expect(isFutureDay("2026-10-12", today)).toBe(false);
-    expect(isFutureDay("", today)).toBe(false);
+  it("flags a date after the branch's business day, which at 00:30 is still yesterday", () => {
+    const halfPastMidnight = businessDayFor("02:01", new Date(2026, 9, 13, 0, 30)); // 13 Oct 00:30 belongs to 12 Oct
+    expect(halfPastMidnight).toBe("2026-10-12");
+    expect(isFutureDay("2026-10-13", halfPastMidnight)).toBe(true); // the calendar date is still the future to the API
+    expect(isFutureDay("2026-10-12", halfPastMidnight)).toBe(false);
+    expect(isFutureDay("", halfPastMidnight)).toBe(false);
+    const afterDayEnd = businessDayFor("02:01", new Date(2026, 9, 13, 2, 30));
+    expect(afterDayEnd).toBe("2026-10-13");
+    expect(isFutureDay("2026-10-13", afterDayEnd)).toBe(false);
+  });
+  it("sends only a past day; today or blank is left to the API's own business day", () => {
+    expect(effectiveDay("", "2026-10-12")).toBeUndefined();
+    expect(effectiveDay("2026-10-12", "2026-10-12")).toBeUndefined();
+    expect(effectiveDay("2026-10-01", "2026-10-12")).toBe("2026-10-01");
+    expect(effectiveDay("2026-10-13", "2026-10-12")).toBeUndefined(); // Save is held for a future day anyway
   });
 });
 
@@ -217,7 +229,23 @@ describe("monthly bills screen", () => {
   });
 });
 
+describe("khata limit", () => {
+  it("refuses a limit above 0 but under Rs 1, and accepts no limit, not allowed and Rs 1 or more", () => {
+    expect(MIN_KHATA_LIMIT).toBe(100);
+    expect(khataLimitError(1)).toBe("Enter a limit of at least Rs 1");
+    expect(khataLimitError(99)).toBe("Enter a limit of at least Rs 1");
+    expect(khataLimitError(100)).toBeNull();
+    expect(khataLimitError(800_000)).toBeNull();
+    expect(khataLimitError(0)).toBeNull();
+    expect(khataLimitError(null)).toBeNull();
+    expect(khataLimitError(undefined)).toBeNull();
+  });
+});
+
 describe("import template", () => {
+  it("tells Excel users to keep phone columns as Text", () => {
+    for (const key of ["phone", "guardian_phone"]) expect(IMPORT_COLUMNS.find((c) => c.key === key)?.help, key).toMatch(/as Text/);
+  });
   it("gives the same template as a table for download", () => {
     const t = templateTable(true);
     expect(t.columns.map((c) => c.key)).toContain("roll_no");

@@ -35,8 +35,16 @@ module Whatsapp
       r[:message_id]
     end
 
+    # The gateway takes a document of at most 10 MB.
+    MAX_DOCUMENT_BYTES = 10.megabytes
+
     # Sends a file (a customer bill PDF) with the text as its caption; returns the provider message id or raises.
     def send_document!(business, to:, text:, filename:, data:, mimetype: "application/pdf")
+      # Refused here with the reason, not sent and lost as a vague gateway error.
+      if data.bytesize > MAX_DOCUMENT_BYTES
+        size = ActiveSupport::NumberHelper.number_to_human_size(data.bytesize)
+        raise Api::Errors::Conflict.new("whatsapp.document_too_large", "#{filename} is #{size}; the linked phone sends files up to 10 MB. Send a shorter period.")
+      end
       r = request(:post, "/sessions/#{session_id(business)}/send", { to: to.to_s.delete("+"), text: text,
                                                                       document: { base64: Base64.strict_encode64(data), filename: filename, mimetype: mimetype } }, read_timeout: 60)
       raise Api::Errors::Conflict.new("whatsapp.gateway", r[:last_error] || "The linked phone could not send") unless r[:ok]

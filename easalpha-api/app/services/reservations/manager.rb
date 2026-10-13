@@ -11,6 +11,8 @@ module Reservations
       r = Reservation.new(branch: branch, table: table, customer: customer, guest_name: attrs[:guest_name].presence || customer&.name, phone: attrs[:phone].presence || customer&.phone, party_size: attrs[:party_size].presence || 2,
                           starts_at: starts, ends_at: ends, deposit_minor: attrs[:deposit_minor].to_i, notes: attrs[:notes], by_membership_id: actor&.id, status: "booked")
       check_conflict!(r)
+      # A deposit is held on the customer's khata, which only exists while customer accounts are on.
+      BusinessModules.require!(branch.business, "customer_accounts") if r.deposit_minor.positive?
       Reservation.transaction do
         r.save!
         if r.deposit_minor.positive? && customer && attrs[:deposit_method_code].present?
@@ -33,6 +35,7 @@ module Reservations
     def update!(r, attrs)
       raise Api::Errors::Conflict.new("reservation.status", "Reservation is #{r.status}") unless r.status.in?(%w[booked confirmed])
       r.assign_attributes(attrs.slice(:guest_name, :phone, :party_size, :notes, :table_id, :deposit_minor))
+      BusinessModules.require!(r.branch.business, "customer_accounts") if r.deposit_minor_changed? && r.deposit_minor.positive?
       r.starts_at = Time.iso8601(attrs[:starts_at].to_s) if attrs[:starts_at].present?
       r.ends_at = Time.iso8601(attrs[:ends_at].to_s) if attrs[:ends_at].present?
       check_conflict!(r)

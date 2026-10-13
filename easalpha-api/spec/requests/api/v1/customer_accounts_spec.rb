@@ -231,6 +231,7 @@ RSpec.describe "Customer accounts", type: :request do
       expect(json[:error][:code]).to eq("bill.link_invalid")
 
       within(biz) { WhatsappMessage.delete_all }
+      allow(Whatsapp::Provider).to receive(:live?).and_return(true) # a phone is linked
       api_post "/api/v1/customers/#{s[:id]}/send_bill", {}, headers: headers
       expect(response).to have_http_status(:created)
       msg = within(biz) { WhatsappMessage.find_by(template_name: "account_bill") }
@@ -257,6 +258,7 @@ RSpec.describe "Customer accounts", type: :request do
       expect(response.body[0, 5]).to eq("%PDF-")
       expect(response.body.scan("/Type /Page\n").size + response.body.scan("/Type /Page>>").size + response.body.scan(%r{/Type /Page[^s]}).size).to be >= 1
 
+      allow(Whatsapp::Provider).to receive(:live?).and_return(true) # a phone is linked
       api_post "/api/v1/bill_runs", { from: today.beginning_of_month.to_s, to: today.to_s }, headers: headers
       expect(response).to have_http_status(:created)
       run = json
@@ -269,12 +271,13 @@ RSpec.describe "Customer accounts", type: :request do
 
     it "sends the month-end bills once, on the chosen day, only when switched on" do
       s = student!(opening_balance_minor: 40_000, opening_on: (today.prev_month.beginning_of_month).to_s)
+      allow(Whatsapp::Provider).to receive(:live?).and_return(true) # a phone is linked
       within(biz) do
         Customers::Bills.monthly!(biz, today: today.beginning_of_month + 0)
         expect(BillRun.count).to eq(0) # not switched on
         Setting.write!(biz, { "khata.monthly_bills.enabled" => true, "khata.monthly_bills.day" => 3 })
         Customers::Bills.monthly!(biz.reload, today: today.beginning_of_month)
-        expect(BillRun.count).to eq(0) # wrong day
+        expect(BillRun.count).to eq(0) # before the chosen day
         Customers::Bills.monthly!(biz.reload, today: today.beginning_of_month + 2)
         expect(BillRun.count).to eq(1)
         expect(BillRun.first).to have_attributes(trigger: "auto", period_from: today.prev_month.beginning_of_month, sent_count: 1)

@@ -30,10 +30,14 @@ export async function enqueue(rec: { type: SyncRecordType; id: string; membershi
   schedule(500);
 }
 
-/** Merge new payload fields into a queued record (e.g. add payments to an order that has not been pushed yet). Returns false when not queued. */
-export async function patchQueued(id: string, patch: (p: Record<string, unknown>) => Record<string, unknown>): Promise<boolean> {
+/**
+ * Merge new payload fields into a queued record (e.g. add payments to an order that has not been pushed yet). Returns
+ * false when not queued, or when `type` is given and the queued record is another type (an order_update shares its
+ * order's id, and the server ignores payments or a void inside it).
+ */
+export async function patchQueued(id: string, patch: (p: Record<string, unknown>) => Record<string, unknown>, type?: SyncRecordType): Promise<boolean> {
   const item = await db.queue.get(id);
-  if (!item || item.status === "sending") return false;
+  if (!item || item.status === "sending" || (type && item.type !== type)) return false;
   await db.queue.put({ ...item, payload: patch(item.payload) });
   schedule(500);
   return true;

@@ -45,8 +45,9 @@ interface Props {
 }
 
 export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride, canRemove = true, canDecrease = true, onPlaceUnpaid, unpaidLabel }: Props) {
-  // SPEC Charges: the same totals as the payment page, with the charges in force on this order.
-  const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor });
+  // SPEC Charges: the same totals as the payment page, with the charges in force on this order, plus the cash rounding
+  // and tips earlier payments stored (the server keeps both in the order's total).
+  const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor, rounding_minor: cart.rounding_minor, tip_minor: cart.tip_minor });
   const empty = cart.lines.length === 0;
   const paid = cart.paid_minor ?? 0;
   const due = Math.max(0, t.total_minor - paid);
@@ -112,6 +113,8 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(resolveServiceCharge(cart, settings), currency)}</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
           {t.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery</span><span className="tabular">{formatMoney(t.delivery_charge_minor, currency)}</span></div> : null}
           {t.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(t.tax_minor, currency)}</span></div> : null}
+          {t.rounding_minor ? <div className="flex justify-between"><span>Cash rounding</span><span className="tabular">{formatMoney(t.rounding_minor, currency)}</span></div> : null}
+          {t.tip_minor ? <div className="flex justify-between"><span>Tip</span><span className="tabular">{formatMoney(t.tip_minor, currency)}</span></div> : null}
           {paid ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(t.total_minor, currency)}</span></div> : null}
           {paid ? <div className="flex justify-between"><span>Paid</span><span className="tabular">-{formatMoney(paid, currency)}</span></div> : null}
         </div>
@@ -125,7 +128,8 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
               <Button variant="secondary" size="lg" onClick={onSend} disabled={empty || busy} title="Kitchen (F5)"><Send className="h-5 w-5" /> Kitchen<span className="[@media(max-height:700px)]:hidden"> (F5)</span></Button>
             </>
           )}
-          {onPlaceUnpaid && !reopened ? <Button variant="secondary" size="lg" className="col-span-2 [@media(max-height:700px)]:col-span-3" onClick={onPlaceUnpaid} disabled={empty || busy} title="Skips the payment screen (Direct Unpaid Orders)"><Receipt className="h-5 w-5" /> {unpaidLabel ?? "Place unpaid"}</Button> : null}
+          {/* Short screens: drawn after Pay, so Hold, Kitchen and Pay share the first row and this one spans the second. */}
+          {onPlaceUnpaid && !reopened ? <Button variant="secondary" size="lg" className="col-span-2 [@media(max-height:700px)]:order-last [@media(max-height:700px)]:col-span-3" onClick={onPlaceUnpaid} disabled={empty || busy} title="Skips the payment screen (Direct Unpaid Orders)"><Receipt className="h-5 w-5" /> {unpaidLabel ?? "Place unpaid"}</Button> : null}
           <Button size="xl" className={cn("col-span-2 h-14 text-lg [@media(max-height:700px)]:h-12", reopened ? "[@media(max-height:700px)]:col-span-2" : "[@media(max-height:700px)]:col-span-1")} onClick={onPay} disabled={empty || busy} loading={busy} title={reopened ? "Save and pay (F8)" : "Pay (F8)"}><Banknote className="h-6 w-6" /> {reopened ? "Save and pay" : "Pay"}<span className="[@media(max-height:700px)]:hidden"> (F8)</span></Button>
         </div>
       </div>

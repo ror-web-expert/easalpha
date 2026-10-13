@@ -9,7 +9,7 @@ import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
 import type { BarcodeMatch } from "@/lib/barcode";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, localToCart, TotalChangedError } from "@/lib/pos-actions";
+import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError } from "@/lib/pos-actions";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
@@ -40,7 +40,7 @@ function SellScreen() {
   const session = useDeviceStore((s) => s.session);
   const can = usePosCan();
   const { cart, reset, load, patch, addLine, updateLine, removeLine, setQty } = useCartStore();
-  const { run, dialog: pinDialog } = useApproval();
+  const { run, dialog: pinDialog, open: approvalOpen } = useApproval();
   const searchRef = useRef<HTMLInputElement>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -62,6 +62,8 @@ function SellScreen() {
   // SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own PIN, asked once per reopened order and reused for the payment save.
   const [orderPin, setOrderPin] = useState<string | undefined>();
   const [pinAsk, setPinAsk] = useState<{ resolve: (pin: string | null) => void } | null>(null);
+  // The server's amount due from the last "Total updated" stop: the cashier has seen it, so the next press pays it.
+  const seenDue = useRef<{ id: string; due: number } | null>(null);
   const settings = catalog?.business.settings;
   const currency = catalog?.business.currency;
   const display = displaySettings(settings);
@@ -93,7 +95,7 @@ function SellScreen() {
     patch({ order_type: allowedTypes[0], lines: repriceLines(cart.lines, allowedTypes[0], catalog, catalog?.branch?.id), table_id: null, table_code: null });
   }, [allowedTypes, cart.saved, cart.order_type, cart.lines, patch, catalog]);
 
-  const newOrder = useCallback(() => { reset(); setReceipt(null); setPayOpen(false); setOrderPin(undefined); }, [reset]);
+  const newOrder = useCallback(() => { reset(); setReceipt(null); setPayOpen(false); setOrderPin(undefined); seenDue.current = null; }, [reset]);
 
   const addProduct = (p: Product) => {
     const needsSheet = (p.variants?.length ?? 0) > 0 || (p.modifier_group_ids?.length ?? 0) > 0;
@@ -267,17 +269,20 @@ function SellScreen() {
     } catch (e) { toast.error("Could not set the tax choice", errorMessage(e)); }
     finally { setBusy(false); }
   };
-  const pay = async (payments: PaymentInput[], tip: number) => {
+  const pay = async (payments: PaymentInput[], tip: number, shownDue: number) => {
     setBusy(true);
     try {
-      const r = await withOrderPin((o) => payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin }), "Take payment");
+      const seen = seenDue.current?.id === cart.id ? seenDue.current.due : undefined;
+      const r = await withOrderPin((o) => payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin, shownDue, seenDue: seen }), "Take payment");
       if (!r) return;
+      seenDue.current = null;
       setPayOpen(false);
       const fullyPaid = ["paid", "closed"].includes(r.local.status) || r.local.paid_minor >= r.local.total_minor;
       if (!fullyPaid) {
         // SPEC part payment: the order stays open as Pending with the remaining due on the panel. The panel takes the
-        // server's order (lines, discounts, paid), so the due it shows is the one still owed.
-        loadCart({ ...localToCart(r.local), customer: cart.customer });
+        // order as payOrder left it (the server's lines, discounts, rounding, tip and paid; the reopen state kept),
+        // so the due it shows is the one still owed.
+        loadCart(r.cart);
         toast.info("Part payment taken", `${formatMoney(r.local.total_minor - r.local.paid_minor, currency)} still due on ${r.local.label}. The order stays open until it is paid.`);
         return;
       }
@@ -292,8 +297,9 @@ function SellScreen() {
     } catch (e) {
       if (e instanceof TotalChangedError) {
         // Nothing was paid: show the order as the server prices it and leave the payment screen open on the new total.
+        seenDue.current = { id: e.cart.id, due: e.toMinor };
         loadCart(e.cart);
-        toast.info("Total updated", `The total is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
+        toast.info("Total updated", `The amount due is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
       } else toast.error("Payment failed", errorMessage(e));
     }
     finally { setBusy(false); }
@@ -325,8 +331,11 @@ function SellScreen() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, newOrder]);
-  // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being taken.
-  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: payOpen || !!receipt || !!pinAsk, onMatch: addScanned });
+  // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being
+  // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
+  // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.
+  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || !!receipt || !!pinAsk || approvalOpen;
+  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned });
 
   if (!catalog) {
     return (

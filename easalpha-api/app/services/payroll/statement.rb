@@ -23,24 +23,29 @@ module Payroll
 
     def entries(employee)
       rows = []
+      branch = employee.branch
+      # Dates follow the branch business day, so a wage paid after midnight lands on the day it belongs to.
+      day_of = ->(t) { branch ? branch.business_day_for(t) : t.to_date }
       Payslip.includes(:payroll_run).where(employee_id: employee.id).where.not(payroll_runs: { status: "cancelled" }).references(:payroll_runs).each do |p|
         run = p.payroll_run
         earned = p.base_minor + p.earnings_minor - p.deductions_minor - p.absence_minor - p.late_fines_minor
         rows << { date: run.month.end_of_month, at: run.created_at, kind: "salary", label: "Salary #{run.month.strftime('%B %Y')}", ref: run.label, credit_minor: earned, debit_minor: 0,
                   detail: "Gross #{rs(p.base_minor + p.earnings_minor)}, deductions #{rs(p.deductions_minor + p.absence_minor + p.late_fines_minor)}" }
         next unless p.paid_at
-        rows << { date: p.paid_at.to_date, at: p.paid_at, kind: "salary_paid", label: "Salary paid", ref: run.label, credit_minor: 0, debit_minor: p.net_minor, recovered_minor: p.advances_recovered_minor,
+        rows << { date: day_of.call(p.paid_at), at: p.paid_at, kind: "salary_paid", label: "Salary paid", ref: run.label, credit_minor: 0, debit_minor: p.net_minor, recovered_minor: p.advances_recovered_minor,
                   detail: p.advances_recovered_minor.positive? ? "Advance recovered #{rs(p.advances_recovered_minor)}" : nil }
       end
       WagePayment.where(employee_id: employee.id, status: "paid").each do |w|
         period = w.period_from == w.period_to ? w.period_from.strftime("%-d %b") : "#{w.period_from.strftime('%-d %b')} to #{w.period_to.strftime('%-d %b')}"
-        rows << { date: w.period_to, at: w.paid_at || w.created_at, kind: "wage", label: "Wage #{period}", ref: w.label, credit_minor: w.gross_minor + w.bonus_minor - w.deductions_minor, debit_minor: 0,
+        paid_on = day_of.call(w.paid_at || w.created_at)
+        # A week paid before it ends is earned and paid on the same day, so a month-end statement never shows the pay without the wage.
+        rows << { date: [ w.period_to, paid_on ].min, at: w.paid_at || w.created_at, kind: "wage", label: "Wage #{period}", ref: w.label, credit_minor: w.gross_minor + w.bonus_minor - w.deductions_minor, debit_minor: 0,
                   detail: [ days(w.days_worked), (w.bonus_minor.positive? ? "bonus #{rs(w.bonus_minor)}" : nil), (w.deductions_minor.positive? ? "deductions #{rs(w.deductions_minor)}" : nil) ].compact.join(", ") }
-        rows << { date: (w.paid_at || w.created_at).to_date, at: (w.paid_at || w.created_at) + 1, kind: "wage_paid", label: "Wage paid", ref: w.label, credit_minor: 0, debit_minor: w.net_minor,
+        rows << { date: paid_on, at: (w.paid_at || w.created_at) + 1, kind: "wage_paid", label: "Wage paid", ref: w.label, credit_minor: 0, debit_minor: w.net_minor,
                   recovered_minor: w.advance_recovered_minor, detail: w.advance_recovered_minor.positive? ? "Advance recovered #{rs(w.advance_recovered_minor)}" : nil }
       end
       Advance.where(employee_id: employee.id, status: %w[paid repaid]).where.not(paid_at: nil).each do |a|
-        rows << { date: a.paid_at.to_date, at: a.paid_at, kind: "advance", label: "Advance #{a.label}", ref: a.label, credit_minor: 0, debit_minor: a.amount_minor, detail: a.reason }
+        rows << { date: day_of.call(a.paid_at), at: a.paid_at, kind: "advance", label: "Advance #{a.label}", ref: a.label, credit_minor: 0, debit_minor: a.amount_minor, detail: a.reason }
       end
       rows.sort_by { |e| [ e[:date], e[:at] ] }
     end

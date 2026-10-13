@@ -38,6 +38,8 @@ describe("SPEC sidebar", () => {
     const all = NAV.flatMap((g) => g.items);
     const byLabel = (l: string, group?: string) => (group ? NAV.find((g) => g.label === group)!.items : all).find((i) => i.label === l)!;
     for (const l of ["Customer Ledger", "Monthly Bills", "Customer Payments", "Customer Account", "AR Aging"]) expect(byLabel(l, "Customers").module, l).toBe("customer_accounts");
+    expect(byLabel("Customer Ledger", "Reports").module).toBe("customer_accounts"); // its API answers module.disabled too
+    expect(byLabel("Customers", "Reports").module).toBeUndefined();
     for (const l of ["Overview", "Employees", "Advances", "Run Payroll", "Pay Wages", "Employee Statement", "Fingerprint"]) expect(byLabel(l, "Payroll").module, l).toBe("payroll");
     expect(byLabel("Customers", "Customers").module).toBeUndefined();
     expect(byLabel("Modules", "Settings").href).toBe("/admin/settings/modules");

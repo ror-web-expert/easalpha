@@ -55,8 +55,8 @@ function createMainWindow(): void {
     height: Math.min(800, work.height),
     minWidth: Math.min(800, work.width),
     minHeight: Math.min(600, work.height),
-    fullscreen: !!s.fullScreen && !s.kiosk,
-    kiosk: !!s.kiosk,
+    // Only a true value is passed: an explicit "fullscreen: false" stops a macOS window from ever going full screen.
+    ...(s.kiosk ? { kiosk: true } : s.fullScreen ? { fullscreen: true } : {}),
     title: "EasAlpha POS",
     backgroundColor: "#ffffff",
     icon: path.join(__dirname, "..", "build", "icon.png"),
@@ -97,7 +97,17 @@ function createMainWindow(): void {
     mainWindow = null;
   });
 
+  // The Full screen tick follows the window, whether F11, kiosk mode or the macOS green button changed it.
+  mainWindow.on("enter-full-screen", syncFullScreenItem);
+  mainWindow.on("leave-full-screen", syncFullScreenItem);
+  syncFullScreenItem();
+
   void mainWindow.loadURL(appUrl());
+}
+
+function syncFullScreenItem(): void {
+  const item = Menu.getApplicationMenu()?.getMenuItemById("fullScreen");
+  if (item && mainWindow) item.checked = mainWindow.isFullScreen();
 }
 
 function setUpDeviceAgain(): void {
@@ -174,11 +184,16 @@ function buildMenu(): void {
       submenu: [
         { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => void mainWindow?.loadURL(appUrl()) },
         {
+          id: "fullScreen",
           label: "Full screen",
           accelerator: "F11",
           type: "checkbox",
           checked: mainWindow?.isFullScreen() ?? false,
-          click: (item) => mainWindow?.setFullScreen(item.checked),
+          // Toggle from the window itself: the tick can be stale when the window opened full screen or in kiosk mode.
+          click: () => {
+            mainWindow?.setFullScreen(!mainWindow.isFullScreen());
+            syncFullScreenItem();
+          },
         },
         {
           label: "Open full screen at launch",
@@ -191,7 +206,11 @@ function buildMenu(): void {
           accelerator: "CmdOrCtrl+Shift+K",
           type: "checkbox",
           checked: !!loadSettings().kiosk,
-          click: (item) => { saveSettings({ kiosk: item.checked }); mainWindow?.setKiosk(item.checked); },
+          click: (item) => {
+            saveSettings({ kiosk: item.checked });
+            mainWindow?.setKiosk(item.checked);
+            syncFullScreenItem();
+          },
         },
         { type: "separator" },
         { label: "Printers", accelerator: "CmdOrCtrl+Shift+P", click: openPrinterSettings },

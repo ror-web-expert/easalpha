@@ -1,7 +1,8 @@
 // Pure till rules from SPEC "Orders, order taking and tables", "Payments, charges, tax and the finance ledger",
 // "Kitchen display, printing and devices" and "Roles and permissions". Every rule reads the synced settings object
 // (settingValue) and the session's permission codes, so the till behaves the same offline as online.
-import { settingValue } from "@/lib/pricing";
+import { cashRounding, settingValue, type CartLine, type Totals } from "@/lib/pricing";
+import { totalsWithCharges, type ChargeFields } from "@/lib/pos-charges";
 import type { BusinessSettings, OrderType } from "@/lib/types";
 
 export type Settings = BusinessSettings | Record<string, unknown> | null | undefined;
@@ -136,21 +137,74 @@ export function defaultPaymentMethod(settings: Settings, order?: { reopened?: bo
   return typeof code === "string" && code.trim() ? code.trim() : null;
 }
 
+/** Payments::Processor rounds only when one of the payments uses the method coded "cash" (the default Cash method). */
+export function roundsCash(methodCodes: readonly (string | null | undefined)[]): boolean {
+  return methodCodes.includes("cash");
+}
+
 /**
- * What to send when the server's total differs from the till's: the same payments when they match or when this is
- * a part payment; the last payment moved by the difference when it is under Rs 1 (paisa rounding); and null when the
- * difference is Rs 1 or more on a full payment, so the cashier sees the new total before any money is taken.
+ * The cash rounding in force once a payment is taken, as Payments::Processor#apply_rounding! works it out: a cash
+ * payment while nothing has been paid rounds the total (tips included) to the cash_rounding step; every later payment
+ * keeps the rounding already stored on the order.
  */
-export function reconcilePayments<P extends { amount_minor: number; tendered_minor?: number | null }>(payments: P[], tillDueMinor: number, serverDueMinor: number): P[] | null {
-  const diff = serverDueMinor - tillDueMinor;
+export function roundingForPayment(unroundedMinor: number, storedMinor: number, paidMinor: number, cash: boolean, settings: Settings): number {
+  const step = Number(settingValue<unknown>(settings, "cash_rounding", 0)) || 0;
+  if (!cash || paidMinor !== 0 || step <= 0) return storedMinor;
+  return cashRounding(unroundedMinor, (settings ?? undefined) as BusinessSettings | undefined);
+}
+
+/** An order as the payment screen prices it. discount_minor is the order-level discount only: the lines carry the product discounts. */
+export type PayableOrder = ChargeFields & { lines: CartLine[]; is_staff_meal: boolean; discount_minor?: number; rounding_minor?: number; tip_minor?: number; paid_minor?: number };
+
+/**
+ * The order's totals once this payment is taken, the way Orders::Pricing and Payments::Processor will charge them:
+ * the tips already taken plus this one, and the rounding from roundingForPayment.
+ */
+export function payableTotals(order: PayableOrder, opts: { settings?: Settings; tip_minor?: number; cash: boolean }): Totals {
+  const tip_minor = (order.tip_minor ?? 0) + Math.max(0, opts.tip_minor ?? 0);
+  const t = totalsWithCharges(order.lines, order, { settings: opts.settings, staffMeal: order.is_staff_meal, tip_minor, discount_minor: order.discount_minor });
+  const rounding_minor = roundingForPayment(t.total_minor, order.rounding_minor ?? 0, order.paid_minor ?? 0, opts.cash, opts.settings);
+  return { ...t, rounding_minor, total_minor: order.is_staff_meal ? 0 : t.total_minor + rounding_minor };
+}
+
+/**
+ * What Payments::Processor will ask for when this payment reaches it, from the order as the server just saved it. Its
+ * total already holds the stored rounding and tips; the payment adds its tip and, as the first cash payment, rounds.
+ */
+export function serverDueForPayment(order: { total_minor: number; rounding_minor: number; paid_minor: number; is_staff_meal: boolean }, opts: { settings?: Settings; tip_minor?: number; cash: boolean }): number {
+  const unrounded = order.total_minor - order.rounding_minor + Math.max(0, opts.tip_minor ?? 0);
+  const rounding = roundingForPayment(unrounded, order.rounding_minor, order.paid_minor, opts.cash, opts.settings);
+  return Math.max(0, (order.is_staff_meal ? 0 : unrounded + rounding) - order.paid_minor);
+}
+
+/**
+ * What to send when the server will ask for a different amount than the payment screen showed (a discount re-checked
+ * on the server, a price changed): the same payments when they agree or when this stays a part payment; the payments
+ * moved to the server's figure when the gap is under Rs 1 (paisa rounding) or when the cashier was already shown that
+ * figure (seenServerDueMinor, from the stop before); otherwise null, so the cashier sees it before any money is taken.
+ */
+export function reconcilePayments<P extends { amount_minor: number; tendered_minor?: number | null }>(payments: P[], shownDueMinor: number, serverDueMinor: number, seenServerDueMinor?: number | null): P[] | null {
+  const diff = serverDueMinor - shownDueMinor;
   if (diff === 0 || !payments.length) return payments;
   const paying = payments.reduce((s, p) => s + p.amount_minor, 0);
-  const full = paying + 100 >= tillDueMinor; // within Rs 1 of everything due: the cashier meant to settle the order
+  // Within Rs 1 of either figure: the cashier means to settle the order, so the two must agree.
+  const full = paying + 100 >= Math.min(shownDueMinor, serverDueMinor);
   if (!full) return payments;
-  if (Math.abs(diff) >= 100) return null;
-  const last = payments[payments.length - 1];
-  const amount = Math.max(0, last.amount_minor + diff);
-  const tendered = last.tendered_minor != null ? Math.max(last.tendered_minor, amount) : last.tendered_minor;
-  return [...payments.slice(0, -1), { ...last, amount_minor: amount, ...(tendered != null ? { tendered_minor: tendered } : {}) }];
+  if (Math.abs(diff) >= 100 && serverDueMinor !== seenServerDueMinor) return null;
+  return shiftPayments(payments, diff);
+}
+
+/** The payments moved by diff: a rise goes on the last one; a cut comes off the last ones first, dropping any that reach zero. */
+function shiftPayments<P extends { amount_minor: number; tendered_minor?: number | null }>(payments: P[], diff: number): P[] {
+  const out = [...payments];
+  let left = diff;
+  for (let i = out.length - 1; i >= 0 && left !== 0; i--) {
+    const p = out[i];
+    const amount = Math.max(0, p.amount_minor + left);
+    left -= amount - p.amount_minor;
+    const tendered = p.tendered_minor != null ? Math.max(p.tendered_minor, amount) : p.tendered_minor;
+    out[i] = { ...p, amount_minor: amount, ...(tendered != null ? { tendered_minor: tendered } : {}) };
+  }
+  return out.filter((p) => p.amount_minor > 0);
 }
 

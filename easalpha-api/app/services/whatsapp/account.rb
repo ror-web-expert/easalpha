@@ -43,6 +43,7 @@ module Whatsapp
     # Bulk Send: a list of customers or every customer with a balance; skips those without a phone.
     def bulk!(customer_ids: nil, segment: nil, template_name:, actor: nil)
       guard!
+      Provider.require_live!
       scope = Customer.active.where(is_walk_in: false)
       scope = scope.where(id: customer_ids) if customer_ids.present?
       scope = scope.where("balance_minor > 0") if segment == "with_balance"
@@ -61,6 +62,8 @@ module Whatsapp
 
     # Customer Account: send the statement (SEND_ACCOUNT_BILL).
     def send_statement!(customer, actor: nil)
+      guard!(customer.business)
+      Provider.require_live!(customer.business) if customer.phone.present?
       send!(customer: customer, template_name: "account_statement", actor: actor, extra: { link: "" })
     end
 

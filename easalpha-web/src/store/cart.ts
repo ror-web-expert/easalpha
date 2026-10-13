@@ -42,6 +42,9 @@ export interface Cart {
   reopen_count?: number;
   /** Money already taken against this order (part payments, or the payments of a reopened order). */
   paid_minor?: number;
+  /** Cash rounding and tips the server stored with earlier payments; they stay in the order's total (Orders::Pricing). */
+  rounding_minor?: number;
+  tip_minor?: number;
   /** "cash:4500,khata:2000" from the server; a reopened order pre-selects its original method from it. */
   payment_method_summary?: string | null;
   /** SPEC Charges: the cashier's per-order service / delivery charge. Undefined means the settings default applies; zero removes it. */

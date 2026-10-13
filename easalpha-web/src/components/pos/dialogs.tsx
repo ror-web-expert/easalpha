@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Repeat, UserPlus } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { Customer, CustomerLookup, DiningTable, Order } from "@/lib/types";
@@ -18,14 +18,18 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
   const [adding, setAdding] = useState<{ name: string; phone: string; room: string; member_no: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (open) { setPicked(null); setLastOrder(null); setAdding(null); setError(null); } }, [open]);
+  // Counts picks, so a slow lookup for an earlier pick never shows its last order on a later one.
+  const pickNo = useRef(0);
+  useEffect(() => { if (open) { pickNo.current++; setPicked(null); setLastOrder(null); setAdding(null); setError(null); } }, [open]);
   const choose = async (c: Customer) => {
+    const n = ++pickNo.current;
     setPicked(c); setLastOrder(null); setError(null);
     // The last order (for one-tap repeat) comes with the phone lookup; a customer without a phone has none to repeat.
     if (c.phone) {
-      try { const r = await api<CustomerLookup>("/customers/lookup", { auth: "pos", query: { phone: c.phone } }); if (r.customer?.id === c.id) setLastOrder(r.last_order ?? null); } catch {}
+      try { const r = await api<CustomerLookup>("/customers/lookup", { auth: "pos", query: { phone: c.phone } }); if (n === pickNo.current && r.customer?.id === c.id) setLastOrder(r.last_order ?? null); } catch {}
     }
   };
+  const searchAgain = () => { pickNo.current++; setPicked(null); setLastOrder(null); };
   const attach = (c: Customer) => { onPick(toCartCustomer(c)); onClose(); };
   const create = async () => {
     if (!adding) return;
@@ -67,7 +71,7 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
                 <Repeat className="h-4 w-4" /> Repeat last order · {formatMoney(lastOrder.total_minor)} · {lastOrder.items?.length} items
               </Button>
             ) : null}
-            <Button className="w-full" variant="ghost" onClick={() => setPicked(null)}>Search again</Button>
+            <Button className="w-full" variant="ghost" onClick={searchAgain}>Search again</Button>
           </div>
         ) : (
           <CustomerSearch autoFocus onPick={(c) => void choose(c)} onAddNew={(q) => setAdding({ ...newCustomerPrefill(q), room: "", member_no: "" })} />

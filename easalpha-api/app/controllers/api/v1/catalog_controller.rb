@@ -14,7 +14,7 @@ module Api
           generated_at: Time.current,
           business: { id: current_business.id, name: current_business.name, currency: current_business.currency, time_zone: current_business.time_zone,
                       phone: current_business.phone, logo_key: current_business.logo_key,
-                      settings: current_business.settings.merge(Setting.effective(current_business, branch: current_branch)) },
+                      settings: Setting.for_clients(current_business, branch: current_branch) },
           branch: current_branch && Serializers.branch(current_branch),
           tax_rates: TaxRate.active.map { |t| MenuSerializers.tax_rate(t) },
           stations: (branch_id ? Station.active.where(branch_id: branch_id) : Station.active).map { |s| MenuSerializers.station(s) },

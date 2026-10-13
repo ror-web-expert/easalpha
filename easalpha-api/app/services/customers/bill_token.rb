@@ -23,8 +23,9 @@ module Customers
       nil
     end
 
+    # The web app's address: PUBLIC_URL is what deploy/.env sets for it (also used for mail and push links).
     def url(customer, from:, to:, due_on: nil)
-      base = ENV["PUBLIC_WEB_URL"].presence || ENV["WEB_URL"].presence || (Rails.env.production? ? "https://easalpha.com" : "http://localhost:3000")
+      base = ENV["PUBLIC_WEB_URL"].presence || ENV["WEB_URL"].presence || ENV["PUBLIC_URL"].presence || (Rails.env.production? ? "https://easalpha.com" : "http://localhost:3000")
       "#{base.chomp('/')}/bill/#{generate(customer, from: from, to: to, due_on: due_on)}"
     end
   end

@@ -155,12 +155,20 @@ module Api
           raise Api::Errors::Forbidden.new("permission.denied", "Missing permission: khata.adjust (needed for opening balances)") unless current_membership.can?("khata.adjust")
         end
         day = today
+        # Excel drops the 0 of a mobile number (3001234567) and saves a long one such as 923001234567 as 9.23001E+11,
+        # which has lost digits for good.
+        excel_number = ->(v) { v.to_s.strip.match?(/\A[+-]?\d+(\.\d+)?E[+-]?\d+\z/i) }
+        phone_of = ->(v) { s = v.to_s.gsub(/[\s\-()]/, ""); User.normalize_phone(s.match?(/\A3\d{9}\z/) ? "0#{s}" : s) }
         rows.each_with_index do |row, i|
           name = row["name"].to_s.strip
-          phone = User.normalize_phone(row["phone"])
+          phone = phone_of.(row["phone"])
           member_no = (row["roll_no"].presence || row["member_no"].presence || row["roll_id_no"].presence).to_s.strip.presence
           if name.blank?
             errors << { line: i + 2, error: "name is missing" }
+            next
+          end
+          if excel_number.(row["phone"]) || excel_number.(row["guardian_phone"])
+            errors << { line: i + 2, error: "Excel changed this phone into a number; format the phone columns as Text" }
             next
           end
           limit = row["credit_limit"].to_s.strip.delete(",").presence && (BigDecimal(row["credit_limit"].to_s.strip.delete(",")) * 100).round
@@ -170,7 +178,7 @@ module Api
             group = row["group"].present? ? (CustomerGroup.active.find_by(name: row["group"]) || CustomerGroup.create!(name: row["group"])) : nil
             existing = (phone && Customer.active.find_by(phone: phone)) || (member_no && Customer.active.find_by(member_no: member_no))
             attrs = { name: name, phone: phone, email: row["email"].presence, company: row["company"].presence, group: group, notes: row["notes"].presence,
-                      room: row["room"].presence, member_no: member_no, guardian_name: row["guardian_name"].presence, guardian_phone: row["guardian_phone"].presence,
+                      room: row["room"].presence, member_no: member_no, guardian_name: row["guardian_name"].presence, guardian_phone: phone_of.(row["guardian_phone"]),
                       credit_limit_minor: limit }.compact
             c = existing
             if existing

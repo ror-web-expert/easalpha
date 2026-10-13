@@ -34,4 +34,13 @@ describe("till customer search helpers", () => {
     expect(accountSummary({ balance_minor: 0, credit_limit_minor: 0 }, 100).overText).toContain("not allowed");
     expect(accountSummary({ balance_minor: -20_000, credit_limit_minor: null }, 0).owes).toBe("Rs 200 in advance");
   });
+
+  it("claims nothing it does not know for a customer that came with a saved order", () => {
+    // A table, resumed or reopened order brings only the id, name and phone.
+    expect(accountSummary({}, 80_000)).toEqual({ owes: null, limitText: null, after: null, afterText: null, over: false, overText: null });
+    // Balance known, limit not: what they will owe is shown, but no limit and no warning.
+    expect(accountSummary({ balance_minor: 450_000 }, 80_000)).toMatchObject({ owes: "owes Rs 4,500", limitText: null, afterText: "Rs 5,300 after this sale", over: false });
+    // A known "no limit" still reads as one.
+    expect(accountSummary({ balance_minor: 0, credit_limit_minor: null }, 100).limitText).toBe("no limit");
+  });
 });

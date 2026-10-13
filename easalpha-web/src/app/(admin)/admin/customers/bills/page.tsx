@@ -35,6 +35,8 @@ export default function MonthlyBillsPage() {
   const [q, setQ] = useState("");
   const dq = useDebounced(q.trim(), 300);
   const [minBalance, setMinBalance] = useState(0);
+  // Every bill is rebuilt on the server for a new minimum, so typing 5000 asks once, not four times.
+  const dMin = useDebounced(minBalance, 300);
   const [everyone, setEveryone] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
@@ -44,8 +46,8 @@ export default function MonthlyBillsPage() {
   const [printing, setPrinting] = useState(false);
   const bad = periodError(period);
   const list = useQuery({
-    queryKey: ["customer_bills", period.from, period.to, dq, minBalance, everyone],
-    queryFn: () => api<CustomerBillsResponse>("/customer_bills", { query: { from: period.from, to: period.to, q: dq || undefined, min_balance_minor: minBalance > 0 ? minBalance : undefined, all: everyone ? "true" : undefined }, timeoutMs: 60_000 }),
+    queryKey: ["customer_bills", period.from, period.to, dq, dMin, everyone],
+    queryFn: () => api<CustomerBillsResponse>("/customer_bills", { query: { from: period.from, to: period.to, q: dq || undefined, min_balance_minor: dMin > 0 ? dMin : undefined, all: everyone ? "true" : undefined }, timeoutMs: 60_000 }),
     enabled: !bad,
     placeholderData: keepPreviousData,
   });
@@ -62,10 +64,10 @@ export default function MonthlyBillsPage() {
   const targets = billTargets(rows, selected, minDue);
   const noPhone = targets.rows.filter((r) => !r.phones.length).length;
   const owing = rows.filter((r) => r.closing_balance_minor > 0).length;
-  const filtered = !!dq || minBalance > 0;
+  const filtered = !!dq || dMin > 0;
   const label = periodLabel(period);
-  // While a new period or filter loads, the rows on screen still belong to the old one: hold Send and Print.
-  const settled = !bad && !!data && !list.isPlaceholderData;
+  // While a new period or filter loads (or is still being typed), the rows on screen belong to the old one: hold Send and Print.
+  const settled = !bad && !!data && !list.isPlaceholderData && dq === q.trim() && dMin === minBalance;
 
   const sendRun = useMutation({
     mutationFn: (customerIds: string[]) => api<BillRun>("/bill_runs", { method: "POST", body: { from: period.from, to: period.to, due_on: dueOn || undefined, customer_ids: customerIds }, timeoutMs: 300_000 }),
@@ -163,7 +165,7 @@ export default function MonthlyBillsPage() {
                     <TD right><BillActions customer={c} period={period} variant="icons" className="flex-nowrap justify-end gap-0.5" /></TD>
                   </TR>
                 );
-              }) : <EmptyRow colSpan={10}>{dq || minBalance > 0 ? "No customer matches the search and minimum." : `Nobody has anything on account for ${label}.`}</EmptyRow>}
+              }) : <EmptyRow colSpan={10}>{dq || dMin > 0 ? "No customer matches the search and minimum." : `Nobody has anything on account for ${label}.`}</EmptyRow>}
             </TBody>
           </Table>
         </div>

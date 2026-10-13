@@ -111,7 +111,9 @@ function DueSection({ today, onVoid }: { today: string; onVoid: (w: WagePayment)
   const chosen = dueRows.filter((v) => v.selected);
   const invalid = chosen.filter((v) => hasErrors(v.errors));
   const chosenTotal = chosen.reduce((s, v) => s + v.net, 0);
-  const allSelected = dueRows.length > 0 && dueRows.every((v) => v.selected);
+  // "Select every due row" skips rows with nothing to pay (absent all period), so a zero wage is never recorded by accident.
+  const payableRows = dueRows.filter((v) => v.net > 0);
+  const allSelected = payableRows.length > 0 && payableRows.every((v) => v.selected);
   const resultMap = results?.day === day ? results.map : {};
   const week = weekOf(day);
 
@@ -165,7 +167,7 @@ function DueSection({ today, onVoid }: { today: string; onVoid: (w: WagePayment)
           <Table>
             <THead>
               <tr>
-                <TH className="w-10"><Checkbox aria-label="Select every due row" checked={allSelected} disabled={!dueRows.length} onChange={(e) => setSelected(e.target.checked ? new Set(dueRows.map((v) => v.key)) : new Set())} /></TH>
+                <TH className="w-10"><Checkbox aria-label="Select every due row" checked={allSelected} disabled={!payableRows.length} onChange={(e) => setSelected(e.target.checked ? new Set(payableRows.map((v) => v.key)) : new Set())} /></TH>
                 <TH>Employee</TH><TH>Attendance</TH><TH>Days</TH><TH right>Wage</TH><TH right>Bonus</TH><TH right>Deductions</TH><TH right>Advance recovery</TH><TH right>Net</TH><TH>Status</TH>
               </tr>
             </THead>

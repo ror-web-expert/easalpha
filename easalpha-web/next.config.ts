@@ -7,6 +7,20 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Rewrite barrel imports from these packages to direct module imports so each page only bundles the pieces it uses.
   experimental: { optimizePackageImports: ["lucide-react", "recharts", "date-fns"] },
+  // Browser protections on every page: HTTPS only (a year, with subdomains), no MIME sniffing, no framing by other sites,
+  // a tight referrer, and the camera only for this site (the till's barcode scanner). The API sends its own set.
+  async headers() {
+    return [{
+      source: "/:path*",
+      headers: [
+        { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
+      ],
+    }];
+  },
   async redirects() {
     return [
       { source: "/admin/stock/deduction-audits", destination: "/admin/inventory-reports/deduction-health", permanent: true },

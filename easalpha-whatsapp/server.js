@@ -13,6 +13,7 @@ const TOKEN = process.env.WHATSAPP_GATEWAY_TOKEN || "";
 const ROOT = path.resolve(process.env.SESSIONS_DIR || "./sessions");
 const log = pino({ level: process.env.LOG_LEVEL || "info" });
 const sessions = new Map(); // id -> { sock, status, qr, phone, connectedAt, lastError, starting }
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
 fs.mkdirSync(ROOT, { recursive: true });
 
@@ -86,11 +87,16 @@ async function logout(id) {
 }
 
 const app = express();
-app.use(express.json({ limit: "12mb" })); // room for a PDF bill sent as a document
+// A document comes inline as base64 (4 bytes for every 3), so the body limit covers the largest one plus the text.
+app.use(express.json({ limit: Math.ceil(MAX_DOCUMENT_BYTES / 3) * 4 + 1024 * 1024 }));
 app.use((req, res, next) => {
-  if (TOKEN && req.headers.authorization !== `Bearer ${TOKEN}`) return res.status(401).json({ error: "unauthorized" });
+  if (TOKEN && req.headers.authorization !== `Bearer ${TOKEN}`) return res.status(401).json({ ok: false, last_error: "The gateway token does not match WHATSAPP_GATEWAY_TOKEN" });
   next();
 });
+
+// Checked before any handler runs: safeId throwing inside an async handler would be an unhandled rejection, which
+// stops the whole gateway (every linked phone) under Node 20.
+app.param("id", (req, res, next, id) => (/^[A-Za-z0-9_-]{1,64}$/.test(id) ? next() : res.status(400).json({ ok: false, last_error: "bad session id" })));
 
 app.get("/health", (_req, res) => res.json({ ok: true, sessions: sessions.size }));
 app.get("/sessions/:id", (req, res) => res.json(view(sessions.get(safeId(req.params.id)))));
@@ -107,7 +113,7 @@ app.post("/sessions/:id/send", async (req, res) => {
   let content = { text };
   if (doc && doc.base64) {
     const buf = Buffer.from(String(doc.base64), "base64");
-    if (!buf.length || buf.length > 10 * 1024 * 1024) return res.status(400).json({ ok: false, last_error: "document must be between 1 byte and 10 MB" });
+    if (!buf.length || buf.length > MAX_DOCUMENT_BYTES) return res.status(400).json({ ok: false, last_error: "document must be between 1 byte and 10 MB" });
     content = { document: buf, mimetype: String(doc.mimetype || "application/pdf"), fileName: String(doc.filename || "document.pdf").slice(0, 120), caption: text };
   }
   try {
@@ -117,9 +123,12 @@ app.post("/sessions/:id/send", async (req, res) => {
     res.status(502).json({ ok: false, last_error: e.message });
   }
 });
-app.use((err, _req, res, _next) => res.status(400).json({ error: err.message }));
+// The API reads the reason from last_error.
+app.use((err, _req, res, _next) =>
+  res.status(err.status || 400).json({ ok: false, last_error: err.type === "entity.too.large" ? "document must be at most 10 MB" : err.message }),
+);
 
 // Resume every saved session at boot so linked phones reconnect without a new scan.
 for (const id of fs.readdirSync(ROOT, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)) start(id).catch(() => {});
 
-app.listen(PORT, () => log.info({ port: PORT }, "easalpha-whatsapp gateway listening"));
+export const server = app.listen(PORT, () => log.info({ port: PORT }, "easalpha-whatsapp gateway listening"));

@@ -5,6 +5,7 @@ import type { BusinessSettings, Catalog, Deal, Product } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { displaySettings, priceFor } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
+import { modalOpen } from "./scanner";
 
 // Soft tints (translucent, so they read on light and dark themes) instead of loud solid blocks.
 const PLACEHOLDERS = ["bg-teal-500/12 text-teal-600", "bg-amber-500/15 text-amber-600", "bg-sky-500/12 text-sky-600", "bg-rose-500/12 text-rose-600", "bg-violet-500/12 text-violet-600", "bg-emerald-500/12 text-emerald-600", "bg-orange-500/12 text-orange-600", "bg-indigo-500/12 text-indigo-500"];
@@ -88,8 +89,9 @@ export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
               {/* data-scan-target: a scanner typing into this box is caught as a scan (components/pos/scanner.tsx). */}
               <input ref={searchRef} data-scan-target value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items (F2)" className="h-12 w-full rounded-full bg-high pl-12 pr-4 text-base transition placeholder:text-fg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
                 onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  if (q.trim() && onCode?.(q.trim())) { setQ(""); return; }
+                  // Enter acts on what was typed: never on an empty box (a scanner's late Enter) or behind an open dialog.
+                  if (e.key !== "Enter" || !q.trim() || modalOpen()) return;
+                  if (onCode?.(q.trim())) { setQ(""); return; }
                   if (shown[0]) { onProduct(shown[0]); setQ(""); }
                 }} />
             </div>

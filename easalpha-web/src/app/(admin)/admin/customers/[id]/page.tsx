@@ -17,7 +17,7 @@ import { loyaltyKindVariant } from "@/components/admin/phase3";
 import { balanceLabel, balanceVariant } from "@/components/admin/marketing-helpers";
 import {
   AdjustBalanceDialog, AdjustmentsTable, BillActions, DuplicateWarning, OpeningBalanceDialog, ReverseAdjustmentDialog, useAdjustments, type ReversibleAdjustment, KhataLimitField, khataLimitText } from "@/components/admin/customer-accounts";
-import { canReverseEntry, cleanPhone, entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, signedMoney } from "@/components/admin/customer-accounts-helpers";
+import { canReverseEntry, cleanPhone, entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, khataLimitError, signedMoney } from "@/components/admin/customer-accounts-helpers";
 import { useApproval } from "@/components/approval";
 import { toast } from "@/store/toast";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Dialog, EmptyRow, Field, Input, Label, Loading, MoneyInput, Select, SummaryCard, Switch, Table, TBody, TD, TH, THead, TR, Tabs, Textarea, orderStatusVariant } from "@/components/ui";
@@ -224,7 +224,7 @@ export default function CustomerDetailPage() {
         footer={<>
           {edit && !c.is_walk_in ? <DuplicateWarning fields={edit} excludeId={id} showBalance={khata} /> : null}
           <Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button>
-          <Button loading={editM.isPending} disabled={!edit?.name?.trim()} onClick={saveEdit}>Save</Button>
+          <Button loading={editM.isPending} disabled={!edit?.name?.trim() || (khata && !!khataLimitError(edit?.credit_limit_minor))} onClick={saveEdit}>Save</Button>
         </>}>
         {edit ? (
           <div className="grid gap-3 sm:grid-cols-2">
