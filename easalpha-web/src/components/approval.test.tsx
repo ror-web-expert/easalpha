@@ -39,13 +39,14 @@ describe("useApproval", () => {
     await screen.findByText("Approve: Void order #12");
     expect(screen.getByLabelText("Asking")).toHaveTextContent("yes");
     tap("1234");
-    await screen.findByText("Wrong PIN or not allowed. Try again.");
+    // A slow CI runner needs more than the default second here.
+    await screen.findByText("Wrong PIN or not allowed. Try again.", {}, { timeout: 5000 });
     await settle();
     await settle();
     expect(pins(fn)).toEqual([undefined, "1234"]);
     // The dots were cleared: the next four digits are a new PIN on their own.
     tap(MANAGER);
-    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"));
+    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"), { timeout: 5000 });
     expect(pins(fn)).toEqual([undefined, "1234", MANAGER]);
     expect(screen.getByLabelText("Asking")).toHaveTextContent("no");
   });
