@@ -70,7 +70,7 @@ export function CustomerSearch({ onPick, onAddNew, autoFocus, className }: { onP
         <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-fg-secondary" />
         <input value={q} onChange={(e) => { setQ(e.target.value); setEnterFor(null); }} autoFocus={autoFocus} aria-label="Search customers"
           placeholder="Name or number"
-          className="h-13 w-full rounded-full border bg-card pl-12 pr-12 text-base placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-primary"
+          className="h-13 w-full rounded-full border-2 border-border bg-card pl-12 pr-12 text-base placeholder:text-fg-muted transition-colors focus:border-primary focus:outline-none"
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.max(0, Math.min(i + 1, listed.length - 1))); }
             if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
