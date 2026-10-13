@@ -1,5 +1,6 @@
 "use client";
 import { forwardRef, useMemo, useState } from "react";
+import { scannerConfig } from "@/lib/barcode";
 import { Search, Star, Gift, PlusSquare } from "lucide-react";
 import type { BusinessSettings, Catalog, Deal, Product } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
@@ -87,7 +88,7 @@ export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-fg-secondary" />
               {/* data-scan-target: a scanner typing into this box is caught as a scan (components/pos/scanner.tsx). */}
-              <input ref={searchRef} data-scan-target value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items (F2)" className="h-12 w-full rounded-full bg-high pl-12 pr-4 text-base transition placeholder:text-fg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
+              <input ref={searchRef} data-scan-target value={q} onChange={(e) => setQ(e.target.value)} placeholder={scannerConfig(settings).enabled ? "Search or scan items (F2)" : "Search items (F2)"} className="h-12 w-full rounded-full bg-high pl-12 pr-4 text-base transition placeholder:text-fg-secondary focus:outline-none focus:ring-2 focus:ring-primary"
                 onKeyDown={(e) => {
                   // Enter acts on what was typed: never on an empty box (a scanner's late Enter) or behind an open dialog.
                   if (e.key !== "Enter" || !q.trim() || modalOpen()) return;

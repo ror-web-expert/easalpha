@@ -86,3 +86,39 @@ describe("CustomerSearch Enter", () => {
     expect(onPick).not.toHaveBeenCalled();
   });
 });
+
+describe("CustomerSearch before typing", () => {
+  it("lists the customers picked at this till most recently and keeps New customer one tap away", async () => {
+    localStorage.setItem("easalpha.pos.recent_customers", JSON.stringify([{ id: "r1", name: "Regular Riaz", phone: "+923001112233", khata_no: null, room: null, member_no: null, balance_minor: 50000, orders_count: 12, last_order_at: "2026-10-10T08:00:00Z", status: "active" }]));
+    const onPick = vi.fn(); const onAddNew = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><CustomerSearch onPick={onPick} onAddNew={onAddNew} /></QueryClientProvider>);
+    const recent = await screen.findByRole("listbox", { name: "Recent customers" });
+    expect(recent).toHaveTextContent("Regular Riaz");
+    expect(recent).toHaveTextContent("owes Rs 500");
+    expect(recent).toHaveTextContent("last order 10 Oct 2026");
+    expect(apiMock).not.toHaveBeenCalled(); // recents come from the till, not the server
+    fireEvent.click(screen.getByRole("button", { name: "New customer" }));
+    expect(onAddNew).toHaveBeenCalledWith("");
+    fireEvent.click(screen.getByRole("option", { name: /Regular Riaz/ }));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: "r1" }));
+    localStorage.removeItem("easalpha.pos.recent_customers");
+  });
+
+  it("remembers a search pick as recent and offers to add the typed name when nobody matches", async () => {
+    localStorage.removeItem("easalpha.pos.recent_customers");
+    searchReturns({ Hamza: [customer("c1", "Hamza Ali")], Nobody: [] });
+    const onPick = vi.fn(); const onAddNew = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><CustomerSearch onPick={onPick} onAddNew={onAddNew} /></QueryClientProvider>);
+    const box = screen.getByLabelText("Search customers");
+    fireEvent.change(box, { target: { value: "Hamza" } });
+    fireEvent.click(await screen.findByRole("option", { name: /Hamza Ali/ }));
+    expect(JSON.parse(localStorage.getItem("easalpha.pos.recent_customers")!)[0]).toMatchObject({ id: "c1", name: "Hamza Ali" });
+    fireEvent.change(box, { target: { value: "Nobody" } });
+    await screen.findByText(/No customer matches/);
+    fireEvent.click(screen.getByRole("button", { name: "Add “Nobody” as a new customer" }));
+    expect(onAddNew).toHaveBeenCalledWith("Nobody");
+    localStorage.removeItem("easalpha.pos.recent_customers");
+  });
+});

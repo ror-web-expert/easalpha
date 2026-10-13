@@ -44,3 +44,22 @@ describe("till customer search helpers", () => {
     expect(accountSummary({ balance_minor: 0, credit_limit_minor: null }, 100).limitText).toBe("no limit");
   });
 });
+
+describe("recent customers on the till", () => {
+  it("keeps the newest eight, one entry per person, and survives junk", async () => {
+    const { readRecentCustomers, rememberRecentCustomer } = await import("./pos-customers");
+    const store = new Map<string, string>();
+    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); } };
+    const c = (id: string, name: string) => ({ id, name, phone: null, khata_no: null, room: null, member_no: null, balance_minor: 0, orders_count: 0, last_order_at: null, status: "active" });
+    for (let i = 1; i <= 9; i++) rememberRecentCustomer(c(`c${i}`, `Customer ${i}`), storage);
+    rememberRecentCustomer(c("c3", "Customer 3 again"), storage);
+    const list = readRecentCustomers(storage);
+    expect(list).toHaveLength(8);
+    expect(list.map((r) => r.id)).toEqual(["c3", "c9", "c8", "c7", "c6", "c5", "c4", "c2"]);
+    expect(list[0].name).toBe("Customer 3 again");
+    store.set("easalpha.pos.recent_customers", "{not json");
+    expect(readRecentCustomers(storage)).toEqual([]);
+    store.set("easalpha.pos.recent_customers", JSON.stringify([{ id: 1 }, null, { id: "ok", name: "Fine" }]));
+    expect(readRecentCustomers(storage).map((r) => r.id)).toEqual(["ok"]);
+  });
+});

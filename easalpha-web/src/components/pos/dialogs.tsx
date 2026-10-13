@@ -42,7 +42,7 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
     finally { setBusy(false); }
   };
   return (
-    <Dialog open={open} onClose={onClose} title="Customer" description="Search by name or number (F3). One tap repeats the last order." size="sm">
+    <Dialog open={open} onClose={onClose} title="Customer" description="Pick a recent customer, search by name or number, or add a new one. One tap repeats the last order." size="md">
       <div className="space-y-4">
         {adding ? (
           <form onSubmit={(e) => { e.preventDefault(); void create(); }} className="space-y-3 rounded-lg border p-3">

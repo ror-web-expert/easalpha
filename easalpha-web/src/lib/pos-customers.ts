@@ -46,3 +46,26 @@ export function accountSummary(c: { balance_minor?: number; credit_limit_minor?:
   return { owes, limitText, after, afterText: after === null ? null : `${after < 0 ? `${formatMoney(-after, currency)} in advance` : formatMoney(after, currency)} after this sale`, over,
     overText: over ? (limit === 0 ? "Khata is not allowed for this customer. The till will refuse it." : `This passes the limit of ${formatMoney(limit as number, currency)} by ${formatMoney((after as number) - (limit as number), currency)}. The till will refuse it.`) : null };
 }
+
+// ---- Recent customers on this till ----
+// The customer dialog opens on the last eight people picked at this till, so a regular is one tap away before anything
+// is typed. Kept in localStorage, newest first; the server is never asked.
+const RECENT_KEY = "easalpha.pos.recent_customers";
+export const RECENT_LIMIT = 8;
+export type RecentCustomer = Pick<Customer, "id" | "name" | "phone" | "khata_no" | "room" | "member_no" | "balance_minor" | "orders_count" | "last_order_at" | "status">;
+
+export function readRecentCustomers(storage: Pick<Storage, "getItem"> | null = typeof localStorage === "undefined" ? null : localStorage): RecentCustomer[] {
+  try {
+    const raw = storage?.getItem(RECENT_KEY);
+    const list = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(list) ? list.filter((c): c is RecentCustomer => !!c && typeof c === "object" && typeof (c as RecentCustomer).id === "string" && typeof (c as RecentCustomer).name === "string").slice(0, RECENT_LIMIT) : [];
+  } catch { return []; }
+}
+
+/** Puts the customer at the top of the recent list (dropping an older entry for the same person) and returns the new list. */
+export function rememberRecentCustomer(c: Customer | RecentCustomer, storage: Pick<Storage, "getItem" | "setItem"> | null = typeof localStorage === "undefined" ? null : localStorage): RecentCustomer[] {
+  const entry: RecentCustomer = { id: c.id, name: c.name, phone: c.phone ?? null, khata_no: c.khata_no ?? null, room: c.room ?? null, member_no: c.member_no ?? null, balance_minor: c.balance_minor ?? 0, orders_count: c.orders_count ?? 0, last_order_at: c.last_order_at ?? null, status: c.status ?? "active" };
+  const next = [entry, ...readRecentCustomers(storage).filter((r) => r.id !== c.id)].slice(0, RECENT_LIMIT);
+  try { storage?.setItem(RECENT_KEY, JSON.stringify(next)); } catch {}
+  return next;
+}

@@ -54,7 +54,7 @@ module Settings
       [ "pos.kds.new_order_sound", "point_of_sale", "KDS Alerts", "boolean", false, "Sound when a new Pending order arrives, while the KDS page is open" ],
       [ "pos.kds.timeout_minutes", "point_of_sale", "KDS Alerts", "integer", nil, "Minutes after which a still-Pending card turns red; blank disables" ],
       [ "pos.kds.red_sound", "point_of_sale", "KDS Alerts", "boolean", false, "One-shot sound when a card first turns red" ],
-      [ "pos.barcode_scanning.enabled", "point_of_sale", "Barcode Scanning", "boolean", false, "Add products by scanning a barcode on the POS" ],
+      [ "pos.barcode_scanning.enabled", "point_of_sale", "Barcode Scanning", "boolean", true, "Add products by scanning a barcode on the POS (a USB or Bluetooth scanner works as soon as it is plugged in)" ],
       [ "pos.barcode_scanning.prefix", "point_of_sale", "Barcode Scanning", "string", "", "Characters the scanner sends before every code (removed before the lookup)" ],
       [ "pos.barcode_scanning.suffix", "point_of_sale", "Barcode Scanning", "string", "", "Characters the scanner sends after every code (removed before the lookup)" ],
       [ "pos.barcode_scanning.terminator", "point_of_sale", "Barcode Scanning", "string", "enter", "Key the scanner sends at the end of a code: enter, tab or none" ],

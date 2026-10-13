@@ -57,8 +57,9 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
       <div className="flex items-center justify-between border-b px-3 py-2">
         <div className="min-w-0">
           <div className="truncate font-semibold">
-            {cart.label ?? "New order"}
-            {cart.saved ? <Badge className="ml-2" variant={cart.local_only ? "warning" : "primary"}>{cart.local_only ? "on till" : cart.status}</Badge> : null}
+            {/* The server labels an order "draft" until it is placed; the cashier reads that as a new order. */}
+            {cart.label && cart.label !== "draft" ? cart.label : "New order"}
+            {cart.saved ? <Badge className="ml-2" variant={cart.local_only ? "warning" : "primary"}>{cart.local_only ? "on till" : cart.status === "draft" ? "not placed" : cart.status}</Badge> : null}
             {reopened ? <Badge className="ml-1" variant="warning">reopened{cart.reopen_count && cart.reopen_count > 1 ? ` ×${cart.reopen_count}` : ""}</Badge> : null}
             {cart.is_staff_meal ? <Badge className="ml-1" variant="accent">staff meal</Badge> : null}
           </div>

@@ -37,7 +37,7 @@ export function ReceiptDialog({ receipt, change, onClose, onNew, offline }: { re
     finally { setSending(false); }
   };
   return (
-    <Dialog open={!!receipt} onClose={onClose} title={receipt?.duplicate ? "Receipt (duplicate)" : "Paid"} description={offline ? "Saved on this till; it syncs when the connection returns." : undefined} size="lg"
+    <Dialog open={!!receipt} onClose={onClose} title={receipt?.duplicate ? "Receipt (duplicate)" : change ? `Paid · change ${formatMoney(change, receipt?.business.currency)}` : "Paid"} description={offline ? "Saved on this till; it syncs when the connection returns." : undefined} size="lg"
       footer={<>
         <Button variant="secondary" onClick={print} loading={printing}><Printer className="h-4 w-4" /> Print</Button>
         {onNew ? <Button onClick={onNew}><Check className="h-4 w-4" /> New order (F1)</Button> : <Button onClick={onClose}>Done</Button>}
