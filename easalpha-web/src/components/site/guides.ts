@@ -15,7 +15,10 @@ export function guideBySlug(slug: string): Guide | undefined {
   return GUIDES.find((g) => g.slug === slug);
 }
 
-/** The other guides, for a Related section at the foot of a page. */
+/** The guides that follow this one in the list, wrapping round, for a Related section at the foot of a page.
+ *  Rotating rather than always taking the first three means every guide is linked from three others. */
 export function otherGuides(slug: string, limit = 3): Guide[] {
-  return GUIDES.filter((g) => g.slug !== slug).slice(0, limit);
+  const i = GUIDES.findIndex((g) => g.slug === slug);
+  const rest = i < 0 ? GUIDES : [...GUIDES.slice(i + 1), ...GUIDES.slice(0, i)];
+  return rest.filter((g) => g.slug !== slug).slice(0, limit);
 }

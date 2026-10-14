@@ -54,3 +54,17 @@ describe("schema", () => {
     expect(JSON.parse(serializeJsonLd([organization(), webSite()]))).toHaveLength(2);
   });
 });
+
+describe("guides", () => {
+  it("every guide is linked from three others through Related", async () => {
+    const { GUIDES, otherGuides } = await import("@/components/site/guides");
+    const inbound = new Map(GUIDES.map((g) => [g.slug, 0]));
+    for (const g of GUIDES) {
+      const rel = otherGuides(g.slug);
+      expect(rel).toHaveLength(3);
+      expect(rel.map((r) => r.slug)).not.toContain(g.slug);
+      for (const r of rel) inbound.set(r.slug, (inbound.get(r.slug) ?? 0) + 1);
+    }
+    for (const [slug, n] of inbound) expect(n, slug).toBe(3);
+  });
+});
