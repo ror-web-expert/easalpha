@@ -72,7 +72,7 @@ function Picker({ guides, selected, onSelect, detected, list, cols }: { guides: 
         const ready = files.length === 0 || files.some((i) => i.available !== false);
         return (
           <button key={g.key} type="button" role="tab" aria-selected={active} onClick={() => onSelect(g.os)}
-            className={`relative flex items-start gap-3 rounded-2xl border p-5 text-left transition ${active ? "border-[#FF7A1A] bg-white shadow-md ring-2 ring-[#FF7A1A]" : "border-slate-200 bg-white hover:border-[#0B1F3A]/40 hover:shadow-sm"}`}>
+            className={`relative flex min-w-0 items-start gap-3 rounded-2xl border p-5 text-left transition ${active ? "border-[#FF7A1A] bg-white shadow-md ring-2 ring-[#FF7A1A]" : "border-slate-200 bg-white hover:border-[#0B1F3A]/40 hover:shadow-sm"}`}>
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${active ? "bg-[#0B1F3A] text-white" : "bg-[#F4F7FB] text-[#0B1F3A]"}`}><I className="h-5 w-5" /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-base font-bold text-[#0B1F3A]">{g.title}</span>

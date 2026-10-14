@@ -28,7 +28,7 @@ export default async function DownloadPage() {
   return (
     <SiteShell>
       <PageHero eyebrow="Download" title="EasAlpha POS for your counter" text="The desktop app wraps the till and adds direct receipt printing and the print server that order-taker tablets print through. It keeps selling when the internet drops and syncs when it is back."
-        visual={<div className="relative lg:[perspective:1200px]"><div className="lg:origin-left lg:[transform:rotateY(-6deg)]"><BrowserFrame shot={SHOTS.till} sizes="(max-width: 1024px) 100vw, 560px" priority dark /></div><HeroChip icon={MonitorDown} title="Windows · Linux · Mac" text="one installer per computer" className="absolute -left-4 -bottom-6 hidden sm:flex" /><HeroChip icon={CloudOff} title="Offline" text="sells with no internet" tone="navy" className="absolute -right-2 -top-6 hidden sm:flex" /></div>} />
+        visual={<div className="relative min-w-0 lg:[perspective:1200px]"><div className="lg:origin-left lg:[transform:rotateY(-6deg)]"><BrowserFrame shot={SHOTS.till} sizes="(max-width: 1024px) 100vw, 560px" priority dark /></div><HeroChip icon={MonitorDown} title="Windows · Linux · Mac" text="one installer per computer" className="absolute -left-4 -bottom-6 hidden sm:flex" /><HeroChip icon={CloudOff} title="Offline" text="sells with no internet" tone="navy" className="absolute -right-2 -top-6 hidden sm:flex" /></div>} />
       <Container className="py-16 lg:py-24">
         <DownloadList baseUrl={base} version={version ?? fallback} list={list} builtAt={manifest?.built_at ?? null} />
       </Container>

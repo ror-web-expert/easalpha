@@ -34,7 +34,7 @@ export default function PricingPage() {
       </Section>
       <Section tone="tint">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr]">
-          <div>
+          <div className="min-w-0">
             <SectionHeading align="left" eyebrow="Billing questions" title="How paying for EasAlpha works" />
             <p className="mt-6 text-slate-600">Something specific? <Link href="/contact" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Ask us</Link>, we reply the same day.</p>
           </div>

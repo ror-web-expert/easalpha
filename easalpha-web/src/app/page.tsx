@@ -83,7 +83,7 @@ export default function HomePage() {
           <circle cx="600" cy="-100" r="3" fill="white" /><circle cx="1000" cy="-100" r="3" fill="white" /><circle cx="400" cy="320" r="3" fill="white" /><circle cx="1150" cy="240" r="3" fill="white" />
         </svg>
         <Container className="relative grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
-          <LangBox className="max-w-xl">
+          <LangBox className="min-w-0 max-w-xl">
             <p className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white backdrop-blur">
               <Zap className="h-4 w-4 text-[#FF7A1A]" aria-hidden /><Txt k="hero.badge" />
             </p>
@@ -98,7 +98,7 @@ export default function HomePage() {
             <Reassurance className="mt-7" />
           </LangBox>
 
-          <div className="relative lg:[perspective:1200px]">
+          <div className="relative min-w-0 lg:[perspective:1200px]">
             <div className="relative lg:origin-left lg:[transform:rotateY(-6deg)]">
               <BrowserFrame shot={SHOTS.dashboard} sizes="(max-width: 1024px) 100vw, 620px" priority dark />
             </div>
@@ -216,7 +216,7 @@ export default function HomePage() {
       {/* FAQ */}
       <Section tone="tint">
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr]">
-          <div>
+          <div className="min-w-0">
             <Eyebrow>Questions</Eyebrow>
             <Txt k="sec.faq" as="h2" className="mt-3 text-[32px] font-extrabold leading-[1.1] tracking-[-0.02em] text-[#0B1F3A] sm:text-[40px]" />
             <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>

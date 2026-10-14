@@ -51,14 +51,14 @@ export default function FeaturesPage() {
   return (
     <SiteShell>
       <PageHero eyebrow="Features" title="Everything in EasAlpha, area by area" text="Each section below is built, tested and in the product today. Where a screenshot exists it is the real screen, not a mock-up." 
-        visual={<div className="relative lg:[perspective:1200px]"><div className="lg:origin-left lg:[transform:rotateY(-6deg)]"><BrowserFrame shot={SHOTS.dashboard} sizes="(max-width: 1024px) 100vw, 560px" priority dark /></div><HeroChip icon={CheckCircle2} title="Built and tested" text="every area below is live today" className="absolute -left-4 -bottom-6 hidden sm:flex" /></div>} />
+        visual={<div className="relative min-w-0 lg:[perspective:1200px]"><div className="lg:origin-left lg:[transform:rotateY(-6deg)]"><BrowserFrame shot={SHOTS.dashboard} sizes="(max-width: 1024px) 100vw, 560px" priority dark /></div><HeroChip icon={CheckCircle2} title="Built and tested" text="every area below is live today" className="absolute -left-4 -bottom-6 hidden sm:flex" /></div>} />
       <Container className="grid gap-12 py-20 lg:grid-cols-[220px_1fr] lg:py-28">
         <nav aria-label="Areas" className="hidden lg:block">
           <ul className="sticky top-24 space-y-1 text-sm">
             {AREAS.map((a) => <li key={a.id}><a href={`#${a.id}`} className="block rounded-lg px-3 py-2 font-medium text-slate-600 transition hover:bg-[#F4F7FB] hover:text-[#0B1F3A]">{a.name}</a></li>)}
           </ul>
         </nav>
-        <div className="space-y-24">
+        <div className="min-w-0 space-y-24">
           {AREAS.map((a) => (
             <section key={a.id} id={a.id} className="scroll-mt-24">
               <Reveal>
