@@ -92,7 +92,7 @@ export default function HomePage() {
             </h1>
             <Txt k="hero.subtitle" as="p" className="mt-6 max-w-lg text-[17px] leading-[1.6] text-white/80 sm:text-lg" />
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/signup" className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-[#FF7A1A] px-7 text-base font-semibold text-white shadow-[0_14px_30px_-10px_rgba(255,122,26,0.7)] transition hover:-translate-y-0.5 hover:bg-[#E0640C]"><Txt k="cta.start" /><ArrowRight className="h-4 w-4" /></Link>
+              <Link href="/signup" className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-brand-cta px-7 text-base font-semibold text-white shadow-[0_14px_30px_-10px_rgba(194,65,12,0.7)] transition hover:-translate-y-0.5 hover:bg-brand-cta-hover"><Txt k="cta.start" /><ArrowRight className="h-4 w-4" /></Link>
               <SecondaryLink href="#tour" size="lg" dark><Txt k="cta.demo" /></SecondaryLink>
             </div>
             <Reassurance className="mt-7" />
@@ -102,7 +102,7 @@ export default function HomePage() {
             <div className="relative lg:origin-left lg:[transform:rotateY(-6deg)]">
               <BrowserFrame shot={SHOTS.dashboard} sizes="(max-width: 1024px) 100vw, 620px" priority dark />
             </div>
-            <div className="absolute -right-3 -top-6 grid h-24 w-24 -rotate-12 place-items-center rounded-full bg-[#FF7A1A] text-center text-sm font-extrabold leading-tight text-white shadow-[0_18px_40px_-12px_rgba(255,122,26,0.8)] ring-4 ring-[#0B1F3A] sm:-right-6 sm:-top-8 sm:h-28 sm:w-28 sm:text-base">Free<br />{TRIAL_DAYS} days</div>
+            <div className="absolute -right-3 -top-6 grid h-24 w-24 -rotate-12 place-items-center rounded-full bg-brand-cta text-center text-sm font-extrabold leading-tight text-white shadow-[0_18px_40px_-12px_rgba(194,65,12,0.8)] ring-4 ring-[#0B1F3A] sm:-right-6 sm:-top-8 sm:h-28 sm:w-28 sm:text-base">Free<br />{TRIAL_DAYS} days</div>
             <GlassCard icon={CloudOff} title="Offline" text="sells with no internet" className="absolute -left-6 bottom-16 hidden sm:flex" />
             <GlassCard icon={MessageCircle} title="WhatsApp" text="receipts from your own number" className="absolute -bottom-7 right-4 hidden sm:flex lg:right-0" />
           </div>

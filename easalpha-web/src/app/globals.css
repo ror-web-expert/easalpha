@@ -14,6 +14,8 @@
   color-scheme: light;
   /* brand constants (same in both modes) */
   --navy-deep: #0b1f3a; --navy: #10294d; --navy-raised: #1b3a6b;
+  /* public-site buttons and badges with white text: white on #ff7a1a is 2.61:1, white on #c2410c is 5.18:1 (WCAG AA) */
+  --brand-cta: #c2410c; --brand-cta-hover: #9a3412;
   /* primary: navy */
   --primary: #10294d; --primary-fg: #ffffff; --primary-hover: #1b3a6b;
   --primary-soft: #e3eaf6; --primary-ink: #0b1f3a;            /* primary container / on primary container */
@@ -108,6 +110,8 @@
   --color-navy: var(--navy);
   --color-navy-deep: var(--navy-deep);
   --color-navy-raised: var(--navy-raised);
+  --color-brand-cta: var(--brand-cta);
+  --color-brand-cta-hover: var(--brand-cta-hover);
   --color-heading: var(--heading);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);

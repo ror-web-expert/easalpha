@@ -15,7 +15,7 @@ function Toggle<T extends string>({ value, onChange, options, label }: { value: 
     <div role="radiogroup" aria-label={label} className="inline-flex rounded-full border border-[#E6EBF2] bg-[#F4F7FB] p-1">
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition", value === o.value ? "bg-[#0B1F3A] text-white shadow-sm" : "text-slate-600 hover:text-[#0B1F3A]")}>
-          {o.label}{o.hint ? <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold", value === o.value ? "bg-[#FF7A1A] text-white" : "bg-[#FFE4D1] text-[#C2410C]")}>{o.hint}</span> : null}
+          {o.label}{o.hint ? <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold", value === o.value ? "bg-brand-cta text-white" : "bg-[#FFE4D1] text-[#C2410C]")}>{o.hint}</span> : null}
         </button>
       ))}
     </div>
@@ -40,7 +40,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
               <div className={cn("px-7 pb-6 pt-7", p.popular ? "bg-[#0B1F3A] text-white [--heading-color:#fff]" : "text-[#0B1F3A]")}>
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-lg font-bold">{p.name}</h3>
-                  {p.popular ? <span className="rounded-full bg-[#FF7A1A] px-3 py-1 text-xs font-bold text-white">Most popular</span> : null}
+                  {p.popular ? <span className="rounded-full bg-brand-cta px-3 py-1 text-xs font-bold text-white">Most popular</span> : null}
                 </div>
                 <p className={cn("mt-1 text-sm", p.popular ? "text-white/80" : "text-slate-600")}>{p.tagline}</p>
                 <div className="mt-6 flex items-end gap-1.5">
@@ -52,7 +52,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
                 </p>
               </div>
               <div className="flex flex-1 flex-col px-7 pb-7 pt-6">
-                <Link href={`/signup?plan=${p.code}`} className={cn("inline-flex h-11 items-center justify-center rounded-full text-sm font-semibold transition", p.popular ? "bg-[#FF7A1A] text-white hover:bg-[#E0640C]" : "border border-[#0B1F3A]/30 text-[#0B1F3A] hover:bg-[#F4F7FB]")}>
+                <Link href={`/signup?plan=${p.code}`} className={cn("inline-flex h-11 items-center justify-center rounded-full text-sm font-semibold transition", p.popular ? "bg-brand-cta text-white hover:bg-brand-cta-hover" : "border border-[#0B1F3A]/30 text-[#0B1F3A] hover:bg-[#F4F7FB]")}>
                   Start {TRIAL_DAYS}-day free trial
                 </Link>
                 <ul className="mt-7 space-y-2.5 text-sm text-slate-700">

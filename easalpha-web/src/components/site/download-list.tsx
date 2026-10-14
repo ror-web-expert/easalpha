@@ -9,7 +9,7 @@ import {
 } from "@/components/site/download-helpers";
 
 const ICON: Record<Os, React.ComponentType<{ className?: string }>> = { windows: Monitor, linux: Terminal, mac: Apple, android: Smartphone, ios: Smartphone, other: Monitor };
-const BTN_PRIMARY = "inline-flex h-11 items-center gap-2 rounded-full bg-[#FF7A1A] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#E0640C]";
+const BTN_PRIMARY = "inline-flex h-11 items-center gap-2 rounded-full bg-brand-cta px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover";
 const BTN_SECONDARY = "inline-flex h-11 items-center gap-2 rounded-full border border-[#0B1F3A]/20 px-5 text-sm font-semibold text-[#0B1F3A] transition hover:bg-[#F4F7FB]";
 
 type Guide = { os: Os; key: string; title: string; needs: string; install: string[]; issues: { title: string; fix: string }[]; installerIds?: string[] };
@@ -81,7 +81,7 @@ function Picker({ guides, selected, onSelect, detected, list, cols }: { guides: 
                 {ready ? <><Check className="h-3.5 w-3.5" /> {files.length ? "Ready to download" : "Web app, no install"}</> : <><Clock className="h-3.5 w-3.5" /> Next release</>}
               </span>
             </span>
-            {g.os === detected ? <span className="absolute -top-2.5 right-4 rounded-full bg-[#FF7A1A] px-2.5 py-0.5 text-[11px] font-semibold text-white">Your device</span> : null}
+            {g.os === detected ? <span className="absolute -top-2.5 right-4 rounded-full bg-brand-cta px-2.5 py-0.5 text-[11px] font-semibold text-white">Your device</span> : null}
           </button>
         );
       })}
@@ -118,7 +118,7 @@ function Panel({ guide, list, baseUrl, version }: { guide: Guide; list: Installe
           <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">{isPhone ? "Add to the home screen" : "Install"}</h4>
           <ol className="mt-3 space-y-3 text-sm text-slate-700">
             {guide.install.map((s, n) => (
-              <li key={s} className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#FF7A1A] text-xs font-bold text-white">{n + 1}</span><span className="pt-0.5">{s}</span></li>
+              <li key={s} className="flex gap-3"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-cta text-xs font-bold text-white">{n + 1}</span><span className="pt-0.5">{s}</span></li>
             ))}
           </ol>
         </div>

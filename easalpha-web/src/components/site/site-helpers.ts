@@ -312,8 +312,9 @@ export function telLink(contact: SiteContact = CONTACT): string {
 }
 
 // ---- Site palette (also used as literal Tailwind classes in the components) ----
-// Navy #0B1F3A / #10294D, tint #F4F7FB, orange #FF7A1A (buttons, icons, big numbers on navy),
-// orange hover #E0640C, orange text on white #C2410C (small) and #D9580A (large, 3.9:1).
+// Navy #0B1F3A / #10294D, tint #F4F7FB, orange #FF7A1A (icons, highlights, big numbers on navy, decorative tiles),
+// orange text on white #C2410C (small) and #D9580A (large, 3.9:1). Buttons and badges with white text use the
+// brand-cta token (#C2410C, hover #9A3412) from globals.css: white on #FF7A1A measures 2.61:1 and fails WCAG AA.
 
 // ---- Language (English / Urdu) for the hero, buttons and section headings ----
 

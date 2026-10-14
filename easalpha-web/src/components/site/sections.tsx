@@ -36,7 +36,7 @@ export function SectionHeading({ eyebrow, title, titleKey, text, align = "center
 
 export function PrimaryLink({ href, children, className, size = "md" }: { href: string; children: React.ReactNode; className?: string; size?: "md" | "lg" }) {
   return (
-    <Link href={href} className={cn("inline-flex items-center justify-center gap-2 rounded-full bg-[#FF7A1A] font-semibold text-white shadow-sm transition hover:bg-[#E0640C] hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF7A1A]", size === "lg" ? "h-13 px-7 text-base" : "h-11 px-6 text-sm", className)}>
+    <Link href={href} className={cn("inline-flex items-center justify-center gap-2 rounded-full bg-brand-cta font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cta", size === "lg" ? "h-13 px-7 text-base" : "h-11 px-6 text-sm", className)}>
       {children}
     </Link>
   );
@@ -155,7 +155,7 @@ export function CtaBand({ title, titleKey, text, primary = { href: "/signup", la
         {titleKey ? <Txt k={titleKey} as="h2" className={h2} /> : <h2 className={h2}>{title}</h2>}
         <p className="mx-auto mt-5 max-w-2xl text-[17px] leading-[1.6] text-white/80 sm:text-lg">{text}</p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link href={primary.href} className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-[#FF7A1A] px-7 text-base font-semibold text-white shadow-lg transition hover:bg-[#E0640C]">{primary.label}<ArrowRight className="h-4 w-4" /></Link>
+          <Link href={primary.href} className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-brand-cta px-7 text-base font-semibold text-white shadow-lg transition hover:bg-brand-cta-hover">{primary.label}<ArrowRight className="h-4 w-4" /></Link>
           {secondary ? <SecondaryLink href={secondary.href} size="lg" dark>{secondary.label}</SecondaryLink> : null}
         </div>
         <Reassurance className="mt-8 justify-center" />

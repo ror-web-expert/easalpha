@@ -43,7 +43,7 @@ export function SiteHeader() {
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
           <Link href="/login" className="rounded-full px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"><Txt k="cta.login" /></Link>
-          <Link href="/signup" className="rounded-full bg-[#FF7A1A] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#E0640C] hover:shadow-md"><Txt k="cta.start" /></Link>
+          <Link href="/signup" className="rounded-full bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md"><Txt k="cta.start" /></Link>
         </div>
         <div className="flex items-center gap-2 lg:hidden">
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="site-menu" aria-label={open ? "Close menu" : "Open menu"} className="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10">

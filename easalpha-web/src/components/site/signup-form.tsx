@@ -121,7 +121,7 @@ export function SignupForm() {
           {error.text}{error.exists ? <> <Link href="/login" className="font-medium underline">Log in instead</Link>.</> : null}
         </p>
       ) : null}
-      <Button type="submit" size="lg" className="w-full bg-[#FF7A1A] font-semibold text-white hover:bg-[#E0640C]" loading={busy}>Create my account</Button>
+      <Button type="submit" size="lg" className="w-full bg-brand-cta font-semibold text-white hover:bg-brand-cta-hover" loading={busy}>Create my account</Button>
       <p className="text-center text-sm text-slate-600">Already have an account? <Link href="/login" className="font-medium text-[#C2410C] hover:underline">Log in</Link></p>
     </form>
   );

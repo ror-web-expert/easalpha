@@ -35,7 +35,7 @@ export default function SignupPage() {
           <Image src="/brand/logo-white.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto" />
         </Link>
         <div className="relative mt-auto max-w-md">
-          <p className="inline-flex rounded-full bg-[#FF7A1A] px-3 py-1 text-sm font-bold text-white">{TRIAL_DAYS} days free, no card</p>
+          <p className="inline-flex rounded-full bg-brand-cta px-3 py-1 text-sm font-bold text-white">{TRIAL_DAYS} days free, no card</p>
           <h2 className="mt-5 text-[44px] font-extrabold leading-[1.05] tracking-[-0.02em]">Your whole restaurant, set up this afternoon.</h2>
           <p className="mt-4 text-lg text-white/80">Every plan&apos;s features are open during the trial. Pick a plan when you are ready; until then nothing is charged.</p>
           <ul className="mt-8 space-y-3">

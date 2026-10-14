@@ -29,7 +29,7 @@ export function ContactForm({ contact = CONTACT }: { contact?: SiteContact }) {
         <Field label="Topic"><Select value={topic} onChange={(e) => setTopic(e.target.value)} className="h-11">{TOPICS.map((t) => <option key={t}>{t}</option>)}</Select></Field>
       </div>
       <Field label="Message"><Textarea value={message} onChange={(e) => setMessage(e.target.value)} required rows={5} placeholder="Tell us about your restaurant: branches, tills, what you use today." /></Field>
-      <Button type="submit" size="lg" className="w-full bg-[#FF7A1A] font-semibold text-white hover:bg-[#E0640C] sm:w-auto"><Send className="h-4 w-4" />Open in my mail app</Button>
+      <Button type="submit" size="lg" className="w-full bg-brand-cta font-semibold text-white hover:bg-brand-cta-hover sm:w-auto"><Send className="h-4 w-4" />Open in my mail app</Button>
       <p className="text-xs text-slate-500">This opens your email app with the message filled in. Nothing is sent until you press send there.</p>
     </form>
   );
