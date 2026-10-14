@@ -273,12 +273,15 @@ export const SITE_DESCRIPTION = "EasAlpha is the restaurant POS that keeps selli
 export const OFFICE = { street: "161 P Block, Gulberg 3", city: "Lahore", region: "Punjab", countryCode: "PK", country: "Pakistan" } as const;
 export const OFFICE_ADDRESS = `${OFFICE.street}, ${OFFICE.city}, ${OFFICE.country}`;
 
-export interface SiteContact { email: string; whatsapp: string; whatsappDisplay: string; address: string; hours: string; productName: string }
+/** phone is the number to call; when it is the WhatsApp number too, the footer shows it once with both labels. */
+export interface SiteContact { email: string; whatsapp: string; whatsappDisplay: string; phone: string; phoneDisplay: string; address: string; hours: string; productName: string }
 
 export const CONTACT: SiteContact = {
   email: "hello@easalpha.com",
   whatsapp: "+923437172731",
   whatsappDisplay: "+92 343 7172731",
+  phone: "+923437172731",
+  phoneDisplay: "+92 343 7172731",
   address: OFFICE_ADDRESS,
   hours: "10 am to 11 pm Pakistan time, every day",
   productName: "EasAlpha",
@@ -295,10 +298,13 @@ export function displayPhone(raw: string): string {
 export function contactFromPlatform(p: { support_email?: string | null; support_whatsapp?: string | null; support_phone?: string | null; support_hours?: string | null; product_name?: string | null } | null | undefined): SiteContact {
   if (!p) return CONTACT;
   const whatsapp = (p.support_whatsapp || p.support_phone || CONTACT.whatsapp).trim();
+  const phone = (p.support_phone || whatsapp).trim();
   return {
     email: (p.support_email || CONTACT.email).trim(),
     whatsapp,
     whatsappDisplay: displayPhone(whatsapp),
+    phone,
+    phoneDisplay: displayPhone(phone),
     address: CONTACT.address,
     hours: (p.support_hours || CONTACT.hours).trim(),
     productName: (p.product_name || CONTACT.productName).trim(),
@@ -315,7 +321,7 @@ export function mailtoLink(subject: string, body: string, contact: SiteContact =
 }
 
 export function telLink(contact: SiteContact = CONTACT): string {
-  return `tel:${contact.whatsapp}`;
+  return `tel:${contact.phone}`;
 }
 
 // ---- Site palette (also used as literal Tailwind classes in the components) ----
@@ -351,7 +357,7 @@ export const UI = {
   "sec.tour": { en: "Everything a restaurant runs on, in one account", ur: "ریسٹورنٹ کی ہر ضرورت، ایک اکاؤنٹ میں" },
   "sec.pk": { en: "The local details, done right", ur: "مقامی ضروریات، درست طریقے سے" },
   "sec.surfaces": { en: "Every screen your staff touch", ur: "آپ کے عملے کی ہر اسکرین" },
-  "sec.pricing": { en: "Simple monthly plans in rupees", ur: "روپوں میں سادہ ماہانہ پلان" },
+  "sec.pricing": { en: "Simple monthly plans", ur: "سادہ ماہانہ پلان" },
   "sec.faq": { en: "Before you start", ur: "شروع کرنے سے پہلے" },
   "sec.cta": { en: "Open your account today", ur: "آج ہی اپنا اکاؤنٹ کھولیں" },
 } satisfies Record<string, Bi>;

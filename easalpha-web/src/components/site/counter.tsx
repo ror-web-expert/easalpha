@@ -2,10 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
-/** Counts up from 0 to `to` once when scrolled into view (1.2 s ease-out). Width is reserved so nothing shifts. */
+/** Renders `to` in the server HTML (crawlers and anyone who sees the page before JavaScript runs get the real number),
+ *  then counts up from 0 to `to` once when scrolled into view (1.2 s ease-out). Width is reserved so nothing shifts. */
 export function Counter({ to, suffix = "", className }: { to: number; suffix?: string; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(to);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;

@@ -154,6 +154,16 @@ describe("contact links", () => {
     expect(displayPhone("+923001234567")).toBe("+92 300 1234567");
     expect(displayPhone("042-111-222")).toBe("042-111-222");
   });
+  it("keeps a separate call number only when the platform sets one", () => {
+    const one = contactFromPlatform({ support_whatsapp: "+92 311 0000000", support_phone: null });
+    expect(one.phone).toBe(one.whatsapp);
+    expect(one.phoneDisplay).toBe("+92 311 0000000");
+    const two = contactFromPlatform({ support_whatsapp: "+92 311 0000000", support_phone: "+92 42 1234567" });
+    expect(two.whatsapp).toBe("+92 311 0000000");
+    expect(two.phone).toBe("+92 42 1234567");
+    expect(telLink(two)).toBe("tel:+92 42 1234567");
+    expect(CONTACT.address).toBe("161 P Block, Gulberg 3, Lahore, Pakistan");
+  });
   it("builds a mailto with an encoded subject and body", () => {
     expect(mailtoLink("Demo request", "Name: Ali\nPhone: +92")).toBe("mailto:hello@easalpha.com?subject=Demo%20request&body=Name%3A%20Ali%0APhone%3A%20%2B92");
   });

@@ -29,8 +29,8 @@ export default function PricingPage() {
   return (
     <SiteShell>
       <JsonLd data={[pricingProduct(), breadcrumbs("Pricing", "/pricing")]} />
-      <PageHero eyebrow="Pricing" title="Plans that grow with your restaurant" text={`Prices in rupees, no per-order fees, and every plan starts with a ${TRIAL_DAYS}-day free trial. No card needed to begin.`} 
-        visual={<HeroStack chips={[{ icon: CalendarCheck, title: `${TRIAL_DAYS}-day free trial`, text: "every plan, every feature" }, { icon: Banknote, title: "Prices in rupees", text: "no per-order fees" }, { icon: BadgeCheck, title: "Cancel any time", text: "no contract, no card to start" }]} />} />
+      <PageHero eyebrow="Pricing" title="Plans that grow with your restaurant" text={`Prices in rupees or dollars, no per-order fees, and every plan starts with a ${TRIAL_DAYS}-day free trial. No card needed to begin.`} 
+        visual={<HeroStack chips={[{ icon: CalendarCheck, title: `${TRIAL_DAYS}-day free trial`, text: "every plan, every feature" }, { icon: Banknote, title: "PKR or USD", text: "no per-order fees" }, { icon: BadgeCheck, title: "Cancel any time", text: "no contract, no card to start" }]} />} />
       <Section className="pt-16 sm:pt-20 lg:pt-24">
         <PricingTable />
         <p className="mt-6 text-center text-sm text-slate-500">Prices exclude sales tax where it applies. Customers outside Pakistan are billed in US dollars.</p>

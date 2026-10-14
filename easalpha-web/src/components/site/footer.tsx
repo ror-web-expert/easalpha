@@ -30,8 +30,9 @@ export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[#FF7A1A]">Contact</h3>
           <ul className="mt-4 space-y-3 text-sm max-md:space-y-0">
-            <li><a href={whatsappLink(undefined, contact)} target="_blank" rel="noopener noreferrer" {...trackAttrs("whatsapp_click", { where: "footer" })} className={`flex items-center gap-2.5 ${link}`}><MessageCircle className="h-4 w-4 text-[#FF7A1A]" />WhatsApp {contact.whatsappDisplay}</a></li>
-            <li><a href={telLink(contact)} className={`flex items-center gap-2.5 ${link}`}><Phone className="h-4 w-4 text-[#FF7A1A]" />{contact.whatsappDisplay}</a></li>
+            {/* One number that takes WhatsApp and calls shows once with both labels; two numbers show as two rows. */}
+            <li><a href={whatsappLink(undefined, contact)} target="_blank" rel="noopener noreferrer" {...trackAttrs("whatsapp_click", { where: "footer" })} className={`flex items-center gap-2.5 ${link}`}><MessageCircle className="h-4 w-4 text-[#FF7A1A]" />{contact.phone === contact.whatsapp ? "WhatsApp or call" : "WhatsApp"} {contact.whatsappDisplay}</a></li>
+            {contact.phone !== contact.whatsapp ? <li><a href={telLink(contact)} className={`flex items-center gap-2.5 ${link}`}><Phone className="h-4 w-4 text-[#FF7A1A]" />Call {contact.phoneDisplay}</a></li> : null}
             <li><a href={`mailto:${contact.email}`} className={`flex items-center gap-2.5 ${link}`}><Mail className="h-4 w-4 text-[#FF7A1A]" />{contact.email}</a></li>
             <li className="flex items-start gap-2.5 text-white/70"><MapPin className="mt-1 h-4 w-4 shrink-0 text-[#FF7A1A]" />{contact.address}</li>
           </ul>
