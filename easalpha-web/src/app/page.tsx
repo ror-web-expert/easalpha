@@ -29,7 +29,7 @@ const STATS = [
 
 const QUOTES = [
   { text: "The first month we could actually see food cost per dish. Two recipes were losing money and we fixed the portions the same week.", name: "Shahzad Sadaqat", place: "Shahzad Restaurant, Multan Road, Lahore" },
-  { text: "Khata used to live in a notebook. Now every regular has a balance, a limit and a WhatsApp statement at month end.", name: "Muhammad Shahid", place: "The SJY Cafe" },
+  { text: "Khata used to live in a notebook. Now every regular has a balance, a limit and a WhatsApp statement at month end.", name: "Muhammad Shahid", place: "TheSky Cafe" },
   { text: "Power went for three hours on a Friday night. The tills carried on, the kitchen screen carried on, and nothing was lost.", name: "Dastarkhwan", place: "Dastarkhwan Family Restaurant, Faisalabad" },
 ];
 
