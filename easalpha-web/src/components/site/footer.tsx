@@ -3,9 +3,11 @@ import Image from "next/image";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { CONTACT, telLink, whatsappLink, type SiteContact } from "./site-helpers";
 import { trackAttrs } from "@/lib/analytics";
+import { GUIDES } from "./guides";
 
 const COLUMNS = [
   { title: "Product", links: [{ href: "/features", label: "Features" }, { href: "/pricing", label: "Pricing" }, { href: "/download", label: "Download the desktop app" }, { href: "/apps", label: "Open an app screen" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Start free", track: trackAttrs("cta_start_free_click", { where: "footer_links" }) }] },
+  { title: "Solutions", links: GUIDES.map((g) => ({ href: `/${g.slug}`, label: g.nav })) },
   { title: "Company", links: [{ href: "/contact", label: "Contact" }, { href: "/privacy", label: "Privacy" }, { href: "/terms", label: "Terms" }] },
 ];
 
@@ -14,7 +16,7 @@ const link = "text-sm text-white/90 transition-colors hover:text-[#FF7A1A] max-m
 export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
   return (
     <footer className="bg-[#0B1F3A] text-white [--heading-color:#fff]">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-[1.3fr_1fr_1.1fr_1fr_1.3fr]">
         <div>
           <Image src="/brand/logo-white.svg" alt="EasAlpha" width={130} height={32} unoptimized className="h-8 w-auto" />
           <p className="mt-4 max-w-xs text-sm leading-6 text-white/70">The complete restaurant POS for any restaurant, anywhere: till, kitchen, stock, money, people, riders and customers in one account.</p>

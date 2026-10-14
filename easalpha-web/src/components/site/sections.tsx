@@ -14,10 +14,10 @@ export function Container({ className, children }: { className?: string; childre
   return <div className={cn("mx-auto w-full max-w-6xl px-4 sm:px-6", className)}>{children}</div>;
 }
 
-export function Section({ id, className, tone = "white", children }: { id?: string; className?: string; tone?: "white" | "tint" | "navy"; children: React.ReactNode }) {
+export function Section({ id, className, tone = "white", children, ...rest }: { id?: string; className?: string; tone?: "white" | "tint" | "navy"; children: React.ReactNode } & Record<`data-${string}`, string>) {
   const tones = { white: "bg-white", tint: "bg-[#F4F7FB]", navy: "bg-[#0B1F3A] text-white [--heading-color:#fff]" };
   return (
-    <section id={id} className={cn("scroll-mt-20 py-20 sm:py-24 lg:py-28", tones[tone], className)}>
+    <section id={id} {...rest} className={cn("scroll-mt-20 py-20 sm:py-24 lg:py-28", tones[tone], className)}>
       <Container>{children}</Container>
     </section>
   );
@@ -151,7 +151,7 @@ export function FaqList({ items }: { items: { q: string; a: React.ReactNode }[] 
 export function CtaBand({ title, titleKey, text, primary = { href: "/signup", label: "Start free" }, secondary }: { title: string; titleKey?: UiKey; text: string; primary?: { href: string; label: string }; secondary?: { href: string; label: string } }) {
   const h2 = "text-[36px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[48px]";
   return (
-    <section className="relative overflow-hidden bg-[#0B1F3A] py-20 text-white sm:py-28 [--heading-color:#fff]">
+    <section data-boilerplate="" className="relative overflow-hidden bg-[#0B1F3A] py-20 text-white sm:py-28 [--heading-color:#fff]">
       <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
       <div aria-hidden className="pointer-events-none absolute -right-32 -top-40 h-[32rem] w-[32rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />
       <div aria-hidden className="pointer-events-none absolute -bottom-40 -left-32 h-[28rem] w-[28rem] rounded-full bg-[#FF7A1A]/15 blur-3xl" />

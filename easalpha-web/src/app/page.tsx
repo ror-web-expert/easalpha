@@ -9,6 +9,7 @@ import { LangBox, Txt } from "@/components/site/txt";
 import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { HOME_FAQ } from "@/components/site/faq";
+import { GUIDES } from "@/components/site/guides";
 import { JsonLd } from "@/components/site/json-ld";
 import { faqPage, softwareApplication } from "@/lib/schema";
 import { trackAttrs } from "@/lib/analytics";
@@ -207,6 +208,22 @@ export default function HomePage() {
         <SectionHeading eyebrow="Pricing" title="Simple monthly plans in rupees" titleKey="sec.pricing" text={`Every plan starts with a ${TRIAL_DAYS}-day free trial. Pay yearly and get two months free.`} />
         <div className="mt-12"><PricingTable compact /></div>
         <p className="mt-10 text-center text-slate-600">Full comparison and billing questions on the <Link href="/pricing" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">pricing page</Link>.</p>
+      </Section>
+
+      {/* Guides */}
+      <Section id="guides">
+        <SectionHeading eyebrow="In depth" title="The questions restaurants ask before they switch" text="Six short guides on the things that decide a POS purchase: tax filing, power cuts, the kitchen, stock, local payments and how we compare." />
+        <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {GUIDES.map((g, i) => (
+            <Reveal as="li" key={g.slug} delay={(i % 3) * 70} className={`flex ${CARD}`}>
+              <Link href={`/${g.slug}`} className="flex flex-1 flex-col p-6">
+                <span className="text-lg font-bold text-[#0B1F3A]">{g.title}</span>
+                <span className="mt-2 flex-1 text-[15px] leading-relaxed text-slate-600">{g.short}</span>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0B1F3A]">Read the guide<ArrowRight className="h-4 w-4 text-[#FF7A1A]" /></span>
+              </Link>
+            </Reveal>
+          ))}
+        </ul>
       </Section>
 
       {/* FAQ */}
