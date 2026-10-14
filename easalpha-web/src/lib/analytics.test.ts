@@ -39,3 +39,26 @@ describe("analytics", () => {
     expect(eventFromDataset(document.createElement("a").dataset)).toBeNull();
   });
 });
+
+describe("analytics loader", () => {
+  it("reads the provider from the environment and defaults the script URL", async () => {
+    const { analyticsConfig } = await import("@/components/site/analytics");
+    expect(analyticsConfig({})).toBeNull();
+    expect(analyticsConfig({ ANALYTICS_PROVIDER: "umami" })).toBeNull();
+    expect(analyticsConfig({ ANALYTICS_PROVIDER: "Umami", ANALYTICS_ID: " abc " })).toEqual({ provider: "umami", src: "https://cloud.umami.is/script.js", id: "abc" });
+    expect(analyticsConfig({ NEXT_PUBLIC_ANALYTICS_PROVIDER: "plausible", NEXT_PUBLIC_ANALYTICS_ID: "easalpha.com", ANALYTICS_SRC: "https://stats.example.com/js/script.js" })).toEqual({ provider: "plausible", src: "https://stats.example.com/js/script.js", id: "easalpha.com" });
+    expect(analyticsConfig({ ANALYTICS_PROVIDER: "ga4", ANALYTICS_ID: "G-1" })).toBeNull();
+  });
+
+  it("adds the tracker script once with the provider's attribute", async () => {
+    const { loadTracker } = await import("@/components/site/analytics-client");
+    document.head.querySelectorAll("script").forEach((s) => s.remove());
+    expect(loadTracker(null)).toBe(false);
+    expect(loadTracker({ provider: "umami", src: "https://cloud.umami.is/script.js", id: "site-1" })).toBe(true);
+    const s = document.head.querySelector("script[data-easalpha-analytics]");
+    expect(s?.getAttribute("data-website-id")).toBe("site-1");
+    expect(s?.getAttribute("src")).toBe("https://cloud.umami.is/script.js");
+    expect(loadTracker({ provider: "umami", src: "https://cloud.umami.is/script.js", id: "site-1" })).toBe(false);
+    expect(document.head.querySelectorAll("script[data-easalpha-analytics]")).toHaveLength(1);
+  });
+});

@@ -75,8 +75,8 @@ Override the defaults with environment variables when they differ: `REPO=myorg/e
 | variable | `ANALYTICS_ID` | the Umami website id, or the Plausible domain | optional, with the one above |
 
 Analytics can also be switched on without a rebuild: put `ANALYTICS_PROVIDER` and `ANALYTICS_ID` in the server's
-`~/easalpha/.env` and run `docker compose up -d`; the web container reads them when a page renders (static pages pick
-them up at their next revalidation, within five minutes). The site loads no tracker until both are set.
+`~/easalpha/.env` and run `docker compose up -d`; the browser asks `/api/analytics`, which reads them on the server per
+request, so the change applies on the next page view. The site loads no tracker until both are set.
 
 ## Every deploy after that
 
