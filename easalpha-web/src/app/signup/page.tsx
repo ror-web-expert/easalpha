@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Check } from "lucide-react";
 import { SignupForm } from "@/components/site/signup-form";
 import { WhatsAppFab } from "@/components/site/whatsapp-fab";
+import { Analytics } from "@/components/site/analytics";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
@@ -64,6 +65,7 @@ export default function SignupPage() {
         </div>
       </section>
       <WhatsAppFab />
+      <Analytics />
     </main>
   );
 }

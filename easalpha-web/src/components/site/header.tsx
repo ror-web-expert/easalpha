@@ -7,6 +7,7 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Txt } from "./txt";
 import { type UiKey } from "./site-helpers";
+import { trackAttrs } from "@/lib/analytics";
 
 const NAV: { href: string; k: UiKey }[] = [
   { href: "/features", k: "nav.features" },
@@ -43,7 +44,7 @@ export function SiteHeader() {
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
           <Link href="/login" className="rounded-full px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"><Txt k="cta.login" /></Link>
-          <Link href="/signup" className="rounded-full bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md"><Txt k="cta.start" /></Link>
+          <Link href="/signup" {...trackAttrs("cta_start_free_click", { where: "nav" })} className="rounded-full bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md"><Txt k="cta.start" /></Link>
         </div>
         <div className="flex items-center gap-2 lg:hidden">
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="site-menu" aria-label={open ? "Close menu" : "Open menu"} className="grid h-11 w-11 place-items-center rounded-full text-white hover:bg-white/10">
@@ -57,7 +58,7 @@ export function SiteHeader() {
             <Link key={n.href} href={n.href} className="rounded-lg px-3 py-2.5 text-base font-medium text-white hover:bg-white/10"><Txt k={n.k} /></Link>
           ))}
           <Link href="/login" className="rounded-lg px-3 py-2.5 text-base font-medium text-white hover:bg-white/10"><Txt k="cta.login" /></Link>
-          <Link href="/signup" className="mt-2 rounded-full border border-white/30 px-5 py-3 text-center text-base font-semibold text-white hover:bg-white/10"><Txt k="cta.start" /></Link>
+          <Link href="/signup" {...trackAttrs("cta_start_free_click", { where: "nav_menu" })} className="mt-2 rounded-full border border-white/30 px-5 py-3 text-center text-base font-semibold text-white hover:bg-white/10"><Txt k="cta.start" /></Link>
         </nav>
       </div>
     </header>

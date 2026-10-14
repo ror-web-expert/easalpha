@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/lib/types";
 import { Button, Field, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 import { COUNTRIES, DEFAULT_COUNTRY, PASSWORD_MIN, PLANS, type SignupErrors, type SignupInput, countryByCode, detectCountry, passwordStrength, signupPayload, validateSignup } from "./site-helpers";
 
 const STRENGTH: Record<ReturnType<typeof passwordStrength>, { width: string; color: string; text: string }> = {
@@ -44,13 +45,18 @@ export function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; exists?: boolean } | null>(null);
+  // signup_started fires once, on the first keystroke; signup_completed when the API has created the account.
+  const started = useRef(false);
 
   // Same session handling as /login: the store persists to localStorage and /admin reads it.
   useEffect(() => { if (hydrated && session) router.replace("/admin"); }, [hydrated, session, router]);
 
   const errors: SignupErrors = validateSignup(form);
   const show = (k: keyof SignupInput) => (touched[k] ? errors[k] : undefined);
-  const set = <K extends keyof SignupInput>(k: K, v: SignupInput[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof SignupInput>(k: K, v: SignupInput[K]) => {
+    if (!started.current) { started.current = true; track("signup_started", { plan: planCode ?? "none" }); }
+    setForm((f) => ({ ...f, [k]: v }));
+  };
   const blur = (k: keyof SignupInput) => setTouched((t) => ({ ...t, [k]: true }));
   const strength = STRENGTH[passwordStrength(form.password)];
 
@@ -61,6 +67,7 @@ export function SignupForm() {
     setBusy(true); setError(null);
     try {
       const s = await api<Session>("/auth/signup", { method: "POST", body: signupPayload(form), auth: "none" });
+      track("signup_completed", { plan: planCode ?? "none", country: form.country });
       qc.clear(); // as at login: nothing cached for an earlier session carries over to the new business
       setSession(s);
       router.replace("/admin");

@@ -64,6 +64,12 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${API_PUBLIC_URL}/api/v1
         NEXT_PUBLIC_CABLE_URL: ${API_PUBLIC_URL}/cable
+    environment:
+      # Cookieless analytics on the public site, read when a page renders: ANALYTICS_PROVIDER=umami with the website id
+      # in ANALYTICS_ID, or plausible with the site domain. Empty means no tracker is loaded. See docs/DEPLOY.md.
+      ANALYTICS_PROVIDER: ${ANALYTICS_PROVIDER:-}
+      ANALYTICS_ID: ${ANALYTICS_ID:-}
+      ANALYTICS_SRC: ${ANALYTICS_SRC:-}
     ports: ["3000:3000"]
     # Desktop installers for the Download page: drop the files from a desktop release into deploy/downloads/ and the
     # site serves them at /downloads, so the links follow the site's own domain.

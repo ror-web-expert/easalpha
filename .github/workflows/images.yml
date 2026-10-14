@@ -50,6 +50,8 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.API_PUBLIC_URL || 'https://api.example.pk' }}/api/v1
             NEXT_PUBLIC_CABLE_URL=${{ vars.API_PUBLIC_URL || 'https://api.example.pk' }}/cable
+            NEXT_PUBLIC_ANALYTICS_PROVIDER=${{ vars.ANALYTICS_PROVIDER || '' }}
+            NEXT_PUBLIC_ANALYTICS_ID=${{ vars.ANALYTICS_ID || '' }}
 
   deploy:
     needs: build

@@ -2,9 +2,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { CONTACT, telLink, whatsappLink, type SiteContact } from "./site-helpers";
+import { trackAttrs } from "@/lib/analytics";
 
 const COLUMNS = [
-  { title: "Product", links: [{ href: "/features", label: "Features" }, { href: "/pricing", label: "Pricing" }, { href: "/download", label: "Download the desktop app" }, { href: "/apps", label: "Open an app screen" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Start free" }] },
+  { title: "Product", links: [{ href: "/features", label: "Features" }, { href: "/pricing", label: "Pricing" }, { href: "/download", label: "Download the desktop app" }, { href: "/apps", label: "Open an app screen" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Start free", track: trackAttrs("cta_start_free_click", { where: "footer_links" }) }] },
   { title: "Company", links: [{ href: "/contact", label: "Contact" }, { href: "/privacy", label: "Privacy" }, { href: "/terms", label: "Terms" }] },
 ];
 
@@ -22,14 +23,14 @@ export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
           <div key={c.title}>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#FF7A1A]">{c.title}</h3>
             <ul className="mt-4 space-y-2.5 max-md:space-y-0">
-              {c.links.map((l) => <li key={l.href}><Link href={l.href} className={link}>{l.label}</Link></li>)}
+              {c.links.map((l) => <li key={l.href}><Link href={l.href} {...("track" in l ? l.track : {})} className={link}>{l.label}</Link></li>)}
             </ul>
           </div>
         ))}
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[#FF7A1A]">Contact</h3>
           <ul className="mt-4 space-y-3 text-sm max-md:space-y-0">
-            <li><a href={whatsappLink(undefined, contact)} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2.5 ${link}`}><MessageCircle className="h-4 w-4 text-[#FF7A1A]" />WhatsApp {contact.whatsappDisplay}</a></li>
+            <li><a href={whatsappLink(undefined, contact)} target="_blank" rel="noopener noreferrer" {...trackAttrs("whatsapp_click", { where: "footer" })} className={`flex items-center gap-2.5 ${link}`}><MessageCircle className="h-4 w-4 text-[#FF7A1A]" />WhatsApp {contact.whatsappDisplay}</a></li>
             <li><a href={telLink(contact)} className={`flex items-center gap-2.5 ${link}`}><Phone className="h-4 w-4 text-[#FF7A1A]" />{contact.whatsappDisplay}</a></li>
             <li><a href={`mailto:${contact.email}`} className={`flex items-center gap-2.5 ${link}`}><Mail className="h-4 w-4 text-[#FF7A1A]" />{contact.email}</a></li>
             <li className="flex items-start gap-2.5 text-white/70"><MapPin className="mt-1 h-4 w-4 shrink-0 text-[#FF7A1A]" />{contact.address}</li>

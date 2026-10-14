@@ -28,7 +28,7 @@ export default function PrivacyPage() {
               <li><strong>Your restaurant&apos;s records:</strong> menu, orders, payments, stock, suppliers, expenses, accounts, staff records (including attendance, fingerprint identifiers from your kiosk and payroll), riders, customers (names, phone numbers, khata balances, loyalty points) and settings. You enter this data or your staff and customers generate it while using the service.</li>
               <li><strong>Device and usage records:</strong> which devices are paired, login sessions, and an audit log of changes made in your account, so you can see who did what.</li>
               <li><strong>Messages:</strong> if you link a WhatsApp number or use the included messaging, we keep a log of what was sent, to whom and whether it was delivered.</li>
-              <li><strong>Website visits:</strong> this public website uses no advertising trackers. Server logs record IP address and pages requested for security and capacity planning and are kept for a short period.</li>
+              <li><strong>Website visits:</strong> this public website uses no advertising trackers. Page views and button clicks on the public pages are counted with a cookieless analytics script that sets no cookies and stores no personal data, which is why there is no cookie banner. Server logs record IP address and pages requested for security and capacity planning and are kept for a short period.</li>
             </ul>
             <h2>Who can see it</h2>
             <ul>

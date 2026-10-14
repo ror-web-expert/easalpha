@@ -11,6 +11,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { HOME_FAQ } from "@/components/site/faq";
 import { JsonLd } from "@/components/site/json-ld";
 import { faqPage, softwareApplication } from "@/lib/schema";
+import { trackAttrs } from "@/lib/analytics";
 
 export const metadata: Metadata = {
   title: { absolute: "Restaurant POS for any restaurant, anywhere | EasAlpha" },
@@ -87,8 +88,8 @@ export default function HomePage() {
             </h1>
             <Txt k="hero.subtitle" as="p" className="mt-6 max-w-lg text-[17px] leading-[1.6] text-white/80 sm:text-lg" />
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/signup" className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-brand-cta px-7 text-base font-semibold text-white shadow-[0_14px_30px_-10px_rgba(194,65,12,0.7)] transition hover:-translate-y-0.5 hover:bg-brand-cta-hover"><Txt k="cta.start" /><ArrowRight className="h-4 w-4" /></Link>
-              <SecondaryLink href="#tour" size="lg" dark><Txt k="cta.demo" /></SecondaryLink>
+              <Link href="/signup" {...trackAttrs("cta_start_free_click", { where: "hero" })} className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-brand-cta px-7 text-base font-semibold text-white shadow-[0_14px_30px_-10px_rgba(194,65,12,0.7)] transition hover:-translate-y-0.5 hover:bg-brand-cta-hover"><Txt k="cta.start" /><ArrowRight className="h-4 w-4" /></Link>
+              <SecondaryLink href="#tour" size="lg" dark track={{ name: "cta_demo_click", props: { where: "hero" } }}><Txt k="cta.demo" /></SecondaryLink>
             </div>
             <Reassurance className="mt-7" />
           </LangBox>
@@ -190,8 +191,8 @@ export default function HomePage() {
               ))}
             </ul>
             <div className="mt-10 flex flex-wrap gap-3">
-              <PrimaryLink href="/signup"><Txt k="cta.start" /></PrimaryLink>
-              <SecondaryLink href="/apps">Open an app screen</SecondaryLink>
+              <PrimaryLink href="/signup" track={{ name: "cta_start_free_click", props: { where: "surfaces" } }}><Txt k="cta.start" /></PrimaryLink>
+              <SecondaryLink href="/apps" track={{ name: "cta_demo_click", props: { where: "surfaces" } }}>Open an app screen</SecondaryLink>
             </div>
           </div>
           <Reveal delay={150} className="flex items-end justify-center gap-6">
@@ -214,7 +215,7 @@ export default function HomePage() {
           <div className="min-w-0">
             <Eyebrow>Questions</Eyebrow>
             <Txt k="sec.faq" as="h2" className="mt-3 text-[32px] font-extrabold leading-[1.1] tracking-[-0.02em] text-[#0B1F3A] sm:text-[40px]" />
-            <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>
+            <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" {...trackAttrs("whatsapp_click", { where: "home_faq" })} className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>
             <div className={`mt-8 flex items-center gap-4 p-5 ${CARD}`}>
               <span className={TILE_ORANGE}><MessageCircle className="h-6 w-6" /></span>
               <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, every day during restaurant hours, wherever you are.</div>

@@ -5,6 +5,10 @@ import { cn } from "@/lib/utils";
 import { Reveal } from "./reveal";
 import { Txt } from "./txt";
 import type { UiKey } from "./site-helpers";
+import { trackAttrs } from "@/lib/analytics";
+
+/** An analytics event a link sends when clicked; see lib/analytics.ts. */
+export type Track = { name: string; props?: Record<string, string> };
 
 export function Container({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={cn("mx-auto w-full max-w-6xl px-4 sm:px-6", className)}>{children}</div>;
@@ -34,17 +38,17 @@ export function SectionHeading({ eyebrow, title, titleKey, text, align = "center
   );
 }
 
-export function PrimaryLink({ href, children, className, size = "md" }: { href: string; children: React.ReactNode; className?: string; size?: "md" | "lg" }) {
+export function PrimaryLink({ href, children, className, size = "md", track }: { href: string; children: React.ReactNode; className?: string; size?: "md" | "lg"; track?: Track }) {
   return (
-    <Link href={href} className={cn("inline-flex items-center justify-center gap-2 rounded-full bg-brand-cta font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cta", size === "lg" ? "h-13 px-7 text-base" : "h-11 px-6 text-sm", className)}>
+    <Link href={href} {...(track ? trackAttrs(track.name, track.props) : {})} className={cn("inline-flex items-center justify-center gap-2 rounded-full bg-brand-cta font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cta", size === "lg" ? "h-13 px-7 text-base" : "h-11 px-6 text-sm", className)}>
       {children}
     </Link>
   );
 }
 
-export function SecondaryLink({ href, children, className, size = "md", dark }: { href: string; children: React.ReactNode; className?: string; size?: "md" | "lg"; dark?: boolean }) {
+export function SecondaryLink({ href, children, className, size = "md", dark, track }: { href: string; children: React.ReactNode; className?: string; size?: "md" | "lg"; dark?: boolean; track?: Track }) {
   return (
-    <Link href={href} className={cn("inline-flex items-center justify-center gap-2 rounded-full border font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2", dark ? "border-white/40 text-white hover:bg-white/10 focus-visible:outline-white" : "border-[#0B1F3A]/25 text-[#0B1F3A] hover:border-[#0B1F3A]/50 hover:bg-[#F4F7FB] focus-visible:outline-[#0B1F3A]", size === "lg" ? "h-13 px-7 text-base" : "h-11 px-6 text-sm", className)}>
+    <Link href={href} {...(track ? trackAttrs(track.name, track.props) : {})} className={cn("inline-flex items-center justify-center gap-2 rounded-full border font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2", dark ? "border-white/40 text-white hover:bg-white/10 focus-visible:outline-white" : "border-[#0B1F3A]/25 text-[#0B1F3A] hover:border-[#0B1F3A]/50 hover:bg-[#F4F7FB] focus-visible:outline-[#0B1F3A]", size === "lg" ? "h-13 px-7 text-base" : "h-11 px-6 text-sm", className)}>
       {children}
     </Link>
   );
@@ -132,7 +136,7 @@ export function FaqList({ items }: { items: { q: string; a: React.ReactNode }[] 
   return (
     <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_-20px_rgba(11,31,58,0.4)]">
       {items.map((it) => (
-        <details key={it.q} className="group">
+        <details key={it.q} className="group" {...trackAttrs("faq_open", { question: it.q })}>
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-[#0B1F3A] sm:px-6 [&::-webkit-details-marker]:hidden">
             {it.q}
             <ChevronDown className="h-5 w-5 shrink-0 text-[#FF7A1A] transition-transform group-open:rotate-180" />
@@ -155,7 +159,7 @@ export function CtaBand({ title, titleKey, text, primary = { href: "/signup", la
         {titleKey ? <Txt k={titleKey} as="h2" className={h2} /> : <h2 className={h2}>{title}</h2>}
         <p className="mx-auto mt-5 max-w-2xl text-[17px] leading-[1.6] text-white/80 sm:text-lg">{text}</p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Link href={primary.href} className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-brand-cta px-7 text-base font-semibold text-white shadow-lg transition hover:bg-brand-cta-hover">{primary.label}<ArrowRight className="h-4 w-4" /></Link>
+          <Link href={primary.href} {...trackAttrs("cta_start_free_click", { where: "footer" })} className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-brand-cta px-7 text-base font-semibold text-white shadow-lg transition hover:bg-brand-cta-hover">{primary.label}<ArrowRight className="h-4 w-4" /></Link>
           {secondary ? <SecondaryLink href={secondary.href} size="lg" dark>{secondary.label}</SecondaryLink> : null}
         </div>
         <Reassurance className="mt-8 justify-center" />

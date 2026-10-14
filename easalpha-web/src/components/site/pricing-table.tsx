@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { track, trackAttrs } from "@/lib/analytics";
 import {
   FEATURE_LABELS, PLANS, TRIAL_DAYS, type Currency, type FeatureKey, type Period, displayPriceMinor, formatMoney,
   monthlyMinor, yearlyMinor, yearlySavingMinor,
@@ -28,8 +29,8 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
   return (
     <div>
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-        <Toggle label="Billing period" value={period} onChange={setPeriod} options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly", hint: "2 months free" }]} />
-        <Toggle label="Currency" value={currency} onChange={setCurrency} options={[{ value: "PKR", label: "PKR" }, { value: "USD", label: "USD" }]} />
+        <Toggle label="Billing period" value={period} onChange={(v) => { setPeriod(v); track("pricing_toggle", { billing: v, currency }); }} options={[{ value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly", hint: "2 months free" }]} />
+        <Toggle label="Currency" value={currency} onChange={(v) => { setCurrency(v); track("pricing_toggle", { billing: period, currency: v }); }} options={[{ value: "PKR", label: "PKR" }, { value: "USD", label: "USD" }]} />
       </div>
 
       <div className="mt-14 grid gap-6 lg:grid-cols-3">
@@ -52,7 +53,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
                 </p>
               </div>
               <div className="flex flex-1 flex-col px-7 pb-7 pt-6">
-                <Link href={`/signup?plan=${p.code}`} className={cn("inline-flex h-11 items-center justify-center rounded-full text-sm font-semibold transition", p.popular ? "bg-brand-cta text-white hover:bg-brand-cta-hover" : "border border-[#0B1F3A]/30 text-[#0B1F3A] hover:bg-[#F4F7FB]")}>
+                <Link href={`/signup?plan=${p.code}`} {...trackAttrs("cta_start_free_click", { where: `pricing_${p.code}` })} className={cn("inline-flex h-11 items-center justify-center rounded-full text-sm font-semibold transition", p.popular ? "bg-brand-cta text-white hover:bg-brand-cta-hover" : "border border-[#0B1F3A]/30 text-[#0B1F3A] hover:bg-[#F4F7FB]")}>
                   Start {TRIAL_DAYS}-day free trial
                 </Link>
                 <ul className="mt-7 space-y-2.5 text-sm text-slate-700">

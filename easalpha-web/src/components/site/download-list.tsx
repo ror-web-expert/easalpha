@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Apple, Check, ChevronDown, Clock, Download, Monitor, Smartphone, Terminal } from "lucide-react";
 import { CARD } from "@/components/site/sections";
+import { trackAttrs } from "@/lib/analytics";
 import {
   AFTER_INSTALL, detectOs, installers, installerUrl, MOBILE_GUIDES, PLATFORM_GUIDES,
   type Installer, type Os,
@@ -152,7 +153,7 @@ function label(i: Installer): string {
 function DownloadButton({ i, baseUrl, primary }: { i: Installer; baseUrl: string; primary: boolean }) {
   const text = primary ? (i.id === "win" ? "Download" : `Download ${label(i)}`) : label(i);
   return (
-    <a href={installerUrl(baseUrl, i.file)} download className={primary ? BTN_PRIMARY : BTN_SECONDARY} title={i.file}>
+    <a href={installerUrl(baseUrl, i.file)} download {...trackAttrs("download_click", { installer: i.id, file: i.file })} className={primary ? BTN_PRIMARY : BTN_SECONDARY} title={i.file}>
       <Download className="h-4 w-4" /> {text}
     </a>
   );
