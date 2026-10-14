@@ -7,9 +7,9 @@ import { Reveal } from "@/components/site/reveal";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "Features",
-  description: "A deeper tour of EasAlpha by area: selling, kitchen, inventory, purchasing, money, people, riders, customers and marketing, reports, settings and security.",
-  alternates: { canonical: "/features" },
+  title: "Restaurant POS features, till to reports",
+  description: "Every EasAlpha area: offline till, kitchen display, recipes and stock, purchasing, double-entry accounts, payroll, riders, khata, WhatsApp and 27 reports.",
+  alternates: { canonical: "/features", languages: { en: "/features", "x-default": "/features" } },
 };
 
 interface Area { id: string; name: string; title: string; text: string; bullets: string[]; shots: Shot[]; phone?: boolean }

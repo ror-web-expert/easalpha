@@ -7,9 +7,9 @@ import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "Pricing",
-  description: `EasAlpha plans in USD or PKR: Starter, Pro and Business, billed monthly or yearly. Yearly billing is ten months' price. Every plan starts with a ${TRIAL_DAYS}-day free trial.`,
-  alternates: { canonical: "/pricing" },
+  title: "Pricing: restaurant POS plans in PKR and USD",
+  description: "Starter, Pro and Business from Rs 2,500 or $19 a month, monthly or yearly with two months free. No per-order fees, and every plan starts with 90 days free.",
+  alternates: { canonical: "/pricing", languages: { en: "/pricing", "x-default": "/pricing" } },
 };
 
 const FAQ = [

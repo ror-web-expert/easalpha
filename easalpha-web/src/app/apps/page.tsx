@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LayoutDashboard, Monitor, ChefHat, Megaphone, Settings2, Download } from "lucide-react";
 
-export const metadata: Metadata = { title: "Open an app screen", description: "Set this device up with a manager login, or pick a EasAlpha screen: admin panel, till, kitchen display or token screen." };
+export const metadata: Metadata = {
+  title: "Open an app screen",
+  description: "Pick the EasAlpha screen for this device: set-up, admin panel, till, kitchen display, token screen, or download the desktop app. One account, every surface.",
+  alternates: { canonical: "/apps", languages: { en: "/apps", "x-default": "/apps" } },
+  // robots.txt already keeps /apps out of search; this tells crawlers the same on the page itself.
+  robots: { index: false, follow: true },
+};
 
 const links = [
   { href: "/setup", title: "Set up this device", text: "Sign in once as a manager and choose: till, tablet, kitchen, token screen or rider phone.", icon: Settings2 },

@@ -7,9 +7,9 @@ import { whatsappLink } from "@/components/site/site-helpers";
 import { getSiteContact } from "@/components/site/platform-server";
 
 export const metadata: Metadata = {
-  title: "Contact",
-  description: "Talk to the EasAlpha team on WhatsApp or email. Book a demo, ask about plans or get help moving from your current POS.",
-  alternates: { canonical: "/contact" },
+  title: "Contact us: WhatsApp, email or book a demo",
+  description: "Talk to a person on WhatsApp or email, seven days a week during restaurant hours. Book a demo, ask about plans or get help moving from your current POS.",
+  alternates: { canonical: "/contact", languages: { en: "/contact", "x-default": "/contact" } },
 };
 
 export default async function ContactPage() {

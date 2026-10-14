@@ -7,8 +7,8 @@ import { CONTACT, TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Terms of service",
-  description: "The terms for using EasAlpha: your account, trials and billing, what we promise about availability, what we ask of you and how either side can end the agreement.",
-  alternates: { canonical: "/terms" },
+  description: "The terms for using EasAlpha: your account, the 90-day trial and billing, availability, what we ask of you, and how either side can end the agreement.",
+  alternates: { canonical: "/terms", languages: { en: "/terms", "x-default": "/terms" } },
 };
 
 export default function TermsPage() {

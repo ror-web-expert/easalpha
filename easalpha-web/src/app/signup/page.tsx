@@ -8,10 +8,10 @@ import { WhatsAppFab } from "@/components/site/whatsapp-fab";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "Create your account",
-  description: `Start your ${TRIAL_DAYS}-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant.`,
+  title: "Create your account, 90 days free",
+  description: "Start your 90-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant. No card.",
+  alternates: { canonical: "/signup", languages: { en: "/signup", "x-default": "/signup" } },
   robots: { index: true, follow: true },
-  alternates: { canonical: "/signup" },
 };
 
 const INCLUDED = [

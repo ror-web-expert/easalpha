@@ -7,8 +7,8 @@ import { CONTACT } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
-  description: "How EasAlpha handles your restaurant's data: what we store, who can see it, how you export it and how to have it deleted.",
-  alternates: { canonical: "/privacy" },
+  description: "How EasAlpha handles your restaurant's data: what we store, who can see it, how it is protected, how you export it and how to have it deleted on request.",
+  alternates: { canonical: "/privacy", languages: { en: "/privacy", "x-default": "/privacy" } },
 };
 
 export default function PrivacyPage() {

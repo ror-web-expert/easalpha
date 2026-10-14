@@ -10,9 +10,9 @@ import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 
 export const metadata: Metadata = {
-  title: "EasAlpha: restaurant POS for any restaurant, anywhere",
-  description: "One system for every counter, kitchen and branch. Offline till, kitchen display, inventory with recipe deduction, supplier and customer ledgers, payroll, riders, WhatsApp receipts, local tax rules and 27 reports, in any currency. Start free for 90 days.",
-  alternates: { canonical: "/" },
+  title: { absolute: "Restaurant POS for any restaurant, anywhere | EasAlpha" },
+  description: "Offline till, kitchen display, inventory with recipe deduction, khata, payroll, riders, WhatsApp receipts and FBR tax invoices. 90 days free, no card needed.",
+  alternates: { canonical: "/", languages: { en: "/", "x-default": "/" } },
 };
 
 const STATS = [

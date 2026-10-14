@@ -10,14 +10,19 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-inter", display: "swap" });
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://easalpha.com").replace(/\/$/, "");
-const DESCRIPTION = "EasAlpha is the complete restaurant POS for any restaurant, anywhere: an offline desktop till, order-taker tablet, kitchen display, inventory with recipe deduction, purchasing, double-entry accounts, payroll, riders, customer credit, WhatsApp receipts, local tax rules and 27 reports, in your currency.";
+// 155 characters: Google cuts descriptions at about 155 to 160, and the old one ran to 253.
+const DESCRIPTION = "EasAlpha is the restaurant POS that keeps selling offline: till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts. 90 days free.";
+// Paste the content value Google Search Console gives you (Settings, Ownership verification, HTML tag). The tag is
+// only rendered once the placeholder is replaced, so production never carries a dummy value.
+const GOOGLE_SITE_VERIFICATION = "REPLACE_ME";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: "EasAlpha: restaurant POS for any restaurant, anywhere", template: "%s | EasAlpha" },
   description: DESCRIPTION,
   applicationName: "EasAlpha",
-  keywords: ["restaurant POS", "offline POS", "kitchen display", "restaurant inventory", "multi-currency POS", "restaurant POS Pakistan", "FBR POS", "WhatsApp receipts"],
+  alternates: { canonical: "/", languages: { en: "/", "x-default": "/" } },
+  ...(GOOGLE_SITE_VERIFICATION !== "REPLACE_ME" ? { verification: { google: GOOGLE_SITE_VERIFICATION } } : {}),
   manifest: "/manifest.json",
   icons: { icon: [{ url: "/favicon-32.png", sizes: "32x32", type: "image/png" }, { url: "/icon.svg", type: "image/svg+xml" }], apple: "/icon-192.png" },
   openGraph: {
