@@ -6,6 +6,8 @@ import { Check } from "lucide-react";
 import { SignupForm } from "@/components/site/signup-form";
 import { WhatsAppFab } from "@/components/site/whatsapp-fab";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
+import { JsonLd } from "@/components/site/json-ld";
+import { breadcrumbs } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Create your account, 90 days free",
@@ -27,6 +29,7 @@ const INCLUDED = [
 export default function SignupPage() {
   return (
     <main className="grid min-h-screen bg-white text-slate-800 lg:grid-cols-[1fr_1.1fr]">
+      <JsonLd data={breadcrumbs("Create your account", "/signup")} />
       <section className="relative hidden overflow-hidden bg-linear-to-br from-[#0B1F3A] to-[#10294D] p-12 text-white [--heading-color:#fff] lg:flex lg:flex-col">
         <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
         <div aria-hidden className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#FF7A1A]/25 blur-3xl" />

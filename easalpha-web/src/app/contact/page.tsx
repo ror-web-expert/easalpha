@@ -5,6 +5,8 @@ import { CARD, Container, HeroStack, PageHero, TILE_NAVY, TILE_ORANGE } from "@/
 import { ContactForm } from "@/components/site/contact-form";
 import { whatsappLink } from "@/components/site/site-helpers";
 import { getSiteContact } from "@/components/site/platform-server";
+import { JsonLd } from "@/components/site/json-ld";
+import { breadcrumbs } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Contact us: WhatsApp, email or book a demo",
@@ -16,6 +18,7 @@ export default async function ContactPage() {
   const contact = await getSiteContact();
   return (
     <SiteShell>
+      <JsonLd data={breadcrumbs("Contact", "/contact")} />
       <PageHero eyebrow="Contact" title="Talk to a person" text="WhatsApp is fastest. We answer in English and Urdu, seven days a week during restaurant hours."
         visual={<HeroStack chips={[{ icon: MessageCircle, title: "WhatsApp", text: contact.whatsappDisplay }, { icon: Mail, title: "Email", text: contact.email }, { icon: Clock, title: "Hours", text: contact.hours }]} />} />
       <Container className="grid gap-12 py-20 lg:grid-cols-[1fr_1.4fr] lg:py-28">

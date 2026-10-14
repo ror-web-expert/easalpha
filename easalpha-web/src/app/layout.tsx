@@ -6,12 +6,15 @@ import "@fontsource/roboto-mono/400.css";
 import "@fontsource/roboto-mono/700.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { JsonLd } from "@/components/site/json-ld";
+import { organization, webSite } from "@/lib/schema";
+import { SITE_DESCRIPTION } from "@/components/site/site-helpers";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-inter", display: "swap" });
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://easalpha.com").replace(/\/$/, "");
-// 155 characters: Google cuts descriptions at about 155 to 160, and the old one ran to 253.
-const DESCRIPTION = "EasAlpha is the restaurant POS that keeps selling offline: till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts. 90 days free.";
+// 155 characters (Google cuts descriptions at about 155 to 160; the old one ran to 253). Shared with the schema.
+const DESCRIPTION = SITE_DESCRIPTION;
 // Paste the content value Google Search Console gives you (Settings, Ownership verification, HTML tag). The tag is
 // only rendered once the placeholder is replaced, so production never carries a dummy value.
 const GOOGLE_SITE_VERIFICATION = "REPLACE_ME";
@@ -43,6 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-full">
+        <JsonLd data={[organization(), webSite()]} />
         <Providers>{children}</Providers>
       </body>
     </html>

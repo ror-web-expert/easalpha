@@ -8,6 +8,9 @@ import { Counter } from "@/components/site/counter";
 import { LangBox, Txt } from "@/components/site/txt";
 import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
+import { HOME_FAQ } from "@/components/site/faq";
+import { JsonLd } from "@/components/site/json-ld";
+import { faqPage, softwareApplication } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: { absolute: "Restaurant POS for any restaurant, anywhere | EasAlpha" },
@@ -48,15 +51,6 @@ const SURFACES = [
   { icon: LayoutDashboard, title: "Admin panel", text: "Everything for owners and managers: menu, stock, money, people, reports and settings, per branch." },
 ];
 
-const FAQ = [
-  { q: "Does EasAlpha really work offline?", a: "Yes. The till keeps a local copy of the menu and queues orders, payments and receipts while the connection is down. When the internet returns everything syncs in order, and anything the server rejects shows up in a Needs Attention list so nothing is lost silently." },
-  { q: "What do I need to run it?", a: "Any Windows or Linux PC for the till, a thermal receipt printer (58 or 80 mm), and Android tablets or phones for the order-taker, kitchen display and rider app. The admin panel runs in any browser. Nothing to install on a server; we host it." },
-  { q: "How long does setup take?", a: "Most single-branch restaurants are selling the same day. Import your menu from a spreadsheet, pair your till with a code, and follow the setup checklist. Recipes and stock can be added later without stopping sales." },
-  { q: "Can I move from my current POS?", a: "You can import products, categories and customers from CSV. If you are on another system today, contact us and we will help map the export." },
-  { q: "Is my data mine?", a: "Yes. Every report exports to CSV and PDF, customers and products download as spreadsheets, and we delete your account's data on request. See the privacy policy." },
-  { q: "What does the free trial include?", a: `Every feature of the plan you choose for ${TRIAL_DAYS} days, with no card required. At the end you pick a plan and pay by card or bank transfer, or JazzCash and EasyPaisa in Pakistan.` },
-];
-
 function GlassCard({ icon: Icon, title, text, className }: { icon: React.ComponentType<{ className?: string }>; title: string; text: string; className?: string }) {
   return (
     <div className={`flex items-center gap-3 rounded-2xl border border-white/15 bg-[#0B1F3A]/70 px-4 py-3 text-white shadow-[0_20px_50px_-20px_rgba(0,0,0,0.6)] backdrop-blur-md ${className ?? ""}`}>
@@ -72,6 +66,7 @@ function GlassCard({ icon: Icon, title, text, className }: { icon: React.Compone
 export default function HomePage() {
   return (
     <SiteShell>
+      <JsonLd data={[softwareApplication(), faqPage(HOME_FAQ)]} />
       {/* Hero */}
       <section className="relative overflow-hidden bg-[#0B1F3A] pb-32 pt-28 text-white sm:pt-36 lg:pb-44 [--heading-color:#fff]">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-linear-to-br from-[#0B1F3A] to-[#10294D] [--heading-color:#fff]" />
@@ -225,7 +220,7 @@ export default function HomePage() {
               <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, every day during restaurant hours, wherever you are.</div>
             </div>
           </div>
-          <FaqList items={FAQ} />
+          <FaqList items={HOME_FAQ} />
         </div>
       </Section>
 

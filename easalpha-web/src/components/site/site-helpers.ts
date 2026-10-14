@@ -266,13 +266,20 @@ export function signupPayload(input: SignupInput) {
 // Defaults only. The live values come from the product owner's platform settings (GET /platform, edited in the super
 // panel); contactFromPlatform maps them and every link helper takes the contact as its last argument.
 
+/** The one-line description used by the layout metadata, Open Graph and the schema. 155 characters. */
+export const SITE_DESCRIPTION = "EasAlpha is the restaurant POS that keeps selling offline: till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts. 90 days free.";
+
+/** The registered office, in parts for the schema's PostalAddress and joined for the footer. */
+export const OFFICE = { street: "161 P Block, Gulberg 3", city: "Lahore", region: "Punjab", countryCode: "PK", country: "Pakistan" } as const;
+export const OFFICE_ADDRESS = `${OFFICE.street}, ${OFFICE.city}, ${OFFICE.country}`;
+
 export interface SiteContact { email: string; whatsapp: string; whatsappDisplay: string; address: string; hours: string; productName: string }
 
 export const CONTACT: SiteContact = {
   email: "hello@easalpha.com",
   whatsapp: "+923437172731",
   whatsappDisplay: "+92 343 7172731",
-  address: "Office address to be announced, Lahore, Pakistan",
+  address: OFFICE_ADDRESS,
   hours: "10 am to 11 pm Pakistan time, every day",
   productName: "EasAlpha",
 };

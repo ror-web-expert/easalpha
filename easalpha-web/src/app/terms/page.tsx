@@ -4,6 +4,8 @@ import { SiteShell } from "@/components/site/shell";
 import { Container, HeroStack, PageHero, Prose } from "@/components/site/sections";
 import { FileText, Lock, ShieldCheck } from "lucide-react";
 import { CONTACT, TRIAL_DAYS } from "@/components/site/site-helpers";
+import { JsonLd } from "@/components/site/json-ld";
+import { breadcrumbs } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Terms of service",
@@ -14,6 +16,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <SiteShell>
+      <JsonLd data={breadcrumbs("Terms of service", "/terms")} />
       <PageHero eyebrow="Terms of service" title="Plain terms for using EasAlpha" visual={<HeroStack chips={[{ icon: FileText, title: "Plain terms", text: "written to be read" }, { icon: ShieldCheck, title: "Fair to both sides", text: "no surprises" }, { icon: Lock, title: "Your account, your data", text: "export or delete any time" }]} />}><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
       <Container className="max-w-3xl py-16 sm:py-20">
         <div>

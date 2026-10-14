@@ -5,6 +5,8 @@ import { CtaBand, FaqList, HeroStack, PageHero, Section, SectionHeading } from "
 import { BadgeCheck, Banknote, CalendarCheck } from "lucide-react";
 import { PricingTable } from "@/components/site/pricing-table";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
+import { JsonLd } from "@/components/site/json-ld";
+import { breadcrumbs, pricingProduct } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Pricing: restaurant POS plans in PKR and USD",
@@ -26,6 +28,7 @@ const FAQ = [
 export default function PricingPage() {
   return (
     <SiteShell>
+      <JsonLd data={[pricingProduct(), breadcrumbs("Pricing", "/pricing")]} />
       <PageHero eyebrow="Pricing" title="Plans that grow with your restaurant" text={`Prices in rupees, no per-order fees, and every plan starts with a ${TRIAL_DAYS}-day free trial. No card needed to begin.`} 
         visual={<HeroStack chips={[{ icon: CalendarCheck, title: `${TRIAL_DAYS}-day free trial`, text: "every plan, every feature" }, { icon: Banknote, title: "Prices in rupees", text: "no per-order fees" }, { icon: BadgeCheck, title: "Cancel any time", text: "no contract, no card to start" }]} />} />
       <Section className="pt-16 sm:pt-20 lg:pt-24">

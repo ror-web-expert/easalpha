@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LayoutDashboard, Monitor, ChefHat, Megaphone, Settings2, Download } from "lucide-react";
+import { JsonLd } from "@/components/site/json-ld";
+import { breadcrumbs, itemList } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Open an app screen",
@@ -22,6 +24,7 @@ const links = [
 export default function AppsPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-8 px-4 py-12">
+      <JsonLd data={[itemList("EasAlpha app screens", links.map((l) => ({ name: l.title, url: l.href }))), breadcrumbs("Open an app screen", "/apps")]} />
       <div>
         <div className="flex items-center gap-2 text-primary">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-fg font-bold">S</span>

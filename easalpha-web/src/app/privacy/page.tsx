@@ -4,6 +4,8 @@ import { SiteShell } from "@/components/site/shell";
 import { Container, HeroStack, PageHero, Prose } from "@/components/site/sections";
 import { FileText, Lock, ShieldCheck } from "lucide-react";
 import { CONTACT } from "@/components/site/site-helpers";
+import { JsonLd } from "@/components/site/json-ld";
+import { breadcrumbs } from "@/lib/schema";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
@@ -14,6 +16,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <SiteShell>
+      <JsonLd data={breadcrumbs("Privacy policy", "/privacy")} />
       <PageHero eyebrow="Privacy policy" title="Your data stays yours" visual={<HeroStack chips={[{ icon: ShieldCheck, title: "Your data stays yours", text: "never sold, never shared" }, { icon: Lock, title: "Encrypted", text: "in transit and at rest" }, { icon: FileText, title: "Plain language", text: "no legal maze" }]} />}><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
       <Container className="max-w-3xl py-16 sm:py-20">
         <div>
