@@ -45,7 +45,7 @@ export default function PrivacyPage() {
             <h2>Security</h2>
             <p>Connections to the service are encrypted. Passwords are hashed. Till devices hold only the data they need to sell offline and can be unpaired from the admin panel at any time. We keep the software and its dependencies updated and review security findings as they appear. No service can promise perfect security; if we learn of a breach affecting your data we will tell you without undue delay and explain what happened.</p>
             <h2>Changes and contact</h2>
-            <p>If this policy changes in a way that matters to you, we will tell account owners by email before it takes effect. Questions go to <a href={`mailto:${CONTACT.email}`} className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">{CONTACT.email}</a> or through the <Link href="/contact" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">contact page</Link>.</p>
+            <p>If this policy changes in a way that matters to you, we will tell account owners by email before it takes effect. Questions go to <a href={`mailto:${CONTACT.email}`} className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">{CONTACT.email}</a> or through the <Link href="/contact" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">contact page</Link>.</p>
           </Prose>
         </div>
       </Container>

@@ -118,7 +118,7 @@ export function FeatureRow({ eyebrow, title, text, bullets, shot, flip, href = "
             </li>
           ))}
         </ul>
-        {href ? <Link href={href} className="mt-6 inline-flex items-center gap-1.5 font-semibold text-[#0B1F3A] hover:underline">{hrefLabel}<ArrowRight className="h-4 w-4 text-[#FF7A1A]" /></Link> : null}
+        {href ? <Link href={href} className="mt-6 inline-flex items-center gap-1.5 font-semibold text-[#0B1F3A] hover:underline max-md:-mb-2 max-md:mt-4 max-md:min-h-11">{hrefLabel}<ArrowRight className="h-4 w-4 text-[#FF7A1A]" /></Link> : null}
       </Reveal>
       <Reveal delay={120} className={cn("relative min-w-0", flip && "lg:order-1")}>
         <BrowserFrame shot={shot} sizes="(max-width: 1024px) 100vw, 560px" />
@@ -132,12 +132,12 @@ export function FaqList({ items }: { items: { q: string; a: React.ReactNode }[] 
   return (
     <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-[0_10px_30px_-20px_rgba(11,31,58,0.4)]">
       {items.map((it) => (
-        <details key={it.q} className="group px-5 py-4 sm:px-6">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-left font-semibold text-[#0B1F3A] [&::-webkit-details-marker]:hidden">
+        <details key={it.q} className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-[#0B1F3A] sm:px-6 [&::-webkit-details-marker]:hidden">
             {it.q}
             <ChevronDown className="h-5 w-5 shrink-0 text-[#FF7A1A] transition-transform group-open:rotate-180" />
           </summary>
-          <div className="mt-3 text-slate-600">{it.a}</div>
+          <div className="-mt-1 px-5 pb-4 text-slate-600 sm:px-6">{it.a}</div>
         </details>
       ))}
     </div>
@@ -232,7 +232,7 @@ export function PageHero({ eyebrow, title, text, children, visual, crumb }: { ey
       <Container className={cn("relative grid items-center gap-12", visual ? "lg:grid-cols-[1.1fr_0.9fr] lg:gap-10" : "")}>
         <Reveal className={cn("min-w-0 max-w-2xl", !visual && "mx-auto text-center")}>
           <nav aria-label="Breadcrumb" className={cn("flex items-center gap-1.5 text-xs font-medium text-white/60", !visual && "justify-center")}>
-            <Link href="/" className="hover:text-white">Home</Link><span aria-hidden>›</span><span className="text-white/85">{crumb ?? eyebrow}</span>
+            <Link href="/" className="-my-3.5 inline-flex min-h-11 min-w-11 items-center hover:text-white">Home</Link><span aria-hidden>›</span><span className="text-white/85">{crumb ?? eyebrow}</span>
           </nav>
           <p className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-[#FF7A1A] backdrop-blur">
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#FF7A1A]" />{eyebrow}

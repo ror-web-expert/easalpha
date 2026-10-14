@@ -31,7 +31,7 @@ export function SiteHeader() {
   return (
     <header className={cn("fixed inset-x-0 top-0 z-40 text-white transition-[background-color,box-shadow] duration-300", solid ? "bg-[#0B1F3A]/90 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5)] backdrop-blur" : "bg-transparent")}>
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex shrink-0 items-center" aria-label="EasAlpha home">
+        <Link href="/" className="flex min-h-11 shrink-0 items-center" aria-label="EasAlpha home">
           <Image src="/brand/logo-white.svg" alt="EasAlpha" width={130} height={32} priority unoptimized className="h-8 w-auto" />
         </Link>
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Main">
@@ -46,7 +46,7 @@ export function SiteHeader() {
           <Link href="/signup" className="rounded-full bg-brand-cta px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cta-hover hover:shadow-md"><Txt k="cta.start" /></Link>
         </div>
         <div className="flex items-center gap-2 lg:hidden">
-          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="site-menu" aria-label={open ? "Close menu" : "Open menu"} className="grid h-10 w-10 place-items-center rounded-full text-white hover:bg-white/10">
+          <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="site-menu" aria-label={open ? "Close menu" : "Open menu"} className="grid h-11 w-11 place-items-center rounded-full text-white hover:bg-white/10">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>

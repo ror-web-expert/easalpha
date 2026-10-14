@@ -47,7 +47,7 @@ export default function SignupPage() {
       </section>
       <section className="flex items-center justify-center px-4 py-12 sm:px-8">
         <div className="w-full max-w-lg">
-          <Link href="/" className="mb-8 flex items-center lg:hidden" aria-label="EasAlpha home">
+          <Link href="/" className="mb-8 flex min-h-11 items-center lg:hidden" aria-label="EasAlpha home">
             <Image src="/brand/logo.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto" />
           </Link>
           <h1 className="text-[36px] font-extrabold leading-[1.05] tracking-[-0.02em] text-[#0B1F3A]">Create your account</h1>

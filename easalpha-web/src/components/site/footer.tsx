@@ -8,7 +8,7 @@ const COLUMNS = [
   { title: "Company", links: [{ href: "/contact", label: "Contact" }, { href: "/privacy", label: "Privacy" }, { href: "/terms", label: "Terms" }] },
 ];
 
-const link = "text-sm text-white/90 transition-colors hover:text-[#FF7A1A]";
+const link = "text-sm text-white/90 transition-colors hover:text-[#FF7A1A] max-md:inline-flex max-md:min-h-11 max-md:min-w-11 max-md:items-center";
 
 export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
   return (
@@ -21,14 +21,14 @@ export function SiteFooter({ contact = CONTACT }: { contact?: SiteContact }) {
         {COLUMNS.map((c) => (
           <div key={c.title}>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[#FF7A1A]">{c.title}</h3>
-            <ul className="mt-4 space-y-2.5">
+            <ul className="mt-4 space-y-2.5 max-md:space-y-0">
               {c.links.map((l) => <li key={l.href}><Link href={l.href} className={link}>{l.label}</Link></li>)}
             </ul>
           </div>
         ))}
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-[#FF7A1A]">Contact</h3>
-          <ul className="mt-4 space-y-3 text-sm">
+          <ul className="mt-4 space-y-3 text-sm max-md:space-y-0">
             <li><a href={whatsappLink(undefined, contact)} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2.5 ${link}`}><MessageCircle className="h-4 w-4 text-[#FF7A1A]" />WhatsApp {contact.whatsappDisplay}</a></li>
             <li><a href={telLink(contact)} className={`flex items-center gap-2.5 ${link}`}><Phone className="h-4 w-4 text-[#FF7A1A]" />{contact.whatsappDisplay}</a></li>
             <li><a href={`mailto:${contact.email}`} className={`flex items-center gap-2.5 ${link}`}><Mail className="h-4 w-4 text-[#FF7A1A]" />{contact.email}</a></li>

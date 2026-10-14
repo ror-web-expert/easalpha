@@ -52,7 +52,7 @@ export function DownloadList({ baseUrl, version, list: given, builtAt }: { baseU
         <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-700">
           {AFTER_INSTALL.map((step) => <li key={step}>{step}</li>)}
         </ol>
-        <p className="mt-4 text-sm text-slate-600">Stuck? <Link href="/contact" className="font-semibold text-[#C2410C] hover:underline">Contact support</Link>, or write to the team from Admin, Help.</p>
+        <p className="mt-4 text-sm text-slate-600">Stuck? <Link href="/contact" className="py-3.5 font-semibold text-[#C2410C] hover:underline">Contact support</Link>, or write to the team from Admin, Help.</p>
       </section>
     </div>
   );
@@ -111,7 +111,7 @@ function Panel({ guide, list, baseUrl, version }: { guide: Guide; list: Installe
           {pending.map((i) => <span key={i.id} className="inline-flex h-11 items-center gap-2 rounded-full border border-dashed border-slate-300 px-4 text-sm text-slate-500" title={i.file}><Clock className="h-4 w-4" /> {label(i)}: next release</span>)}
         </div>
       </div>
-      {!isPhone && ready.length === 0 ? <p className="mt-4 rounded-xl bg-[#F4F7FB] p-3 text-sm text-slate-700">This build is produced by the next release and appears here on its own. Until then the till runs in your browser: <Link href="/setup" className="font-semibold text-[#C2410C] hover:underline">open the setup screen</Link>.</p> : null}
+      {!isPhone && ready.length === 0 ? <p className="mt-4 rounded-xl bg-[#F4F7FB] p-3 text-sm text-slate-700">This build is produced by the next release and appears here on its own. Until then the till runs in your browser: <Link href="/setup" className="py-3.5 font-semibold text-[#C2410C] hover:underline">open the setup screen</Link>.</p> : null}
 
       <div className="mt-6 grid gap-8 md:grid-cols-2">
         <div>
@@ -123,7 +123,7 @@ function Panel({ guide, list, baseUrl, version }: { guide: Guide; list: Installe
           </ol>
         </div>
         <details className="group text-sm" open>
-          <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500 max-md:min-h-11 [&::-webkit-details-marker]:hidden">
             Problems? <ChevronDown className="h-4 w-4 transition group-open:rotate-180" />
           </summary>
           <dl className="mt-3 space-y-2.5">

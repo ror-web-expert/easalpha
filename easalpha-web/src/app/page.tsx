@@ -210,7 +210,7 @@ export default function HomePage() {
       <Section id="pricing">
         <SectionHeading eyebrow="Pricing" title="Simple monthly plans in rupees" titleKey="sec.pricing" text={`Every plan starts with a ${TRIAL_DAYS}-day free trial. Pay yearly and get two months free.`} />
         <div className="mt-12"><PricingTable compact /></div>
-        <p className="mt-10 text-center text-slate-600">Full comparison and billing questions on the <Link href="/pricing" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">pricing page</Link>.</p>
+        <p className="mt-10 text-center text-slate-600">Full comparison and billing questions on the <Link href="/pricing" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">pricing page</Link>.</p>
       </Section>
 
       {/* FAQ */}
@@ -219,7 +219,7 @@ export default function HomePage() {
           <div className="min-w-0">
             <Eyebrow>Questions</Eyebrow>
             <Txt k="sec.faq" as="h2" className="mt-3 text-[32px] font-extrabold leading-[1.1] tracking-[-0.02em] text-[#0B1F3A] sm:text-[40px]" />
-            <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>
+            <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>
             <div className={`mt-8 flex items-center gap-4 p-5 ${CARD}`}>
               <span className={TILE_ORANGE}><MessageCircle className="h-6 w-6" /></span>
               <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, every day during restaurant hours, wherever you are.</div>

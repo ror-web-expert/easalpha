@@ -14,7 +14,7 @@ function Toggle<T extends string>({ value, onChange, options, label }: { value: 
   return (
     <div role="radiogroup" aria-label={label} className="inline-flex rounded-full border border-[#E6EBF2] bg-[#F4F7FB] p-1">
       {options.map((o) => (
-        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition", value === o.value ? "bg-[#0B1F3A] text-white shadow-sm" : "text-slate-600 hover:text-[#0B1F3A]")}>
+        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition max-md:min-h-11", value === o.value ? "bg-[#0B1F3A] text-white shadow-sm" : "text-slate-600 hover:text-[#0B1F3A]")}>
           {o.label}{o.hint ? <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold", value === o.value ? "bg-brand-cta text-white" : "bg-[#FFE4D1] text-[#C2410C]")}>{o.hint}</span> : null}
         </button>
       ))}

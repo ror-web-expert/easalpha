@@ -76,7 +76,7 @@ export default function FeaturesPage() {
               </Reveal>
             </section>
           ))}
-          <p className={`p-6 text-slate-600 ${CARD}`}>EasAlpha also keeps extras beyond the core spec: reservations, QR table ordering, modifier groups, overheads and food cost, production, goods received, campaigns, roles, branch comparison, Foodpanda, setup checklist and opening and closing checklists. See <Link href="/pricing" className="font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">which plan includes what</Link>.</p>
+          <p className={`p-6 text-slate-600 ${CARD}`}>EasAlpha also keeps extras beyond the core spec: reservations, QR table ordering, modifier groups, overheads and food cost, production, goods received, campaigns, roles, branch comparison, Foodpanda, setup checklist and opening and closing checklists. See <Link href="/pricing" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">which plan includes what</Link>.</p>
         </div>
       </Container>
       <CtaBand title="See it with your own menu" text={`Create an account, import your products and try every screen free for ${TRIAL_DAYS} days.`} secondary={{ href: "/contact", label: "Book a demo" }} />

@@ -100,7 +100,7 @@ export function SignupForm() {
       <Field label="Password" error={show("password")}>
         <div className="relative">
           <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => set("password", e.target.value)} onBlur={() => blur("password")} autoComplete="new-password" minLength={PASSWORD_MIN} required className="h-12 pr-12" aria-invalid={!!show("password")} aria-describedby="password-strength" />
-          <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-1 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full text-slate-500 hover:bg-slate-100">
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
@@ -112,17 +112,17 @@ export function SignupForm() {
       <div>
         <label className="flex cursor-pointer items-start gap-3 text-sm text-slate-700">
           <input type="checkbox" checked={form.agree} onChange={(e) => { set("agree", e.target.checked); blur("agree"); }} aria-invalid={!!show("agree")} className="mt-1 h-[18px] w-[18px] shrink-0 rounded-[2px] accent-[#FF7A1A]" />
-          <span>I agree to the <Link href="/terms" className="font-medium text-[#C2410C] hover:underline">terms</Link> and <Link href="/privacy" className="font-medium text-[#C2410C] hover:underline">privacy policy</Link>.</span>
+          <span>I agree to the <Link href="/terms" className="-mx-1 px-1 py-3.5 font-medium text-[#C2410C] hover:underline">terms</Link> and <Link href="/privacy" className="-mx-1 px-1 py-3.5 font-medium text-[#C2410C] hover:underline">privacy policy</Link>.</span>
         </label>
         {show("agree") ? <p className="mt-1 text-xs text-[#ba1a1a]">{errors.agree}</p> : null}
       </div>
       {error ? (
         <p role="alert" className="rounded-lg bg-[#ffdad6] px-4 py-3 text-sm text-[#93000a]">
-          {error.text}{error.exists ? <> <Link href="/login" className="font-medium underline">Log in instead</Link>.</> : null}
+          {error.text}{error.exists ? <> <Link href="/login" className="py-3.5 font-medium underline">Log in instead</Link>.</> : null}
         </p>
       ) : null}
       <Button type="submit" size="lg" className="w-full bg-brand-cta font-semibold text-white hover:bg-brand-cta-hover" loading={busy}>Create my account</Button>
-      <p className="text-center text-sm text-slate-600">Already have an account? <Link href="/login" className="font-medium text-[#C2410C] hover:underline">Log in</Link></p>
+      <p className="text-center text-sm text-slate-600">Already have an account? <Link href="/login" className="-mx-1 px-1 py-3.5 font-medium text-[#C2410C] hover:underline">Log in</Link></p>
     </form>
   );
 }
