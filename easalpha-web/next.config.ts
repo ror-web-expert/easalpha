@@ -5,8 +5,10 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // NEXT_DIST_DIR lets a second build (for the browser gate) sit beside the one a running `next start` is serving.
   distDir: process.env.NEXT_DIST_DIR || ".next",
-  // AVIF first (about a third smaller than WebP for the marketing screenshots), WebP for browsers without it.
-  images: { formats: ["image/avif", "image/webp"] },
+  // WebP only: an AVIF encode of one 1440x900 screenshot took the production server (2 CPUs) tens of seconds when
+  // several cold sizes were asked for at once, and it held the page's load event with it. The screenshots never
+  // change under one name, so optimised copies are kept for 30 days instead of the 60-second default.
+  images: { formats: ["image/webp"], minimumCacheTTL: 60 * 60 * 24 * 30 },
   // Rewrite barrel imports from these packages to direct module imports so each page only bundles the pieces it uses.
   experimental: { optimizePackageImports: ["lucide-react", "recharts", "date-fns"] },
   // Browser protections on every page: HTTPS only (a year, with subdomains), no MIME sniffing, no framing by other sites,

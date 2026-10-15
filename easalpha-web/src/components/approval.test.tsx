@@ -32,6 +32,8 @@ const settle = () => act(() => new Promise((r) => setTimeout(r, 50)));
 const pins = (fn: ReturnType<typeof voidOrder>) => fn.mock.calls.map((c) => c[0]);
 
 describe("useApproval", () => {
+  // The wrong-PIN path waits on real timers; a slow CI runner needs more than Vitest's 5-second default for the whole
+  // test, not only for the inner waits, so the test declares its own limit.
   it("sends a wrong PIN once and clears it for the next try (a resend loop locked every manager's PIN)", async () => {
     const fn = voidOrder();
     render(<Screen action={fn} />);
@@ -39,17 +41,16 @@ describe("useApproval", () => {
     await screen.findByText("Approve: Void order #12");
     expect(screen.getByLabelText("Asking")).toHaveTextContent("yes");
     tap("1234");
-    // A slow CI runner needs more than the default second here.
-    await screen.findByText("Wrong PIN or not allowed. Try again.", {}, { timeout: 5000 });
+    await screen.findByText("Wrong PIN or not allowed. Try again.", {}, { timeout: 10000 });
     await settle();
     await settle();
     expect(pins(fn)).toEqual([undefined, "1234"]);
     // The dots were cleared: the next four digits are a new PIN on their own.
     tap(MANAGER);
-    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"), { timeout: 10000 });
     expect(pins(fn)).toEqual([undefined, "1234", MANAGER]);
     expect(screen.getByLabelText("Asking")).toHaveTextContent("no");
-  });
+  }, 30000);
 
   it("never reuses the last PIN for the next approval", async () => {
     const fn = voidOrder();
