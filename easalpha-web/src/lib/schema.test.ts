@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breadcrumbs, faqPage, itemList, organization, pricingProduct, serializeJsonLd, softwareApplication, webSite } from "./schema";
+import { breadcrumbs, faqPage, itemList, localBusiness, organization, pricingProduct, serializeJsonLd, softwareApplication, webSite } from "./schema";
 import { HOME_FAQ } from "@/components/site/faq";
 import { CONTACT, OFFICE, PLANS } from "@/components/site/site-helpers";
 
@@ -35,6 +35,16 @@ describe("schema", () => {
     expect(org.address.addressLocality).toBe("Lahore");
     expect(org.address.addressCountry).toBe("PK");
     expect(webSite().publisher["@id"]).toBe(org["@id"]);
+  });
+
+  it("the local business carries the office, the support number and every day's hours", () => {
+    const lb = localBusiness();
+    expect(lb.address.streetAddress).toBe(OFFICE.street);
+    expect(lb.telephone).toBe(CONTACT.whatsapp);
+    expect(lb.openingHoursSpecification[0].dayOfWeek).toHaveLength(7);
+    expect(lb.openingHoursSpecification[0]).toMatchObject({ opens: "10:00", closes: "23:00" });
+    expect(lb.priceRange).toBe("Rs 2,500 to Rs 8,999 a month");
+    expect(lb.parentOrganization["@id"]).toBe(organization()["@id"]);
   });
 
   it("breadcrumbs and item lists are positioned from 1 with absolute URLs", () => {

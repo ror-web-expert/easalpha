@@ -1,8 +1,31 @@
 import type { NextConfig } from "next";
 
+const API_ORIGIN = (() => { try { return new URL(process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1").origin; } catch { return "http://localhost:3001"; } })();
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  `connect-src 'self' ${API_ORIGIN} ${API_ORIGIN.replace(/^http/, "ws")}`,
+  "frame-ancestors 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "upgrade-insecure-requests",
+].join("; ");
+
+/** The marketing pages and the sign-up page; app screens are everything else. */
+const PUBLIC_PAGES = "/(features|pricing|download|contact|privacy|terms|signup|guides|restaurant-pos-pakistan|fbr-pos-integration|offline-pos-system|arfapos-alternative|kitchen-display-system|restaurant-inventory-software)";
+const PUBLIC_HEADERS = [
+  { key: "Content-Security-Policy", value: CSP },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+];
+
 // Old admin paths (before the SPEC sidebar, 10 Oct 2026) keep working through redirects.
 const nextConfig: NextConfig = {
   devIndicators: false,
+  poweredByHeader: false,
   // NEXT_DIST_DIR lets a second build (for the browser gate) sit beside the one a running `next start` is serving.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // WebP only: an AVIF encode of one 1440x900 screenshot took the production server (2 CPUs) tens of seconds when
@@ -23,7 +46,24 @@ const nextConfig: NextConfig = {
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
       ],
+    }, {
+      // The public site only: a Content-Security-Policy and a same-origin opener policy. Scripts and styles come from
+      // this origin (Next's own inline bootstrap needs 'unsafe-inline'; a per-request nonce would make every page
+      // dynamic), the sign-up form talks to the API, and the analytics script and collector are first-party under
+      // /stats. The app screens (admin, till, kitchen, rider, storefront) are left out: they open blobs, cameras and
+      // the API's WebSocket and get their own policy when they are reviewed.
+      source: "/",
+      headers: PUBLIC_HEADERS,
+    }, {
+      source: PUBLIC_PAGES,
+      headers: PUBLIC_HEADERS,
     }];
+  },
+  // The self-hosted Umami (deploy/docker-compose.yml) answers at /stats: its UI, its tracker script and its collector,
+  // all first-party, so no DNS, certificate or Caddy change is needed and ad blockers leave it alone.
+  async rewrites() {
+    const umami = (process.env.UMAMI_INTERNAL_URL || "http://umami:3000").replace(/\/$/, "");
+    return [{ source: "/stats", destination: `${umami}/stats` }, { source: "/stats/:path*", destination: `${umami}/stats/:path*` }];
   },
   async redirects() {
     return [

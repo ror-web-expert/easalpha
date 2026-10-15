@@ -6,7 +6,7 @@ import { SITE_URL } from "./sitemap";
 // would also block the /kitchen-display-system guide, and a bare /pos the /pos-... pages.
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin$", "/admin/", "/super$", "/super/", "/pos$", "/pos/", "/kitchen$", "/kitchen/", "/rider$", "/rider/", "/token$", "/token/", "/queue$", "/queue/", "/apps$", "/api/", "/bill/", "/q/", "/setup$", "/login$", "/store/", "/version$"] }],
+    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin$", "/admin/", "/super$", "/super/", "/pos$", "/pos/", "/kitchen$", "/kitchen/", "/rider$", "/rider/", "/token$", "/token/", "/queue$", "/queue/", "/apps$", "/api/", "/bill/", "/q/", "/setup$", "/login$", "/store/", "/version$", "/stats$", "/stats/"] }],
     sitemap: `${SITE_URL}/sitemap.xml`,
     host: SITE_URL,
   };

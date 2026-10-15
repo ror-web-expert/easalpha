@@ -210,6 +210,7 @@ export default function HomePage() {
       {/* Guides */}
       <Section id="guides">
         <SectionHeading eyebrow="In depth" title="The questions restaurants ask before they switch" text="Six short guides on the things that decide a POS purchase: tax filing, power cuts, the kitchen, stock, local payments and how we compare." />
+        <p className="mt-6 text-center"><Link href="/guides" className={`py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]`}>All guides on one page</Link></p>
         <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {GUIDES.map((g, i) => (
             <Reveal as="li" key={g.slug} delay={(i % 3) * 70} className={`flex ${CARD}`}>

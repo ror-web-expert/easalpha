@@ -29,7 +29,7 @@ export function Counter({ to, suffix = "", className }: { to: number; suffix?: s
     return () => { io.disconnect(); cancelAnimationFrame(frame); };
   }, [to]);
   return (
-    <span ref={ref} className={cn("inline-block tabular-nums", className)} style={{ minWidth: `${String(to).length + suffix.length}ch` }} aria-label={`${to}${suffix}`}>
+    <span ref={ref} className={cn("inline-block tabular-nums", className)} style={{ minWidth: `${String(to).length + suffix.length}ch` }}>
       {value}{suffix}
     </span>
   );

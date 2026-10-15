@@ -71,12 +71,23 @@ Override the defaults with environment variables when they differ: `REPO=myorg/e
 | secret | `DEPLOY_DOWNLOADS_PATH` | /home/sajid/easalpha/downloads | desktop.yml publish job |
 | variable | `API_PUBLIC_URL` | https://api.easalpha.com | baked into the web image at build time |
 | variable | `PUBLIC_URL` | https://easalpha.com | update feed of the desktop installers |
-| variable | `ANALYTICS_PROVIDER` | umami (or plausible) | optional, set by hand: cookieless analytics on the public site |
+| variable | `ANALYTICS_PROVIDER` | umami (or plausible) | optional on GitHub; the production server sets it in `.env` instead |
 | variable | `ANALYTICS_ID` | the Umami website id, or the Plausible domain | optional, with the one above |
 
-Analytics can also be switched on without a rebuild: put `ANALYTICS_PROVIDER` and `ANALYTICS_ID` in the server's
-`~/easalpha/.env` and run `docker compose up -d`; the browser asks `/api/analytics`, which reads them on the server per
-request, so the change applies on the next page view. The site loads no tracker until both are set.
+### Analytics (self-hosted Umami at easalpha.com/stats)
+
+The public site's analytics is a Umami instance in the same compose stack (`umami` service, built by `images.yml` from
+Umami's repository at a pinned tag with `BASE_PATH=/stats`; `umami-db-init` creates its `umami` database in the stack's
+PostgreSQL once). The web container proxies `/stats` to it (`rewrites()` in `easalpha-web/next.config.ts`), so the
+dashboard is https://easalpha.com/stats, the tracker is `/stats/script.js` and the collector `/stats/api/send`, all
+first-party: no DNS record, certificate or Caddy change, and ad blockers do not block it. Cookieless, so no banner.
+
+Server `.env`: `UMAMI_APP_SECRET` (`openssl rand -hex 32`), `ANALYTICS_PROVIDER=umami`, `ANALYTICS_SRC=/stats/script.js`
+and `ANALYTICS_ID=<website id>`. The website id comes from Umami: log in at /stats (the admin password is in the server
+`.env` as `UMAMI_ADMIN_PASSWORD`), Settings, Websites, Add website (name EasAlpha, domain easalpha.com), then copy the
+Website ID into `.env` and run `docker compose up -d web`. The browser asks `/api/analytics` for the config on every page
+view, so the change applies at once. Events the site sends (cta_start_free_click with where, pricing_toggle,
+faq_open, whatsapp_click, download_click, signup_started, signup_completed) appear under the website's Events tab.
 
 ## Every deploy after that
 

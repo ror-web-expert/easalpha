@@ -70,6 +70,8 @@ services:
       ANALYTICS_PROVIDER: ${ANALYTICS_PROVIDER:-}
       ANALYTICS_ID: ${ANALYTICS_ID:-}
       ANALYTICS_SRC: ${ANALYTICS_SRC:-}
+      # Where the web container reaches the self-hosted Umami for the /stats proxy (next.config.ts rewrites).
+      UMAMI_INTERNAL_URL: http://umami:3000
     ports: ["3000:3000"]
     # Desktop installers for the Download page: drop the files from a desktop release into deploy/downloads/ and the
     # site serves them at /downloads, so the links follow the site's own domain.
@@ -83,6 +85,30 @@ services:
       PORT: "3010"
       WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
     volumes: ["wasessions:/app/sessions"]
+
+  # Self-hosted Umami, the public site's analytics, built with BASE_PATH=/stats so the web container can proxy it at
+  # easalpha.com/stats (dashboard, tracker script and collector, all first-party: no DNS, certificate or Caddy change,
+  # and ad blockers leave it alone). It keeps its own database in the same PostgreSQL; umami-db-init creates it once.
+  umami-db-init:
+    image: postgres:16
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    entrypoint: ["sh", "-c", "psql -h db -U postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='umami'\" | grep -q 1 || psql -h db -U postgres -c 'CREATE DATABASE umami'"]
+    depends_on: { db: { condition: service_healthy } }
+
+  umami:
+    build:
+      context: https://github.com/umami-software/umami.git#v3.4.0
+      args:
+        BASE_PATH: /stats
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      DISABLE_TELEMETRY: "1"
+    depends_on:
+      umami-db-init: { condition: service_completed_successfully }
 
 volumes:
   pgdata:

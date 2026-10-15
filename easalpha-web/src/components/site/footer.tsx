@@ -7,7 +7,7 @@ import { GUIDES } from "./guides";
 
 const COLUMNS = [
   { title: "Product", links: [{ href: "/features", label: "Features" }, { href: "/pricing", label: "Pricing" }, { href: "/download", label: "Download the desktop app" }, { href: "/apps", label: "Open an app screen" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Start free", track: trackAttrs("cta_start_free_click", { where: "footer_links" }) }] },
-  { title: "Solutions", links: GUIDES.map((g) => ({ href: `/${g.slug}`, label: g.nav })) },
+  { title: "Guides", links: [...GUIDES.map((g) => ({ href: `/${g.slug}`, label: g.nav })), { href: "/guides", label: "All guides" }] },
   { title: "Company", links: [{ href: "/contact", label: "Contact" }, { href: "/privacy", label: "Privacy" }, { href: "/terms", label: "Terms" }] },
 ];
 

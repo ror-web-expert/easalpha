@@ -23,9 +23,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { name: api, context: easalpha-api }
-          - { name: web, context: easalpha-web }
-          - { name: whatsapp, context: easalpha-whatsapp }
+          - { name: api, context: easalpha-api, build_args: "" }
+          - { name: web, context: easalpha-web, build_args: "" }
+          - { name: whatsapp, context: easalpha-whatsapp, build_args: "" }
+          # Self-hosted analytics, built from Umami's own repository at a pinned tag with the /stats base path
+          # (deploy/docker-compose.yml, next.config.ts rewrites). A git URL is a valid build context for buildx.
+          - { name: umami, context: "https://github.com/umami-software/umami.git#v3.4.0", build_args: "BASE_PATH=/stats" }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -48,6 +51,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
+            ${{ matrix.build_args }}
             NEXT_PUBLIC_API_URL=${{ vars.API_PUBLIC_URL || 'https://api.example.pk' }}/api/v1
             NEXT_PUBLIC_CABLE_URL=${{ vars.API_PUBLIC_URL || 'https://api.example.pk' }}/cable
             NEXT_PUBLIC_ANALYTICS_PROVIDER=${{ vars.ANALYTICS_PROVIDER || '' }}

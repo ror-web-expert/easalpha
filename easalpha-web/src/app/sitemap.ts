@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/signup", priority: 0.8, changeFrequency: "yearly" },
     { path: "/contact", priority: 0.6, changeFrequency: "yearly" },
     { path: "/download", priority: 0.7, changeFrequency: "monthly" },
+    { path: "/guides", priority: 0.7, changeFrequency: "monthly" },
     ...GUIDES.map((g) => ({ path: `/${g.slug}`, priority: 0.8, changeFrequency: "monthly" as const })),
     { path: "/privacy", priority: 0.3, changeFrequency: "yearly" },
     { path: "/terms", priority: 0.3, changeFrequency: "yearly" },

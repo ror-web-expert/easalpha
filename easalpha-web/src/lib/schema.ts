@@ -1,6 +1,6 @@
 // JSON-LD for the public site, built as typed objects from the same data the pages render (plans, contact, FAQ),
 // so the structured data cannot drift from the visible content. Rendered through <JsonLd> (components/site/json-ld.tsx).
-import { CONTACT, OFFICE, PLANS, SITE_DESCRIPTION, TRIAL_DAYS, monthlyMinor, type Currency, type Plan, type SiteContact } from "@/components/site/site-helpers";
+import { CONTACT, OFFICE, PLANS, SITE_DESCRIPTION, TRIAL_DAYS, formatMoney, monthlyMinor, type Currency, type Plan, type SiteContact } from "@/components/site/site-helpers";
 import { SITE_URL } from "@/app/sitemap";
 
 const CONTEXT = "https://schema.org" as const;
@@ -18,7 +18,9 @@ export interface Product extends Node { "@type": "Product"; name: string; descri
 export interface ListItem { "@type": "ListItem"; position: number; name: string; item: string }
 export interface BreadcrumbList extends Node { "@type": "BreadcrumbList"; itemListElement: ListItem[] }
 export interface ItemList extends Node { "@type": "ItemList"; name: string; itemListElement: ListItem[] }
-export type JsonLdNode = Organization | WebSite | SoftwareApplication | FaqPage | Product | BreadcrumbList | ItemList;
+export interface OpeningHours { "@type": "OpeningHoursSpecification"; dayOfWeek: string[]; opens: string; closes: string }
+export interface LocalBusiness extends Node { "@type": "LocalBusiness"; "@id": string; name: string; url: string; image: string; telephone: string; email: string; address: PostalAddress; openingHoursSpecification: OpeningHours[]; priceRange: string; parentOrganization: { "@id": string } }
+export type JsonLdNode = Organization | WebSite | SoftwareApplication | FaqPage | Product | BreadcrumbList | ItemList | LocalBusiness;
 
 const ORG_ID = `${SITE_URL}/#organization`;
 const SITE_ID = `${SITE_URL}/#website`;
@@ -76,6 +78,18 @@ export function faqPage(items: { q: string; a: string }[]): FaqPage {
 /** Block 5: the pricing page's product with offers. */
 export function pricingProduct(): Product {
   return { "@context": CONTEXT, "@type": "Product", name: "EasAlpha restaurant POS", description: SITE_DESCRIPTION, image: `${SITE_URL}/og.png`, brand: { "@type": "Brand", name: "EasAlpha" }, offers: allOffers() };
+}
+
+/** The Lahore office as a local business for the contact page: address, phone, email and the support hours. */
+export function localBusiness(contact: SiteContact = CONTACT): LocalBusiness {
+  return {
+    "@context": CONTEXT, "@type": "LocalBusiness", "@id": `${SITE_URL}/contact#office`, name: `${contact.productName} (Lahore office)`, url: `${SITE_URL}/contact`,
+    image: `${SITE_URL}/og.png`, telephone: contact.whatsapp, email: contact.email,
+    address: { "@type": "PostalAddress", streetAddress: OFFICE.street, addressLocality: OFFICE.city, addressRegion: OFFICE.region, addressCountry: OFFICE.countryCode },
+    openingHoursSpecification: [{ "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "10:00", closes: "23:00" }],
+    priceRange: `${formatMoney(PLANS[0].pricePkrMinor, "PKR")} to ${formatMoney(PLANS[PLANS.length - 1].pricePkrMinor, "PKR")} a month`,
+    parentOrganization: { "@id": ORG_ID },
+  };
 }
 
 /** Block 6: Home, then the current page. */

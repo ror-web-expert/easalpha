@@ -17,3 +17,6 @@ services:
   whatsapp:
     image: ${IMAGE_REPO}-whatsapp:${IMAGE_TAG:-latest}
     build: !reset null
+  umami:
+    image: ${IMAGE_REPO}-umami:${IMAGE_TAG:-latest}
+    build: !reset null

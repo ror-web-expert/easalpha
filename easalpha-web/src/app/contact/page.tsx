@@ -8,7 +8,7 @@ import { whatsappLink } from "@/components/site/site-helpers";
 import { getSiteContact } from "@/components/site/platform-server";
 import { trackAttrs } from "@/lib/analytics";
 import { JsonLd } from "@/components/site/json-ld";
-import { breadcrumbs } from "@/lib/schema";
+import { breadcrumbs, localBusiness } from "@/lib/schema";
 
 export const metadata: Metadata = pageMetadata({ title: "Contact us: WhatsApp, email or book a demo", description: "Talk to a person on WhatsApp or email, seven days a week during restaurant hours. Book a demo, ask about plans or get help moving from your current POS.", path: "/contact" });
 
@@ -16,7 +16,7 @@ export default async function ContactPage() {
   const contact = await getSiteContact();
   return (
     <SiteShell>
-      <JsonLd data={breadcrumbs("Contact", "/contact")} />
+      <JsonLd data={[breadcrumbs("Contact", "/contact"), localBusiness(contact)]} />
       <PageHero eyebrow="Contact" title="Talk to a person" text="WhatsApp is fastest. We answer in English and Urdu, seven days a week during restaurant hours."
         visual={<HeroStack chips={[{ icon: MessageCircle, title: "WhatsApp", text: contact.whatsappDisplay }, { icon: Mail, title: "Email", text: contact.email }, { icon: Clock, title: "Hours", text: contact.hours }]} />} />
       <Container className="grid gap-12 py-20 lg:grid-cols-[1fr_1.4fr] lg:py-28">
