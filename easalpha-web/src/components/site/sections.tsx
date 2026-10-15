@@ -89,7 +89,7 @@ export function BrowserFrame({ shot, sizes, priority, className, glow = true, da
           </span>
           {shot.url ? <span className={cn("mx-auto truncate rounded-md px-3 py-0.5 text-[11px]", dark ? "bg-white/10 text-white/70" : "bg-white text-slate-500 ring-1 ring-slate-200")}>{shot.url}</span> : null}
         </div>
-        <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} sizes={sizes} priority={priority} className="block h-auto w-full" />
+        <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} sizes={sizes} priority={priority} fetchPriority={priority ? "high" : undefined} className="block h-auto w-full" />
       </div>
     </div>
   );
@@ -107,7 +107,7 @@ export function PhoneFrame({ shot, sizes, className, priority }: { shot: Shot; s
   );
 }
 
-export function FeatureRow({ eyebrow, title, text, bullets, shot, flip, href = "/features", hrefLabel = "Learn more", id, caption }: { eyebrow: string; title: string; text: string; bullets: string[]; shot: Shot; flip?: boolean; href?: string; hrefLabel?: string; id?: string; caption?: string }) {
+export function FeatureRow({ eyebrow, title, text, bullets, shot, flip, href = "/features", hrefLabel, id, caption }: { eyebrow: string; title: string; text: string; bullets: string[]; shot: Shot; flip?: boolean; href?: string; hrefLabel?: string; id?: string; caption?: string }) {
   return (
     <div id={id} className="grid scroll-mt-24 items-center gap-10 lg:grid-cols-2 lg:gap-16">
       <Reveal className={cn("min-w-0", flip && "lg:order-2")}>
@@ -122,7 +122,7 @@ export function FeatureRow({ eyebrow, title, text, bullets, shot, flip, href = "
             </li>
           ))}
         </ul>
-        {href ? <Link href={href} className="mt-6 inline-flex items-center gap-1.5 font-semibold text-[#0B1F3A] hover:underline max-md:-mb-2 max-md:mt-4 max-md:min-h-11">{hrefLabel}<ArrowRight className="h-4 w-4 text-[#FF7A1A]" /></Link> : null}
+        {href ? <Link href={href} className="mt-6 inline-flex items-center gap-1.5 font-semibold text-[#0B1F3A] hover:underline max-md:-mb-2 max-md:mt-4 max-md:min-h-11">{hrefLabel ?? `More about ${eyebrow.toLowerCase()}`}<ArrowRight className="h-4 w-4 text-[#FF7A1A]" /></Link> : null}
       </Reveal>
       <Reveal delay={120} className={cn("relative min-w-0", flip && "lg:order-1")}>
         <BrowserFrame shot={shot} sizes="(max-width: 1024px) 100vw, 560px" />
@@ -234,7 +234,7 @@ export function PageHero({ eyebrow, title, text, children, visual, crumb }: { ey
         <circle cx="500" cy="-100" r="3" fill="white" /><circle cx="380" cy="280" r="3" fill="white" /><circle cx="1180" cy="200" r="3" fill="white" />
       </svg>
       <Container className={cn("relative grid items-center gap-12", visual ? "lg:grid-cols-[1.1fr_0.9fr] lg:gap-10" : "")}>
-        <Reveal className={cn("min-w-0 max-w-2xl", !visual && "mx-auto text-center")}>
+        <div className={cn("min-w-0 max-w-2xl", !visual && "mx-auto text-center")}>
           <nav aria-label="Breadcrumb" className={cn("flex items-center gap-1.5 text-xs font-medium text-white/60", !visual && "justify-center")}>
             <Link href="/" className="-my-3.5 inline-flex min-h-11 min-w-11 items-center hover:text-white">Home</Link><span aria-hidden>›</span><span className="text-white/85">{crumb ?? eyebrow}</span>
           </nav>
@@ -244,8 +244,8 @@ export function PageHero({ eyebrow, title, text, children, visual, crumb }: { ey
           <h1 className="mt-5 text-[40px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[52px] lg:text-[58px]">{title}</h1>
           {text ? <p className={cn("mt-5 text-[17px] leading-[1.6] text-white/80 sm:text-lg", !visual && "mx-auto", "max-w-xl")}>{text}</p> : null}
           {children}
-        </Reveal>
-        {visual ? <Reveal delay={150} className="relative min-w-0">{visual}</Reveal> : null}
+        </div>
+        {visual ? <div className="relative min-w-0">{visual}</div> : null}
       </Container>
       <svg aria-hidden className="pointer-events-none absolute bottom-0 left-0 h-10 w-full text-white sm:h-14" viewBox="0 0 1440 80" preserveAspectRatio="none" fill="currentColor">
         <path d="M0 80 C 360 0 1080 0 1440 80 Z" />

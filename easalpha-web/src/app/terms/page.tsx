@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/shell";
 import { Container, HeroStack, PageHero, Prose } from "@/components/site/sections";
@@ -7,11 +8,7 @@ import { CONTACT, TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Terms of service",
-  description: "The terms for using EasAlpha: your account, the 90-day trial and billing, availability, what we ask of you, and how either side can end the agreement.",
-  alternates: { canonical: "/terms", languages: { en: "/terms", "x-default": "/terms" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Terms of service", description: "The terms for using EasAlpha: your account, the 90-day trial and billing, availability, what we ask of you, and how either side can end the agreement.", path: "/terms" });
 
 export default function TermsPage() {
   return (

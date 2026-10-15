@@ -1,29 +1,12 @@
-"use client";
-import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
-/** Fades a block in the first time it scrolls into view. CSS only; falls back to visible without IntersectionObserver. */
+/** Fades a block in the first time it scrolls into view. The element is server-rendered with data-reveal; one
+ *  RevealObserver (mounted by SiteShell) adds "shown" when it intersects. The hidden start state only applies where
+ *  scripting is enabled (globals.css), so crawlers and no-script browsers see everything, and nothing here hydrates. */
 export function Reveal({ children, className, delay = 0, as = "div" }: { children: React.ReactNode; className?: string; delay?: number; as?: "div" | "section" | "li" }) {
-  // All three tags take the same props here, so one element type keeps the ref simple.
-  const Tag = as as "div";
-  const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === "undefined") { setShown(true); return; }
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) { setShown(true); io.disconnect(); }
-    }, { rootMargin: "0px 0px -10% 0px", threshold: 0.1 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+  const Tag = as;
   return (
-    <Tag
-      ref={ref}
-      style={{ transitionDelay: shown ? `${delay}ms` : "0ms" }}
-      className={cn("transition-[opacity,transform] duration-700 ease-out motion-reduce:transition-none motion-reduce:transform-none", shown ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0", className)}
-    >
+    <Tag data-reveal="" style={delay ? { transitionDelay: `${delay}ms` } : undefined} className={cn("reveal", className)}>
       {children}
     </Tag>
   );

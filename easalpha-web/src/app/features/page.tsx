@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -8,11 +9,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Restaurant POS features, till to reports",
-  description: "Every EasAlpha area: offline till, kitchen display, recipes and stock, purchasing, double-entry accounts, payroll, riders, khata, WhatsApp and 27 reports.",
-  alternates: { canonical: "/features", languages: { en: "/features", "x-default": "/features" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Restaurant POS features, till to reports", description: "Every EasAlpha area: offline till, kitchen display, recipes and stock, purchasing, double-entry accounts, payroll, riders, khata, WhatsApp and 27 reports.", path: "/features" });
 
 interface Area { id: string; name: string; title: string; text: string; bullets: string[]; shots: Shot[]; phone?: boolean }
 

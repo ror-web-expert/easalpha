@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { Banknote, BookOpen, CloudOff, Languages, MessageCircle, ShoppingBag } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -11,11 +12,7 @@ import { PLANS, TRIAL_DAYS, formatMoney } from "@/components/site/site-helpers";
 const SLUG = "restaurant-pos-pakistan";
 const guide = guideBySlug(SLUG)!;
 
-export const metadata: Metadata = {
-  title: "Restaurant POS in Pakistan: FBR, Urdu, khata",
-  description: "Restaurant POS for Pakistan: FBR and PRA e-invoices with a QR receipt, JazzCash and EasyPaisa, Urdu names, khata and a till that sells through load-shedding.",
-  alternates: { canonical: `/${SLUG}`, languages: { en: `/${SLUG}`, "x-default": `/${SLUG}` } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Restaurant POS in Pakistan: FBR, Urdu, khata", description: "Restaurant POS for Pakistan: FBR and PRA e-invoices with a QR receipt, JazzCash and EasyPaisa, Urdu names, khata and a till that sells through load-shedding.", path: `/${SLUG}` });
 
 const price = (i: number) => formatMoney(PLANS[i].pricePkrMinor, "PKR");
 

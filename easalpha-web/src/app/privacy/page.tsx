@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/shell";
 import { Container, HeroStack, PageHero, Prose } from "@/components/site/sections";
@@ -7,11 +8,7 @@ import { CONTACT } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Privacy policy",
-  description: "How EasAlpha handles your restaurant's data: what we store, who can see it, how it is protected, how you export it and how to have it deleted on request.",
-  alternates: { canonical: "/privacy", languages: { en: "/privacy", "x-default": "/privacy" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Privacy policy", description: "How EasAlpha handles your restaurant's data: what we store, who can see it, how it is protected, how you export it and how to have it deleted on request.", path: "/privacy" });
 
 export default function PrivacyPage() {
   return (

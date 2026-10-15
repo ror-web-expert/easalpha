@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import Image from "next/image";
 import { Check } from "lucide-react";
@@ -10,12 +10,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Create your account, 90 days free",
-  description: "Start your 90-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant. No card.",
-  alternates: { canonical: "/signup", languages: { en: "/signup", "x-default": "/signup" } },
-  robots: { index: true, follow: true },
-};
+export const metadata: Metadata = pageMetadata({ title: "Create your account, 90 days free", description: "Start your 90-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant. No card.", path: "/signup", extra: { robots: { index: true, follow: true } } });
 
 const INCLUDED = [
   "Admin panel, till, kitchen display, order-taker tablet and rider app",
@@ -57,9 +52,7 @@ export default function SignupPage() {
           <h1 className="text-[36px] font-extrabold leading-[1.05] tracking-[-0.02em] text-[#0B1F3A]">Create your account</h1>
           <p className="mt-2 text-slate-600">Start your {TRIAL_DAYS}-day free trial. You will land in the admin panel signed in.</p>
           <div className="mt-8">
-            <Suspense fallback={<div className="h-96 animate-pulse rounded-2xl bg-slate-100" />}>
-              <SignupForm />
-            </Suspense>
+            <SignupForm />
           </div>
           <p className="mt-10 text-center text-xs text-slate-500">Till staff do not sign up here: the owner adds them and they log in on a paired device with a PIN.</p>
         </div>

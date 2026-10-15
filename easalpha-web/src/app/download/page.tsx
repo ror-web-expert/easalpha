@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import { SiteShell } from "@/components/site/shell";
 import { BrowserFrame, Container, HeroChip, PageHero, SHOTS } from "@/components/site/sections";
 import { CloudOff, MonitorDown } from "lucide-react";
@@ -11,11 +12,7 @@ import { SITE_URL } from "@/app/sitemap";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Download the desktop POS app",
-  description: "EasAlpha POS for Windows, macOS and Linux with receipt printing and a print server for tablets. Setup guides and fixes for each system; phones run the web app.",
-  alternates: { canonical: "/download", languages: { en: "/download", "x-default": "/download" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Download the desktop POS app", description: "EasAlpha POS for Windows, macOS and Linux with receipt printing and a print server for tablets. Setup guides and fixes for each system; phones run the web app.", path: "/download" });
 
 export default async function DownloadPage() {
   const p = await getPlatform();

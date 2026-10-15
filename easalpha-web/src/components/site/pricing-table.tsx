@@ -16,14 +16,17 @@ function Toggle<T extends string>({ value, onChange, options, label }: { value: 
     <div role="radiogroup" aria-label={label} className="inline-flex rounded-full border border-[#E6EBF2] bg-[#F4F7FB] p-1">
       {options.map((o) => (
         <button key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onChange(o.value)} className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition max-md:min-h-11", value === o.value ? "bg-[#0B1F3A] text-white shadow-sm" : "text-slate-600 hover:text-[#0B1F3A]")}>
-          {o.label}{o.hint ? <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold", value === o.value ? "bg-brand-cta text-white" : "bg-[#FFE4D1] text-[#C2410C]")}>{o.hint}</span> : null}
+          {o.label}{o.hint ? <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold", value === o.value ? "bg-brand-cta text-white" : "bg-[#FFE4D1] text-[#9A3412]")}>{o.hint}</span> : null}
         </button>
       ))}
     </div>
   );
 }
 
+/** compact: five highlights per plan and no comparison table (the homepage). Plan names are h2 on the pricing page,
+ *  where nothing but the h1 precedes them, and h3 on the homepage under its section heading. */
 export function PricingTable({ compact = false }: { compact?: boolean }) {
+  const PlanName = compact ? "h3" : "h2";
   const [currency, setCurrency] = useState<Currency>("PKR");
   const [period, setPeriod] = useState<Period>("monthly");
   return (
@@ -40,7 +43,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
             <div key={p.code} className={cn("relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-[0_18px_40px_-24px_rgba(11,31,58,0.45)]", p.popular ? "border-[#0B1F3A] ring-1 ring-[#0B1F3A] lg:-translate-y-4 lg:shadow-[0_40px_80px_-30px_rgba(11,31,58,0.55)]" : "border-[#E6EBF2]")}>
               <div className={cn("px-7 pb-6 pt-7", p.popular ? "bg-[#0B1F3A] text-white [--heading-color:#fff]" : "text-[#0B1F3A]")}>
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-bold">{p.name}</h3>
+                  <PlanName className="text-lg font-bold">{p.name}</PlanName>
                   {p.popular ? <span className="rounded-full bg-brand-cta px-3 py-1 text-xs font-bold text-white">Most popular</span> : null}
                 </div>
                 <p className={cn("mt-1 text-sm", p.popular ? "text-white/80" : "text-slate-600")}>{p.tagline}</p>

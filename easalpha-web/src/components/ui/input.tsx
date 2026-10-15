@@ -1,5 +1,5 @@
 "use client";
-import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type LabelHTMLAttributes } from "react";
+import { cloneElement, forwardRef, isValidElement, type InputHTMLAttributes, type LabelHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, useId } from "react";
 import { cn } from "@/lib/utils";
 
 // Material Design 3 outlined text field (dense 40px): outline border, extra-small (4px) corners,
@@ -27,11 +27,17 @@ export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElem
   return <label className={cn("mb-1 block text-xs font-medium tracking-[0.4px] text-fg-secondary", className)} {...props} />;
 }
 
-export function Field({ label, hint, error, children, className }: { label?: string; hint?: string; error?: string; children: React.ReactNode; className?: string }) {
+export function Field({ label, hint, error, children, className, htmlFor: given }: { label?: string; hint?: string; error?: string; children: React.ReactNode; className?: string; htmlFor?: string }) {
+  // The label points at the control: a single child element without its own id gets one, so screen readers and
+  // Lighthouse see the association (clicking the label focuses the field too). A control wrapped in another element
+  // (an input with a button inside a div) passes htmlFor and carries that id itself.
+  const generated = useId();
+  const child = !given && isValidElement<{ id?: string }>(children) && !children.props.id ? cloneElement(children, { id: generated }) : children;
+  const htmlFor = given ?? (isValidElement<{ id?: string }>(children) ? (children.props.id ?? generated) : undefined);
   return (
     <div className={cn("space-y-0", className)}>
-      {label ? <Label>{label}</Label> : null}
-      {children}
+      {label ? <Label htmlFor={htmlFor}>{label}</Label> : null}
+      {child}
       {error ? <p className="mt-1 text-xs text-danger">{error}</p> : hint ? <p className="mt-1 text-xs text-fg-muted">{hint}</p> : null}
     </div>
   );

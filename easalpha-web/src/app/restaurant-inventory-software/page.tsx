@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { BookOpen, ClipboardList, FileStack, Scale, ShoppingCart, Trash2 } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -11,11 +12,7 @@ import { PLANS, TRIAL_DAYS, formatMoney } from "@/components/site/site-helpers";
 const SLUG = "restaurant-inventory-software";
 const guide = guideBySlug(SLUG)!;
 
-export const metadata: Metadata = {
-  title: "Restaurant inventory software with recipes",
-  description: "Restaurant inventory software where recipes deduct stock as orders complete: food cost per dish, actual vs theoretical, COGS, waste and purchase orders.",
-  alternates: { canonical: `/${SLUG}`, languages: { en: `/${SLUG}`, "x-default": `/${SLUG}` } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Restaurant inventory software with recipes", description: "Restaurant inventory software where recipes deduct stock as orders complete: food cost per dish, actual vs theoretical, COGS, waste and purchase orders.", path: `/${SLUG}` });
 
 const pro = formatMoney(PLANS[1].pricePkrMinor, "PKR");
 

@@ -10,7 +10,9 @@ import { JsonLd } from "@/components/site/json-ld";
 import { organization, webSite } from "@/lib/schema";
 import { SITE_DESCRIPTION } from "@/components/site/site-helpers";
 
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-inter", display: "swap" });
+// No weight list: next/font then serves Google's variable Inter, one file for every weight instead of five, so the
+// headline (the largest contentful paint on phones) swaps to the real font sooner.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://easalpha.com").replace(/\/$/, "");
 // 155 characters (Google cuts descriptions at about 155 to 160; the old one ran to 253). Shared with the schema.

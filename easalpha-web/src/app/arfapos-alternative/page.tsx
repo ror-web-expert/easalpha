@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { Check, Minus, Scale } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -11,11 +12,7 @@ import { PLANS, TRIAL_DAYS, formatMoney } from "@/components/site/site-helpers";
 const SLUG = "arfapos-alternative";
 const guide = guideBySlug(SLUG)!;
 
-export const metadata: Metadata = {
-  title: "ArfaPOS alternative: EasAlpha compared",
-  description: "EasAlpha and ArfaPOS compared for restaurants in Pakistan: published prices, trial length, offline tills, FBR and PRA e-invoicing, kitchen display and support.",
-  alternates: { canonical: `/${SLUG}`, languages: { en: `/${SLUG}`, "x-default": `/${SLUG}` } },
-};
+export const metadata: Metadata = pageMetadata({ title: "ArfaPOS alternative: EasAlpha compared", description: "EasAlpha and ArfaPOS compared for restaurants in Pakistan: published prices, trial length, offline tills, FBR and PRA e-invoicing, kitchen display and support.", path: `/${SLUG}` });
 
 /** ArfaPOS figures are from arfapos.com as read on 15 October 2026. If their site changes, this page is wrong until it is updated. */
 const CHECKED = "15 October 2026";

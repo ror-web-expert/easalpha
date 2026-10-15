@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { SiteShell } from "@/components/site/shell";
 import { CtaBand, FaqList, HeroStack, PageHero, Section, SectionHeading } from "@/components/site/sections";
@@ -8,11 +9,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs, pricingProduct } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Pricing: restaurant POS plans in PKR and USD",
-  description: "Starter, Pro and Business from Rs 2,500 or $19 a month, monthly or yearly with two months free. No per-order fees, and every plan starts with 90 days free.",
-  alternates: { canonical: "/pricing", languages: { en: "/pricing", "x-default": "/pricing" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Pricing: restaurant POS plans in PKR and USD", description: "Starter, Pro and Business from Rs 2,500 or $19 a month, monthly or yearly with two months free. No per-order fees, and every plan starts with 90 days free.", path: "/pricing" });
 
 const FAQ = [
   { q: "How do I pay?", a: "Debit or credit card or bank transfer anywhere; JazzCash and EasyPaisa in Pakistan. Customers in Pakistan are billed in rupees, everyone else in US dollars." },

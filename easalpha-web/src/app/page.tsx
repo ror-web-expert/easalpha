@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { ArrowRight, Banknote, BookOpen, CloudOff, Languages, MessageCircle, Monitor, Receipt, ShoppingBag, Tablet, ChefHat, Bike, Globe, LayoutDashboard, Bell, Zap } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -14,11 +15,7 @@ import { JsonLd } from "@/components/site/json-ld";
 import { faqPage, softwareApplication } from "@/lib/schema";
 import { trackAttrs } from "@/lib/analytics";
 
-export const metadata: Metadata = {
-  title: { absolute: "Restaurant POS for any restaurant, anywhere | EasAlpha" },
-  description: "Offline till, kitchen display, inventory with recipe deduction, khata, payroll, riders, WhatsApp receipts and FBR tax invoices. 90 days free, no card needed.",
-  alternates: { canonical: "/", languages: { en: "/", "x-default": "/" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Restaurant POS for any restaurant, anywhere | EasAlpha", description: "Offline till, kitchen display, inventory with recipe deduction, khata, payroll, riders, WhatsApp receipts and FBR tax invoices. 90 days free, no card needed.", path: "/", absolute: true });
 
 const STATS = [
   { to: 27, label: "reports", sub: "each with CSV and PDF" },
@@ -144,17 +141,17 @@ export default function HomePage() {
         <SectionHeading eyebrow="Product tour" title="Everything a restaurant runs on, in one account" titleKey="sec.tour" text="Not a till with add-ons. Sales, kitchen, stock, purchasing, money, people and customers share one database, so every number ties out." />
         <div className="mt-20 space-y-28">
           <FeatureRow eyebrow="Sell" title="A till that is fast at 9 pm on a Friday" text="Walk-in, takeaway and delivery from one screen, PIN login per cashier, part payments and a reopen flow that records every change." shot={SHOTS.till} caption="Desktop till, offline"
-            bullets={["Works offline; orders queue and sync in order", "Deals, promotions, discount tiers and vouchers at the till", "Receipts on 58 or 80 mm paper with logo, Urdu names and a QR code"]} href="/features#sell" />
+            bullets={["Works offline; orders queue and sync in order", "Deals, promotions, discount tiers and vouchers at the till", "Receipts on 58 or 80 mm paper with logo, Urdu names and a QR code"]} href="/features#sell" hrefLabel="All selling features" />
           <FeatureRow flip eyebrow="Kitchen" title="Every ticket where it belongs" text="Tickets route to stations, timers turn amber then red, and a bump clears the ticket. The token screen tells guests what is ready." shot={SHOTS.kitchen} caption="Kitchen display"
-            bullets={["Stations per branch with their own printers or screens", "Alerts for late, modified or cancelled tickets", "Order-taker tablet sends dine-in orders straight to the kitchen"]} href="/features#kitchen" />
+            bullets={["Stations per branch with their own printers or screens", "Alerts for late, modified or cancelled tickets", "Order-taker tablet sends dine-in orders straight to the kitchen"]} href="/features#kitchen" hrefLabel="All kitchen features" />
           <FeatureRow eyebrow="Inventory" title="Stock that deducts itself" text="Recipes link every product to its ingredients. When an order completes, stock is deducted once, never twice, and a safety-net job catches anything missed." shot={SHOTS.deduction} caption="Deduction Health"
-            bullets={["Deduction Health shows deducted, pending and retried orders", "Actual vs theoretical, valuation and COGS, waste and adjustments", "Demand buckets tell you what to order and when"]} href="/features#inventory" />
+            bullets={["Deduction Health shows deducted, pending and retried orders", "Actual vs theoretical, valuation and COGS, waste and adjustments", "Demand buckets tell you what to order and when"]} href="/features#inventory" hrefLabel="All inventory features" />
           <FeatureRow flip eyebrow="Money" title="Accounts that tie out, not a sales summary" text="Supplier ledgers, payment accounts and expenses post to real double-entry books with a chart of accounts, journal vouchers, trial balance and balance sheet." shot={SHOTS.balance} caption="Balance sheet"
-            bullets={["Supplier Dr/Cr ledger with payments, adjustments and ranking", "Purchase orders, receipts, returns and price history verdicts", "Fixed assets, liabilities, equity and a finance dashboard"]} href="/features#money" />
+            bullets={["Supplier Dr/Cr ledger with payments, adjustments and ranking", "Purchase orders, receipts, returns and price history verdicts", "Fixed assets, liabilities, equity and a finance dashboard"]} href="/features#money" hrefLabel="All money features" />
           <FeatureRow eyebrow="People" title="Attendance, payroll and permissions" text="A fingerprint kiosk feeds an attendance rules engine; payroll runs from it with advances, fines and allowances snapshotted per run." shot={SHOTS.attendance} caption="Attendance"
-            bullets={["Fingerprint enrolment and scan log; selfie attendance without a reader", "Late, early, overtime and holiday rules per employee", "58 permissions per user with Cashier, Supervisor and Manager presets"]} href="/features#people" />
+            bullets={["Fingerprint enrolment and scan log; selfie attendance without a reader", "Late, early, overtime and holiday rules per employee", "58 permissions per user with Cashier, Supervisor and Manager presets"]} href="/features#people" hrefLabel="All people features" />
           <FeatureRow flip eyebrow="Reports" title="27 reports that answer the question" text="From the Grand Report that ties sales, discounts, tax and payments together to cashier tills and a sales calendar. Every one exports to CSV and PDF." shot={SHOTS.grand} caption="Grand Report"
-            bullets={["Business overview, sales, financial, products, categories", "Order takers, cashiers, cashier till, riders, vouchers, loyalty", "Branch comparison and scheduled reports by email"]} href="/features#reports" />
+            bullets={["Business overview, sales, financial, products, categories", "Order takers, cashiers, cashier till, riders, vouchers, loyalty", "Branch comparison and scheduled reports by email"]} href="/features#reports" hrefLabel="All 27 reports" />
         </div>
       </Section>
 

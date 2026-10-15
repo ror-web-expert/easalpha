@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorMessage } from "@/lib/api";
@@ -19,10 +19,13 @@ const STRENGTH: Record<ReturnType<typeof passwordStrength>, { width: string; col
   strong: { width: "w-full", color: "bg-emerald-600", text: "Strong" },
 };
 
+/** The form is in the first HTML (the page stays static, so its title and description stay in the head). The plan
+ *  picked on the pricing page is read from the address after mount; its note sits just above the button so the
+ *  fields above it never move. */
 export function SignupForm() {
   const router = useRouter();
-  const params = useSearchParams();
-  const planCode = params.get("plan");
+  const [planCode, setPlanCode] = useState<string | null>(null);
+  useEffect(() => { setPlanCode(new URLSearchParams(window.location.search).get("plan")); }, []);
   const plan = PLANS.find((p) => p.code === planCode);
   const setSession = useAuthStore((s) => s.setSession);
   const qc = useQueryClient();
@@ -82,7 +85,6 @@ export function SignupForm() {
 
   return (
     <form onSubmit={submit} noValidate className="space-y-5">
-      {plan ? <p className="rounded-lg bg-[#E8EEF7] px-4 py-3 text-sm text-[#0B1F3A]">You picked the <strong>{plan.name}</strong> plan. Your trial includes everything in it; nothing is charged until the trial ends.</p> : null}
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Your name" error={show("name")}>
           <Input value={form.name} onChange={(e) => set("name", e.target.value)} onBlur={() => blur("name")} autoComplete="name" placeholder="Ali Raza" required className="h-12" aria-invalid={!!show("name")} />
@@ -104,9 +106,9 @@ export function SignupForm() {
           <Input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} onBlur={() => blur("phone")} autoComplete="tel" inputMode="tel" placeholder={`${countryByCode(form.country).dial} 300 1234567`} required className="h-12" aria-invalid={!!show("phone")} />
         </Field>
       </div>
-      <Field label="Password" error={show("password")}>
+      <Field label="Password" error={show("password")} htmlFor="signup-password">
         <div className="relative">
-          <Input type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => set("password", e.target.value)} onBlur={() => blur("password")} autoComplete="new-password" minLength={PASSWORD_MIN} required className="h-12 pr-12" aria-invalid={!!show("password")} aria-describedby="password-strength" />
+          <Input id="signup-password" type={showPassword ? "text" : "password"} value={form.password} onChange={(e) => set("password", e.target.value)} onBlur={() => blur("password")} autoComplete="new-password" minLength={PASSWORD_MIN} required className="h-12 pr-12" aria-invalid={!!show("password")} aria-describedby="password-strength" />
           <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-1 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full text-slate-500 hover:bg-slate-100">
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
@@ -128,6 +130,7 @@ export function SignupForm() {
           {error.text}{error.exists ? <> <Link href="/login" className="py-3.5 font-medium underline">Log in instead</Link>.</> : null}
         </p>
       ) : null}
+      {plan ? <p className="rounded-lg bg-[#E8EEF7] px-4 py-3 text-sm text-[#0B1F3A]">You picked the <strong>{plan.name}</strong> plan. Your trial includes everything in it; nothing is charged until the trial ends.</p> : null}
       <Button type="submit" size="lg" className="w-full bg-brand-cta font-semibold text-white hover:bg-brand-cta-hover" loading={busy}>Create my account</Button>
       <p className="text-center text-sm text-slate-600">Already have an account? <Link href="/login" className="-mx-1 px-1 py-3.5 font-medium text-[#C2410C] hover:underline">Log in</Link></p>
     </form>

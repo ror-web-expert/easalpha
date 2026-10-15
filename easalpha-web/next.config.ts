@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // NEXT_DIST_DIR lets a second build (for the browser gate) sit beside the one a running `next start` is serving.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // AVIF first (about a third smaller than WebP for the marketing screenshots), WebP for browsers without it.
+  images: { formats: ["image/avif", "image/webp"] },
   // Rewrite barrel imports from these packages to direct module imports so each page only bundles the pieces it uses.
   experimental: { optimizePackageImports: ["lucide-react", "recharts", "date-fns"] },
   // Browser protections on every page: HTTPS only (a year, with subdomains), no MIME sniffing, no framing by other sites,
@@ -23,6 +25,8 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // One hostname for search engines: www is a permanent redirect to the apex, path and query kept.
+      { source: "/:path*", has: [{ type: "host", value: "www.easalpha.com" }], destination: "https://easalpha.com/:path*", permanent: true },
       { source: "/admin/stock/deduction-audits", destination: "/admin/inventory-reports/deduction-health", permanent: true },
       { source: "/admin/stock/deduction-audits/:path*", destination: "/admin/inventory-reports/deduction-health/:path*", permanent: true },
       { source: "/admin/menu/modifier-groups", destination: "/admin/products/modifier-groups", permanent: true },

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { CheckCircle2, CloudOff, QrCode, ReceiptText, RefreshCw } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -11,11 +12,7 @@ import { PLANS, TRIAL_DAYS, formatMoney } from "@/components/site/site-helpers";
 const SLUG = "fbr-pos-integration";
 const guide = guideBySlug(SLUG)!;
 
-export const metadata: Metadata = {
-  title: "FBR POS integration and PRA e-invoicing",
-  description: "FBR POS integration in the till: fiscal invoice number and QR code on every receipt, PRA, SRB, KPRA and BRA adapters, offline queueing and a status screen.",
-  alternates: { canonical: `/${SLUG}`, languages: { en: `/${SLUG}`, "x-default": `/${SLUG}` } },
-};
+export const metadata: Metadata = pageMetadata({ title: "FBR POS integration and PRA e-invoicing", description: "FBR POS integration in the till: fiscal invoice number and QR code on every receipt, PRA, SRB, KPRA and BRA adapters, offline queueing and a status screen.", path: `/${SLUG}` });
 
 const pro = formatMoney(PLANS[1].pricePkrMinor, "PKR");
 

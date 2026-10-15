@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import { Mail, MapPin, MessageCircle, Clock } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
 import { CARD, Container, HeroStack, PageHero, TILE_NAVY, TILE_ORANGE } from "@/components/site/sections";
@@ -9,11 +10,7 @@ import { trackAttrs } from "@/lib/analytics";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = {
-  title: "Contact us: WhatsApp, email or book a demo",
-  description: "Talk to a person on WhatsApp or email, seven days a week during restaurant hours. Book a demo, ask about plans or get help moving from your current POS.",
-  alternates: { canonical: "/contact", languages: { en: "/contact", "x-default": "/contact" } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Contact us: WhatsApp, email or book a demo", description: "Talk to a person on WhatsApp or email, seven days a week during restaurant hours. Book a demo, ask about plans or get help moving from your current POS.", path: "/contact" });
 
 export default async function ContactPage() {
   const contact = await getSiteContact();

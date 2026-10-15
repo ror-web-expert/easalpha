@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { AlertTriangle, Bell, CloudOff, Database, ListOrdered, Printer, Wifi } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -11,11 +12,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 const SLUG = "offline-pos-system";
 const guide = guideBySlug(SLUG)!;
 
-export const metadata: Metadata = {
-  title: "Offline POS system for restaurants",
-  description: "An offline POS for restaurants: orders, cash and khata payments, receipts and shifts saved on the till with no internet, then synced in order, never twice.",
-  alternates: { canonical: `/${SLUG}`, languages: { en: `/${SLUG}`, "x-default": `/${SLUG}` } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Offline POS system for restaurants", description: "An offline POS for restaurants: orders, cash and khata payments, receipts and shifts saved on the till with no internet, then synced in order, never twice.", path: `/${SLUG}` });
 
 const FAQ = [
   { q: "What exactly keeps working with no internet?", a: "Taking orders of every type, cash and khata payments with cash rounding, printing receipts and kitchen tickets on local printers, the cash drawer, shift open and close with the Z report for that till, discounts, voids and price overrides with a manager PIN, and today's report for that till. The menu, prices, PINs, permissions, tables and open orders are all on the device." },

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
 import { Bell, ChefHat, Megaphone, Tablet, Timer, Wifi } from "lucide-react";
 import { SiteShell } from "@/components/site/shell";
@@ -11,11 +12,7 @@ import { PLANS, TRIAL_DAYS, formatMoney } from "@/components/site/site-helpers";
 const SLUG = "kitchen-display-system";
 const guide = guideBySlug(SLUG)!;
 
-export const metadata: Metadata = {
-  title: "Kitchen display system for restaurants",
-  description: "Kitchen display system on any tablet: tickets per station, timers that turn amber then red, bump to clear, alerts for changed orders and a token screen.",
-  alternates: { canonical: `/${SLUG}`, languages: { en: `/${SLUG}`, "x-default": `/${SLUG}` } },
-};
+export const metadata: Metadata = pageMetadata({ title: "Kitchen display system for restaurants", description: "Kitchen display system on any tablet: tickets per station, timers that turn amber then red, bump to clear, alerts for changed orders and a token screen.", path: `/${SLUG}` });
 
 const pro = formatMoney(PLANS[1].pricePkrMinor, "PKR");
 
