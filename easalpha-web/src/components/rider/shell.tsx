@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useRiderStore } from "./store";
 import { Loading } from "@/components/ui";
+import { registerAppWorker } from "@/lib/app-worker";
+import "@/lib/install-prompt"; // attaches the install-prompt listener as early as the rider app loads
 
 /** Route guard for the rider app: no device token goes to /rider/pair, no PIN session goes to /rider/pin. */
 export function RiderShell({ children }: { children: React.ReactNode }) {
@@ -11,7 +13,7 @@ export function RiderShell({ children }: { children: React.ReactNode }) {
   const hydrated = useRiderStore((s) => s.hydrated);
   const deviceToken = useRiderStore((s) => s.deviceToken);
   const session = useRiderStore((s) => s.session);
-  useEffect(() => { useRiderStore.persist.rehydrate(); }, []);
+  useEffect(() => { useRiderStore.persist.rehydrate(); registerAppWorker(); }, []);
   useEffect(() => {
     if (!hydrated) return;
     if (!deviceToken && pathname !== "/rider/pair") router.replace("/rider/pair");

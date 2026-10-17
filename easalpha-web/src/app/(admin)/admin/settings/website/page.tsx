@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Globe, ExternalLink } from "lucide-react";
+import { Globe, ExternalLink, Copy, MessageCircle, Smartphone } from "lucide-react";
 import { api } from "@/lib/api";
 import type { WebsiteConfig, WebsiteSections } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
@@ -9,6 +9,8 @@ import { useAction } from "@/components/admin/crud";
 import { slugify } from "@/components/admin/marketing-helpers";
 import { SectionForm, SectionList } from "@/components/admin/marketing-website";
 import { Badge, Button, Card, CardBody, Field, Input, Loading, Switch } from "@/components/ui";
+import { QrCode } from "@/components/qr-code";
+import { toast } from "@/store/toast";
 
 // SPEC Website Config: Store Identity, Pages, Menu Slider, Documents, Footer, Availability, Customer Sign-ups, Location,
 // Branches, Delivery, Pricing, Contact, Social Media, WhatsApp, Instagram, SEO, Mobile App and System. Each section
@@ -55,10 +57,36 @@ export default function WebsiteConfigPage() {
           </div>
         </CardBody>
       </Card>
+      {published && serverSlug ? <CustomerAppCard slug={serverSlug} name={String(q.data.sections.identity?.name ?? "") || "your restaurant"} /> : null}
       <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
         <SectionList sections={sections} value={section} onChange={setSection} dirty={dirtySections} />
         <SectionForm section={section} values={values} onChange={setValue} onSave={onSave} saving={saveSection.isPending} dirty={dirtySections.has(section)} />
       </div>
     </>
+  );
+}
+
+/** The storefront is also the restaurant's own customer app: customers open the link or scan the QR and tap Install,
+ *  and the restaurant's name, logo and colour go on their home screen. No app store, nothing to pay. */
+function CustomerAppCard({ slug, name }: { slug: string; name: string }) {
+  const [origin, setOrigin] = useState("");
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+  const url = origin ? `${origin}/store/${slug}` : `/store/${slug}`;
+  const share = `https://wa.me/?text=${encodeURIComponent(`Order from ${name} online and install our app: ${url}`)}`;
+  return (
+    <Card className="mb-4">
+      <CardBody className="flex flex-col gap-5 md:flex-row md:items-center">
+        <QrCode value={url} size={152} label={`QR code for ${url}`} download={`${slug}-customer-app`} />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-center gap-2"><Smartphone className="h-5 w-5 text-primary" /><h2 className="text-base font-semibold">Your customer app</h2><Badge variant="success">free</Badge></div>
+          <p className="text-sm text-fg-secondary">Your website is also your app. Customers open this link or scan the QR, then tap Install (Android) or Share, Add to Home Screen (iPhone). Your name, logo and colour go on their home screen, and it opens straight to your menu. Print the QR on tables, bags and flyers.</p>
+          <div className="flex flex-wrap gap-2">
+            <Input readOnly value={url} className="w-full font-mono sm:w-96" onFocus={(e) => e.currentTarget.select()} aria-label="Customer app link" />
+            <Button variant="secondary" onClick={() => { void navigator.clipboard?.writeText(url).then(() => toast.success("Link copied")); }}><Copy className="h-4 w-4" /> Copy</Button>
+            <a href={share} target="_blank" rel="noreferrer"><Button variant="secondary"><MessageCircle className="h-4 w-4" /> Share on WhatsApp</Button></a>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
   );
 }

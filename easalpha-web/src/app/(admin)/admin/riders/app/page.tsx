@@ -10,6 +10,7 @@ import { Cards, PageHeader } from "@/components/admin/page";
 import { useAction, useList, useRemove, useSave } from "@/components/admin/crud";
 import { useRiders } from "@/components/admin/delivery";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { QrCode as QrImage } from "@/components/qr-code";
 
 interface Form { name: string; kind: "rider"; branch_id: string }
 
@@ -30,7 +31,7 @@ export default function RiderAppPage() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return (
     <>
-      <PageHeader icon={Smartphone} title="Rider App" description="Riders see their assigned deliveries and mark each step: picked up, on the way, arrived, delivered or failed. Cash collected on delivery is recorded for the Rider Vault. The app is an installable page at /rider on the rider's phone."
+      <PageHeader icon={Smartphone} title="Rider App" description="Riders see their assigned deliveries and mark each step: picked up, on the way, arrived, delivered or failed, even with weak signal. Cash collected on delivery is recorded for the Rider Vault. The app installs from /rider on the rider's phone, no app store needed."
         actions={canManage ? <Button onClick={() => setForm({ name: "", kind: "rider", branch_id: branches.data?.[0]?.id ?? "" })}><Plus className="h-4 w-4" /> Add rider phone</Button> : null} />
       <Cards>
         <SummaryCard label="Rider phones" value={devices.filter((d) => !d.revoked_at).length} sub={`${devices.filter((d) => d.paired && !d.revoked_at).length} paired`} tone="info" />
@@ -39,9 +40,9 @@ export default function RiderAppPage() {
       </Cards>
       <div className="mb-6 grid gap-4 lg:grid-cols-3">
         {[
-          { icon: QrCode, title: "1. Open /rider on the phone", text: "Use the phone's browser and choose Add to Home Screen so it opens like an app, full screen and portrait." },
-          { icon: KeyRound, title: "2. Enter the pairing code", text: "Add a rider phone here and read the 6-digit code to the rider. The code is shown once and expires; make a new one if it lapses." },
-          { icon: LogIn, title: "3. Sign in with the rider's PIN", text: "The rider enters the 4-digit PIN set in Manage Riders. The phone stays paired; only the PIN is asked again." },
+          { icon: QrCode, title: "1. Scan the pairing QR", text: "Add a rider phone here. The rider scans the QR with the phone camera: the rider app opens and pairs by itself. Typing the 6-digit code at /rider works too." },
+          { icon: KeyRound, title: "2. Install the app", text: "On Android tap Install when the app offers it; on iPhone use Share, Add to Home Screen in Safari. It opens full screen, like a store app." },
+          { icon: LogIn, title: "3. Sign in with the rider's PIN", text: "The rider enters the 4-digit PIN set in Manage Riders once per shift. The app keeps them signed in and saves every tap when there is no signal." },
         ].map((s) => (
           <Card key={s.title}>
             <CardHeader><CardTitle className="flex items-center gap-2"><s.icon className="h-4 w-4 text-primary" /> {s.title}</CardTitle></CardHeader>
@@ -79,8 +80,9 @@ export default function RiderAppPage() {
           </div>
         ) : null}
       </Dialog>
-      <Dialog open={!!code} onClose={() => setCode(null)} title="Pairing code" description={`On the phone open ${origin || ""}/rider, enter this code, then sign in with the rider's PIN. Expires ${formatDateTime(code?.pairing_expires_at)}.`} size="sm" footer={<Button onClick={() => setCode(null)}>Done</Button>}>
-        <div className="py-6 text-center font-mono text-5xl font-bold tracking-[0.3em] text-primary">{code?.pairing_code}</div>
+      <Dialog open={!!code} onClose={() => setCode(null)} title="Pair a rider phone" description={`Scan the QR with the rider's phone camera, or open ${origin || ""}/rider and type the code. Then the rider signs in with their PIN. Expires ${formatDateTime(code?.pairing_expires_at)}.`} size="sm" footer={<Button onClick={() => setCode(null)}>Done</Button>}>
+        {code?.pairing_code && origin ? <div className="flex justify-center pt-2"><QrImage value={`${origin}/rider/pair?code=${code.pairing_code}`} size={200} label="Pairing QR code: scan with the rider's phone" /></div> : null}
+        <div className="py-4 text-center font-mono text-4xl font-bold tracking-[0.3em] text-primary">{code?.pairing_code}</div>
         <p className="text-center text-sm text-fg-secondary">{code?.name}</p>
       </Dialog>
       <ConfirmDialog open={!!del} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.id, { onSuccess: () => setDel(null) })} title={`Revoke ${del?.name}?`} description="The phone is signed out at once and must be paired again with a new code." confirmLabel="Revoke" destructive loading={remove.isPending} />

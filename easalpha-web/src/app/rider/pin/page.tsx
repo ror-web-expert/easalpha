@@ -7,6 +7,7 @@ import type { Session } from "@/lib/types";
 import { riderApi } from "@/components/rider/api";
 import { useRiderStore } from "@/components/rider/store";
 import { Button, Keypad, PinDots, ThemeToggle } from "@/components/ui";
+import { InstallAppCard } from "@/components/install-app";
 
 export default function RiderPinPage() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function RiderPinPage() {
         <PinDots length={4} filled={pin.length} />
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Keypad large onKey={(d) => setPin((p) => (p.length < 4 ? p + d : p))} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} />
+        <InstallAppCard appName="the rider app" text="Add it to the home screen so it opens like an app." className="text-left" />
         <Button variant="ghost" size="sm" className="text-fg-muted" onClick={() => { if (confirm("Unpair this phone? You will need a new code from the admin.")) { unpair(); router.replace("/rider/pair"); } }}><Unplug className="h-4 w-4" /> Unpair phone</Button>
       </div>
     </main>

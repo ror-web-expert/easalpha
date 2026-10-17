@@ -1,16 +1,37 @@
 {
+  "id": "/rider",
   "name": "EasAlpha Rider",
-  "short_name": "EasAlpha Rider",
-  "description": "EasAlpha rider app: your deliveries and delivery status",
+  "short_name": "Rider",
+  "description": "EasAlpha rider app: your deliveries, directions, calls and delivery status, even with weak signal",
+  "lang": "en",
   "start_url": "/rider",
   "scope": "/rider",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0B1F3A",
   "theme_color": "#10294D",
+  "categories": [
+    "business",
+    "food"
+  ],
   "icons": [
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
   ]
 }

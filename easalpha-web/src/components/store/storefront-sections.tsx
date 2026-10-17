@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Clock, Globe, Mail, MapPin, MessageCircle, Navigation, Phone, Quote, Smartphone, Star, type LucideIcon } from "lucide-react";
+import { Clock, Download, Globe, Mail, MapPin, MessageCircle, Navigation, Phone, PlusSquare, Quote, Share, Smartphone, Star, type LucideIcon } from "lucide-react";
+import type { InstallMode } from "@/lib/install-prompt";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { Storefront } from "@/lib/types";
 import { formatDate } from "@/lib/dates";
@@ -291,7 +292,9 @@ export function VisitSection({ name, info, socials, theme, ink }: { name: string
   );
 }
 
-export function AppBanner({ name, android, ios, theme, onTheme }: { name: string; android: string; ios: string; theme: string; onTheme: string }) {
+/** The app section: the store badges when the owner lists a native app, and the site's own install (the restaurant's
+ *  name and icon on the home screen) with Chrome's prompt on Android or the Share steps on an iPhone. */
+export function AppBanner({ name, android, ios, theme, onTheme, install }: { name: string; android: string; ios: string; theme: string; onTheme: string; install?: { mode: InstallMode; prompt: () => Promise<unknown> } | null }) {
   const badge = (href: string, small: string, big: string) => (
     <a href={href} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center gap-2.5 rounded-xl bg-black px-4 text-white ring-1 ring-white/20 transition hover:bg-black/85">
       <Smartphone className="h-5 w-5" />
@@ -299,14 +302,28 @@ export function AppBanner({ name, android, ios, theme, onTheme }: { name: string
     </a>
   );
   return (
-    <section aria-label={`Get the ${name} app`} className="relative overflow-hidden rounded-[28px] p-6 sm:p-10" style={{ color: onTheme }}>
+    <section aria-label={`Get the ${name} app`} className="relative overflow-hidden rounded-[28px] p-6 sm:p-10" style={{ color: onTheme, ["--heading-color" as string]: onTheme }}>
       <BrandBackdrop theme={theme} />
       <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15"><Smartphone className="h-7 w-7" /></span>
-          <div><h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">Get the {name} app</h2><p className="mt-1 text-sm opacity-85">Order in a few taps and follow your delivery live.</p></div>
+          <div>
+            <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">Get the {name} app</h2>
+            <p className="mt-1 text-sm opacity-85">
+              {install?.mode === "ios" ? <>In Safari tap <Share className="inline h-4 w-4 align-[-3px]" aria-label="Share" /> Share, then <PlusSquare className="inline h-4 w-4 align-[-3px]" aria-label="Add to Home Screen" /> Add to Home Screen.</>
+                : install?.mode === "android-manual" ? "Open the browser menu and choose Install app or Add to Home screen."
+                : "Order in a few taps and follow your delivery live. Free, nothing to download from a store."}
+            </p>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">{android ? badge(android, "Get it on", "Google Play") : null}{ios ? badge(ios, "Download on the", "App Store") : null}</div>
+        <div className="flex flex-wrap gap-2">
+          {install?.mode === "prompt" ? (
+            <button type="button" onClick={() => { void install.prompt(); }} className="inline-flex h-12 items-center gap-2 rounded-xl bg-white px-5 text-sm font-bold transition hover:bg-white/90" style={{ color: theme }}>
+              <Download className="h-5 w-5" /> Install the app
+            </button>
+          ) : null}
+          {android ? badge(android, "Get it on", "Google Play") : null}{ios ? badge(ios, "Download on the", "App Store") : null}
+        </div>
       </div>
     </section>
   );

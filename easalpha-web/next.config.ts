@@ -26,6 +26,10 @@ const PUBLIC_HEADERS = [
 const nextConfig: NextConfig = {
   devIndicators: false,
   poweredByHeader: false,
+  // Metadata always in <head>, for every visitor: by default Next streams async metadata (the restaurant storefront's
+  // generateMetadata) into <body> for browsers that are not known bots, and Chrome only reads the app manifest from
+  // <head>, so a restaurant's site could not be installed. Every other page has static metadata and is unaffected.
+  htmlLimitedBots: /.*/,
   // NEXT_DIST_DIR lets a second build (for the browser gate) sit beside the one a running `next start` is serving.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // WebP only: an AVIF encode of one 1440x900 screenshot took the production server (2 CPUs) tens of seconds when
@@ -44,7 +48,8 @@ const nextConfig: NextConfig = {
         { key: "X-Content-Type-Options", value: "nosniff" },
         { key: "X-Frame-Options", value: "SAMEORIGIN" },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
+        // geolocation for this site only: the rider app records where each delivery is picked up and delivered.
+        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=()" },
       ],
     }, {
       // The public site only: a Content-Security-Policy and a same-origin opener policy. Scripts and styles come from

@@ -1,7 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Bike, Clock, MapPin, MessageCircle, Phone, Plus, Search, ShoppingBag, Star, Store as StoreIcon, Wallet, BadgePercent, X } from "lucide-react";
+import { ArrowRight, Bike, Clock, Download, MapPin, MessageCircle, Phone, Plus, Search, ShoppingBag, Star, Store as StoreIcon, Wallet, BadgePercent, X } from "lucide-react";
+import { useInstallPrompt } from "@/lib/install-prompt";
 import { api } from "@/lib/api";
 import type { Storefront, StorefrontProduct } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
@@ -117,7 +118,12 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
   const reviewsOn = pages.reviews !== false;
   const contactOn = pages.contact !== false && !!(address || hours || phone || email || waHref);
   const appAndroid = str(mobileApp.android_url), appIos = str(mobileApp.ios_url);
-  const appBanner = bool(mobileApp.show_banner) && !!(appAndroid || appIos);
+  const storeLinks = bool(mobileApp.show_banner) && !!(appAndroid || appIos);
+  // The site itself installs as the restaurant's app (manifest from app/store/[slug]/layout.tsx), so the app section
+  // shows on any phone that can add it, with the store badges too when the owner has a native app listed.
+  const install = useInstallPrompt();
+  const installable = install.mode !== "installed" && install.mode !== "none";
+  const appBanner = storeLinks || installable;
   const links = [
     ...(menuOn ? [{ href: "#menu", label: "Menu" }] : []),
     ...(aboutOn ? [{ href: "#about", label: "About" }] : []),
@@ -147,7 +153,7 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
   return (
     <main id="top" className="min-h-screen bg-page text-fg" style={{ ["--primary" as string]: theme, ["--primary-fg" as string]: onTheme, ["--primary-hover" as string]: theme }}>
       {maintenance ? <div className="bg-warning px-4 py-2 text-center text-sm font-medium text-warning-fg">{closedMessage}</div> : null}
-      <StoreNav name={name} logo={logo} theme={theme} onTheme={onTheme} links={links} showOrder={menuOn && canOrder} onCart={setSheet} />
+      <StoreNav name={name} logo={logo} theme={theme} onTheme={onTheme} links={links} showOrder={menuOn && canOrder} onCart={setSheet} onInstall={install.mode === "prompt" ? () => { void install.prompt(); } : undefined} />
       <Hero
         name={name} description={description} logo={logo} cover={cover} theme={theme} onTheme={onTheme} ink={ink}
         rating={rating} reviewsOn={reviewsOn} hours={hours} address={address} canOrder={canOrder} maintenance={maintenance} menuOn={menuOn}
@@ -164,7 +170,7 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
           <VisitSection name={name} socials={socials} theme={theme} ink={ink}
             info={{ address, hours, phone, email, waHref, waNumber, mapHref: mapLink(location, address), embed: mapEmbed(location, address) }} />
         ) : null}
-        {appBanner ? <AppBanner name={name} android={appAndroid} ios={appIos} theme={theme} onTheme={onTheme} /> : null}
+        {appBanner ? <AppBanner name={name} android={storeLinks ? appAndroid : ""} ios={storeLinks ? appIos : ""} theme={theme} onTheme={onTheme} install={installable ? install : null} /> : null}
       </div>
       <SiteFooter
         name={name} description={description} logo={logo} theme={theme} onTheme={onTheme} roomForBar={barVisible} links={links} extraLinks={footerLinks(footer.links)}
@@ -185,7 +191,7 @@ export function StorefrontView({ slug, data }: { slug: string; data: Storefront 
 
 // ---- Top bar ----
 
-function StoreNav({ name, logo, theme, onTheme, links, showOrder, onCart }: { name: string; logo: string | null; theme: string; onTheme: string; links: { href: string; label: string }[]; showOrder: boolean; onCart: (view: CartSheetView) => void }) {
+function StoreNav({ name, logo, theme, onTheme, links, showOrder, onCart, onInstall }: { name: string; logo: string | null; theme: string; onTheme: string; links: { href: string; label: string }[]; showOrder: boolean; onCart: (view: CartSheetView) => void; onInstall?: () => void }) {
   const hydrated = useStorefrontCart((s) => s.hydrated);
   const lines = useStorefrontCart((s) => s.lines);
   const lastOrder = useStorefrontCart((s) => s.lastOrder);
@@ -201,6 +207,11 @@ function StoreNav({ name, logo, theme, onTheme, links, showOrder, onCart }: { na
           {links.map((l) => <a key={l.href} href={l.href} className="rounded-full px-3.5 py-2 text-sm font-medium text-fg-secondary transition hover:bg-fg/5 hover:text-fg">{l.label}</a>)}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-2">
+          {onInstall ? (
+            <button type="button" onClick={onInstall} className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-semibold transition hover:bg-fg/5" aria-label={`Install the ${name} app`}>
+              <Download className="h-4 w-4" /> App
+            </button>
+          ) : null}
           {hydrated ? (
             <button type="button" onClick={() => onCart(!n && lastOrder ? "tracking" : "cart")} aria-label={n ? `Cart, ${n} item${n === 1 ? "" : "s"}` : "Cart, empty"} className="relative grid h-10 w-10 place-items-center rounded-full border border-border bg-card transition hover:bg-fg/5">
               <ShoppingBag className="h-5 w-5" />
