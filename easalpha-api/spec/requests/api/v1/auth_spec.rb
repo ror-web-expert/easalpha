@@ -2,15 +2,15 @@ require "rails_helper"
 
 RSpec.describe "Auth", type: :request do
   describe "POST /api/v1/auth/signup" do
-    it "creates a business on the Pro trial with an owner, main branch and seven roles" do
+    it "creates a business on the 40-day Business trial with an owner, main branch and seven roles" do
       api_post "/api/v1/auth/signup", { name: "Ali", business_name: "Karachi Grill", email: "ali@example.com", password: "password123" }
       expect(response).to have_http_status(:created)
       expect(json[:access_token]).to be_present
       expect(json[:refresh_token]).to be_present
       expect(json[:business][:slug]).to eq("karachi-grill")
       expect(json[:business][:status]).to eq("trial")
-      expect(json[:business][:trial_days_left]).to be_between(89, 90)
-      expect(json[:business][:plan][:code]).to eq("pro")
+      expect(json[:business][:trial_days_left]).to be_between(39, 40)
+      expect(json[:business][:plan][:code]).to eq("business") # the trial opens every feature
       expect(json[:membership][:role][:system_key]).to eq("owner")
       expect(json[:permissions]).to include("orders.void", "staff.manage", "billing.manage")
       business = Business.find(json[:business][:id])

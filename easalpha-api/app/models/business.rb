@@ -1,6 +1,8 @@
 class Business < ApplicationRecord
   STATUSES = %w[trial active grace read_only deleted].freeze
-  TRIAL_DAYS = 90
+  # 40 days from 18 Oct 2026 (90 before): always one full month end, so a canteen sees its khata bills and payroll run
+  # once before paying. Trials already running keep the end date they were given.
+  TRIAL_DAYS = 40
 
   belongs_to :plan, optional: true
   has_many :branches, dependent: :destroy

@@ -1,13 +1,14 @@
 module Auth
-  # Creates a user, a business on the Pro trial, its main branch, the seven default roles,
-  # the owner membership and the setup checklist.
+  # Creates a user, a business on the Business trial (every feature open, as the site promises; the owner picks a plan
+  # when it ends), its main branch, the seven default roles, the owner membership and the setup checklist.
   class Signup
     Result = Struct.new(:user, :business, :membership, :branch, keyword_init: true)
+    TRIAL_PLAN = "business"
 
     def self.call(name:, business_name:, email: nil, phone: nil, password: nil, country: "PK", currency: "PKR", time_zone: "Asia/Karachi", locale: "en")
       ActiveRecord::Base.transaction do
         user = User.create!(name: name, email: email, phone: phone, password: password, locale: locale)
-        plan = Plan.find_by(code: "pro") || Plan.seed! && Plan.find_by!(code: "pro")
+        plan = Plan.find_by(code: TRIAL_PLAN) || Plan.seed! && Plan.find_by!(code: TRIAL_PLAN)
         business = Business.create!(
           name: business_name, slug: Business.generate_slug(business_name), country: country, currency: currency,
           time_zone: time_zone, phone: phone, email: email, plan: plan, trial_ends_on: Business::TRIAL_DAYS.days.from_now.to_date, status: "trial"

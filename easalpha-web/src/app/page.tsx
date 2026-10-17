@@ -15,7 +15,7 @@ import { JsonLd } from "@/components/site/json-ld";
 import { faqPage, softwareApplication } from "@/lib/schema";
 import { trackAttrs } from "@/lib/analytics";
 
-export const metadata: Metadata = pageMetadata({ title: "Restaurant POS for any restaurant, anywhere | EasAlpha", description: "Offline till, kitchen display, inventory with recipe deduction, khata, payroll, riders, WhatsApp receipts and FBR tax invoices. 90 days free, no card needed.", path: "/", absolute: true });
+export const metadata: Metadata = pageMetadata({ title: "Restaurant POS for any restaurant, anywhere | EasAlpha", description: "Offline till, kitchen display, inventory with recipe deduction, khata, payroll, riders, WhatsApp receipts and FBR tax invoices. 40 days free, no card needed.", path: "/", absolute: true });
 
 const STATS = [
   { to: 27, label: "reports", sub: "each with CSV and PDF" },

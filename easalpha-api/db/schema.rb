@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_17_151000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -294,6 +294,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_151000) do
     t.datetime "trial_reminder_88_at"
     t.integer "whatsapp_credits", default: 0, null: false
     t.bigint "settings_version", default: 0, null: false
+    t.datetime "trial_reminder_7_at"
+    t.datetime "trial_reminder_3_at"
+    t.datetime "trial_reminder_1_at"
     t.index ["plan_id"], name: "index_businesses_on_plan_id"
     t.index ["slug"], name: "index_businesses_on_slug", unique: true
     t.check_constraint "status::text = ANY (ARRAY['trial'::character varying, 'active'::character varying, 'grace'::character varying, 'read_only'::character varying, 'deleted'::character varying]::text[])", name: "businesses_status_check"

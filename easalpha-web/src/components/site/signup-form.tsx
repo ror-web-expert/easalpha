@@ -130,7 +130,7 @@ export function SignupForm() {
           {error.text}{error.exists ? <> <Link href="/login" className="py-3.5 font-medium underline">Log in instead</Link>.</> : null}
         </p>
       ) : null}
-      {plan ? <p className="rounded-lg bg-[#E8EEF7] px-4 py-3 text-sm text-[#0B1F3A]">You picked the <strong>{plan.name}</strong> plan. Your trial includes everything in it; nothing is charged until the trial ends.</p> : null}
+      {plan ? <p className="rounded-lg bg-[#E8EEF7] px-4 py-3 text-sm text-[#0B1F3A]">You picked the <strong>{plan.name}</strong> plan. Your trial opens every feature; you choose {plan.name} or another plan when it ends, and nothing is charged until then.</p> : null}
       <Button type="submit" size="lg" className="w-full bg-brand-cta font-semibold text-white hover:bg-brand-cta-hover" loading={busy}>Create my account</Button>
       <p className="text-center text-sm text-slate-600">Already have an account? <Link href="/login" className="-mx-1 px-1 py-3.5 font-medium text-[#C2410C] hover:underline">Log in</Link></p>
     </form>

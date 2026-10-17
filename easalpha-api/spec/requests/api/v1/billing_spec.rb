@@ -36,16 +36,25 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
     expect(Time.parse(json[:subscription][:current_period_end].to_s)).to be > 12.months.from_now  # yearly during trial adds a free month
   end
 
-  it "sends trial reminders at day 60, 80 and 88 and makes the account read-only after the trial" do
+  it "starts a new account on the Business plan for 40 days, reminds 7, 3 and 1 day before the end and makes it read-only after" do
+    expect(biz.plan.code).to eq("business")
+    expect(biz.trial_ends_on).to eq(Date.current + 40)
     owner.user.update!(phone: "+923001234567")
-    biz.update!(trial_ends_on: Date.current + 30)   # day 60 of 90
+    reminders = -> { within(biz) { WhatsappMessage.where(business_id: biz.id, template_name: "trial_reminder").count } }
+    biz.update!(trial_ends_on: Date.current + 10)
     BillingLifecycleJob.perform_now(biz.id)
-    within(biz) { expect(WhatsappMessage.where(business_id: biz.id, template_name: "trial_reminder").count).to eq(1) }
+    expect(reminders.call).to eq(0)
+    biz.update!(trial_ends_on: Date.current + 7)
     BillingLifecycleJob.perform_now(biz.id)
-    within(biz) { expect(WhatsappMessage.where(business_id: biz.id, template_name: "trial_reminder").count).to eq(1) }
-    biz.update!(trial_ends_on: Date.current + 2)
     BillingLifecycleJob.perform_now(biz.id)
-    within(biz) { expect(WhatsappMessage.where(business_id: biz.id, template_name: "trial_reminder").count).to eq(3) }
+    expect(reminders.call).to eq(1)
+    # The job missed some days: the 3-day and 1-day reminders fall due together and go out as one message.
+    biz.update!(trial_ends_on: Date.current + 1)
+    BillingLifecycleJob.perform_now(biz.id)
+    expect(reminders.call).to eq(2)
+    BillingLifecycleJob.perform_now(biz.id)
+    expect(reminders.call).to eq(2)
+    expect(biz.reload).to have_attributes(trial_reminder_7_at: be_present, trial_reminder_3_at: be_present, trial_reminder_1_at: be_present)
     biz.update!(trial_ends_on: Date.current - 1)
     BillingLifecycleJob.perform_now(biz.id)
     expect(biz.reload.status).to eq("read_only")
@@ -83,7 +92,7 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
     expect(response).to have_http_status(:conflict)
     get "/api/v1/onboarding/status", headers: headers
     expect(json[:items].find { |i| i[:key] == "menu" }[:done]).to be true
-    expect(json[:trial_days_left]).to be_between(89, 90)
+    expect(json[:trial_days_left]).to be_between(39, 40)
   end
 
   it "support access needs the owner's approval, expires, and is audited" do

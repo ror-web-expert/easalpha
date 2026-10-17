@@ -243,7 +243,7 @@ Include values: **Yes** build in the phase shown; **Later** a later phase. (No a
 | F1 | Signup with WhatsApp OTP or email; business, country, currency, time zone; sample menu or import; setup checklist with progress | Blueprint | Core | Yes |
 | F2 | Setup checklist flags features on the plan that are switched off | ArfaPOS | Core | Yes |
 | F3 | Business, branches, users, memberships and registered devices | Blueprint | Core | Yes |
-| F4 | Plans, 90-day trial, invoices, grace period, read-only mode, plan limits; Pakistan by JazzCash, EasyPaisa and bank; international by Paddle | Blueprint | Core | Yes |
+| F4 | Plans, 40-day trial, invoices, grace period, read-only mode, plan limits; Pakistan by JazzCash, EasyPaisa and bank; international by Paddle | Blueprint | Core | Yes |
 | F5 | WhatsApp through the Meta Cloud API: OTP, receipts, order status, daily summary, alerts, reminders; templates; opt-in; SMS and email fallback | Blueprint | Core | Yes |
 | F6 | Super admin with support login on owner approval, every action logged | Blueprint | Core | Yes |
 | F7 | Settings: business info, business-day start and end (SPEC), tax, payment methods, printers and stations, receipt designer for 58 and 80 mm with Urdu, languages | Blueprint | Core | Yes |

@@ -557,7 +557,7 @@ Where an extra conflicts with the PDF, the PDF behaviour comes first and the ext
 | Extra in EasAlpha docs | Docs ref | Source | Why it was added |
 | --- | --- | --- | --- |
 | Signup with WhatsApp OTP or email; setup checklist | F1, F2 | Both | Restaurants sign up without a salesperson |
-| Plans, 90-day trial, invoices, grace period, read-only mode; Paddle, JazzCash, EasyPaisa | F4 | Blueprint | EasAlpha is sold by subscription |
+| Plans, 40-day trial, invoices, grace period, read-only mode; Paddle, JazzCash, EasyPaisa | F4 | Blueprint | EasAlpha is sold by subscription |
 | WhatsApp receipts, order status, daily summary, owner alerts; SMS and email fallback | F5 | Blueprint | WhatsApp is how owners and customers talk |
 | Super admin with support login on owner approval | F6 | Blueprint | EasAlpha's own support team |
 | One formatter for money, dates and phones | F8 | ArfaPOS audit | ArfaPOS showed the same values in different formats |

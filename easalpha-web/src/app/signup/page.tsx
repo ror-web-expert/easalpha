@@ -11,7 +11,7 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = pageMetadata({ title: "Create your account, 90 days free", description: "Start your 90-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant. No card.", path: "/signup", extra: { robots: { index: true, follow: true } } });
+export const metadata: Metadata = pageMetadata({ title: "Create your account, 40 days free", description: "Start your 40-day free EasAlpha trial: offline till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts for your restaurant. No card.", path: "/signup", extra: { robots: { index: true, follow: true } } });
 
 const INCLUDED = [
   "Admin panel, till, kitchen display, order-taker tablet and rider app",

@@ -22,7 +22,7 @@ describe("plans", () => {
     expect(business.limits.branches).toBe(20);
   });
   it("uses the API trial length", () => {
-    expect(TRIAL_DAYS).toBe(90);
+    expect(TRIAL_DAYS).toBe(40);
   });
 });
 
@@ -182,7 +182,7 @@ describe("language dictionary", () => {
   it("translates and falls back to English", () => {
     expect(t("cta.start", "en")).toBe("Start free");
     expect(t("cta.start", "ur")).toBe("مفت شروع کریں");
-    expect(t("hero.trial", "en")).toBe("90-day free trial");
+    expect(t("hero.trial", "en")).toBe("40-day free trial");
   });
   it("toggles and validates languages", () => {
     expect(toggleLang("en")).toBe("ur");

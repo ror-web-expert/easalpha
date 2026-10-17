@@ -3,7 +3,8 @@ module Billing
   module Lifecycle
     module_function
 
-    REMINDER_DAYS = { 60 => :trial_reminder_60_at, 80 => :trial_reminder_80_at, 88 => :trial_reminder_88_at }.freeze
+    # Reminders by days left, so they fit a trial of any length (a 40-day trial never reached the old day 60, 80 and 88).
+    REMINDER_DAYS_LEFT = { 7 => :trial_reminder_7_at, 3 => :trial_reminder_3_at, 1 => :trial_reminder_1_at }.freeze
     GRACE_DAYS = 7
     DATA_RETENTION_DAYS = 60
 
@@ -20,12 +21,12 @@ module Billing
 
     def trial_step(business, today)
       return unless business.trial_ends_on
-      elapsed = Business::TRIAL_DAYS - (business.trial_ends_on - today).to_i
-      REMINDER_DAYS.each do |day, column|
-        next if elapsed < day || business.public_send(column)
-        days_left = (business.trial_ends_on - today).to_i
-        notify_owners(business, "trial_reminder", { business_name: business.name, days: days_left, ends_on: business.trial_ends_on.to_s }, title: "Trial ends in #{days_left} days", link: "/settings/billing")
-        business.update_column(column, Time.current)
+      days_left = (business.trial_ends_on - today).to_i
+      due = REMINDER_DAYS_LEFT.select { |left, column| days_left.between?(0, left) && !business.public_send(column) }
+      if due.any?
+        # One message even when the job missed a day and two reminders fall due together.
+        notify_owners(business, "trial_reminder", { business_name: business.name, days: days_left, ends_on: business.trial_ends_on.to_s }, title: days_left == 1 ? "Trial ends tomorrow" : "Trial ends in #{days_left} days", link: "/settings/billing")
+        due.each_value { |column| business.update_column(column, Time.current) }
       end
       make_read_only!(business, reason: "trial ended") if today > business.trial_ends_on && !paid_subscription?(business)
     end

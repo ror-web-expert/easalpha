@@ -8,7 +8,7 @@ import { CONTACT, TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
 
-export const metadata: Metadata = pageMetadata({ title: "Terms of service", description: "The terms for using EasAlpha: your account, the 90-day trial and billing, availability, what we ask of you, and how either side can end the agreement.", path: "/terms" });
+export const metadata: Metadata = pageMetadata({ title: "Terms of service", description: "The terms for using EasAlpha: your account, the 40-day trial and billing, availability, what we ask of you, and how either side can end the agreement.", path: "/terms" });
 
 export default function TermsPage() {
   return (
@@ -27,7 +27,7 @@ export default function TermsPage() {
             </ul>
             <h2>Trial and billing</h2>
             <ul>
-              <li>New accounts get a {TRIAL_DAYS}-day free trial of the chosen plan with no card required.</li>
+              <li>New accounts get a {TRIAL_DAYS}-day free trial with every feature (the Business plan) and no card required; the owner picks a plan when it ends.</li>
               <li>After the trial, the service continues only on a paid plan. Plans are billed monthly or yearly in advance in Pakistani rupees (or US dollars outside Pakistan), by JazzCash, EasyPaisa, bank transfer or card. Yearly billing is ten months&apos; price.</li>
               <li>If a payment is missed, the account enters a grace period, then becomes read-only: you can still log in and export your data. We do not delete an account for non-payment without notice.</li>
               <li>You can cancel at any time from the Plan screen or by writing to us. Paid periods run to their end and are not refunded, except where the law requires or where we have failed to provide the service.</li>

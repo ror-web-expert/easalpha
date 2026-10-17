@@ -5,7 +5,7 @@ export type Currency = "PKR" | "USD";
 export type Period = "monthly" | "yearly";
 
 /** Business::TRIAL_DAYS in easalpha-api/app/models/business.rb. */
-export const TRIAL_DAYS = 90;
+export const TRIAL_DAYS = 40;
 
 /** Yearly billing is ten months' price: two months free. */
 export const YEARLY_MONTHS_CHARGED = 10;
@@ -274,7 +274,7 @@ export const OG_IMAGE_PATH = "/og.png?v=20261017";
 export const OG_IMAGE_ALT = "EasAlpha: the restaurant POS for any restaurant, anywhere";
 
 /** The one-line description used by the layout metadata, Open Graph and the schema. 155 characters. */
-export const SITE_DESCRIPTION = "EasAlpha is the restaurant POS that keeps selling offline: till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts. 90 days free.";
+export const SITE_DESCRIPTION = "EasAlpha is the restaurant POS that keeps selling offline: till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts. 40 days free.";
 
 /** The registered office, in parts for the schema's PostalAddress and joined for the footer. */
 export const OFFICE = { street: "161 P Block, Gulberg 3", city: "Lahore", region: "Punjab", countryCode: "PK", country: "Pakistan" } as const;

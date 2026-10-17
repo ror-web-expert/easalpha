@@ -9,11 +9,11 @@ import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs, pricingProduct } from "@/lib/schema";
 
-export const metadata: Metadata = pageMetadata({ title: "Pricing: restaurant POS plans in PKR and USD", description: "Starter, Pro and Business from Rs 2,500 or $19 a month, monthly or yearly with two months free. No per-order fees, and every plan starts with 90 days free.", path: "/pricing" });
+export const metadata: Metadata = pageMetadata({ title: "Pricing: restaurant POS plans in PKR and USD", description: "Starter, Pro and Business from Rs 2,500 or $19 a month, monthly or yearly with two months free. No per-order fees, and every plan starts with 40 days free.", path: "/pricing" });
 
 const FAQ = [
   { q: "How do I pay?", a: "Debit or credit card or bank transfer anywhere; JazzCash and EasyPaisa in Pakistan. Customers in Pakistan are billed in rupees, everyone else in US dollars." },
-  { q: "What happens when the trial ends?", a: `Your trial lasts ${TRIAL_DAYS} days with every feature of the plan you picked. Near the end we remind you by email and WhatsApp. If you do not pick a plan, the account goes read-only: you can still log in and export everything, and nothing is deleted without your say.` },
+  { q: "What happens when the trial ends?", a: `Your trial lasts ${TRIAL_DAYS} days with every feature open (it runs on the Business plan). Near the end we remind you by email and WhatsApp. If you do not pick a plan, the account goes read-only: you can still log in and export everything, and nothing is deleted without your say.` },
   { q: "Is yearly billing really two months free?", a: "Yes. A year is charged at ten times the monthly price. The cards above show the yearly amount spread over twelve months so plans compare easily." },
   { q: "Can I change plans?", a: "Any time. Upgrades apply immediately and you pay the difference for the rest of the period. Downgrades apply at the next renewal." },
   { q: "What counts as a till?", a: "A paired device that takes payment: the desktop till or a tablet running the till. Kitchen displays, token screens, order-taker tablets and rider phones do not count as tills." },

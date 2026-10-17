@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Page not found", description: "That 
 
 const PLACES = [
   { href: "/features", title: "Features", text: "Every area of EasAlpha, screen by screen." },
-  { href: "/pricing", title: "Pricing", text: "Three plans in rupees or dollars, 90 days free." },
+  { href: "/pricing", title: "Pricing", text: "Three plans in rupees or dollars, 40 days free." },
   { href: "/download", title: "Download", text: "The desktop till for Windows, Linux and Mac." },
   { href: "/contact", title: "Contact", text: "WhatsApp or email; a person answers." },
 ];
