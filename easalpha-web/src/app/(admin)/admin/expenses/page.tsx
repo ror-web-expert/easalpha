@@ -103,7 +103,7 @@ export default function ExpensesPage() {
             <SummaryCard label="Count" value={s?.count ?? 0} sub="expenses in the period" tone="neutral" />
             <SummaryCard label="Categories" value={s?.category_count ?? s?.by_category.length ?? 0} sub={`${s?.subcategory_count ?? s?.by_subcategory.length ?? 0} sub-categories used`} tone="primary" />
           </Cards>
-          <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+          <Cards>
             <SummaryCard label="Overheads allocated" value={formatMoney(s?.overheads_minor)} sub={`${s?.overheads.length ?? 0} overheads for this period`} tone="warning" />
             <SummaryCard label="Paid orders" value={s?.paid_orders ?? 0} tone="neutral" />
             <SummaryCard label="Cost per order" value={s?.cost_per_order_minor != null ? formatMoney(s.cost_per_order_minor) : "-"} sub="(expenses + overheads) / paid orders" tone="info" />

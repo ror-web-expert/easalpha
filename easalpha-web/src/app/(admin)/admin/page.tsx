@@ -3,17 +3,17 @@
 // operations cards for the current business day (one dashboard, not two); Sales Trend and
 // Orders by hour, Products by Category, Order Status Distribution and Expenses (with an explicit empty state); Top
 // Selling Products. EasAlpha's extras (tax queue, needs attention, khata, checklist, recent orders) sit in a lower section.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, ReceiptText, Wallet, AlertTriangle, PiggyBank, FileCheck2, Lock, Package, Users, Banknote, RefreshCw } from "lucide-react";
+import { LayoutDashboard, ReceiptText, Wallet, AlertTriangle, PiggyBank, FileCheck2, Lock, Package, Users, Banknote, RefreshCw, BarChart3 } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { Dashboard, DashboardPeriod, DashboardSpec } from "@/lib/types";
 import { formatMoney, formatPercent } from "@/lib/money";
 import { formatDate, formatDateTime, isoDay } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { Cards, DateRangePicker, FilterBar, PageHeader, type DateRange } from "@/components/admin/page";
-import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, ErrorState, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR, EmptyRow, Tabs } from "@/components/ui";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, ErrorState, SummaryCard, SummaryCardSkeleton, Table, TBody, TD, TH, THead, TR, EmptyRow, Tabs } from "@/components/ui";
 import { TrendChart, BarsChart, Breakdown } from "@/components/charts/charts";
 import { useAuthStore } from "@/store/auth";
 import { DASHBOARD_PERIODS, hourLabel, specStatusVariant } from "@/components/admin/order-helpers";
@@ -21,24 +21,44 @@ import { DASHBOARD_PERIODS, hourLabel, specStatusVariant } from "@/components/ad
 export default function DashboardPage() {
   const qc = useQueryClient();
   const business = useAuthStore((s) => s.session?.business);
-  const [period, setPeriod] = useState<DashboardPeriod>("today");
+  const [period, setPeriodState] = useState<DashboardPeriod>("today");
+  // Review 4.1: a dashboard of zeros is a poor first screen. When nothing has sold yet today and the owner has not
+  // picked a period, it opens on the last 7 days instead and says so.
+  const [picked, setPicked] = useState(false);
+  const [fellBack, setFellBack] = useState(false);
+  const setPeriod = (p: DashboardPeriod) => { setPicked(true); setFellBack(false); setPeriodState(p); };
   const [custom, setCustom] = useState<DateRange>({ from: isoDay(), to: isoDay() });
   const query = period === "custom" ? { period, from: custom.from, to: custom.to } : { period };
-  const spec = useQuery({ queryKey: ["dashboard", "spec", query], queryFn: () => api<DashboardSpec>("/reports/dashboard/spec", { query }), refetchInterval: 60_000 });
-  const extras = useQuery({ queryKey: ["dashboard", "extras"], queryFn: () => api<Dashboard>("/reports/dashboard"), refetchInterval: 60_000 });
-  const refresh = () => qc.invalidateQueries({ queryKey: ["dashboard"] });
-  const d = spec.data;
-  const x = extras.data;
+  // Review 6: the cards and the extras arrive in one call (cached on the server for up to a minute, and at once when
+  // an order changes); Refresh asks for a fresh copy.
+  const fresh = useRef(false);
+  const all = useQuery({
+    queryKey: ["dashboard", "all", query],
+    queryFn: () => api<{ spec: DashboardSpec; extras: Dashboard | null }>("/reports/dashboard/all", { query: fresh.current ? { ...query, fresh: 1 } : query }).finally(() => { fresh.current = false; }),
+    refetchInterval: 60_000,
+  });
+  const refresh = () => { fresh.current = true; return qc.invalidateQueries({ queryKey: ["dashboard"] }); };
+  const d = all.data?.spec;
+  const x = all.data?.extras ?? undefined;
   const cards = d?.cards;
   const trend = (d?.charts.sales_by_hour ?? []).map((r) => ({ hour: hourLabel(r.hour), revenue: r.revenue_minor, orders: r.orders }));
   const hasSales = trend.some((r) => r.revenue > 0 || r.orders > 0);
   const checklistDone = x?.checklist?.filter((c) => c.done).length ?? 0;
-  const pct = (v: number | null | undefined) => (v === null || v === undefined ? "No data last week" : `${v >= 0 ? "+" : ""}${formatPercent(v)} vs last week`);
+  useEffect(() => {
+    if (!picked && period === "today" && d && d.cards.total_orders === 0) { setFellBack(true); setPeriodState("7d"); }
+  }, [picked, period, d]);
+  // No percentage when there is nothing to compare: no sales yet, or no baseline last week (review 4.1: Rs 0 showed
+  // as a red -100%).
+  const pct = (v: number | null | undefined, current: number) => (current <= 0 ? "No completed sales yet" : v === null || v === undefined ? "Nothing to compare last week" : `${v >= 0 ? "+" : ""}${formatPercent(v)} vs last week`);
+  const paymentRows = x?.today?.by_payment_method ?? [];
+  const hasPayments = Array.isArray(paymentRows) ? paymentRows.length > 0 : Object.keys(paymentRows).length > 0;
+  const expenses = d?.charts.expenses_by_category ?? [];
+  const statuses = d?.charts.order_status ?? [];
   const rangeLabel = d ? (d.from === d.to ? formatDate(d.from) : `${formatDate(d.from)} to ${formatDate(d.to)}`) : "";
   return (
     <>
       <PageHeader icon={LayoutDashboard} title={`Good day, ${business?.name ?? ""}`} description={`${rangeLabel}${x?.day_locked ? " · day locked" : ""}`}
-        actions={<Button variant="secondary" onClick={refresh} loading={spec.isFetching}><RefreshCw className="h-4 w-4" /> Refresh</Button>} />
+        actions={<Button variant="secondary" onClick={refresh} loading={all.isFetching}><RefreshCw className="h-4 w-4" /> Refresh</Button>} />
       <FilterBar>
         <Tabs value={period} onChange={setPeriod} items={DASHBOARD_PERIODS} />
         {period === "custom" ? <DateRangePicker value={custom} onChange={setCustom} /> : null}
@@ -49,40 +69,55 @@ export default function DashboardPage() {
           <span className="font-medium text-primary">Continue setup</span>
         </Link>
       ) : null}
-      {spec.isLoading ? <Loading /> : spec.error ? <ErrorState message={errorMessage(spec.error)} onRetry={() => spec.refetch()} /> : null}
+      {fellBack ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-info-soft/60 px-4 py-3 text-sm text-info-ink">
+          <span>Nothing has sold yet today, so this shows the last 7 days.</span>
+          <button type="button" className="min-h-10 font-medium underline underline-offset-4" onClick={() => setPeriod("today")}>Show today</button>
+        </div>
+      ) : null}
+      {all.error ? <ErrorState message={errorMessage(all.error)} onRetry={() => all.refetch()} /> : null}
+      {/* Review 4.1: two tiers. The three figures an owner checks first, large; the rest in a compact strip. Skeletons
+          hold their place while the figures load, so nobody reads a false Rs 0 (review 6). */}
+      <Cards>
+        {cards ? <SummaryCard size="large" label="Total revenue" value={formatMoney(cards.total_revenue_minor)} sub={period === "today" && x ? pct(x.change_vs_last_week_percent, cards.total_revenue_minor) : "Completed orders only"} icon={Wallet} tone="success" /> : <SummaryCardSkeleton size="large" />}
+        {cards ? <SummaryCard size="large" label="Total orders" value={cards.total_orders} sub={cards.cancelled_orders ? `${cards.cancelled_orders} cancelled` : "None cancelled"} icon={ReceiptText} tone={cards.cancelled_orders ? "warning" : "primary"} /> : <SummaryCardSkeleton size="large" />}
+        {x ? <SummaryCard size="large" label="Khata outstanding" value={formatMoney(x.khata_outstanding_minor)} sub="Customer credit to collect" icon={PiggyBank} tone="warning" /> : <SummaryCardSkeleton size="large" />}
+      </Cards>
+      <Cards className="-mt-2">
+        {cards ? <SummaryCard size="compact" label="Incl. open orders" value={formatMoney(cards.incl_open_minor)} sub={`+ ${formatMoney(cards.open_minor)} still open`} icon={ReceiptText} tone="info" /> : <SummaryCardSkeleton size="compact" />}
+        {cards ? <SummaryCard size="compact" label="Expenses" value={formatMoney(cards.expenses_minor)} sub="For the period" icon={Banknote} tone={cards.expenses_minor ? "danger" : "neutral"} /> : <SummaryCardSkeleton size="compact" />}
+        {cards ? <SummaryCard size="compact" label="Customers" value={cards.total_customers} sub="Registered" icon={Users} tone="primary" /> : <SummaryCardSkeleton size="compact" />}
+        {cards ? <SummaryCard size="compact" label="Products" value={cards.total_products} sub="Active in the catalog" icon={Package} tone="neutral" /> : <SummaryCardSkeleton size="compact" />}
+        {x ? <SummaryCard size="compact" label="Shifts open" value={x.shifts_open ?? 0} sub={x.day_locked ? `${formatDate(x.business_day)} · locked` : `${formatDate(x.business_day)} · open`} icon={x.day_locked ? Lock : Wallet} tone="neutral" /> : <SummaryCardSkeleton size="compact" />}
+        {x ? <SummaryCard size="compact" label="Needs attention" value={x.needs_attention ?? 0} sub="Records that failed to sync" icon={AlertTriangle} tone={x.needs_attention ? "danger" : "neutral"} /> : <SummaryCardSkeleton size="compact" />}
+        {x ? <SummaryCard size="compact" label="Tax queue" value={`${x.tax_queue?.queued ?? 0} queued`} sub={`${x.tax_queue?.failed ?? 0} failed`} icon={FileCheck2} tone={x.tax_queue?.failed ? "danger" : "neutral"} /> : <SummaryCardSkeleton size="compact" />}
+      </Cards>
       {cards ? (
         <>
-          <Cards className="md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6">
-            <SummaryCard label="Total Products" value={cards.total_products} sub="Active catalog products" icon={Package} tone="neutral" />
-            <SummaryCard label="Total Revenue" value={formatMoney(cards.total_revenue_minor)} sub={period === "today" && x ? pct(x.change_vs_last_week_percent) : "Completed orders only"} icon={Wallet} tone="success" />
-            <SummaryCard label="Incl. Open Orders" value={formatMoney(cards.incl_open_minor)} sub={`+ ${formatMoney(cards.open_minor)} still open`} icon={ReceiptText} tone="info" />
-            <SummaryCard label="Total Orders" value={cards.total_orders} sub={`${cards.cancelled_orders} cancelled`} icon={ReceiptText} tone={cards.cancelled_orders ? "warning" : "primary"} />
-            <SummaryCard label="Total Customers" value={cards.total_customers} sub="Registered customers" icon={Users} tone="primary" />
-            <SummaryCard label="Expenses" value={formatMoney(cards.expenses_minor)} sub="For the period" icon={Banknote} tone={cards.expenses_minor ? "danger" : "neutral"} />
-          </Cards>
-          {x ? (
-            // Operations right now (always the current business day, whatever the period above): the four cards that
-            // the period tiles cannot show. Revenue today and Month to date are the period tiles, so they are not repeated.
-            <Cards className="-mt-2 md:grid-cols-2 xl:grid-cols-4">
-              <SummaryCard label="Shifts open" value={x.shifts_open ?? 0} sub={x.day_locked ? `Business day ${formatDate(x.business_day)} · locked` : `Business day ${formatDate(x.business_day)} · open`} icon={x.day_locked ? Lock : Wallet} tone="neutral" />
-              <SummaryCard label="Khata outstanding" value={formatMoney(x.khata_outstanding_minor)} sub="Customer credit to collect" icon={PiggyBank} tone="warning" />
-              <SummaryCard label="Needs attention" value={x.needs_attention ?? 0} sub="Rejected sync records" icon={AlertTriangle} tone={x.needs_attention ? "danger" : "neutral"} />
-              <SummaryCard label="Tax queue" value={`${x.tax_queue?.queued ?? 0} queued`} sub={`${x.tax_queue?.failed ?? 0} failed`} icon={FileCheck2} tone={x.tax_queue?.failed ? "danger" : "neutral"} />
-            </Cards>
-          ) : null}
-          <div className="mb-6 grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle>Sales Trend (Rs)</CardTitle><span className="text-xs text-fg-muted">Completed revenue by hour</span></CardHeader>
-              <CardBody><TrendChart data={hasSales ? trend : []} x="hour" series={[{ key: "revenue", label: "Revenue", money: true }]} money /></CardBody>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>Orders (count)</CardTitle><span className="text-xs text-fg-muted">Completed orders by hour</span></CardHeader>
-              <CardBody><BarsChart data={hasSales ? trend : []} x="hour" series={[{ key: "orders", label: "Orders" }]} /></CardBody>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>Today by payment method</CardTitle><span className="text-xs text-fg-muted">{x ? `Business day ${formatDate(x.business_day)}` : ""}</span></CardHeader>
-              <CardBody><Breakdown data={x?.today?.by_payment_method ?? []} /></CardBody>
-            </Card>
+          {/* Charts with nothing to draw are left out rather than drawn as empty boxes; when nothing at all has sold in
+              the period, one message says so. */}
+          {!hasSales && !hasPayments ? <EmptyState icon={BarChart3} className="mb-6" title="No completed sales in this period" hint="Sales charts appear here as soon as orders are paid. Pick a longer period above to see earlier days." /> : null}
+          {/* Which charts show depends on the data, so when their count is odd the last card takes the full row
+              instead of sitting alone beside an empty half (review 1.1). */}
+          <div className="mb-6 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0 lg:[&>*:last-child:nth-child(odd)]:col-span-2">
+            {hasSales ? (
+              <Card>
+                <CardHeader><CardTitle>Sales Trend (Rs)</CardTitle><span className="text-xs text-fg-muted">Completed revenue by hour</span></CardHeader>
+                <CardBody><TrendChart data={trend} x="hour" series={[{ key: "revenue", label: "Revenue", money: true }]} money /></CardBody>
+              </Card>
+            ) : null}
+            {hasSales ? (
+              <Card>
+                <CardHeader><CardTitle>Orders (count)</CardTitle><span className="text-xs text-fg-muted">Completed orders by hour</span></CardHeader>
+                <CardBody><BarsChart data={trend} x="hour" series={[{ key: "orders", label: "Orders" }]} /></CardBody>
+              </Card>
+            ) : null}
+            {hasPayments ? (
+              <Card>
+                <CardHeader><CardTitle>Today by payment method</CardTitle><span className="text-xs text-fg-muted">{x ? `Business day ${formatDate(x.business_day)}` : ""}</span></CardHeader>
+                <CardBody><Breakdown data={paymentRows} /></CardBody>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader><CardTitle>Recent orders</CardTitle><Link href="/admin/orders" className="text-xs text-primary">All orders</Link></CardHeader>
               <Table>
@@ -103,19 +138,19 @@ export default function DashboardPage() {
               <CardHeader><CardTitle>Products by Category</CardTitle><span className="text-xs text-fg-muted">Catalog distribution</span></CardHeader>
               <CardBody><Breakdown data={d!.charts.products_by_category.map((r) => ({ label: r.category, value: r.products }))} money={false} /></CardBody>
             </Card>
-            <Card>
-              <CardHeader><CardTitle>Order Status Distribution</CardTitle><span className="text-xs text-fg-muted">For the period</span></CardHeader>
-              <CardBody>
-                <Breakdown data={d!.charts.order_status.map((r) => ({ label: titleCase(r.status), value: r.orders }))} money={false} colorBy="status" />
-                <div className="mt-3 flex flex-wrap gap-1">{d!.charts.order_status.map((r) => <Badge key={r.status} variant={specStatusVariant(r.status)}>{titleCase(r.status)} {r.orders}</Badge>)}</div>
-              </CardBody>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>Expenses by category</CardTitle><Link href="/admin/expenses" className="text-xs text-primary">All expenses</Link></CardHeader>
-              <CardBody>
-                {d!.charts.expenses_by_category.length ? <Breakdown data={d!.charts.expenses_by_category.map((r) => ({ label: `${r.category} (${r.count})`, value: r.amount_minor }))} /> : <EmptyState icon={Banknote} title="No expenses in this period" hint="Expenses recorded on these business days appear here by category." className="py-8" />}
-              </CardBody>
-            </Card>
+            {statuses.some((r) => r.orders > 0) ? (
+              <Card>
+                <CardHeader><CardTitle>Order Status Distribution</CardTitle><span className="text-xs text-fg-muted">For the period</span></CardHeader>
+                {/* One list: the review found the same six figures printed twice, as bars and again as pills. */}
+                <CardBody><Breakdown data={statuses.map((r) => ({ label: titleCase(r.status), value: r.orders }))} money={false} colorBy="status" /></CardBody>
+              </Card>
+            ) : null}
+            {expenses.length ? (
+              <Card>
+                <CardHeader><CardTitle>Expenses by category</CardTitle><Link href="/admin/expenses" className="text-xs text-primary">All expenses</Link></CardHeader>
+                <CardBody><Breakdown data={expenses.map((r) => ({ label: `${r.category} (${r.count})`, value: r.amount_minor }))} /></CardBody>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader><CardTitle>Top Selling Products</CardTitle><span className="text-xs text-fg-muted">Ranked by revenue</span></CardHeader>
               <Table>

@@ -1,5 +1,5 @@
 "use client";
-import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent, Receipt } from "lucide-react";
+import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent, Receipt, Lock } from "lucide-react";
 import type { Cart } from "@/store/cart";
 import type { OrderType } from "@/lib/types";
 import { lineAmount, lineTotals, type CartLine } from "@/lib/pricing";
@@ -38,14 +38,14 @@ interface Props {
   cart: Cart; currency?: string; settings?: Record<string, unknown>;
   onQty: (key: string, q: number) => void; onEditLine: (l: CartLine) => void; onOverride: (l: CartLine) => void; onRemove: (key: string) => void;
   onCustomer: () => void; onTable: () => void; onNotes: () => void; onStaffMeal: () => void;
-  onHold: () => void; onSend: () => void; onPay: () => void; onNew: () => void; busy?: boolean; canOverride: boolean;
+  onHold: () => void; onSend: () => void; onPay: () => void; onNew: () => void; busy?: boolean; canOverride: boolean; /** The role lacks prices.override: a manager PIN is asked for on save. */ overrideNeedsPin?: boolean; /** Opens the bill preview (review 3.10). */ onPreview?: () => void;
   /** SPEC "Editing a Reopened Order": false hides the remove-line control (DELETE_ORDER_ITEM) or the quantity-decrease control (MODIFY_REOPEN_DECREASE_QTY). */
   canRemove?: boolean; canDecrease?: boolean;
   /** SPEC "Direct Unpaid Orders": when given, a button that places (or completes) the order without the payment screen. */
   onPlaceUnpaid?: () => void; unpaidLabel?: string;
 }
 
-export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride, canRemove = true, canDecrease = true, onPlaceUnpaid, unpaidLabel }: Props) {
+export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride, overrideNeedsPin, onPreview, canRemove = true, canDecrease = true, onPlaceUnpaid, unpaidLabel }: Props) {
   // SPEC Charges: the same totals as the payment page, with the charges in force on this order, plus the cash rounding
   // and tips earlier payments stored (the server keeps both in the order's total).
   const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor, rounding_minor: cart.rounding_minor, tip_minor: cart.tip_minor });
@@ -54,7 +54,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
   const due = Math.max(0, t.total_minor - paid);
   const reopened = !!cart.reopened;
   return (
-    <div className="flex h-full flex-col bg-card">
+    <div className="flex h-full flex-col bg-pos-panel">
       <div className="flex items-center justify-between border-b px-3 py-2">
         <div className="min-w-0">
           <div className="truncate font-semibold">
@@ -66,13 +66,17 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           </div>
           <div className="truncate text-xs text-fg-muted">{cart.lines.reduce((s, l) => s + l.quantity, 0)} items{paid ? ` · paid ${formatMoney(paid, currency)}` : ""}</div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onNew} title="New order (F1)">New</Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {onPreview ? <Button variant="ghost" size="sm" onClick={onPreview} disabled={!cart.lines.length} title="See the bill as it will print"><Receipt className="h-4 w-4" /> Bill</Button> : null}
+          <Button variant="ghost" size="sm" onClick={onNew} title="New order (F1)">New</Button>
+        </div>
       </div>
       <div className="flex gap-1 border-b p-2">
         <button onClick={onCustomer} className={cn("flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 text-sm", cart.customer ? "border-primary bg-primary-soft" : "hover:bg-muted")}><User className="h-4 w-4 shrink-0" /><span className="truncate">{cart.customer?.name ?? "Customer (F3)"}</span></button>
         {cart.order_type === "dine_in" ? <button onClick={onTable} className={cn("flex h-11 items-center gap-1.5 rounded-md border px-3 text-sm", cart.table_id ? "border-primary bg-primary-soft" : "hover:bg-muted")}><Grid3X3 className="h-4 w-4" />{cart.table_code ?? "Table"}</button> : null}
-        <button onClick={onNotes} className={cn("grid h-11 w-11 place-items-center rounded-md border", cart.notes ? "border-primary bg-primary-soft" : "hover:bg-muted")} title="Order notes"><StickyNote className="h-4 w-4" /></button>
-        <button onClick={onStaffMeal} className={cn("grid h-11 w-11 place-items-center rounded-md border", cart.is_staff_meal ? "border-accent bg-accent-soft" : "hover:bg-muted")} title="Staff meal"><BadgePercent className="h-4 w-4" /></button>
+        {/* Review 3.3: the two icon buttons say what they are. */}
+        <button onClick={onNotes} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.notes ? "border-primary bg-primary-soft" : "hover:bg-muted")} title="Order notes"><StickyNote className="h-4 w-4 shrink-0" />Notes</button>
+        <button onClick={onStaffMeal} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.is_staff_meal ? "border-accent bg-accent-soft" : "hover:bg-muted")} title="Staff meal: the order total becomes zero"><BadgePercent className="h-4 w-4 shrink-0" />Staff</button>
       </div>
       <ul className="flex-1 overflow-y-auto">
         {empty ? <li className="px-4 py-12 text-center text-fg-muted">Tap items to add them. F2 searches.</li> : null}
@@ -99,7 +103,9 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
                 <span className="w-10 text-center text-lg font-semibold tabular">{l.quantity}</span>
                 <button className="grid h-11 w-11 place-items-center rounded-md border" onClick={() => onQty(l.key, l.quantity + 1)} aria-label="More"><Plus className="h-4 w-4" /></button>
                 <div className="flex-1" />
-                {canOverride && !l.open_item ? <button className="h-11 rounded-md border px-2 text-xs" onClick={() => onOverride(l)}>Price</button> : null}
+                {/* Review 3.8: a price override says what it does; without prices.override it shows the lock, because the
+                    till asks for a manager PIN when the order is saved. */}
+                {canOverride && !l.open_item ? <button className="flex h-11 items-center gap-1 rounded-md border px-2.5 text-xs font-medium" onClick={() => onOverride(l)} title={overrideNeedsPin ? "Needs a manager PIN when the order is saved" : "Set a different price for this line"}>{overrideNeedsPin ? <Lock className="h-3.5 w-3.5" aria-label="Manager PIN" /> : null}Change price</button> : null}
                 {canRemove ? <button className="grid h-11 w-11 place-items-center rounded-md text-danger hover:bg-danger-soft" onClick={() => onRemove(l.key)} aria-label="Remove"><Trash2 className="h-4 w-4" /></button> : null}
               </div>
             </li>

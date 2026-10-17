@@ -56,3 +56,35 @@ describe("ItemGrid search Enter", () => {
     expect(onProduct).not.toHaveBeenCalled();
   });
 });
+
+describe("tiles, quick add and the opening category (reviews 3.4 to 3.6)", () => {
+  it("opens the biggest category when Favourites would not fill a row", async () => {
+    const { startCategory } = await import("./item-grid");
+    const cats = [{ id: "a" }, { id: "b" }];
+    const prods = [{ category_id: "a" }, { category_id: "b" }, { category_id: "b" }, { category_id: "b" }];
+    expect(startCategory(2, 4, cats, prods)).toBe("b");
+    expect(startCategory(4, 4, cats, prods)).toBe("fav");
+    expect(startCategory(0, 4, [], [])).toBe("fav");
+  });
+
+  it("offers quick add only when every choice is optional", async () => {
+    const { canQuickAdd } = await import("./item-grid");
+    const groups = [{ id: "g1", required: false, min_select: 0 }, { id: "g2", required: true, min_select: 1 }] as unknown as Catalog["modifier_groups"];
+    expect(canQuickAdd(product("x", "Tea"), groups)).toBe(false); // no dialog at all: a plain tap already adds it
+    expect(canQuickAdd(product("x", "Tea", { modifier_group_ids: ["g1"] }), groups)).toBe(true);
+    expect(canQuickAdd(product("x", "Tea", { modifier_group_ids: ["g1", "g2"] }), groups)).toBe(false);
+  });
+
+  it("draws no placeholder art for a product without a photo, and the quick add button adds in one tap", () => {
+    const groups = [{ id: "g1", name: "Extras", required: false, min_select: 0, max_select: null, sort_order: 0, modifiers: [] }];
+    const cat2 = { ...catalog, modifier_groups: groups, products: [product("p3", "Zinger", { modifier_group_ids: ["g1"] })] } as unknown as Catalog;
+    const onQuickAdd = vi.fn();
+    const onProduct = vi.fn();
+    const { container } = render(<ItemGrid catalog={cat2} orderType="takeaway" onProduct={onProduct} onDeal={vi.fn()} onOpenItem={vi.fn()} canOpenItem={false} onQuickAdd={onQuickAdd} />);
+    expect(container.querySelector("svg path[d^='M16 7']")).toBeNull();
+    expect(screen.getAllByText("Zinger")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Quick add Zinger" }));
+    expect(onQuickAdd).toHaveBeenCalledWith(expect.objectContaining({ id: "p3" }));
+    expect(onProduct).not.toHaveBeenCalled();
+  });
+});

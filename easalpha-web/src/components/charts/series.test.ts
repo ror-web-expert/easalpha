@@ -32,3 +32,18 @@ describe("chart series colours", () => {
     expect(breakdownColor("Cash", 1, "status")).toBe("var(--chart-2)");
   });
 });
+
+describe("endAtLastData", () => {
+  it("nulls only the trailing empty rows, keeping zeros in the middle", async () => {
+    const { endAtLastData, allZero } = await import("./series");
+    const rows = [{ d: "1", a: 5, b: 0 }, { d: "2", a: 0, b: 0 }, { d: "3", a: 0, b: 2 }, { d: "4", a: 0, b: 0 }, { d: "5", a: 0, b: 0 }];
+    const out = endAtLastData(rows, ["a", "b"]);
+    expect(out.map((r) => r.a)).toEqual([5, 0, 0, null, null]);
+    expect(out.map((r) => r.b)).toEqual([0, 0, 2, null, null]);
+    expect(out[4].d).toBe("5");
+    const full = rows.slice(0, 3);
+    expect(endAtLastData(full, ["a", "b"])).toBe(full);
+    expect(allZero(rows.slice(3), ["a", "b"])).toBe(true);
+    expect(allZero(rows, ["a", "b"])).toBe(false);
+  });
+});

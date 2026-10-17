@@ -1,49 +1,64 @@
 "use client";
 import { forwardRef, useMemo, useState } from "react";
 import { scannerConfig } from "@/lib/barcode";
-import { Search, Star, Gift, PlusSquare } from "lucide-react";
+import { Gift, Plus, PlusSquare, Search, Star } from "lucide-react";
 import type { BusinessSettings, Catalog, Deal, Product } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { displaySettings, priceFor } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { modalOpen } from "./scanner";
 
-// Soft tints (translucent, so they read on light and dark themes) instead of loud solid blocks.
-const PLACEHOLDERS = ["bg-teal-500/12 text-teal-600", "bg-amber-500/15 text-amber-600", "bg-sky-500/12 text-sky-600", "bg-rose-500/12 text-rose-600", "bg-violet-500/12 text-violet-600", "bg-emerald-500/12 text-emerald-600", "bg-orange-500/12 text-orange-600", "bg-indigo-500/12 text-indigo-500"];
-function tint(id: string) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PLACEHOLDERS[h % PLACEHOLDERS.length]; }
-
 /**
- * A product or deal on the till. With images switched on (Display Settings) the picture fills the top of the tile in
- * a 4:3 frame, so food photos read at a glance; a product without a photo gets its tinted dish mark in the same frame,
- * keeping every row even. With images off the tile is just the name and price.
+ * A product or deal on the till (review 3.4): a compact, text-first tile. The name and the price carry the tile; a
+ * real photo, when the product has one and images are on in Display Settings, is a small thumbnail beside the name.
+ * There is no placeholder artwork, so about three times as many items fit on the screen as with picture tiles.
+ * `onQuick` adds a quick-add button (review 3.6): one tap adds the item with the options dialog's defaults.
  */
-export function ItemTile({ name, price, imageKey, id, onClick, badge, currency, showPrice = true, showImage = true }: { name: string; price: number; imageKey?: string | null; id: string; onClick: () => void; badge?: React.ReactNode; currency?: string; showPrice?: boolean; showImage?: boolean }) {
+export function ItemTile({ name, price, imageKey, onClick, badge, currency, showPrice = true, showImage = true, onQuick }: { name: string; price: number; imageKey?: string | null; id?: string; onClick: () => void; badge?: React.ReactNode; currency?: string; showPrice?: boolean; showImage?: boolean; onQuick?: () => void }) {
+  const [broken, setBroken] = useState(false);
+  const thumb = showImage && imageKey && !broken;
   return (
-    <button onClick={onClick} className="group flex flex-col overflow-hidden rounded-2xl border bg-card text-left shadow-[0_1px_2px_rgb(0_0_0/0.06)] transition hover:border-primary/40 hover:shadow-[var(--elev-2)] active:scale-[0.98] active:bg-primary-soft">
-      {showImage ? (
-        <div className={cn("relative aspect-[4/3] w-full overflow-hidden", imageKey ? "bg-muted" : tint(id))}>
-          {imageKey ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageKey} alt="" loading="lazy" className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-          ) : (
-            // Default dish mark when the product has no image: a cloche on the tile's tint, with the initial below it.
-            <span className="flex h-full w-full flex-col items-center justify-center gap-1 opacity-80" aria-hidden>
-              <svg viewBox="0 0 32 32" className="h-10 w-10" fill="currentColor"><path d="M16 7a1.5 1.5 0 0 1 1.5 1.5v.6A9 9 0 0 1 25 18H7a9 9 0 0 1 7.5-8.9v-.6A1.5 1.5 0 0 1 16 7Z" /><rect x="5" y="19.5" width="22" height="2.5" rx="1.25" /></svg>
-              <span className="text-2xl font-semibold leading-none">{name.slice(0, 1).toUpperCase()}</span>
-            </span>
-          )}
-          {badge ? <span className="absolute right-2 top-2 rounded-full bg-card/95 px-2 py-0.5 text-xs font-medium text-fg-secondary shadow-sm">{badge}</span> : null}
-        </div>
+    <div className="relative">
+      <button onClick={onClick} className={cn("flex min-h-[4.5rem] w-full items-center gap-3 rounded-xl border bg-pos-tile p-2.5 text-left shadow-[0_1px_2px_rgb(0_0_0/0.06)] transition hover:border-primary/50 active:scale-[0.98] active:bg-primary-soft", onQuick && "pr-14")}>
+        {thumb ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageKey} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-muted object-cover [filter:var(--pos-media-filter)]" onError={() => setBroken(true)} />
+        ) : null}
+        <span className="min-w-0 flex-1">
+          <span className="line-clamp-2 text-[15px] font-semibold leading-5 tracking-[0.1px] text-fg">{name}</span>
+          <span className="mt-1 flex flex-wrap items-baseline gap-x-2">
+            {showPrice ? <span className="text-base font-bold text-fg tabular">{formatMoney(price, currency)}</span> : null}
+            {badge ? <span className="text-xs font-medium text-fg-secondary">{badge}</span> : null}
+          </span>
+        </span>
+      </button>
+      {onQuick ? (
+        <button type="button" onClick={onQuick} aria-label={`Quick add ${name}`} title="Add with the usual options"
+          className="absolute right-1 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-primary hover:bg-primary-soft active:bg-primary/15">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/40 bg-pos-tile"><Plus className="h-4 w-4" /></span>
+        </button>
       ) : null}
-      <div className="flex flex-1 flex-col justify-between gap-1.5 px-3 pb-3 pt-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="line-clamp-2 text-[15px] font-semibold leading-5 tracking-[0.1px]">{name}</div>
-          {!showImage && badge ? <span className="shrink-0 text-fg-secondary">{badge}</span> : null}
-        </div>
-        {showPrice ? <div className="text-base font-bold text-primary tabular">{formatMoney(price, currency)}</div> : null}
-      </div>
-    </button>
+    </div>
   );
+}
+
+/** Review 3.6: a product that opens the options dialog only for optional choices can be added in one tap with the
+ *  dialog's defaults (first size, no extras). One with a required choice has no safe default, so it keeps the dialog. */
+export function canQuickAdd(p: Product, groups: Catalog["modifier_groups"]): boolean {
+  const ids = p.modifier_group_ids ?? [];
+  const hasSheet = (p.variants?.length ?? 0) > 0 || ids.length > 0;
+  if (!hasSheet) return false;
+  return !ids.some((id) => { const g = groups.find((x) => x.id === id); return !!g && (g.required || g.min_select > 0); });
+}
+
+/** Review 3.5: the till opens on Favourites only when they fill a row; otherwise on the category with the most items. */
+export function startCategory(favourites: number, columns: number, categories: { id: string }[], products: { category_id: string }[]): string {
+  if (favourites >= columns || !categories.length) return "fav";
+  const count = new Map<string, number>();
+  products.forEach((p) => count.set(p.category_id, (count.get(p.category_id) ?? 0) + 1));
+  let best = categories[0].id;
+  categories.forEach((c) => { if ((count.get(c.id) ?? 0) > (count.get(best) ?? 0)) best = c.id; });
+  return (count.get(best) ?? 0) > favourites ? best : "fav";
 }
 
 interface ItemGridProps {
@@ -52,11 +67,12 @@ interface ItemGridProps {
   onCode?: (code: string) => boolean;
   /** Shown beside the search box (the camera Scan button). */
   searchAction?: React.ReactNode;
+  /** One-tap add with the options dialog's defaults (review 3.6). */
+  onQuickAdd?: (p: Product) => void;
 }
 
 export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
-  function ItemGrid({ catalog, orderType, onProduct, onDeal, onOpenItem, canOpenItem, settings, onCode, searchAction }, searchRef) {
-    const [cat, setCat] = useState<string>("fav");
+  function ItemGrid({ catalog, orderType, onProduct, onDeal, onOpenItem, canOpenItem, settings, onCode, searchAction, onQuickAdd }, searchRef) {
     const [q, setQ] = useState("");
     const currency = catalog.business.currency;
     const branchId = catalog.branch?.id;
@@ -65,6 +81,7 @@ export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
     const deals = useMemo(() => catalog.deals.filter((d) => d.active), [catalog.deals]);
     // SPEC "Display Settings": tiles per row, images and prices come from the settings store.
     const display = displaySettings(settings ?? catalog.business.settings);
+    const [cat, setCat] = useState<string>(() => startCategory(products.filter((p) => p.is_favourite).length + deals.filter((d) => d.is_favourite).length, display.columns, categories, products));
     const shown = useMemo(() => {
       const term = q.trim().toLowerCase();
       if (term) return products.filter((p) => p.name.toLowerCase().includes(term) || (p.sku ?? "").toLowerCase().includes(term) || (p.name_ur ?? "").includes(term));
@@ -100,9 +117,10 @@ export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
           </div>
           {/* Tiles per row from Display Settings, but never narrower than 144px: a portrait tablet gets fewer, bigger tiles
               that a finger can hit, instead of squeezing the same count into slivers. */}
-          <div className="grid flex-1 auto-rows-min gap-3 overflow-y-auto p-3" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(max(9rem, calc((100% - ${display.columns - 1} * 0.75rem) / ${display.columns})), 1fr))` }}>
+          <div className="grid flex-1 auto-rows-min gap-2 overflow-y-auto bg-page p-3" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(max(10rem, calc((100% - ${display.columns - 1} * 0.5rem) / ${display.columns})), 1fr))` }}>
             {shownDeals.map((d) => <ItemTile key={d.id} id={d.id} name={d.name} price={d.price_minor} imageKey={display.images ? d.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onDeal(d)} badge={<span className="flex items-center gap-1"><Gift className="h-3.5 w-3.5" /> Deal</span>} />)}
-            {shown.map((p) => <ItemTile key={p.id} id={p.id} name={p.name} price={priceFor(p, orderType, null, branchId)} imageKey={display.images ? p.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onProduct(p)} badge={p.variants?.length ? `${p.variants.length} sizes` : null} />)}
+            {shown.map((p) => <ItemTile key={p.id} id={p.id} name={p.name} price={priceFor(p, orderType, null, branchId)} imageKey={display.images ? p.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onProduct(p)} badge={p.variants?.length ? `${p.variants.length} sizes` : null}
+              onQuick={onQuickAdd && canQuickAdd(p, catalog.modifier_groups) ? () => onQuickAdd(p) : undefined} />)}
             {!shown.length && !showDeals ? <div className="col-span-full py-12 text-center text-fg-muted">{q ? "No items match" : cat === "fav" ? "Star items in the admin to show them here" : "No items in this category"}</div> : null}
           </div>
         </div>

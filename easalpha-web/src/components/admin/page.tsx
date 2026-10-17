@@ -1,4 +1,5 @@
 "use client";
+import { Children } from "react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { Search } from "lucide-react";
@@ -42,10 +43,34 @@ export function SearchInput({ value, onChange, placeholder, className }: { value
   );
 }
 
-/** Stat card grid: 16px gaps, two columns on phones, four on wide screens. */
-export function Cards({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4", className)}>{children}</div>;
+/** Columns for a row of n stat cards, chosen so no card is ever alone on a row at any width (review 1.1: the old
+ *  2 / 3 / 4 steps left four cards as 3 + 1 on every laptop between 1024 and 1279 px). An odd count on a two-column
+ *  phone row lets the first card span both columns. */
+export function statGridClasses(n: number): string {
+  const firstWide = "[&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1";
+  switch (true) {
+    case n <= 1: return "grid-cols-1";
+    case n === 2: return "grid-cols-1 sm:grid-cols-2";
+    case n === 3: return "grid-cols-1 sm:grid-cols-3";
+    case n === 4: return "grid-cols-2 lg:grid-cols-4";
+    case n === 5: return `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 ${firstWide}`;
+    case n === 6: return "grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6";
+    case n === 7: return `grid-cols-2 sm:grid-cols-4 ${firstWide}`;
+    case n === 8: return "grid-cols-2 sm:grid-cols-4";
+    case n === 9: return `grid-cols-2 sm:grid-cols-3 ${firstWide}`;
+    case n === 10: return "grid-cols-2 lg:grid-cols-5";
+    default: return n % 2 ? "grid-cols-2 lg:grid-cols-4 [&>*:first-child]:col-span-2 lg:[&>*:first-child]:col-span-1" : "grid-cols-2 lg:grid-cols-4";
+  }
 }
+
+/** Stat card grid (the review's StatGrid): 16px gaps and a column count from the number of cards, so a row never
+ *  ends with one card on its own. Every KPI row in the admin uses this one component. */
+export function Cards({ children, className }: { children: React.ReactNode; className?: string }) {
+  const n = Children.toArray(children).length;
+  return <div className={cn("mb-6 grid gap-4", statGridClasses(n), className)}>{children}</div>;
+}
+
+export const StatGrid = Cards;
 
 export interface DateRange { from: string; to: string }
 

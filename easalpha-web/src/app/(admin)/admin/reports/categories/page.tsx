@@ -18,7 +18,7 @@ export default function CategoryReportPage() {
     <ReportShell icon={Layers} title="Category Report" description="Sales by menu category: quantity and revenue per category with each category's share of the period."
       range={range} onRange={setRange} loading={q.isLoading} error={q.isError} onRetry={() => q.refetch()}
       exportData={{ name: "categories", columns: CATEGORY_COLUMNS, rows: categoryExportRows(rows), footer: [`${rows.length} categories  |  Revenue ${formatMoney(revenue)}`] }}>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Revenue" value={formatMoney(revenue)} sub={`${rows.length} categories`} tone="success" />
         <SummaryCard label="Quantity sold" value={rows.reduce((a, r) => a + r.quantity, 0)} tone="info" />
         <SummaryCard label="Top category" value={rows[0]?.name ?? "-"} sub={rows[0] && revenue ? `${((rows[0].revenue_minor * 100) / revenue).toFixed(1)}% of revenue` : ""} tone="primary" />

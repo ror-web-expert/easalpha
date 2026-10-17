@@ -95,7 +95,7 @@ export default function DeductionHealthPage() {
         </CardBody>
       </Card>
 
-      <Cards className="lg:grid-cols-4 xl:grid-cols-8">
+      <Cards>
         {HEALTH_BUCKETS.map((b) => {
           const n = h?.buckets[b.value] ?? 0;
           const active = bucket === b.value;

@@ -26,6 +26,7 @@ import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { CustomerDialog, OpenItemDialog, PriceOverrideDialog, StaffMealDialog, TablePicker } from "@/components/pos/dialogs";
 import { Button, Dialog, EmptyState, Field, PinDialog, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
+import { BillPreviewDialog } from "@/components/pos/bill-preview";
 import { Package } from "lucide-react";
 
 type PinOpts = { pin?: string; approver_pin?: string };
@@ -39,7 +40,7 @@ function SellScreen() {
   const refreshCatalog = useCatalogStore((s) => s.refresh);
   const session = useDeviceStore((s) => s.session);
   const can = usePosCan();
-  const { cart, reset, load, patch, addLine, updateLine, removeLine, setQty } = useCartStore();
+  const { cart, reset, load, patch, addLine, updateLine, removeLine, restoreLine, setQty } = useCartStore();
   const { run, dialog: pinDialog, open: approvalOpen } = useApproval();
   const searchRef = useRef<HTMLInputElement>(null);
   const [product, setProduct] = useState<Product | null>(null);
@@ -56,6 +57,7 @@ function SellScreen() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [staffOpen, setStaffOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [billOpen, setBillOpen] = useState(false);
   const [receipt, setReceipt] = useState<{ receipt: Receipt; change: number; offline: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState("");
@@ -74,6 +76,19 @@ function SellScreen() {
   // SPEC reopen flow: which edit controls this user may use on a reopened order.
   const reopened = !!cart.reopened;
   const canRemove = !reopened || can("DELETE_ORDER_ITEM");
+  // Review 3.8: a removed line can be put back for five seconds (the bin button, or stepping the quantity to zero).
+  const removeWithUndo = (key: string) => {
+    const index = cart.lines.findIndex((l) => l.key === key);
+    const line = cart.lines[index];
+    if (!line) return;
+    const orderId = cart.id;
+    removeLine(key);
+    toast.undo(`${line.quantity > 1 ? `${line.quantity} × ` : ""}${line.name} removed`, () => { if (useCartStore.getState().cart.id === orderId) restoreLine(line, index); });
+  };
+  const qtyWithUndo = (key: string, qty: number) => (qty <= 0 ? removeWithUndo(key) : setQty(key, qty));
+  // Review 3.9: discounts and charges show only to roles allowed to give them; the server checks the same codes.
+  const canDiscount = can("discounts.apply");
+  const canCharge = can("prices.override");
   const canDecrease = !reopened || can("MODIFY_REOPEN_DECREASE_QTY");
   const needsPin = reopened && can("REQUIRE_PIN_FOR_ORDER_UPDATE");
   // SPEC "Direct Unpaid Orders": never for a reopened order.
@@ -334,7 +349,7 @@ function SellScreen() {
   // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being
   // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
   // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.
-  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || !!receipt || !!pinAsk || approvalOpen;
+  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen;
   const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned });
 
   if (!catalog) {
@@ -348,15 +363,15 @@ function SellScreen() {
     <PosShell title={<span className="hidden md:inline">{session?.user?.name}</span>}>
       <div className="grid h-full grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
         <div className="flex min-h-0 flex-col">
-          <div className="border-b bg-card p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} allowed={allowedTypes} /></div>
-          <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} onCode={scanner.lookupTyped} searchAction={scanner.cameraButton} /></div>
+          <div className="border-b bg-pos-panel p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} allowed={allowedTypes} /></div>
+          <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} onCode={scanner.lookupTyped} searchAction={scanner.cameraButton} onQuickAdd={(p) => addPicked(p, p.variants?.[0] ?? null)} /></div>
         </div>
         <div className="flex min-h-0 flex-col border-l">
           <QuickAddBar items={catalog.quick_add_items} currency={currency} showPrices={display.showPrices} onPick={quickAdd} />
           <div className="min-h-0 flex-1">
-            <OrderPanel cart={cart} currency={currency} settings={settings} onQty={setQty} onEditLine={editLine} onOverride={setOverride} onRemove={removeLine}
+            <OrderPanel cart={cart} currency={currency} settings={settings} onQty={qtyWithUndo} onEditLine={editLine} onOverride={setOverride} onRemove={removeWithUndo}
               onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? patch({ is_staff_meal: false, staff_meal_reason: "" }) : setStaffOpen(true))}
-              onHold={hold} onSend={send} onPay={openPay} onNew={newOrder} busy={busy} canOverride={true}
+              onHold={hold} onSend={send} onPay={openPay} onNew={newOrder} busy={busy} canOverride={true} overrideNeedsPin={!can("prices.override")} onPreview={() => setBillOpen(true)}
               canRemove={canRemove} canDecrease={canDecrease} onPlaceUnpaid={unpaidOk ? placeUnpaid : undefined} unpaidLabel={unpaidLabel} />
           </div>
         </div>
@@ -370,7 +385,8 @@ function SellScreen() {
       <Dialog open={notesOpen} onClose={() => setNotesOpen(false)} title={editing ? `Notes for ${editing.name}` : "Order notes"} size="sm" footer={<><Button variant="secondary" onClick={() => setNotesOpen(false)}>Cancel</Button><Button onClick={() => { if (editing) updateLine(editing.key, { notes: notes || null }); else patch({ notes }); setNotesOpen(false); setEditing(null); }}>Save</Button></>}>
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
-      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} onCharges={updateCharges} onTaxChoice={chooseTax} onDiscount={runDiscount} onCustomer={(c) => patch({ customer: c })} />
+      <BillPreviewDialog open={billOpen} onClose={() => setBillOpen(false)} cart={cart} />
+      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c })} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />

@@ -38,7 +38,7 @@ function Screen() {
   return (
     <div className="flex h-screen flex-col bg-navy-deep text-white [--heading-color:#fff]">
       <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-4 [--heading-color:#fff]">
-        <Megaphone className="h-6 w-6 text-cta" /><span className="text-lg font-semibold">Ready for pickup</span>
+        <Megaphone className="h-6 w-6 text-brand-orange" /><span className="text-lg font-semibold">Ready for pickup</span>
         <div className="flex-1" />
         <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" onClick={() => setSound(!sound)} aria-label="Sound">{sound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
       </header>

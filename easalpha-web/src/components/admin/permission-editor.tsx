@@ -142,7 +142,7 @@ export function PermissionEditor({ membershipId }: { membershipId: string }) {
           <Button variant="secondary" size="sm" disabled={owner} onClick={() => setSelection(selectAll(reg.data, selection))}>Select all</Button>
           <span className="mx-2 hidden h-6 border-l sm:block" />
           <Badge variant={owner ? "primary" : current.mode === "custom" ? "info" : "neutral"}>{owner ? "Owner" : current.mode === "custom" ? "Custom set" : "From role"}</Badge>
-          <span className="text-xs tabular text-fg-secondary">{specGranted} of {specTotal} SPEC permissions</span>
+          <span className="text-xs tabular text-fg-secondary">{specGranted} of {specTotal} permissions</span>
           <span className="flex-1" />
           <Button variant="ghost" size="sm" disabled={owner || (current.mode === "role" && !dirty)} onClick={onReset} loading={reset.isPending}>Reset to role</Button>
           <Button size="sm" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(selection)}>Save</Button>
@@ -168,21 +168,20 @@ export function PermissionEditor({ membershipId }: { membershipId: string }) {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2"><CardTitle>{moduleName}</CardTitle><span className="text-xs tabular text-fg-muted">{rows.filter((p) => sel.has(p.code)).length} of {rows.length} granted</span></div>
-            {rows.some((p) => p.restriction) ? <span className="text-xs text-fg-secondary">RESTRICTION: ticking this adds a step rather than opening a door.</span> : null}
+            {rows.some((p) => p.restriction) ? <span className="text-xs text-fg-secondary">Restriction: ticking it adds a step rather than opening a door.</span> : null}
           </CardHeader>
           <CardBody className="p-0">
             {rows.map((p) => {
               const on = sel.has(p.code);
               return (
                 <div key={p.code} className={cn("flex min-h-12 items-start gap-3 border-t px-4 py-2 first:border-t-0 hover:bg-fg/[0.04]", on && "bg-primary-soft/40")}>
-                  <Checkbox className="mt-1" aria-label={p.code} checked={on} disabled={owner} onChange={() => setSelection(toggle(selection, p.code))} />
+                  <Checkbox className="mt-1" aria-label={p.label} checked={on} disabled={owner} onChange={() => setSelection(toggle(selection, p.code))} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <code className="font-mono text-xs">{p.code}</code>
                       <span className="text-sm font-medium">{p.label}</span>
                       <Badge variant={SURFACE[p.surface].variant} title={SURFACE_HINT[p.surface]}>{SURFACE[p.surface].label}</Badge>
-                      {p.restriction ? <Badge variant="warning" title="Ticking this adds a step rather than opening a door.">RESTRICTION</Badge> : null}
-                      {!on && implied.has(p.code) ? <Badge variant="outline" title="Held through a ticked SPEC permission that implies it.">Implied</Badge> : null}
+                      {p.restriction ? <Badge variant="warning" title="Ticking this adds a step rather than opening a door.">Restriction</Badge> : null}
+                      {!on && implied.has(p.code) ? <Badge variant="outline" title="Held through another ticked permission that includes it.">Implied</Badge> : null}
                     </div>
                     {p.description !== p.label ? <p className="mt-0.5 text-sm text-fg-secondary">{p.description}</p> : null}
                   </div>

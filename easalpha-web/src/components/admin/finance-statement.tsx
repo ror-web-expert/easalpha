@@ -34,7 +34,7 @@ export function KindStatementPage({ icon, title, description, path, kindLabel }:
       <FilterBar><AsOfPicker value={asOf} onChange={setAsOf} /><Link href="/admin/finance/balance-sheet" className="text-sm text-primary hover:underline">Balance sheet</Link></FilterBar>
       {q.isLoading || !d ? <Loading /> : (
         <>
-          <Cards className={hasEarnings ? "lg:grid-cols-3 xl:grid-cols-3" : "lg:grid-cols-2 xl:grid-cols-2"}>
+          <Cards>
             <SummaryCard label={`Total ${kindLabel}`} value={formatMoney(d.total_minor)} sub={`${d.rows.length} accounts as of ${formatDate(asOf)}`} tone="primary" />
             {hasEarnings ? <SummaryCard label="Current earnings" value={formatMoney(d.current_earnings_minor)} sub="Income less expenses to date" tone={(d.current_earnings_minor ?? 0) < 0 ? "danger" : "success"} /> : null}
             {hasEarnings ? <SummaryCard label="Total with earnings" value={formatMoney(d.total_with_earnings_minor)} tone="neutral" /> : null}

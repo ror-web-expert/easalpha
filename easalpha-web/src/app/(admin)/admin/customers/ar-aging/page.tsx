@@ -18,7 +18,7 @@ export default function AgingPage() {
     <>
       <PageHeader icon={PiggyBank} title="Khata aging" description="Who owes what and for how long. Payments settle the oldest charges first." />
       <FilterBar><Input type="date" className="w-auto" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></FilterBar>
-      <Cards className="xl:grid-cols-5">
+      <Cards>
         <SummaryCard label="Total due" value={formatMoney(t?.total)} sub={`${q.data?.customers_with_due ?? 0} customers`} tone="danger" />
         <SummaryCard label="Current (0–30)" value={formatMoney(t?.current)} tone="success" />
         <SummaryCard label="31–60 days" value={formatMoney(t?.["31_60"])} tone="warning" />

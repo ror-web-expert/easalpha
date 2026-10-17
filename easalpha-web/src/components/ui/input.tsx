@@ -1,5 +1,5 @@
 "use client";
-import { cloneElement, forwardRef, isValidElement, type InputHTMLAttributes, type LabelHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, useId } from "react";
+import { cloneElement, forwardRef, isValidElement, type InputHTMLAttributes, type LabelHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, useId, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 // Material Design 3 outlined text field (dense 40px): outline border, extra-small (4px) corners,
@@ -7,9 +7,58 @@ import { cn } from "@/lib/utils";
 const base = "flex w-full rounded-[4px] border border-border-strong bg-transparent px-3 text-base text-fg transition-[border-color,box-shadow] placeholder:text-fg-muted hover:border-fg focus-visible:border-primary focus-visible:shadow-[inset_0_0_0_1px_var(--primary)] focus-visible:outline-none disabled:opacity-40";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...props }, ref) => (
-  <input ref={ref} className={cn(base, "h-10", className)} {...props} />
+  props.type === "date" ? <DateInput ref={ref} className={className} {...props} /> : <input ref={ref} className={cn(base, "h-10", className)} {...props} />
 ));
 Input.displayName = "Input";
+
+/**
+ * Review 5.4: a native date field shows the browser's locale order, so a Pakistani owner on an en-US browser read
+ * 10/17/2026 in a filter while every table said 17 Oct 2026. Decision: every date field shows "17 Oct 2026", the
+ * same day-month-year the tables print, whatever the browser locale; the month is a word, so no order is ambiguous.
+ * The native input stays the real control (value, events, ref, validation and min/max unchanged, so forms and tests
+ * are untouched). Its own text is hidden and the formatted date is drawn over it. A mouse click opens the browser's
+ * calendar; keyboard focus shows the native fields for typing; touch keeps the phone's own date wheel.
+ */
+const DateInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, onChange, onPointerDown, ...props }, ref) => {
+  const own = useRef<HTMLInputElement>(null);
+  const controlled = props.value !== undefined;
+  const [uncontrolled, setUncontrolled] = useState(String(props.defaultValue ?? ""));
+  const value = controlled ? String(props.value ?? "") : uncontrolled;
+  // An uncontrolled field may get its first value through the ref (a form library) rather than defaultValue.
+  useLayoutEffect(() => { if (!controlled && own.current?.value) setUncontrolled(own.current.value); }, [controlled]);
+  const setRefs = (el: HTMLInputElement | null) => {
+    own.current = el;
+    if (typeof ref === "function") ref(el); else if (ref) ref.current = el;
+  };
+  const inline = /(^|\s)w-(auto|\d|\[)/.test(className ?? "");
+  const small = /(^|\s)text-xs(\s|$)/.test(className ?? "");
+  return (
+    <span className={cn("relative", inline ? "inline-flex" : "flex w-full")}>
+      <input ref={setRefs} {...props}
+        className={cn(base, "h-10 text-transparent focus:text-fg [&::-webkit-datetime-edit]:text-inherit", "peer", className)}
+        onChange={(e) => { if (!controlled) setUncontrolled(e.target.value); onChange?.(e); }}
+        onPointerDown={(e) => {
+          onPointerDown?.(e);
+          const el = e.currentTarget;
+          if (e.pointerType !== "mouse" || props.disabled || props.readOnly || typeof el.showPicker !== "function") return;
+          e.preventDefault();
+          try { el.showPicker(); } catch { el.focus(); }
+        }} />
+      <span aria-hidden className={cn("pointer-events-none absolute inset-y-0 left-0 right-8 flex items-center overflow-hidden whitespace-nowrap px-3 peer-focus:invisible", small ? "text-xs" : "text-base", value ? "text-fg" : "text-fg-muted", props.disabled && "opacity-40")}>
+        {value ? formatDay(value) : "Pick a date"}
+      </span>
+    </span>
+  );
+});
+DateInput.displayName = "DateInput";
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-10-17" as "17 Oct 2026" (the tables' format), without a timezone shift. */
+export function formatDay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
+}
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...props }, ref) => (
   <textarea ref={ref} className={cn(base, "min-h-20 py-2.5", className)} {...props} />
@@ -43,7 +92,7 @@ export function Field({ label, hint, error, children, className, htmlFor: given 
   );
 }
 
-export function Checkbox({ label, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
+export function Checkbox({ label, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: React.ReactNode }) {
   return (
     <label className={cn("flex w-fit cursor-pointer items-center gap-3 text-sm", className)}>
       <input type="checkbox" className="h-[18px] w-[18px] shrink-0 rounded-[2px] accent-[var(--primary)]" {...props} />

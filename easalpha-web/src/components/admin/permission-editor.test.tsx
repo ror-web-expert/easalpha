@@ -137,15 +137,16 @@ describe("PermissionEditor", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
   });
 
-  it("shows code, surface and RESTRICTION badges for the selected module", async () => {
+  it("shows surface and Restriction badges but never the machine code (review 4.6)", async () => {
     const user = userEvent.setup();
     mount();
     await screen.findByText("Ali Raza");
     expect(screen.getByText("Software")).toBeInTheDocument();
     expect(screen.getByText("App")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Security/ }));
-    expect(screen.getByText("REQUIRE_PIN_FOR_ORDER_UPDATE")).toBeInTheDocument();
-    expect(screen.getByText("RESTRICTION")).toBeInTheDocument();
+    expect(screen.queryByText("REQUIRE_PIN_FOR_ORDER_UPDATE")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\b[A-Z]+(?:_[A-Z]+)+\b/);
+    expect(screen.getByText("Restriction")).toBeInTheDocument();
     expect(screen.getByText(/adds a step rather than opening a door/)).toBeInTheDocument();
   });
 });

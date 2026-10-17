@@ -18,6 +18,17 @@ import { toast } from "@/store/toast";
 type Action = { kind: "assign"; d: Delivery } | { kind: "status"; d: Delivery; to: DeliveryStatus } | { kind: "cash"; d: Delivery };
 const BOARD_COLUMNS: DeliveryStatus[] = ["unassigned", "assigned", "picked_up", "on_the_way", "arrived", "delivered", "failed"];
 
+/** Why a board column is empty (review 4.8), instead of a bare "None". */
+const BOARD_EMPTY: Partial<Record<string, string>> = {
+  unassigned: "No delivery is waiting for a rider. New delivery orders from the till and the website land here.",
+  assigned: "No rider has a delivery to collect. Assign one from Unassigned.",
+  picked_up: "Nothing has left the kitchen with a rider.",
+  on_the_way: "No rider is on the road right now.",
+  arrived: "No rider is waiting at a customer's door.",
+  delivered: "Nothing delivered yet today.",
+  failed: "No failed deliveries. Good.",
+};
+
 export default function DeliveryBoardPage() {
   const qc = useQueryClient();
   const [day, setDay] = useState(isoDay());
@@ -96,7 +107,7 @@ export default function DeliveryBoardPage() {
                     <div className="mt-2">{actions(d)}</div>
                   </div>
                 ))}
-                {!counts[s] ? <div className="py-6 text-center text-xs text-fg-muted">None</div> : null}
+                {!counts[s] ? <div className="px-2 py-6 text-center text-xs text-fg-secondary">{BOARD_EMPTY[s] ?? "Nothing here right now."}</div> : null}
               </div>
             </div>
           ))}

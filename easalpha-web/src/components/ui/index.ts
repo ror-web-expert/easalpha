@@ -8,3 +8,4 @@ export * from "./table";
 export * from "./tabs";
 export * from "./misc";
 export * from "./pin-pad";
+export * from "./menu";

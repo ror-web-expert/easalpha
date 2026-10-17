@@ -34,7 +34,7 @@ export default function AdvancesPage() {
   return (
     <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
       <PageHeader icon={CircleDollarSign} title="Advances" description="Salary advances: requested, approved, paid out, then recovered from payslips in instalments until repaid." actions={<Button onClick={() => setForm({ employee_id: "", amount_minor: 0, installment_minor: 0, reason: "" })}><Plus className="h-4 w-4" /> Request advance</Button>} />
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Pending" value={pending.length} sub={`${formatMoney(pending.reduce((s, a) => s + a.amount_minor, 0))} waiting for a decision`} tone={pending.length ? "warning" : "neutral"} />
         <SummaryCard label="Outstanding" value={formatMoney(outstanding.reduce((s, a) => s + a.outstanding_minor, 0))} sub={`${outstanding.length} advances still being recovered`} tone={outstanding.length ? "danger" : "neutral"} />
         <SummaryCard label="Repaid" value={(all.data ?? []).filter((a) => a.status === "repaid").length} sub="fully recovered through payroll" tone="success" />

@@ -118,7 +118,7 @@ export function PriceOverrideDialog({ open, onClose, current, onSet }: { open: b
   const [price, setPrice] = useState(current);
   useEffect(() => { if (open) setPrice(current); }, [open, current]);
   return (
-    <Dialog open={open} onClose={onClose} title="Override price" description="A manager PIN is asked for when the order is saved." size="sm" footer={<><Button variant="secondary" onClick={() => { onSet(null); onClose(); }}>Remove override</Button><Button onClick={() => { onSet(price); onClose(); }}>Set price</Button></>}>
+    <Dialog open={open} onClose={onClose} title="Change price" description="Sets a different price for this line. Without the price permission, a manager PIN is asked for when the order is saved." size="sm" footer={<><Button variant="secondary" onClick={() => { onSet(null); onClose(); }}>Remove override</Button><Button onClick={() => { onSet(price); onClose(); }}>Set price</Button></>}>
       <Field label="New unit price"><MoneyInput value={price} onChange={setPrice} className="h-12 text-base" autoFocus /></Field>
     </Dialog>
   );

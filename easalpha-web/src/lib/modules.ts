@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import type { BusinessModule, BusinessModules, BusinessSettings, Session } from "@/lib/types";
@@ -26,6 +26,12 @@ export function moduleOn(settings: BusinessSettings | Record<string, unknown> | 
   return (settings as Record<string, unknown> | null | undefined)?.[MODULE_KEYS[name]] === true;
 }
 
+/** Review 6: GET /me feeds both the top bar pills and the modules, which asked for it separately on every page load.
+ *  Both now go through this one fetch: requests made within two seconds of each other share a single call. */
+export function fetchMe(qc: QueryClient, businessId: string | null | undefined): Promise<Session> {
+  return qc.fetchQuery({ queryKey: ["me", businessId ?? null], queryFn: () => api<Session>("/me", { auth: "admin" }), staleTime: 2_000 });
+}
+
 /** Cached per business, so a login to another business in this tab never shows the last one's modules. */
 const modulesKey = (businessId: string | null | undefined) => ["modules", businessId ?? null];
 
@@ -38,11 +44,12 @@ function saveModules(businessId: string, m: BusinessModules) {
 /** Admin side: the business's modules. Starts from the saved session and refreshes from /me once per page load, so a
  *  change made on another computer shows up; sessions saved before modules existed load them the first time. */
 export function useModules(): BusinessModules & { loaded: boolean } {
+  const qc = useQueryClient();
   const session = useAuthStore((s) => s.session);
   const businessId = session?.business.id ?? null;
   const q = useQuery({
     queryKey: modulesKey(businessId),
-    queryFn: async () => (await api<Session>("/me", { auth: "admin" })).modules ?? { customer_accounts: false, payroll: false },
+    queryFn: async () => (await fetchMe(qc, businessId)).modules ?? { customer_accounts: false, payroll: false },
     enabled: !!session,
     staleTime: 60_000,
   });

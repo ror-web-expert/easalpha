@@ -56,7 +56,7 @@ export default function CashierTillPage() {
         </>} />
       <Card className="mb-6 border-info/40 bg-info-soft/40"><CardBody className="text-sm text-fg-secondary">{EXPLANATION}</CardBody></Card>
       <FilterBar><DateRangePicker value={range} onChange={setRange} /></FilterBar>
-      <Cards className="xl:grid-cols-5">
+      <Cards>
         <SummaryCard label="Orders taken" value={r?.totals.orders_taken ?? 0} sub="Rung up in the period" tone="neutral" />
         <SummaryCard label="Taken" value={formatMoney(r?.totals.taken_minor ?? 0)} sub="Value of orders taken" tone="info" />
         <SummaryCard label="Collected" value={formatMoney(r?.totals.collected_minor ?? 0)} sub="Payments received, the accountable figure" tone="success" />

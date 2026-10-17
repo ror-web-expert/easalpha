@@ -28,6 +28,9 @@ function CustomTooltip({ active, payload, label, series }: { active?: boolean; p
 const axisTick = { fontSize: 12, fill: "var(--text-muted)" };
 const axisLine = { stroke: "var(--border)" };
 const legendStyle = { fontSize: 12, color: "var(--text-secondary)" };
+// Recharts colours each legend label with its series colour; the orange series made "Discounts" 2.61:1 on white.
+// The swatch keeps the colour and the label uses the body text colour (review 2.4 audit).
+const legendLabel = (value: string) => <span style={{ color: "var(--text-secondary)" }}>{value}</span>;
 const moneyTick = (v: number) => (Math.abs(v) >= 100000 ? `${Math.round(v / 100000)}k` : String(Math.round(v / 100)));
 
 /** True when every plotted value is a whole number, so the y-axis can skip 2.25-style ticks. */
@@ -57,7 +60,8 @@ export function TrendChartBody({ data, x, series, money }: ChartBodyProps) {
         <XAxis dataKey={x} tick={axisTick} axisLine={axisLine} tickLine={false} />
         <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} tickFormatter={money ? moneyTick : undefined} allowDecimals={!allIntegers(data, series)} />
         <Tooltip content={<CustomTooltip series={series} />} cursor={{ stroke: "var(--text-muted)", strokeDasharray: "3 3" }} />
-        {series.length > 1 ? <Legend iconType="circle" iconSize={8} wrapperStyle={legendStyle} /> : null}
+        {/* Review 4.7: with two series the legend sits above the plot, where it is read before the lines. */}
+        {series.length > 1 ? <Legend verticalAlign="top" align="right" height={28} iconType="circle" iconSize={8} wrapperStyle={legendStyle} formatter={legendLabel} /> : null}
         {series.map((s, i) => {
           const color = lineColor(i, series.length);
           return (
@@ -90,7 +94,7 @@ export function BarsChartBody({ data, x, series, money }: ChartBodyProps) {
         <XAxis dataKey={x} tick={axisTick} axisLine={axisLine} tickLine={false} />
         <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} tickFormatter={money ? moneyTick : undefined} allowDecimals={!allIntegers(data, series)} />
         <Tooltip content={<CustomTooltip series={series} />} cursor={{ fill: "var(--bg-muted)", fillOpacity: 0.6 }} />
-        {series.length > 1 ? <Legend iconType="circle" iconSize={8} wrapperStyle={legendStyle} /> : null}
+        {series.length > 1 ? <Legend verticalAlign="top" align="right" height={28} iconType="circle" iconSize={8} wrapperStyle={legendStyle} formatter={legendLabel} /> : null}
         {series.map((s, i) => {
           const color = barColor(i, series.length);
           return (

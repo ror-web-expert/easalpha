@@ -24,12 +24,12 @@ export function AuditInsightsPanel({ filters }: { filters: AuditFilters }) {
   const actors = d.by_actor.slice(0, 10).map((a) => ({ label: a.name, value: a.count }));
   return (
     <>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Entries" value={d.total.toLocaleString()} sub="Matching the filters" />
         <SummaryCard label="Distinct actors" value={d.by_actor.length} sub="Users who made changes" tone="info" />
         <SummaryCard label="Distinct entities" value={Object.keys(d.by_entity).length} sub="Tables touched" tone="neutral" />
       </Cards>
-      <Card className="mb-4"><CardHeader><CardTitle>Entries by day</CardTitle></CardHeader><CardBody><TrendChart data={days} x="day" series={[{ key: "count", label: "Entries" }]} /></CardBody></Card>
+      <Card className="mb-4"><CardHeader><CardTitle>Entries by day</CardTitle></CardHeader><CardBody><TrendChart data={days} x="day" series={[{ key: "count", label: "Entries" }]} empty="No audit entries in this range." /></CardBody></Card>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card><CardHeader><CardTitle>By action</CardTitle></CardHeader><CardBody><Breakdown data={top(d.by_action)} money={false} /></CardBody></Card>
         <Card><CardHeader><CardTitle>By entity (top 10)</CardTitle></CardHeader><CardBody><Breakdown data={top(d.by_entity)} money={false} /></CardBody></Card>

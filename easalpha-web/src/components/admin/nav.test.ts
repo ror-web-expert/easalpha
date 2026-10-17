@@ -51,3 +51,18 @@ describe("SPEC sidebar", () => {
     for (const h of hrefs) expect(h).toMatch(/^\/admin(\/(products|inventory|inventory-reports|purchasing|suppliers|customers|staff|finance|payroll|reports|riders|settings|orders|expenses|tables)(\/.*)?)?$/);
   });
 });
+
+describe("settings sections (review 4.10)", () => {
+  it("puts every settings screen in one of the six areas, each area listed once and in order", async () => {
+    const { SETTINGS_SECTIONS } = await import("./nav");
+    const settings = NAV.find((g) => g.label === "Settings")!;
+    const screens = settings.items.filter((i) => i.href !== "/admin/settings");
+    const keys = SETTINGS_SECTIONS.map((s) => s.key);
+    expect(keys).toEqual(["Store", "Point of Sale", "Money", "Staff and Security", "Integrations", "Plan"]);
+    expect(screens.every((i) => i.section && keys.includes(i.section))).toBe(true);
+    // Contiguous runs: a section heading appears once in the sidebar.
+    const runs = screens.map((i) => i.section).filter((s, n, a) => s !== a[n - 1]);
+    expect(runs).toEqual(keys);
+    expect(screens).toHaveLength(24);
+  });
+});

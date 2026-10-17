@@ -25,7 +25,7 @@ export default function VouchersReportPage() {
         rows: rows.map((r) => ({ name: r.batch.name, kind: titleCase(r.batch.kind), code: r.batch.public_code ?? "", value: valueText(r.batch), issued_in_period: r.issued_in_period, issued: r.issued, redeemed_in_period: r.redeemed_in_period, redeemed_total: r.redeemed_total, amount: formatMoney(r.amount_minor), status: r.batch.expired ? "Expired" : r.batch.exhausted ? "Exhausted" : r.batch.active ? "Active" : "Inactive" })),
         footer: d ? [`Issued ${d.totals.issued}  |  Redeemed ${d.totals.redeemed}  |  Discount given ${formatMoney(d.totals.amount_minor)}`] : undefined,
       }}>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Issued" value={d?.totals.issued ?? 0} sub="Vouchers created in the period" tone="info" />
         <SummaryCard label="Redeemed" value={d?.totals.redeemed ?? 0} sub="On paid orders in the period" tone="success" />
         <SummaryCard label="Discount given" value={formatMoney(d?.totals.amount_minor)} tone="warning" />

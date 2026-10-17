@@ -7,7 +7,7 @@ import { api, errorMessage } from "@/lib/api";
 import type { BusinessModule, BusinessModules } from "@/lib/types";
 import { MODULE_INFO, MODULE_KEYS, useApplyModules, useModules } from "@/lib/modules";
 import { PageHeader } from "@/components/admin/page";
-import { Badge, Card, CardBody, Loading, Switch } from "@/components/ui";
+import { Card, CardBody, Loading, Switch } from "@/components/ui";
 import { useAuthStore } from "@/store/auth";
 import { toast } from "@/store/toast";
 
@@ -46,7 +46,9 @@ export default function ModulesPage() {
       <PageHeader icon={ToggleRight} title="Modules" description="Switch on the parts of EasAlpha this business uses. Switching off hides the screens; no records are deleted." />
       {!isOwner ? <p className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm">Only the owner can switch modules on or off. Ask the owner if you need one.</p> : null}
       {!modules.loaded ? <Loading /> : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        // Review 4.10: the switch already says On or Off, so the badge beside the title went; the grid keeps a
+        // readable width instead of stretching two cards across a wide screen.
+        <div className="grid max-w-5xl gap-4 lg:grid-cols-2">
           {ORDER.map((name) => {
             const info = MODULE_INFO[name];
             const Icon = ICONS[name];
@@ -57,10 +59,7 @@ export default function ModulesPage() {
                   <div className="flex items-start gap-4">
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary"><Icon className="h-6 w-6" /></span>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-medium">{info.title}</h2>
-                        {on ? <Badge variant="success">On</Badge> : <Badge>Off</Badge>}
-                      </div>
+                      <h2 className="text-lg font-medium">{info.title}</h2>
                       <p className="mt-1 text-sm text-fg-secondary">{info.summary}</p>
                     </div>
                     <Switch checked={on} disabled={!isOwner || busy === name} onChange={(v) => void toggle(name, v)} label={on ? "On" : "Off"} />

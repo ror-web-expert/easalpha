@@ -106,7 +106,7 @@ function Board() {
   return (
     <div className="flex h-dvh flex-col bg-navy-deep text-white [--heading-color:#fff]">
       <header className="flex h-14 items-center gap-3 border-b border-white/10 bg-navy px-3 [--heading-color:#fff]">
-        <ChefHat className="h-6 w-6 text-cta" />
+        <ChefHat className="h-6 w-6 text-brand-orange" />
         <span className="text-lg font-semibold">Kitchen</span>
         <Select className="h-11 w-48 border-white/30 text-base text-white hover:border-white [&>option]:bg-card [&>option]:text-fg" value={station} onChange={(e) => setStation(e.target.value)} aria-label="Station"><option value="">All stations</option>{stations.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
         <span className="text-sm text-white/70">{list.length} orders{alerts.timeoutMinutes ? ` · red after ${alerts.timeoutMinutes} min` : ""}</span>

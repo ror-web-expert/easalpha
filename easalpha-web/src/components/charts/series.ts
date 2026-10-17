@@ -51,3 +51,19 @@ export function breakdownColor(label: string, i: number, colorBy: "palette" | "s
 export interface Series { key: string; label: string; money?: boolean }
 
 export interface ChartBodyProps { data: Record<string, unknown>[]; x: string; series: Series[]; money?: boolean }
+
+/** Review 4.7: rows after the last one with any non-zero value are days (or hours) not recorded yet, so a trend line
+ *  that plotted them as 0 dived to the axis at the right edge and looked broken. Those trailing values become null:
+ *  the axis keeps the whole range and the line simply ends at the last real point. Zeros in the middle stay zeros. */
+export function endAtLastData<T extends Record<string, unknown>>(rows: T[], keys: string[]): T[] {
+  const has = (r: T) => keys.some((k) => { const v = Number(r[k]); return Number.isFinite(v) && v !== 0; });
+  let last = -1;
+  rows.forEach((r, i) => { if (has(r)) last = i; });
+  if (last === rows.length - 1) return rows;
+  return rows.map((r, i) => (i <= last ? r : { ...r, ...Object.fromEntries(keys.map((k) => [k, null])) }));
+}
+
+/** True when nothing in the series is above or below zero, so a chart would only draw a flat line. */
+export function allZero(rows: Record<string, unknown>[], keys: string[]): boolean {
+  return rows.every((r) => keys.every((k) => { const v = Number(r[k]); return !Number.isFinite(v) || v === 0; }));
+}

@@ -99,7 +99,7 @@ function LedgerScreen() {
         : bad ? <EmptyState icon={BookOpen} title="Check the dates" hint={bad} />
         : q.isLoading ? <Loading /> : q.error ? <ErrorState message={errorMessage(q.error)} onRetry={() => q.refetch()} /> : c ? (
         <>
-          <Cards className="xl:grid-cols-5">
+          <Cards>
             <SummaryCard label={balanceLabel(c.balance_minor)} value={formatMoney(Math.abs(c.balance_minor))} sub={c.khata_no ? `Khata ${c.khata_no}` : "No khata no"} tone={c.balance_minor > 0 ? "danger" : "success"} />
             <SummaryCard label="Current (0-30)" value={formatMoney(a?.current)} tone="success" />
             <SummaryCard label="31-60 days" value={formatMoney(a?.["31_60"])} tone="warning" />

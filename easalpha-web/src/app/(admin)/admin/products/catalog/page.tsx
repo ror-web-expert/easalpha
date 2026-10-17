@@ -13,7 +13,7 @@ import { useAction, useList } from "@/components/admin/crud";
 import { DisplaySettingsDialog, ImportMenuDialog, ProductCodesDialog, downloadMenu, useDisplaySettings } from "@/components/admin/catalog-dialogs";
 import { DragHandle, SortableList, SortableRow } from "@/components/admin/catalog-sortable";
 import { discountLabel } from "@/components/admin/catalog-helpers";
-import { Badge, Button, Checkbox, EmptyRow, EmptyState, Loading, Select, Switch, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Badge, Button, Checkbox, EmptyRow, EmptyState, Loading, OverflowMenu, Select, Switch, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 type Panel = "import" | "display" | "codes" | null;
@@ -34,6 +34,9 @@ export default function ProductsPage() {
   const list = usePagedList<Product>(["products"], "/products", { q: dq, category_id: cat, favourites: fav ? "true" : "", include_inactive: inactive ? "true" : "" }, { enabled: !arrange });
   const favM = useAction<{ id: string; value: boolean }>(["products"], ({ id, value }) => api(`/products/${id}/favourite`, { method: "POST", body: { value } }));
   const catName = (id: string) => cats.data?.find((c) => c.id === id)?.name ?? "-";
+  // Review 4.4: a column that is empty on every visible row only takes width away from the name.
+  const showSku = list.rows.some((p) => p.sku || p.pct_code);
+  const showVariants = list.rows.some((p) => p.variants?.length);
   const download = async () => {
     setDownloading(true);
     try { await downloadMenu(); toast.success("Menu downloaded"); }
@@ -42,11 +45,14 @@ export default function ProductsPage() {
   };
   return (
     <>
-      <PageHeader icon={Package} title="Products" description="Products show a price and an Active or Inactive state. Drag to arrange within a category; download, import, display and code tools on the right." actions={<>
-        <Button variant="secondary" onClick={download} loading={downloading}><Download className="h-4 w-4" /> Download Menu</Button>
-        <Button variant="secondary" onClick={() => setPanel("import")}><FileJson className="h-4 w-4" /> Import JSON</Button>
-        <Button variant="secondary" onClick={() => setPanel("display")}><SlidersHorizontal className="h-4 w-4" /> Display Settings</Button>
-        <Button variant="secondary" onClick={() => setPanel("codes")}><Hash className="h-4 w-4" /> Product Codes</Button>
+      <PageHeader icon={Package} title="Products" description="Every product with its price and whether it sells in the shop and online. Turn on Arrange to drag products into order within a category." actions={<>
+        {/* Review 4.4: one primary action; the menu tools sit together in one overflow menu. */}
+        <OverflowMenu label={downloading ? "Downloading…" : "Menu tools"} items={[
+          { label: "Download menu", icon: Download, hint: "Every product as a file you can re-import", onSelect: download, disabled: downloading },
+          { label: "Import products", icon: FileJson, hint: "Add or update products from a menu file", onSelect: () => setPanel("import") },
+          { label: "Display settings", icon: SlidersHorizontal, hint: "Images, prices and inactive products", onSelect: () => setPanel("display") },
+          { label: "Product codes", icon: Hash, hint: "SKUs and tax codes in bulk", onSelect: () => setPanel("codes") },
+        ]} />
         <Link href="/admin/products/catalog/new"><Button><Plus className="h-4 w-4" /> New product</Button></Link>
       </>} />
       <FilterBar>
@@ -61,7 +67,7 @@ export default function ProductsPage() {
         cat ? <ArrangeList categoryId={cat} includeInactive={inactive} showImages={display.data.images} /> : <EmptyState icon={Move} title="Pick a category" hint="Products are arranged inside their category, the same order the till and the website show." />
       ) : list.isLoading ? <Loading /> : (
         <Table>
-          <THead><tr><TH></TH><TH>Name</TH><TH>Category</TH><TH>SKU</TH><TH>Variants</TH><TH>Status</TH><TH right>Price</TH></tr></THead>
+          <THead><tr><TH></TH><TH>Name</TH><TH>Category</TH>{showSku ? <TH>SKU</TH> : null}{showVariants ? <TH>Variants</TH> : null}<TH>Status</TH><TH right>Price</TH></tr></THead>
           <TBody>
             {list.rows.length ? list.rows.map((p) => (
               <TR key={p.id}>
@@ -73,12 +79,12 @@ export default function ProductsPage() {
                   </span>
                 </TD>
                 <TD className="text-fg-secondary">{catName(p.category_id)}</TD>
-                <TD className="font-mono text-xs text-fg-secondary">{p.sku ?? "-"}{p.pct_code ? <span className="ml-2 text-fg-muted">PCT {p.pct_code}</span> : null}</TD>
-                <TD className="text-fg-secondary">{p.variants?.length ? p.variants.map((v) => v.name).join(", ") : "-"}</TD>
-                <TD>{p.active ? <Badge variant="success">Active</Badge> : <Badge>Inactive</Badge>} {p.show_online ? <Badge variant="info">online</Badge> : null}</TD>
+                {showSku ? <TD className="font-mono text-xs text-fg-secondary">{p.sku ?? "-"}{p.pct_code ? <span className="ml-2 text-fg-muted">PCT {p.pct_code}</span> : null}</TD> : null}
+                {showVariants ? <TD className="text-fg-secondary">{p.variants?.length ? p.variants.map((v) => v.name).join(", ") : "-"}</TD> : null}
+                <TD><ProductStatus active={p.active} online={p.show_online} /></TD>
                 <TD right className="font-medium">{display.data.show_prices ? formatMoney(p.base_price_minor) : "-"}{discountLabel(p.discount_value, p.discount_type) ? <Badge variant="accent" className="ml-2">{discountLabel(p.discount_value, p.discount_type)} off</Badge> : null}</TD>
               </TR>
-            )) : <EmptyRow colSpan={7}>No products. Add your first item or import a menu.</EmptyRow>}
+            )) : <EmptyRow colSpan={5 + (showSku ? 1 : 0) + (showVariants ? 1 : 0)} icon={Package} action={<Link href="/admin/products/catalog/new"><Button size="sm"><Plus className="h-4 w-4" /> New product</Button></Link>}>{dq || cat || fav ? "No products match these filters. Clear the search or pick another category." : "No products yet. Add your first item, or import a menu from Menu tools."}</EmptyRow>}
           </TBody>
         </Table>
       )}
@@ -88,6 +94,12 @@ export default function ProductsPage() {
       <ProductCodesDialog open={panel === "codes"} onClose={() => setPanel(null)} />
     </>
   );
+}
+
+/** One status pill per product (review 4.4): whether it sells, and where. */
+function ProductStatus({ active, online }: { active: boolean; online?: boolean }) {
+  if (!active) return <Badge>Inactive</Badge>;
+  return <Badge variant="success" title={online ? "Sells at the till and on the website" : "Sells at the till only"}>{online ? "Active · Online" : "Active · Till only"}</Badge>;
 }
 
 function Thumb({ src }: { src: string | null }) {
@@ -121,7 +133,7 @@ function ArrangeList({ categoryId, includeInactive, showImages }: { categoryId: 
                 <TD className="w-10 text-fg-muted tabular">{i + 1}</TD>
                 <TD><span className="flex items-center gap-3">{showImages ? <Thumb src={p.image_key} /> : null}<span className="font-medium">{p.name}</span></span></TD>
                 <TD className="text-fg-secondary">{p.variants?.length ? p.variants.map((v) => v.name).join(", ") : "-"}</TD>
-                <TD>{p.active ? <Badge variant="success">Active</Badge> : <Badge>Inactive</Badge>}</TD>
+                <TD><ProductStatus active={p.active} online={p.show_online} /></TD>
                 <TD right className="font-medium">{formatMoney(p.base_price_minor)}</TD>
               </SortableRow>
             )}

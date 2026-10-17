@@ -1,8 +1,9 @@
-import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, Barcode, FileText, HandCoins as Wage, ToggleRight, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, Barcode, FileText, HandCoins as Wage, ToggleRight, LayoutGrid, type LucideIcon } from "lucide-react";
 import type { BusinessModule } from "@/lib/types";
 
 /** module: shown only while the owner has that module switched on (Settings, Modules). */
-export interface NavItem { href: string; label: string; icon: LucideIcon; perms?: string[]; soon?: boolean; exact?: boolean; module?: BusinessModule }
+/** `section` puts a small heading above the item inside its group (review 4.10: the 24 settings screens in six areas). */
+export interface NavItem { href: string; label: string; icon: LucideIcon; perms?: string[]; soon?: boolean; exact?: boolean; module?: BusinessModule; section?: string }
 /** flat: items render at the top level with no group header (the SPEC's four standalone screens). */
 export interface NavGroup { label: string; icon: LucideIcon; items: NavItem[]; flat?: boolean }
 
@@ -207,30 +208,41 @@ export const NAV: NavGroup[] = [
     label: "Settings",
     icon: Settings,
     items: [
-      { href: "/admin/settings/store", label: "Store", icon: Store, perms: SETTINGS },
-      { href: "/admin/settings/branding", label: "Branding", icon: Palette, perms: SETTINGS },
-      { href: "/admin/settings/modules", label: "Modules", icon: ToggleRight, perms: SETTINGS },
-      { href: "/admin/settings/store-management", label: "Store Management", icon: Building2, perms: SETTINGS },
-      { href: "/admin/settings/business-hours", label: "Business Hours", icon: Timer, perms: SETTINGS },
-      { href: "/admin/settings/point-of-sale", label: "Point of Sale", icon: MonitorSmartphone, perms: SETTINGS },
-      { href: "/admin/settings/charges-tax", label: "Charges & Tax", icon: Percent, perms: SETTINGS },
-      { href: "/admin/settings/security-cash", label: "Security & Cash", icon: Lock, perms: SETTINGS },
-      { href: "/admin/settings/payment-methods", label: "Payment Methods", icon: CreditCard, perms: SETTINGS },
-      { href: "/admin/settings/plan", label: "Plan", icon: BadgeDollarSign, perms: ["billing.manage", "settings.manage"] },
-      { href: "/admin/settings/whatsapp", label: "WhatsApp", icon: MessageCircle, perms: SETTINGS },
-      { href: "/admin/settings/website", label: "Website Config", icon: Globe, perms: SETTINGS },
-      { href: "/admin/settings/notifications", label: "Notifications", icon: Bell, perms: SETTINGS },
-      { href: "/admin/settings/loyalty-points", label: "Loyalty Points", icon: Star, perms: ["settings.manage", "customers.view", "orders.create"] },
-      { href: "/admin/settings/regular-discounts", label: "Regular Discounts", icon: Percent, perms: SETTINGS },
-      { href: "/admin/settings/vouchers", label: "Vouchers", icon: Ticket, perms: SETTINGS },
-      { href: "/admin/settings/reviews", label: "Reviews", icon: Star, perms: SETTINGS },
-      { href: "/admin/settings/audit-logs", label: "Audit Logs", icon: ScrollText, perms: ["audit.view", "reports.view_all"] },
-      { href: "/admin/settings/devices", label: "Signed-in devices", icon: Printer, perms: ["devices.manage", "settings.manage"] },
-      { href: "/admin/settings/qr", label: "QR ordering", icon: QrCode, perms: SETTINGS },
-      { href: "/admin/settings/checklist", label: "Setup checklist", icon: ListChecks },
-      { href: "/admin/settings/checklists", label: "Opening and closing", icon: ClipboardCheck, perms: ["settings.manage", "shifts.any", "shifts.own"] },
-      { href: "/admin/settings/needs-attention", label: "Needs attention", icon: RefreshCw },
-      { href: "/admin/settings/integrations", label: "Integrations", icon: Plug, perms: ["settings.manage", "finance.view"] },
+      { href: "/admin/settings", label: "All settings", icon: LayoutGrid, perms: SETTINGS, exact: true },
+      { href: "/admin/settings/store", section: "Store", label: "Store", icon: Store, perms: SETTINGS },
+      { href: "/admin/settings/branding", section: "Store", label: "Branding", icon: Palette, perms: SETTINGS },
+      { href: "/admin/settings/store-management", section: "Store", label: "Store Management", icon: Building2, perms: SETTINGS },
+      { href: "/admin/settings/business-hours", section: "Store", label: "Business Hours", icon: Timer, perms: SETTINGS },
+      { href: "/admin/settings/point-of-sale", section: "Point of Sale", label: "Point of Sale", icon: MonitorSmartphone, perms: SETTINGS },
+      { href: "/admin/settings/qr", section: "Point of Sale", label: "QR ordering", icon: QrCode, perms: SETTINGS },
+      { href: "/admin/settings/checklists", section: "Point of Sale", label: "Opening and closing", icon: ClipboardCheck, perms: ["settings.manage", "shifts.any", "shifts.own"] },
+      { href: "/admin/settings/needs-attention", section: "Point of Sale", label: "Needs attention", icon: RefreshCw },
+      { href: "/admin/settings/charges-tax", section: "Money", label: "Charges & Tax", icon: Percent, perms: SETTINGS },
+      { href: "/admin/settings/payment-methods", section: "Money", label: "Payment Methods", icon: CreditCard, perms: SETTINGS },
+      { href: "/admin/settings/regular-discounts", section: "Money", label: "Regular Discounts", icon: Percent, perms: SETTINGS },
+      { href: "/admin/settings/vouchers", section: "Money", label: "Vouchers", icon: Ticket, perms: SETTINGS },
+      { href: "/admin/settings/loyalty-points", section: "Money", label: "Loyalty Points", icon: Star, perms: ["settings.manage", "customers.view", "orders.create"] },
+      { href: "/admin/settings/security-cash", section: "Staff and Security", label: "Security & Cash", icon: Lock, perms: SETTINGS },
+      { href: "/admin/settings/devices", section: "Staff and Security", label: "Signed-in devices", icon: Printer, perms: ["devices.manage", "settings.manage"] },
+      { href: "/admin/settings/audit-logs", section: "Staff and Security", label: "Audit Logs", icon: ScrollText, perms: ["audit.view", "reports.view_all"] },
+      { href: "/admin/settings/website", section: "Integrations", label: "Website Config", icon: Globe, perms: SETTINGS },
+      { href: "/admin/settings/whatsapp", section: "Integrations", label: "WhatsApp", icon: MessageCircle, perms: SETTINGS },
+      { href: "/admin/settings/notifications", section: "Integrations", label: "Notifications", icon: Bell, perms: SETTINGS },
+      { href: "/admin/settings/reviews", section: "Integrations", label: "Reviews", icon: Star, perms: SETTINGS },
+      { href: "/admin/settings/integrations", section: "Integrations", label: "Integrations", icon: Plug, perms: ["settings.manage", "finance.view"] },
+      { href: "/admin/settings/plan", section: "Plan", label: "Plan", icon: BadgeDollarSign, perms: ["billing.manage", "settings.manage"] },
+      { href: "/admin/settings/modules", section: "Plan", label: "Modules", icon: ToggleRight, perms: SETTINGS },
+      { href: "/admin/settings/checklist", section: "Plan", label: "Setup checklist", icon: ListChecks },
     ],
   },
+];
+
+/** One line per settings area, for the Settings overview page (review 4.10). Keys match the `section` on each item. */
+export const SETTINGS_SECTIONS: { key: string; summary: string }[] = [
+  { key: "Store", summary: "Name, address and phone on the receipt, linked stores, the business day and the look of the receipt." },
+  { key: "Point of Sale", summary: "How the till takes orders, QR ordering at the table, opening and closing checks, and records that failed to sync." },
+  { key: "Money", summary: "Service and delivery charges, tax, payment methods, discounts, vouchers and loyalty points." },
+  { key: "Staff and Security", summary: "PINs and the cashier drawer, the devices signed in, and the audit log of who changed what." },
+  { key: "Integrations", summary: "The ordering website, WhatsApp, notifications, customer reviews and connected services." },
+  { key: "Plan", summary: "Your subscription, the modules switched on, and the setup checklist." },
 ];

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Gives a demo business a full set of brand images: a logo (also the favicon), a cover, one picture per category and
-per product. Drawn with Pillow (gradient, a plate motif, the name) and uploaded through POST /uploads, so they live in
+per product. Drawn with Pillow (a gradient and a faint dish motif; product pictures carry no text) and uploaded through POST /uploads, so they live in
 Active Storage like real uploads; then saved on the business, Website Config identity, categories and products.
 
-Usage: python3 scripts/demo-images.py <api base> <owner email> <owner password> [--only-missing]
+Usage: python3 scripts/demo-images.py <api base> <owner email> <owner password> [--only-missing] [--pictures-only]
   e.g. python3 scripts/demo-images.py http://localhost:3001/api/v1 demo@easalpha.com password123
 --only-missing keeps pictures that are already set and fills in the gaps.
 """
@@ -12,14 +12,17 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 API, EMAIL, PASSWORD = sys.argv[1].rstrip("/"), sys.argv[2], sys.argv[3]
 ONLY_MISSING = "--only-missing" in sys.argv
+# --pictures-only redraws the category and product pictures and leaves the logo, favicon and cover as they are.
+PICTURES_ONLY = "--pictures-only" in sys.argv
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 NAVY, ORANGE, CREAM = (16, 41, 77), (255, 122, 26), (255, 247, 237)
-# Category palettes: (top colour, bottom colour, ring colour). Unknown categories cycle through them.
+# Category palettes: (top colour, bottom colour, motif colour). Review 2.2: no category sits in the action orange's
+# hue (about 15 to 45 degrees), so a BBQ picture never reads like the Pay button. Unknown categories cycle through them.
 PALETTES = {
-    "bbq": ((160, 48, 24), (214, 86, 36), (255, 140, 90)), "burgers": ((178, 108, 24), (214, 150, 40), (255, 212, 110)),
-    "karahi": ((150, 60, 20), (200, 96, 40), (255, 150, 90)), "rice": ((96, 110, 40), (140, 150, 60), (220, 220, 140)),
-    "drinks": ((24, 90, 140), (50, 140, 200), (140, 210, 255)), "desserts": ((150, 60, 110), (200, 100, 150), (255, 180, 220)),
-    "breakfast": ((170, 120, 30), (220, 170, 60), (255, 230, 150)), "deals": ((90, 50, 140), (130, 90, 190), (200, 170, 255)),
+    "bbq": ((128, 24, 44), (176, 44, 66), (236, 160, 172)), "burgers": ((74, 96, 28), (110, 136, 44), (206, 222, 160)),
+    "karahi": ((96, 34, 80), (138, 58, 112), (222, 176, 210)), "rice": ((28, 96, 62), (46, 136, 88), (172, 222, 192)),
+    "drinks": ((24, 90, 140), (50, 140, 200), (176, 218, 246)), "desserts": ((84, 52, 150), (122, 92, 192), (206, 194, 242)),
+    "breakfast": ((18, 98, 104), (36, 140, 146), (170, 222, 224)), "deals": ((40, 52, 128), (70, 92, 180), (186, 196, 240)),
 }
 PALETTE_LIST = list(PALETTES.values())
 
@@ -50,19 +53,21 @@ def wrap(draw, text, font, width):
 
 
 def dish(name, category, palette):
-    top, bottom, ring = palette
-    img = gradient(800, 600, top, bottom)
-    d = ImageDraw.Draw(img)
-    d.ellipse((470, 80, 760, 370), fill=ring)
-    d.ellipse((520, 130, 710, 320), fill=CREAM)
-    font = ImageFont.truetype(FONT, 46)
-    lines = wrap(d, name, font, 560)[:3]
-    y = 520 - 56 * len(lines)
-    for line in lines:
-        d.text((50, y), line, font=font, fill=CREAM)
-        y += 56
-    d.text((50, 535), category.upper(), font=ImageFont.truetype(FONT, 22), fill=(255, 230, 200))
-    return img, "JPEG"
+    """A product picture with no words on it (review 3.4: the tile prints the name, so the picture must not repeat it)
+    and no bright placeholder disc: a soft gradient with a faint cloche, so a thumbnail reads as food, not as a label."""
+    top, bottom, motif = palette
+    img = gradient(800, 600, top, bottom).convert("RGBA")
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    tint = motif + (110,)
+    # Vary the cloche a little per product so a row of thumbnails is not identical.
+    h = sum(ord(c) for c in name)
+    r = 170 + (h % 5) * 8
+    cx, cy = 400 + (h % 5 - 2) * 10, 300 + (r + 4) // 2
+    d.pieslice((cx - r, cy - r, cx + r, cy + r), 180, 360, fill=tint)
+    d.rounded_rectangle((cx - r - 40, cy + 6, cx + r + 40, cy + 40), radius=17, fill=tint)
+    d.ellipse((cx - 24, cy - r - 44, cx + 24, cy - r + 4), fill=tint)
+    return Image.alpha_composite(img, layer).convert("RGB"), "JPEG"
 
 
 def category_picture(name, palette):
@@ -153,16 +158,18 @@ def main():
     identity = dict(wc.get("sections", {}).get("identity") or {})
     tagline = identity.get("description") or "Family dining since 1998"
     changed = {}
-    if not (ONLY_MISSING and biz.get("logo_key")):
+    if PICTURES_ONLY:
+        pass
+    elif not (ONLY_MISSING and biz.get("logo_key")):
         logo_key = upload(token, f"{slug}-logo", *logo(name))
         request("PATCH", "/business", {"logo_key": logo_key}, token=token)
         changed["logo_key"] = logo_key
         changed["favicon_key"] = logo_key
         print("logo and favicon set")
-    if not (ONLY_MISSING and identity.get("cover_key")):
+    if not PICTURES_ONLY and not (ONLY_MISSING and identity.get("cover_key")):
         changed["cover_key"] = upload(token, f"{slug}-cover", *cover(name, f"{tagline} · Lahore" if "Lahore" not in tagline else tagline))
         print("cover set")
-    if not identity.get("description"):
+    if not PICTURES_ONLY and not identity.get("description"):
         changed["description"] = tagline
     if changed:
         request("PATCH", "/website_config", {"sections": {"identity": {**identity, **changed}}}, token=token)

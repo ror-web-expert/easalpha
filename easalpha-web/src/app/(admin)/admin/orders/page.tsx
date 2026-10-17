@@ -74,14 +74,15 @@ export default function OrdersPage() {
   const error = paged ? list.error : pages.error;
   const retry = () => (paged ? list.refetch() : pages.refetch());
 
+  // Open orders that are fully paid: what "complete all" changes.
+  const bulkCandidates = rows.filter((o) => o.spec_status !== "completed" && !["voided", "refunded", "cancelled"].includes(o.status) && o.payment_status === "paid").length;
   return (
     <>
-      <PageHeader icon={ReceiptText} title="Orders Management" description="Every order with its SPEC status, payment and story. Dates are business days." actions={<>
+      <PageHeader icon={ReceiptText} title="Orders Management" description="Every order with its order status, payment and history. Dates are business days." actions={<>
         <Button variant="ghost" size="icon" onClick={refreshAll} aria-label="Refresh" title="Refresh"><RefreshCw className="h-5 w-5" /></Button>
         <Link href="/admin/orders/pending"><Button variant="secondary"><Clock className="h-4 w-4" /> Pending Orders</Button></Link>
         {can("settings.manage", "reports.view_all", "billing.manage") ? <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="h-4 w-4" /> Export CSV</Button> : null}
         {can("COMPLIMENTARY_ORDER", "orders.staff_meal") ? <Button variant="secondary" onClick={() => sync.mutate()} loading={sync.isPending}>Sync Complimentary</Button> : null}
-        {can("COMPLETE_ORDER", "orders.create") ? <Button onClick={() => setConfirmBulk(true)}><CheckCheck className="h-4 w-4" /> Mark All Completed</Button> : null}
       </>} />
       <Cards>
         <SummaryCard label="Orders" value={oneDay ? s?.orders ?? 0 : rows.length} sub={oneDay ? `${s?.open_orders ?? 0} open · ${s?.voided_orders ?? 0} cancelled` : "Loaded rows; pick one day for day totals"} tone="info" />
@@ -100,6 +101,13 @@ export default function OrdersPage() {
         <Select className="w-auto" value={rider} onChange={(e) => set(setRider)(e.target.value)} aria-label="Rider"><option value="">Any rider</option>{(riders.data ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select>
         <Select className="w-auto" value={sort} onChange={(e) => set(setSort)(e.target.value as OrderSort)} aria-label="Sort">{ORDER_SORTS.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</Select>
       </FilterBar>
+      {/* Review 4.2: completing every paid order is a bulk step that cannot be undone, so it sits apart from the page
+          actions, as a quiet button by the table, and asks first with the number of orders it will change. */}
+      {can("COMPLETE_ORDER", "orders.create") && bulkCandidates > 0 ? (
+        <div className="mb-2 flex justify-end">
+          <Button variant="ghost" size="sm" onClick={() => setConfirmBulk(true)}><CheckCheck className="h-4 w-4" /> Complete {bulkCandidates} paid order{bulkCandidates === 1 ? "" : "s"}</Button>
+        </div>
+      ) : null}
       {loading ? <Loading /> : error ? <ErrorState message={errorMessage(error)} onRetry={retry} /> : <OrderTable rows={rows} onSelect={setSelected} riders={riders.data} />}
       {paged ? <LoadMore cursor={list.nextCursor} onLoad={() => list.fetchNextPage()} loading={list.isFetchingNextPage} /> : (
         <div className="mt-3 flex items-center justify-center gap-3 text-sm">
@@ -109,8 +117,8 @@ export default function OrdersPage() {
         </div>
       )}
       <OrderDrawer id={selected} onClose={() => setSelected(null)} />
-      <ConfirmDialog open={confirmBulk} onClose={() => setConfirmBulk(false)} onConfirm={() => bulk.mutate()} title="Mark all completed?"
-        description={`Every open, paid order ${oneDay ? `of ${range.from}` : "of today"} is completed. Unpaid orders stay open and are counted back to you.`} confirmLabel="Complete all" loading={bulk.isPending} />
+      <ConfirmDialog open={confirmBulk} onClose={() => setConfirmBulk(false)} onConfirm={() => bulk.mutate()} title={`Complete ${bulkCandidates} paid order${bulkCandidates === 1 ? "" : "s"}?`}
+        description={`${bulkCandidates} open order${bulkCandidates === 1 ? " that is" : "s that are"} fully paid ${oneDay ? `on ${range.from}` : "today"} will be marked completed${paged && list.nextCursor ? ", plus any further paid open orders not loaded yet" : ""}. This cannot be undone. Unpaid orders stay open.`} confirmLabel={`Complete ${bulkCandidates}`} loading={bulk.isPending} />
     </>
   );
 }

@@ -40,7 +40,7 @@ export default function PurchasePriceHistoryPage() {
         <SearchInput value={q} onChange={setQ} placeholder="Item name" />
         <Switch checked={flagged} onChange={setFlagged} label="Flagged only" />
       </FilterBar>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Items purchased" value={r?.summary.items ?? 0} sub={`${formatDate(range.from)} to ${formatDate(range.to)}`} tone="neutral" />
         <SummaryCard label="Flagged" value={r?.summary.flagged ?? 0} sub={r?.summary.items ? `${Math.round((r.summary.flagged / r.summary.items) * 100)}% of purchased items` : "Nothing to check yet"} tone={r?.summary.flagged ? "danger" : "success"} />
         <SummaryCard label="Spent" value={formatMoney(r?.summary.spent_minor)} sub="Posted goods receipts in the window" tone="primary" />

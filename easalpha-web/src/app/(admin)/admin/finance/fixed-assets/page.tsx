@@ -40,7 +40,7 @@ export default function FixedAssetsPage() {
   return (
     <>
       <PageHeader icon={Building2} title="Fixed assets" description="Equipment, furniture and vehicles on the books. Straight-line depreciation posts to 1590 Accumulated Depreciation." actions={manage ? <Button onClick={() => setForm(blank())}><Plus className="h-4 w-4" /> Add asset</Button> : null} />
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Cost" value={formatMoney(t?.cost_minor)} sub={`${rows.length} assets`} tone="primary" />
         <SummaryCard label="Accumulated depreciation" value={formatMoney(t?.accumulated_minor)} tone="warning" />
         <SummaryCard label="Book value" value={formatMoney(t?.book_value_minor)} tone="success" />

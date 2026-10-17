@@ -33,7 +33,7 @@ export default function SupplierPaymentsPage() {
         <Select className="w-auto" value={method} onChange={(e) => setMethod(e.target.value)} aria-label="Method"><option value="">Any method</option>{methods.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select>
         <Select className="w-auto" value={direction} onChange={(e) => setDirection(e.target.value)} aria-label="Direction"><option value="">Paid and received</option><option value="paid">Paid to supplier</option><option value="received">Received from supplier</option></Select>
       </FilterBar>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Paid to suppliers" value={formatMoney(totals?.paid_minor)} sub={`${formatDate(range.from)} to ${formatDate(range.to)}`} tone="success" />
         <SummaryCard label="Received from suppliers" value={formatMoney(totals?.received_minor)} sub="Refunds and money back" tone="warning" />
         <SummaryCard label="Payments" value={totals?.count ?? 0} sub={totals ? `Net ${formatMoney(totals.paid_minor - totals.received_minor)}` : ""} tone="neutral" />

@@ -2,7 +2,8 @@
 import dynamic from "next/dynamic";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import { breakdownColor, type Series } from "./series";
+import { allZero, breakdownColor, endAtLastData, type Series } from "./series";
+import { BarChart3 } from "lucide-react";
 
 export { SERIES, type Series } from "./series";
 
@@ -12,20 +13,31 @@ export { SERIES, type Series } from "./series";
 const TrendChartBody = dynamic(() => import("./charts-recharts").then((m) => m.TrendChartBody), { ssr: false, loading: () => null });
 const BarsChartBody = dynamic(() => import("./charts-recharts").then((m) => m.BarsChartBody), { ssr: false, loading: () => null });
 
-type ChartProps = { data: Record<string, unknown>[]; x: string; series: Series[]; money?: boolean; height?: number; className?: string };
-
-/** Line chart with one y-axis. Pass money series together or counts together, never mixed. */
-export function TrendChart({ data, x, series, money, height = 220, className }: ChartProps) {
-  if (!data?.length) return <div className={cn("grid place-items-center text-sm text-fg-muted", className)} style={{ height }}>No data for this range</div>;
+/** A chart with nothing to draw: an icon and the reason, at the chart's own height so the card does not jump. */
+function ChartEmpty({ className, height, text }: { className?: string; height: number; text?: string }) {
   return (
-    <div className={className} style={{ height }}>
-      <TrendChartBody data={data} x={x} series={series} money={money} />
+    <div className={cn("flex flex-col items-center justify-center gap-1.5 text-center text-sm text-fg-secondary", className)} style={{ height }}>
+      <BarChart3 className="h-6 w-6 text-fg-muted" aria-hidden />
+      {text ?? "No sales recorded in this range yet. Pick a longer range above."}
     </div>
   );
 }
 
-export function BarsChart({ data, x, series, money, height = 220, className }: ChartProps) {
-  if (!data?.length) return <div className={cn("grid place-items-center text-sm text-fg-muted", className)} style={{ height }}>No data for this range</div>;
+type ChartProps = { data: Record<string, unknown>[]; x: string; series: Series[]; money?: boolean; height?: number; className?: string; empty?: string };
+
+/** Line chart with one y-axis. Pass money series together or counts together, never mixed. */
+export function TrendChart({ data, x, series, money, height = 220, className, empty }: ChartProps) {
+  const keys = series.map((s) => s.key);
+  if (!data?.length || allZero(data, keys)) return <ChartEmpty className={className} height={height} text={empty} />;
+  return (
+    <div className={className} style={{ height }}>
+      <TrendChartBody data={endAtLastData(data, keys)} x={x} series={series} money={money} />
+    </div>
+  );
+}
+
+export function BarsChart({ data, x, series, money, height = 220, className, empty }: ChartProps) {
+  if (!data?.length) return <ChartEmpty className={className} height={height} text={empty} />;
   return (
     <div className={className} style={{ height }}>
       <BarsChartBody data={data} x={x} series={series} money={money} />
@@ -41,7 +53,7 @@ export function BarsChart({ data, x, series, money, height = 220, className }: C
 export function Breakdown({ data, money = true, className, labelFor, colorBy = "palette" }: { data: Record<string, number> | { label: string; value: number }[] | undefined; money?: boolean; className?: string; labelFor?: (k: string) => string; colorBy?: "palette" | "status" }) {
   const rows = Array.isArray(data) ? data : Object.entries(data ?? {}).map(([k, v]) => ({ label: labelFor ? labelFor(k) : k, value: Number(v) }));
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
-  if (!rows.length) return <div className={cn("py-6 text-center text-sm text-fg-muted", className)}>Nothing yet</div>;
+  if (!rows.length) return <div className={cn("flex flex-col items-center gap-1.5 py-6 text-center text-sm text-fg-secondary", className)}><BarChart3 className="h-5 w-5 text-fg-muted" aria-hidden />No sales in this range yet</div>;
   return (
     <ul className={cn("space-y-2", className)}>
       {rows.sort((a, b) => b.value - a.value).map((r, i) => {

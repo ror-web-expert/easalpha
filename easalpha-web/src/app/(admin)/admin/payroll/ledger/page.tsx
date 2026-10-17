@@ -37,7 +37,7 @@ export default function PayrollLedgerPage() {
         <span className="text-xs text-fg-muted">From</span><MonthPicker value={from} onChange={(v) => { setFrom(v); if (v > to) setTo(v); }} />
         <span className="text-xs text-fg-muted">to</span><MonthPicker value={to} onChange={(v) => { setTo(v); if (v < from) setFrom(v); }} />
       </FilterBar>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Gross" value={formatMoney(t?.gross_minor)} sub={`${rows.length} payslips`} tone="primary" />
         <SummaryCard label="Deductions" value={formatMoney(t?.deductions_minor)} sub="components, absence, fines and advances" tone="warning" />
         <SummaryCard label="Net" value={formatMoney(t?.net_minor)} tone="success" />

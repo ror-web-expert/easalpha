@@ -24,7 +24,7 @@ function isActive(it: NavItem, pathname: string) {
 }
 
 /** Groups and items this user may see, in nav order. */
-function useVisibleNav(): NavGroup[] {
+export function useVisibleNav(): NavGroup[] {
   const perms = useAuthStore((s) => s.session?.permissions);
   const modules = useModules();
   return useMemo(
@@ -96,33 +96,11 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
             </button>
             {expanded ? (
               <ul className="mb-2 mt-0.5 space-y-0.5">
-                {group.items.map((it) => {
-                  const active = current?.item.href === it.href || (isActive(it, pathname) && !current);
-                  if (it.soon) {
-                    return (
-                      <li key={it.href + it.label}>
-                        <span className="flex h-9 cursor-default items-center gap-2 rounded-full pl-12 pr-4 text-sm text-white/50" title="Not built yet">
-                          <span className="truncate">{it.label}</span>
-                          <span className="ml-auto rounded-full bg-white/10 px-2 text-[11px] font-medium tracking-[0.5px] text-white/70">Soon</span>
-                        </span>
-                      </li>
-                    );
-                  }
-                  return (
-                    <li key={it.href + it.label}>
-                      <Link
-                        href={it.href}
-                        onClick={onNavigate}
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "relative flex h-9 items-center rounded-full pl-12 pr-4 text-sm text-sidebar-text transition-colors hover:bg-white/10",
-                          active && "bg-sidebar-active-bg font-medium text-sidebar-active hover:bg-sidebar-active-bg before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-cta",
-                        )}
-                      >
-                        <span className="truncate">{it.label}</span>
-                      </Link>
-                    </li>
-                  );
+                {group.items.flatMap((it, i) => {
+                  const heading = it.section && it.section !== group.items[i - 1]?.section
+                    ? [<li key={`section-${it.section}`} role="presentation" className="px-12 pb-0.5 pt-2.5 text-[11px] font-semibold uppercase tracking-[0.6px] text-white/50 first:pt-1">{it.section}</li>]
+                    : [];
+                  return [...heading, navLeaf(it)];
                 })}
               </ul>
             ) : null}
@@ -131,6 +109,36 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
       })}
     </nav>
   );
+
+  /** One link in an expanded group (or a greyed Soon row). */
+  function navLeaf(it: NavItem) {
+    const active = current?.item.href === it.href || (isActive(it, pathname) && !current);
+    if (it.soon) {
+      return (
+        <li key={it.href + it.label}>
+          <span className="flex h-9 cursor-default items-center gap-2 rounded-full pl-12 pr-4 text-sm text-white/50" title="Not built yet">
+            <span className="truncate">{it.label}</span>
+            <span className="ml-auto rounded-full bg-white/10 px-2 text-[11px] font-medium tracking-[0.5px] text-white/70">Soon</span>
+          </span>
+        </li>
+      );
+    }
+    return (
+      <li key={it.href + it.label}>
+        <Link
+          href={it.href}
+          onClick={onNavigate}
+          aria-current={active ? "page" : undefined}
+          className={cn(
+            "relative flex h-9 items-center rounded-full pl-12 pr-4 text-sm text-sidebar-text transition-colors hover:bg-white/10",
+            active && "bg-sidebar-active-bg font-medium text-sidebar-active hover:bg-sidebar-active-bg before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-cta",
+          )}
+        >
+          <span className="truncate">{it.label}</span>
+        </Link>
+      </li>
+    );
+  }
 }
 
 function BusinessSwitcher() {
@@ -194,10 +202,10 @@ function BranchPicker() {
   };
   if (!session) return null;
   return (
-    <label className="relative flex h-8 items-center rounded-full bg-white/10 pl-3 text-white hover:bg-white/15">
+    <label className="relative flex h-8 min-w-0 shrink items-center rounded-full bg-white/10 pl-3 text-white hover:bg-white/15">
       <Building2 className="h-[18px] w-[18px] text-white/85" />
       <select
-        className="h-full max-w-[160px] appearance-none bg-transparent pl-2 pr-8 text-sm font-medium tracking-[0.1px] text-white outline-none [&>option]:bg-card [&>option]:text-fg"
+        className="h-full min-w-0 max-w-[160px] appearance-none truncate bg-transparent pl-2 pr-8 text-sm font-medium tracking-[0.1px] text-white outline-none [&>option]:bg-card [&>option]:text-fg"
         value={branchId ?? session.branch?.id ?? ""}
         onFocus={load}
         onChange={(e) => { setBranch(e.target.value || null); window.location.reload(); }}
@@ -300,10 +308,12 @@ function DayBar() {
   if (!session) return null;
   const window_ = session.branch?.business_day_window;
   return (
-    <div className="hidden items-center gap-2 text-xs text-white/85 md:flex">
-      {now ? <span className="tabular whitespace-nowrap" suppressHydrationWarning>{format(now, "EEE d MMM yyyy · HH:mm")}</span> : null}
-      {window_ ? <span className="whitespace-nowrap rounded-full bg-white/10 px-2.5 py-0.5 text-white" title="Daily reports and the dashboard use this window, not midnight to midnight">Business day {window_}</span> : null}
-      <Badge className="bg-white/10 text-white">{session.business.plan?.name ?? "Trial"}</Badge>
+    // Review 1.2: below 1280 px the date and the business-day window give way, so the bar never pushes the page sideways;
+    // the chips, the branch and the plan badge stay.
+    <div className="hidden shrink-0 items-center gap-2 text-xs text-white/85 sm:flex">
+      {now ? <span className="tabular hidden whitespace-nowrap 2xl:inline" suppressHydrationWarning>{format(now, "EEE d MMM yyyy · HH:mm")}</span> : null}
+      {window_ ? <span className="hidden whitespace-nowrap rounded-full bg-white/10 px-2.5 py-0.5 text-white 2xl:inline" title="Daily reports and the dashboard use this window, not midnight to midnight">Business day {window_}</span> : null}
+      <Badge className="shrink-0 whitespace-nowrap bg-white/10 text-white">{session.business.plan?.name ?? "Trial"}</Badge>
     </div>
   );
 }

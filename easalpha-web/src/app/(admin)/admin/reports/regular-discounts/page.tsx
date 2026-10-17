@@ -25,7 +25,7 @@ export default function RegularDiscountsReportPage() {
         rows: rows.map((r) => ({ tier: r.tier, within_days: r.within_days ?? "", discount: tierValue(r.kind, r.value), orders: r.orders, amount: formatMoney(r.amount_minor), share: `${pctOf(r.amount_minor, d?.totals.amount_minor ?? 0)}%` })),
         footer: d ? [`${d.totals.orders} orders discounted  |  ${formatMoney(d.totals.amount_minor)} given  |  ${d.tiers.length} active tiers`] : undefined,
       }}>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Orders discounted" value={d?.totals.orders ?? 0} tone="info" />
         <SummaryCard label="Discount given" value={formatMoney(d?.totals.amount_minor)} sub={`Average ${formatMoney(d?.totals.orders ? Math.round(d.totals.amount_minor / d.totals.orders) : 0)} per order`} tone="warning" />
         <SummaryCard label="Active tiers" value={d?.tiers.length ?? 0} sub={(d?.tiers ?? []).map((t) => t.name).join(", ")} tone="primary" />

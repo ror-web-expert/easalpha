@@ -8,8 +8,10 @@
      eye always finds the action.
    Layout and density stay Material Design 3 (compact); only the colour roles changed from the earlier blue
    seed. Status colours (success, warning, danger, info) are untouched M3 tonal palettes. Old token names
-   are kept so every page picks the scheme up unchanged. Text pairs meet WCAG AA, except white on orange,
-   which is reserved for 16px+ bold button labels; small orange text on white uses --cta-ink (#C2410C). */
+   are kept so every page picks the scheme up unchanged. Every text pair meets WCAG AA (4.5:1), checked by
+   src/lib/contrast.test.ts: the action orange that carries white text is the strong #C2410C (5.18:1); the bright
+   brand orange #FF7A1A (--brand-orange, --accent) is for icons, charts, focus rings and other marks without text,
+   because white on it is only 2.61:1. */
 :root {
   color-scheme: light;
   /* brand constants (same in both modes) */
@@ -20,7 +22,8 @@
   --primary: #10294d; --primary-fg: #ffffff; --primary-hover: #1b3a6b;
   --primary-soft: #e3eaf6; --primary-ink: #0b1f3a;            /* primary container / on primary container */
   /* cta: orange, the one action per screen */
-  --cta: #ff7a1a; --cta-hover: #e0640c; --cta-fg: #ffffff; --cta-soft: #fff1e6; --cta-ink: #c2410c;
+  --cta: #c2410c; --cta-hover: #9a3412; --cta-fg: #ffffff; --cta-soft: #fff1e6; --cta-ink: #c2410c;
+  --brand-orange: #ff7a1a;   /* the bright brand orange: icons, charts, accents, never under text */
   /* status (M3 custom colours) */
   --success: #2f6a39; --success-fg: #ffffff; --success-soft: #d5f7d2; --success-ink: #034619;
   --warning: #8d4f00; --warning-fg: #ffffff; --warning-soft: #ffeadb; --warning-ink: #5b3100;
@@ -42,6 +45,9 @@
   --heading: #0b1f3a;
   --inverse: #0b1f3a; --inverse-fg: #ffffff; --inverse-primary: #9ec1ff; --inverse-danger: #ffb4ab;
   --sidebar-text: rgba(255, 255, 255, 0.85); --sidebar-active-bg: #1b3a6b; --sidebar-active: #ffffff;
+  /* POS surfaces (review 2.3): top bar, the product area (--bg-page), the cart panel and the product tiles. In light
+     mode the panel and tiles are white on the grey page; dark mode below gives each its own level. */
+  --pos-bar: #10294d; --pos-panel: #ffffff; --pos-tile: #ffffff; --pos-media-filter: none;
   /* shape and elevation */
   --radius: 8px; --radius-lg: 12px;
   --shadow-card: 0 0 #0000;
@@ -56,7 +62,7 @@
     color-scheme: dark;
     --primary: #9ec1ff; --primary-fg: #0b1f3a; --primary-hover: #b7d1ff;
     --primary-soft: #1b3a6b; --primary-ink: #d6e4ff;
-    --cta: #ff7a1a; --cta-hover: #e0640c; --cta-fg: #ffffff; --cta-soft: #3d2412; --cta-ink: #ffb889;
+    --cta: #c2410c; --cta-hover: #9a3412; --cta-fg: #ffffff; --cta-soft: #3d2412; --cta-ink: #ffb889;
     --success: #96d69a; --success-fg: #003913; --success-soft: #1f3b22; --success-ink: #acecaf;
     --warning: #ffb876; --warning-fg: #4b2800; --warning-soft: #4c2e0f; --warning-ink: #ffd5b2;
     --danger: #ffb4ab;  --danger-fg: #690005;  --danger-soft: #93000a;  --danger-ink: #ffdad6;
@@ -69,6 +75,7 @@
     --heading: #ffffff;
     --inverse: #e6edf7; --inverse-fg: #0b1f3a; --inverse-primary: #10294d; --inverse-danger: #ba1a1a;
     --sidebar-text: rgba(255, 255, 255, 0.85); --sidebar-active-bg: #1b3a6b; --sidebar-active: #ffffff;
+    --pos-bar: #050b16; --pos-panel: #10294d; --pos-tile: #1b3a6b; --pos-media-filter: saturate(0.7) brightness(0.8);
     --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
     --shadow-pop: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
     --chart-1: #6f9be8; --chart-2: #ff7a1a; --chart-3: #2bb5a6; --chart-4: #c98500; --chart-5: #d55181; --chart-7: #9085e9; --chart-8: #e66767;
@@ -78,7 +85,7 @@
   color-scheme: dark;
   --primary: #9ec1ff; --primary-fg: #0b1f3a; --primary-hover: #b7d1ff;
   --primary-soft: #1b3a6b; --primary-ink: #d6e4ff;
-  --cta: #ff7a1a; --cta-hover: #e0640c; --cta-fg: #ffffff; --cta-soft: #3d2412; --cta-ink: #ffb889;
+  --cta: #c2410c; --cta-hover: #9a3412; --cta-fg: #ffffff; --cta-soft: #3d2412; --cta-ink: #ffb889;
   --success: #96d69a; --success-fg: #003913; --success-soft: #1f3b22; --success-ink: #acecaf;
   --warning: #ffb876; --warning-fg: #4b2800; --warning-soft: #4c2e0f; --warning-ink: #ffd5b2;
   --danger: #ffb4ab;  --danger-fg: #690005;  --danger-soft: #93000a;  --danger-ink: #ffdad6;
@@ -91,6 +98,7 @@
   --heading: #ffffff;
   --inverse: #e6edf7; --inverse-fg: #0b1f3a; --inverse-primary: #10294d; --inverse-danger: #ba1a1a;
   --sidebar-text: rgba(255, 255, 255, 0.85); --sidebar-active-bg: #1b3a6b; --sidebar-active: #ffffff;
+  --pos-bar: #050b16; --pos-panel: #10294d; --pos-tile: #1b3a6b; --pos-media-filter: saturate(0.7) brightness(0.8);
   --elev-1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
   --shadow-pop: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
   --chart-1: #6f9be8; --chart-2: #ff7a1a; --chart-3: #2bb5a6; --chart-4: #c98500; --chart-5: #d55181; --chart-7: #9085e9; --chart-8: #e66767;
@@ -107,6 +115,7 @@
   --color-cta-fg: var(--cta-fg);
   --color-cta-soft: var(--cta-soft);
   --color-cta-ink: var(--cta-ink);
+  --color-brand-orange: var(--brand-orange);
   --color-navy: var(--navy);
   --color-navy-deep: var(--navy-deep);
   --color-navy-raised: var(--navy-raised);
@@ -134,6 +143,9 @@
   --color-info-soft: var(--info-soft);
   --color-info-ink: var(--info-ink);
   --color-page: var(--bg-page);
+  --color-pos-bar: var(--pos-bar);
+  --color-pos-panel: var(--pos-panel);
+  --color-pos-tile: var(--pos-tile);
   --color-card: var(--bg-card);
   --color-muted: var(--bg-muted);
   --color-high: var(--bg-high);

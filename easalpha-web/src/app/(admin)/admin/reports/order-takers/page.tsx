@@ -19,7 +19,7 @@ export default function OrderTakersPage() {
     <ReportShell icon={ClipboardSignature} title="Order Takers" description="Orders punched per order taker: how many orders each member of staff rang up and what they were worth."
       range={range} onRange={setRange} loading={q.isLoading} error={q.isError} onRetry={() => q.refetch()}
       exportData={{ name: "order-takers", columns: ORDER_TAKER_COLUMNS, rows: orderTakerExportRows(rows), footer: [`${rows.length} order takers  |  ${orders} orders  |  ${formatMoney(revenue)}`] }}>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Order takers" value={rows.length} tone="info" />
         <SummaryCard label="Orders punched" value={orders} sub={`Average ${formatMoney(orders ? Math.round(revenue / orders) : 0)}`} tone="primary" />
         <SummaryCard label="Value" value={formatMoney(revenue)} tone="success" />

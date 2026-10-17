@@ -72,6 +72,13 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // Review 5.1: a sidebar section's own address opens its first page instead of a 404 (temporary, so a page added
+      // at that address later is not hidden behind a cached redirect).
+      { source: "/admin/products", destination: "/admin/products/catalog", permanent: false },
+      { source: "/admin/finance", destination: "/admin/finance/dashboard", permanent: false },
+      { source: "/admin/inventory", destination: "/admin/inventory/stock-in-hand", permanent: false },
+      { source: "/admin/inventory-reports", destination: "/admin/inventory-reports/daily-stock-sheet", permanent: false },
+      { source: "/admin/riders", destination: "/admin/riders/manage", permanent: false },
       // One hostname for search engines: www is a permanent redirect to the apex, path and query kept.
       { source: "/:path*", has: [{ type: "host", value: "www.easalpha.com" }], destination: "https://easalpha.com/:path*", permanent: true },
       { source: "/admin/stock/deduction-audits", destination: "/admin/inventory-reports/deduction-health", permanent: true },
@@ -150,7 +157,6 @@ const nextConfig: NextConfig = {
       { source: "/admin/accounts", destination: "/admin/finance/payment-accounts", permanent: true },
       { source: "/admin/accounts/:path*", destination: "/admin/finance/payment-accounts/:path*", permanent: true },
       { source: "/admin/delivery", destination: "/admin/riders/delivery-board", permanent: true },
-      { source: "/admin/settings", destination: "/admin/settings/store", permanent: true },
       { source: "/admin/devices", destination: "/admin/settings/devices", permanent: true },
       { source: "/admin/devices/:path*", destination: "/admin/settings/devices/:path*", permanent: true },
       { source: "/admin/loyalty", destination: "/admin/settings/loyalty-points", permanent: true },

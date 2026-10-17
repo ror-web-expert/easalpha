@@ -63,7 +63,7 @@ export function TodayTab() {
           <Button variant="secondary" size="sm" onClick={() => setAutoClose(true)} disabled={!counters?.currently_in}><Moon className="h-4 w-4" /> Auto-close open rows</Button>
         </div>
       </FilterBar>
-      <Cards className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5">
+      <Cards>
         {counterCards(counters).map((c) => <SummaryCard key={c.key} label={c.label} value={c.value} tone={c.tone} />)}
       </Cards>
       {q.isLoading || !t ? <Loading /> : (
@@ -207,7 +207,7 @@ export function AttendanceLedgerView({ employeeId, month, picker }: { employeeId
       {picker ? <FilterBar>{picker}{l ? <span className="text-sm text-fg-secondary">{l.employee.name} · {monthLabel(month)}</span> : null}</FilterBar> : null}
       {q.isLoading || !l || !s ? <Loading /> : (
         <>
-          <Cards className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
+          <Cards>
             <SummaryCard label="Present" value={s.present} sub="incl. late and half days" tone="success" />
             <SummaryCard label="Late" value={s.late} sub={minutesLabel(s.late_minutes)} tone="warning" />
             <SummaryCard label="Half days" value={s.half_days} tone="warning" />

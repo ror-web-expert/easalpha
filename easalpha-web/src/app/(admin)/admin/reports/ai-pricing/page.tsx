@@ -39,7 +39,7 @@ export default function AiPricingPage() {
       {q.data && p ? (
         <>
           <Card className="mb-6 border-info/40 bg-info-soft/40"><CardBody className="flex flex-wrap items-center justify-between gap-2 text-sm text-fg-secondary"><span>Based on sales from {formatDate(p.from)} to {formatDate(p.to)}. Generated {formatDateTime(q.data.generated_at)} by the {q.data.engine} engine.</span><span>Margins use the recipe cost; items without a recipe are flagged for a cost review.</span></CardBody></Card>
-          <Cards className="xl:grid-cols-5">
+          <Cards>
             <SummaryCard label="Items reviewed" value={p.summary.items_reviewed} sub={`${p.summary.flagged} flagged`} tone="neutral" />
             <SummaryCard label="Underpriced" value={p.summary.underpriced} sub="Raise price" tone="success" />
             <SummaryCard label="Promote" value={p.summary.promote} sub="Strong margin, little volume" tone="info" />

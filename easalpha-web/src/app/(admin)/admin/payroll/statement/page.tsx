@@ -141,7 +141,7 @@ function StatementView() {
           <p className="mb-4 text-sm text-fg-secondary">
             <span className="font-medium text-fg">{s.employee.name}</span>{s.employee.designation ? ` · ${s.employee.designation}` : ""} · {payTypeLabel(s.employee.pay_frequency)} {rateLabel(s.employee.rate_minor, s.employee.pay_frequency)} · {s.employee.phone ?? <span className="text-warning-ink">No phone number</span>}
           </p>
-          <Cards className="xl:grid-cols-3">
+          <Cards>
             <SummaryCard label="Earned" value={formatMoney(s.totals.earned_minor)} sub="salary and wages, after deductions" tone="success" />
             <SummaryCard label="Paid" value={formatMoney(s.totals.paid_minor)} sub="salary and wages paid out" tone="primary" />
             <SummaryCard label="Advances given" value={formatMoney(s.totals.advances_minor)} sub="paid out in this period" tone="warning" />

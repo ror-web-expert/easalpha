@@ -25,7 +25,7 @@ export default function BranchComparisonPage() {
         rows: rows.map((r) => ({ branch: r.branch.name, orders: r.orders, revenue: formatMoney(r.revenue_minor), share: `${r.share_percent}%`, average: formatMoney(r.average_order_minor), discounts: formatMoney(r.discounts_minor), voided: `${r.voided} (${formatMoney(r.voided_minor)})`, khata: formatMoney(r.khata_minor), expenses: formatMoney(r.expenses_minor), cogs: formatMoney(r.cost_of_goods_minor), gross_profit: formatMoney(r.gross_profit_minor), by_type: Object.entries(r.by_type).map(([k, v]) => `${titleCase(k)} ${v}`).join(", ") })),
         footer: d ? [`${rows.length} branches  |  ${d.total_orders} orders  |  Revenue ${formatMoney(d.total_revenue_minor)}`] : undefined,
       }}>
-      <Cards className="lg:grid-cols-3 xl:grid-cols-3">
+      <Cards>
         <SummaryCard label="Branches" value={rows.length} tone="info" />
         <SummaryCard label="Orders" value={d?.total_orders ?? 0} tone="primary" />
         <SummaryCard label="Revenue" value={formatMoney(d?.total_revenue_minor)} sub={rows[0] ? `Top: ${rows.slice().sort((a, b) => b.revenue_minor - a.revenue_minor)[0].branch.name}` : ""} tone="success" />

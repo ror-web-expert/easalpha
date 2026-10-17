@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { billRows, cashSuggestions } from "@/lib/bill";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "@/lib/pos-rules";
+import { lineAmount } from "@/lib/pricing";
 import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, type ChargeState } from "@/lib/pos-charges";
 import type { Cart, CartCustomer } from "@/store/cart";
 import { discountRows } from "@/lib/pos-discounts";
@@ -134,9 +135,12 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const discountLines = discountRows(cart.discounts, base.discount_minor);
 
   return (
-    <Dialog open={open} onClose={onClose} title={cart.reopened ? "Payment (F8) · reopened order" : "Payment (F8)"} description={cart.reopened ? "A reopened order is completed through the payment screen. It opens on its original method." : undefined} size="xl" className="sm:max-h-[95vh]">
-      <div className="grid gap-5 md:grid-cols-[1fr_320px]">
-        <div className="space-y-4">
+    // Reviews 3.1 and 3.2: a fixed height that always fits the screen (1024 x 768 included). Only the method column
+    // scrolls; the right column keeps the total and the change at the top, the itemised bill in the middle, and Pay
+    // pinned at the bottom, so the primary action is never below the fold.
+    <Dialog open={open} onClose={onClose} title={cart.reopened ? "Payment (F8) · reopened order" : "Payment (F8)"} description={cart.reopened ? "A reopened order is completed through the payment screen. It opens on its original method." : undefined} size="xl" className="h-[95dvh] sm:h-[min(95dvh,860px)] sm:max-h-[95dvh]">
+      <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4 pb-2 md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-1 md:gap-5">
+        <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain pr-1" data-testid="payment-methods">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {active.map((m) => (
               <button key={m.id} onClick={() => pick(m)} disabled={status === "offline" && !m.works_offline} className={cn("flex min-h-14 flex-col items-center justify-center rounded-lg border px-2 text-base font-semibold disabled:opacity-40", draft.method?.id === m.id ? "border-primary bg-primary-soft" : "bg-card hover:bg-muted")}>
@@ -202,10 +206,24 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
           {onDiscount ? <DiscountsPanel cart={cart} currency={currency} online={online} busy={busy} locked={discountsLocked} totalDiscountMinor={base.discount_minor} onRun={onDiscount} /> : null}
           <Field label="Tip"><div className="flex gap-2"><MoneyInput value={tip} onChange={setTip} className="h-12" />{[0, 5000, 10000, 20000].map((v) => <button key={v} onClick={() => setTip(v)} className={cn("min-h-12 rounded-lg border px-3 text-sm", tip === v ? "border-primary bg-primary-soft" : "bg-card")}>{v ? formatMoney(v, currency) : "None"}</button>)}</div></Field>
         </div>
-        <div className="flex flex-col rounded-lg bg-muted p-4">
+        <div className="flex min-h-0 flex-col rounded-lg bg-muted p-4">
           <div className="text-sm text-fg-secondary">{paidBefore ? "Amount due" : "Total due"}</div>
           <div className="text-4xl font-bold tabular">{formatMoney(due, currency)}</div>
-          <div className="mt-2 space-y-1 text-sm text-fg-secondary">
+          {change > 0 ? <div className="mt-3 rounded-md bg-success-soft p-3 text-success-ink"><div className="text-sm font-medium">Change</div><div className="text-4xl font-bold tabular">{formatMoney(change, currency)}</div></div> : null}
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <ul className="mb-2 hidden space-y-1.5 border-b pb-2 text-sm md:block" aria-label="Items">
+            {cart.lines.filter((l) => l.status !== "cancelled").map((l) => (
+              <li key={l.key} className="flex justify-between gap-2">
+                <span className="min-w-0">
+                  <span className="font-medium">{l.quantity !== 1 ? `${l.quantity} × ` : ""}{l.name}</span>
+                  {l.modifiers.length ? <span className="block text-xs text-fg-secondary">{l.modifiers.map((m) => m.name).join(", ")}</span> : null}
+                  {l.notes ? <span className="block text-xs italic text-fg-secondary">“{l.notes}”</span> : null}
+                </span>
+                <span className="shrink-0 tabular">{formatMoney(lineAmount(l), currency)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="space-y-1 text-sm text-fg-secondary">
             {billRows({ ...base, discounts: discountLines, service_charge_label: `Service charge ${chargeDisplay(service, currency)}`.trim(), delivery_label: `Delivery ${delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}`.trim(), tax_label: cart.tax_choice === "none" ? "Tax (none)" : "Tax" }, currency).map((r) => (
               <div key={r.key} className={cn("flex justify-between gap-2", r.info && "text-xs text-fg-muted")}><span className="truncate">{r.label}</span><span className="shrink-0 tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</span></div>
             ))}
@@ -218,10 +236,11 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
               <li className="flex justify-between font-semibold"><span>Remaining</span><span className="tabular">{formatMoney(remaining, currency)}</span></li>
             </ul>
           ) : null}
-          {change > 0 ? <div className="mt-3 rounded-md bg-success-soft p-3 text-center"><div className="text-xs">Change</div><div className="text-2xl font-bold tabular">{formatMoney(change, currency)}</div></div> : null}
-          <div className="flex-1" />
-          <Button size="xl" className="mt-4 w-full" onClick={payAll} loading={busy} disabled={!canPay}><Banknote className="h-5 w-5" /> {payLabel}</Button>
-          <Button variant="ghost" className="mt-2 w-full" onClick={onClose}>Back (Esc)</Button>
+          </div>
+          <div className="mt-3 shrink-0 border-t pt-3">
+            <Button size="xl" className="w-full" onClick={payAll} loading={busy} disabled={!canPay}><Banknote className="h-5 w-5" /> {payLabel}</Button>
+            <Button variant="ghost" className="mt-1 w-full" onClick={onClose}>Back (Esc)</Button>
+          </div>
         </div>
       </div>
     </Dialog>

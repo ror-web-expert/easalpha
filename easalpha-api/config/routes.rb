@@ -185,6 +185,7 @@ Rails.application.routes.draw do
       get "day_close", to: "day_closes#show"
       get "reports/dashboard", to: "reports#dashboard"
       get "reports/dashboard/spec", to: "reports#dashboard_spec"
+      get "reports/dashboard/all", to: "reports#dashboard_all"
       %w[overview by_day by_hour items categories cashiers order_takers voids discounts modified customers shifts grand].each { |r| get "reports/#{r}", to: "reports##{r}" }
       post "sync/push", to: "sync#push"
       get "sync/changes", to: "sync#changes"

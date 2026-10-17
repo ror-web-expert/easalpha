@@ -169,7 +169,7 @@ export function ImportMenuDialog({ open, onClose }: { open: boolean; onClose: ()
   };
   const shown = preview?.rows.slice(0, 200) ?? [];
   return (
-    <Dialog open={open} onClose={onClose} title="Import JSON" description="Load a menu in bulk from a EasAlpha export, an ArfaPOS JSON export or a CSV. Preview first, then apply." size="xl"
+    <Dialog open={open} onClose={onClose} title="Import products" description="Load a menu in bulk from a EasAlpha export, an ArfaPOS JSON export or a CSV. Preview first, then apply." size="xl"
       footer={result ? <Button onClick={onClose}>Done</Button> : <>
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         {preview ? <Button onClick={apply} loading={busy === "apply"} disabled={!preview.valid_count}>Apply {preview.valid_count} row{preview.valid_count === 1 ? "" : "s"}</Button>

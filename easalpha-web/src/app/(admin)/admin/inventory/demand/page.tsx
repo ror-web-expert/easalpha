@@ -44,7 +44,7 @@ function DemandTab() {
         <datalist id="demand-categories">{cats.data?.map((c) => <option key={c} value={c} />)}</datalist>
         <Tabs value={bucket} onChange={setBucket} items={DEMAND_BUCKETS.map((b) => ({ value: b.value, label: b.label, count: b.value === "low" || b.value === "critical" || b.value === "out" ? d?.counts[b.value] : undefined }))} />
       </FilterBar>
-      <Cards className="lg:grid-cols-5">
+      <Cards>
         <SummaryCard label="Low stock" value={d?.counts.low ?? 0} sub="Under the minimum" icon={TrendingDown} tone={d?.counts.low ? "info" : "neutral"} />
         <SummaryCard label="Critical" value={d?.counts.critical ?? 0} sub="Under half the minimum" icon={AlertTriangle} tone={d?.counts.critical ? "warning" : "neutral"} />
         <SummaryCard label="Out of stock" value={d?.counts.out ?? 0} sub="Nothing on hand" icon={PackageX} tone={d?.counts.out ? "danger" : "neutral"} />

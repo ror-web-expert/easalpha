@@ -16,6 +16,24 @@ module Api
         render json: Reports::Dashboard.spec(current_branch, period: params[:period].presence || "today", from: params[:from], to: params[:to])
       end
 
+      # GET /reports/dashboard/all?period&from&to[&fresh=1]  Review 6: the dashboard's KPI cards (spec) and its extras
+      # in one response instead of two round trips, cached per business, branch, business day and period. The key also
+      # carries the branch's latest order change, so a new or edited order shows at once; anything else (expenses,
+      # khata, shifts) is at most a minute old, and the page's Refresh button asks for a fresh copy.
+      def dashboard_all
+        require_permission!("reports.view_all", "reports.view_branch", "DASHBOARD", "VIEW_DAILY_SALES")
+        period = params[:period].presence || "today"
+        extras_ok = current_membership.can?("reports.view_all") || current_membership.can?("reports.view_branch")
+        build = lambda do
+          extras = extras_ok ? Reports::Dashboard.build(current_branch) : nil
+          { spec: Reports::Dashboard.spec(current_branch, period: period, from: params[:from], to: params[:to]), extras: extras }
+        end
+        return render(json: build.call) if ActiveModel::Type::Boolean.new.cast(params[:fresh])
+        stamp = Order.where(branch_id: current_branch.id).maximum(:updated_at)&.to_f
+        key = [ "dashboard/all/v1", current_business.id, current_branch.id, extras_ok, current_branch.business_day_for(Time.current).iso8601, period, params[:from], params[:to], stamp ]
+        render json: Rails.cache.fetch(key, expires_in: 60.seconds) { build.call }
+      end
+
       def overview = render(json: report.overview)
       def by_day = render(json: { from: @from, to: @to, data: report.by_day })
       def by_hour = render(json: { from: @from, to: @to, data: report.by_hour })

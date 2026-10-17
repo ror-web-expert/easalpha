@@ -73,6 +73,8 @@ interface CartState {
   addLine: (line: Omit<CartLine, "key">) => void;
   updateLine: (key: string, p: Partial<CartLine>) => void;
   removeLine: (key: string) => void;
+  /** Puts a removed line back where it was (the undo after a delete). */
+  restoreLine: (line: CartLine, index: number) => void;
   setQty: (key: string, qty: number) => void;
 }
 
@@ -94,6 +96,11 @@ export const useCartStore = create<CartState>()(
       },
       updateLine: (key, p) => set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? { ...l, ...p } : l)) } }),
       removeLine: (key) => set({ cart: { ...get().cart, lines: get().cart.lines.filter((l) => l.key !== key) } }),
+      restoreLine: (line, index) => {
+        const lines = get().cart.lines.filter((l) => l.key !== line.key);
+        lines.splice(Math.min(Math.max(0, index), lines.length), 0, line);
+        set({ cart: { ...get().cart, lines } });
+      },
       setQty: (key, qty) => {
         if (qty <= 0) return get().removeLine(key);
         set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? { ...l, quantity: qty } : l)) } });

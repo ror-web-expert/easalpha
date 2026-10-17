@@ -45,7 +45,7 @@ export function UpdateNotice() {
   return (
     <div role="status" className="fixed bottom-4 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#0B1F3A] py-2 pl-4 pr-2 text-sm text-white shadow-lg">
       <span>A new version of EasAlpha is ready.</span>
-      <button type="button" onClick={() => window.location.reload()} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#FF7A1A] px-3 font-semibold hover:bg-[#E0640C]"><RefreshCw className="h-3.5 w-3.5" /> Reload</button>
+      <button type="button" onClick={() => window.location.reload()} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-cta px-3 font-semibold text-cta-fg hover:bg-cta-hover"><RefreshCw className="h-3.5 w-3.5" /> Reload</button>
       <button type="button" onClick={() => setHidden(true)} aria-label="Later" className="grid h-8 w-8 place-items-center rounded-full hover:bg-white/10"><X className="h-4 w-4" /></button>
     </div>
   );
