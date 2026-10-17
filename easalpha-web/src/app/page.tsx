@@ -209,7 +209,7 @@ export default function HomePage() {
 
       {/* Guides */}
       <Section id="guides">
-        <SectionHeading eyebrow="In depth" title="The questions restaurants ask before they switch" text="Six short guides on the things that decide a POS purchase: tax filing, power cuts, the kitchen, stock, local payments and how we compare." />
+        <SectionHeading eyebrow="In depth" title="The questions restaurants ask before they switch" text="Five short guides on the things that decide a POS purchase: tax filing, power cuts, the kitchen, stock and local payments." />
         <p className="mt-6 text-center"><Link href="/guides" className={`py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]`}>All guides on one page</Link></p>
         <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {GUIDES.map((g, i) => (
@@ -233,7 +233,7 @@ export default function HomePage() {
             <p className="mt-5 text-slate-600">Anything else? <Link href="/contact" {...trackAttrs("whatsapp_click", { where: "home_faq" })} className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">Message us on WhatsApp</Link> and a person answers.</p>
             <div className={`mt-8 flex items-center gap-4 p-5 ${CARD}`}>
               <span className={TILE_ORANGE}><MessageCircle className="h-6 w-6" /></span>
-              <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, every day during restaurant hours, wherever you are.</div>
+              <div className="text-[15px] leading-relaxed text-slate-600">We answer in English and Urdu, 24/7, wherever you are.</div>
             </div>
           </div>
           <FaqList items={HOME_FAQ} />

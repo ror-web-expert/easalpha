@@ -6,8 +6,16 @@ module Billing
     def price_for(plan, cycle:, currency:, tills: 1)
       base = currency == "PKR" ? plan.price_pkr_minor : plan.price_usd_minor
       extra_till = currency == "PKR" ? 1_000_00 : 9_00
-      monthly = base + [ tills - (plan.limits["tills"] || 1), 0 ].max * extra_till
+      monthly = base + extra_tills(plan, tills) * extra_till
       cycle == "yearly" ? monthly * 10 : monthly
+    end
+
+    # Tills beyond what the plan includes. A plan with no till limit (Business since 17 Oct 2026) includes every till,
+    # so it never bills extra ones; a missing limit used to read as one till.
+    def extra_tills(plan, tills)
+      limit = plan.limits.key?("tills") ? plan.limits["tills"] : 1
+      return 0 if limit.nil?
+      [ tills.to_i - limit.to_i, 0 ].max
     end
 
     def issue!(business, plan:, cycle:, tills: 1, subscription: nil, due_on: Date.current + 7)
@@ -15,7 +23,7 @@ module Billing
       amount = price_for(plan, cycle: cycle, currency: currency, tills: tills)
       label = cycle == "yearly" ? "#{plan.name} yearly" : "#{plan.name} #{Date.current.strftime('%B %Y')}"
       inv = Invoice.create!(business: business, subscription: subscription, amount_minor: amount, currency: currency, due_on: due_on, status: "open", period_label: label,
-                            lines: [ { description: label, amount_minor: amount }, ({ description: "Extra tills x#{tills - (plan.limits['tills'] || 1)}", amount_minor: 0 } if tills > (plan.limits["tills"] || 1)) ].compact)
+                            lines: [ { description: label, amount_minor: amount }, ({ description: "Extra tills x#{extra_tills(plan, tills)}", amount_minor: 0 } if extra_tills(plan, tills).positive?) ].compact)
       Lifecycle.notify_owners(business, "invoice_due", { business_name: business.name, number: inv.number, amount: amount / 100, due_on: due_on.to_s }, title: "Invoice #{inv.number} due #{due_on}", link: "/settings/billing")
       inv
     end

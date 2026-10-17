@@ -36,7 +36,7 @@ Demo data for local testing only. Updated 11 Oct 2026. These are the base seed v
 | Counter till | till | 123456 |
 | Kitchen screen | kitchen | 654321 |
 
-If a code no longer works, open Admin, Devices, and press "Regenerate code". The trial plan allows 3 tills.
+If a code no longer works, open Admin, Devices, and press "Regenerate code". The trial plan (Pro) allows 10 tills.
 
 ## How to use the till
 

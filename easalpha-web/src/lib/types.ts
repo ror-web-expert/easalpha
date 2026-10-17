@@ -31,7 +31,7 @@ export interface BusinessSettings {
 export interface Business {
   id: ID; name: string; slug: string; legal_name: string | null; country: string; currency: string; time_zone: string;
   phone: string | null; email: string | null; logo_key: string | null; status: string; trial_ends_on: string | null; trial_days_left: number;
-  plan: { code: string; name: string; features: Record<string, unknown>; limits: Record<string, number> } | null;
+  plan: { code: string; name: string; features: Record<string, unknown>; limits: Record<string, number | null> } | null;
   settings: BusinessSettings; read_only: boolean; created_at: string;
 }
 

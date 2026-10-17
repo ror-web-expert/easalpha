@@ -19,7 +19,7 @@ export default function NotFound() {
   return (
     <SiteShell>
       <PageHero crumb="Not found" eyebrow="404" title="That page is not here" text="The address may have a typo, or the page moved when the site was reorganised. Nothing on your account is affected."
-        visual={<HeroStack chips={[{ icon: Search, title: "Not found", text: "no page at this address" }, { icon: Home, title: "Home", text: "start again from the top" }, { icon: Compass, title: "Guides", text: "six pages on what matters" }]} />}>
+        visual={<HeroStack chips={[{ icon: Search, title: "Not found", text: "no page at this address" }, { icon: Home, title: "Home", text: "start again from the top" }, { icon: Compass, title: "Guides", text: "five pages on what matters" }]} />}>
         <div className="mt-8 flex flex-wrap gap-3">
           <PrimaryLink href="/" size="lg">Go to the home page</PrimaryLink>
           <SecondaryLink href="/contact" size="lg" dark>Tell us what you were looking for</SecondaryLink>

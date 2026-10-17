@@ -86,7 +86,7 @@ export function PricingTable({ compact = false }: { compact?: boolean }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              <tr><th scope="row" className="px-5 py-3 text-left font-medium text-slate-700">Tills</th>{PLANS.map((p) => <td key={p.code} className="px-5 py-3 text-slate-700">{p.limits.tills}</td>)}</tr>
+              <tr><th scope="row" className="px-5 py-3 text-left font-medium text-slate-700">Tills</th>{PLANS.map((p) => <td key={p.code} className="px-5 py-3 text-slate-700">{p.limits.tills === null ? "Unlimited" : p.limits.tills}</td>)}</tr>
               <tr><th scope="row" className="px-5 py-3 text-left font-medium text-slate-700">Staff logins</th>{PLANS.map((p) => <td key={p.code} className="px-5 py-3 text-slate-700">{p.limits.staff === null ? "Unlimited" : p.limits.staff}</td>)}</tr>
               <tr><th scope="row" className="px-5 py-3 text-left font-medium text-slate-700">Branches</th>{PLANS.map((p) => <td key={p.code} className="px-5 py-3 text-slate-700">{p.limits.branches}</td>)}</tr>
               <tr><th scope="row" className="px-5 py-3 text-left font-medium text-slate-700">WhatsApp messages a month</th>{PLANS.map((p) => <td key={p.code} className="px-5 py-3 text-slate-700">{p.limits.whatsappMessages.toLocaleString("en-US")}</td>)}</tr>

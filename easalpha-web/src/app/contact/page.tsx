@@ -10,14 +10,14 @@ import { trackAttrs } from "@/lib/analytics";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs, localBusiness } from "@/lib/schema";
 
-export const metadata: Metadata = pageMetadata({ title: "Contact us: WhatsApp, email or book a demo", description: "Talk to a person on WhatsApp or email, seven days a week during restaurant hours. Book a demo, ask about plans or get help moving from your current POS.", path: "/contact" });
+export const metadata: Metadata = pageMetadata({ title: "Contact us: WhatsApp, email or book a demo", description: "Talk to a person on WhatsApp or email, 24 hours a day, seven days a week. Book a demo, ask about plans or get help moving from your current POS.", path: "/contact" });
 
 export default async function ContactPage() {
   const contact = await getSiteContact();
   return (
     <SiteShell>
       <JsonLd data={[breadcrumbs("Contact", "/contact"), localBusiness(contact)]} />
-      <PageHero eyebrow="Contact" title="Talk to a person" text="WhatsApp is fastest. We answer in English and Urdu, seven days a week during restaurant hours."
+      <PageHero eyebrow="Contact" title="Talk to a person" text="WhatsApp is fastest. We answer in English and Urdu, 24 hours a day, seven days a week."
         visual={<HeroStack chips={[{ icon: MessageCircle, title: "WhatsApp", text: contact.whatsappDisplay }, { icon: Mail, title: "Email", text: contact.email }, { icon: Clock, title: "Hours", text: contact.hours }]} />} />
       <Container className="grid gap-12 py-20 lg:grid-cols-[1fr_1.4fr] lg:py-28">
         <div className="min-w-0 space-y-5">
@@ -46,7 +46,7 @@ export default async function ContactPage() {
             <span className={TILE_NAVY}><Clock className="h-6 w-6" /></span>
             <div>
               <h2 className="font-bold text-[#0B1F3A]">Hours</h2>
-              <p className="mt-1 text-sm text-slate-600">{contact.hours}. Account emergencies outside those hours: WhatsApp us and say it is urgent.</p>
+              <p className="mt-1 text-sm text-slate-600">{contact.hours}. For anything urgent, WhatsApp us and say so at the start of the message.</p>
             </div>
           </div>
         </div>

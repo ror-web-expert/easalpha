@@ -42,7 +42,7 @@ describe("schema", () => {
     expect(lb.address.streetAddress).toBe(OFFICE.street);
     expect(lb.telephone).toBe(CONTACT.whatsapp);
     expect(lb.openingHoursSpecification[0].dayOfWeek).toHaveLength(7);
-    expect(lb.openingHoursSpecification[0]).toMatchObject({ opens: "10:00", closes: "23:00" });
+    expect(lb.openingHoursSpecification[0]).toMatchObject({ opens: "00:00", closes: "23:59" }); // support answers 24/7
     expect(lb.priceRange).toBe("Rs 2,500 to Rs 8,999 a month");
     expect(lb.parentOrganization["@id"]).toBe(organization()["@id"]);
   });

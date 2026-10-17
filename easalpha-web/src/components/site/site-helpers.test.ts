@@ -17,6 +17,8 @@ describe("plans", () => {
   it("carries the seed limits", () => {
     expect(starter.limits).toEqual({ tills: 1, staff: 3, branches: 1, whatsappMessages: 300 });
     expect(pro.limits.staff).toBeNull();
+    expect(pro.limits.tills).toBe(10); // 17 Oct 2026, as Plan::DEFAULTS
+    expect(business.limits.tills).toBeNull(); // unlimited
     expect(business.limits.branches).toBe(20);
   });
   it("uses the API trial length", () => {

@@ -26,7 +26,7 @@ step("kitchen staff created", staff.status === 201, String(staff.status));
 const existing = await api("/devices", { token: T });
 for (const d of existing.j?.data || []) if (/^E2E /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
 let till = await api("/devices", { method: "POST", token: T, body: { name: "E2E till", kind: "till" } });
-if (till.status !== 201) { // the trial plan allows three tills: reuse the seeded Counter till with a fresh code
+if (till.status !== 201) { // the trial plan allows ten tills: reuse the seeded Counter till with a fresh code
   const counter = (existing.j?.data || []).find((d) => d.name === "Counter till");
   if (counter) till = await api(`/devices/${counter.id}/regenerate_code`, { method: "POST", token: T });
 }

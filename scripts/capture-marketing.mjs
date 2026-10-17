@@ -6,7 +6,7 @@ const OUT = new URL("../easalpha-web/public/marketing/", import.meta.url).pathna
 const api = async (path, { method = "GET", token, body } = {}) => { const r = await fetch(API + path, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined }); let j = null; try { j = await r.json(); } catch {} return { status: r.status, j }; };
 const login = await api("/auth/login", { method: "POST", body: { email: "demo@easalpha.com", password: "password123" } }); const T = login.j.access_token;
 for (const d of (await api("/devices", { token: T })).j?.data || []) if (/^Shot /.test(d.name)) await api(`/devices/${d.id}`, { method: "DELETE", token: T });
-// The trial plan allows three tills, so reuse the seeded Counter till with a fresh code instead of adding one.
+// The trial plan allows ten tills; reuse the seeded Counter till with a fresh code instead of adding one.
 const counter = ((await api("/devices", { token: T })).j?.data || []).find((d) => d.name === "Counter till");
 const till = counter ? await api(`/devices/${counter.id}/regenerate_code`, { method: "POST", token: T }) : await api("/devices", { method: "POST", token: T, body: { name: "Shot till", kind: "till" } });
 if (!till.j?.pairing_code) { console.error("no till code", till); process.exit(1); }

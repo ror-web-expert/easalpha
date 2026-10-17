@@ -15,7 +15,7 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
     api_post "/api/v1/billing/choose_plan", { plan_code: "business", cycle: "yearly", tills: 3 }, headers: headers
     expect(response).to have_http_status(:created)
     inv = json[:invoice]
-    expect(inv[:amount_minor]).to eq(8_999_00 * 10)            # yearly = 10 months, business plan allows 10 tills so no extra
+    expect(inv[:amount_minor]).to eq(8_999_00 * 10)            # yearly = 10 months; Business includes unlimited tills, so no extra
     expect(inv[:currency]).to eq("PKR")
     expect(inv[:status]).to eq("open")
     api_post "/api/v1/billing/invoices/#{inv[:id]}/report_payment", { method: "jazzcash", reference: "TXN123" }, headers: headers
@@ -123,5 +123,19 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
     expect(json[:data].first[:template_name]).to eq("alert_big_void")
     get "/api/v1/whatsapp/usage", headers: headers
     expect(json[:used]).to eq(1)
+  end
+
+  it "includes 10 tills on Pro and unlimited tills on Business (17 Oct 2026)" do
+    pro, business = Plan.find_by!(code: "pro"), Plan.find_by!(code: "business")
+    expect(pro.limits["tills"]).to eq(10)
+    expect(business.limits).to include("tills" => nil, "branches" => 20)
+    expect(Billing::Issuer.price_for(pro, cycle: "monthly", currency: "PKR", tills: 10)).to eq(4_999_00)
+    expect(Billing::Issuer.price_for(pro, cycle: "monthly", currency: "PKR", tills: 12)).to eq(4_999_00 + 2 * 1_000_00)
+    expect(Billing::Issuer.price_for(business, cycle: "monthly", currency: "PKR", tills: 40)).to eq(8_999_00)
+    within(biz) do
+      biz.update!(plan: business)
+      inv = Billing::Issuer.issue!(biz, plan: business, cycle: "monthly", tills: 40)
+      expect(inv.lines.map { |l| l["description"] }.grep(/Extra tills/)).to be_empty
+    end
   end
 end

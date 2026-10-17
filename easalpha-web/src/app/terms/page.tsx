@@ -35,7 +35,7 @@ export default function TermsPage() {
             </ul>
             <h2>What we provide</h2>
             <ul>
-              <li>The hosted service, the till, tablet, kitchen, rider and storefront apps, and support by WhatsApp and email during the hours published on the <Link href="/contact" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">contact page</Link>.</li>
+              <li>The hosted service, the till, tablet, kitchen, rider and storefront apps, and support by WhatsApp and email, 24/7, as published on the <Link href="/contact" className="py-3 font-semibold text-[#0B1F3A] underline decoration-[#FF7A1A] decoration-2 underline-offset-4 hover:text-[#C2410C]">contact page</Link>.</li>
               <li>We work to keep the service available at all times and to fix faults quickly. The till is designed to keep selling while offline. We do not guarantee uninterrupted availability, and we are not liable for losses caused by internet, power or hardware outside our control.</li>
               <li>We back up your data regularly and may update the software at any time. Features may be improved or replaced; we will not remove something you rely on without telling you first.</li>
             </ul>

@@ -25,7 +25,7 @@ const APP_HEADERS = [
 ];
 
 /** The marketing pages and the sign-up page; app screens are everything else. */
-const PUBLIC_PAGES = "/(features|pricing|download|contact|privacy|terms|signup|guides|restaurant-pos-pakistan|fbr-pos-integration|offline-pos-system|arfapos-alternative|kitchen-display-system|restaurant-inventory-software)";
+const PUBLIC_PAGES = "/(features|pricing|download|contact|privacy|terms|signup|guides|restaurant-pos-pakistan|fbr-pos-integration|offline-pos-system|kitchen-display-system|restaurant-inventory-software)";
 const PUBLIC_HEADERS = [
   { key: "Content-Security-Policy", value: CSP },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
@@ -88,6 +88,9 @@ const nextConfig: NextConfig = {
       { source: "/admin/inventory", destination: "/admin/inventory/stock-in-hand", permanent: false },
       { source: "/admin/inventory-reports", destination: "/admin/inventory-reports/daily-stock-sheet", permanent: false },
       { source: "/admin/riders", destination: "/admin/riders/manage", permanent: false },
+      // The ArfaPOS comparison page was taken down on 17 Oct 2026 at the owner's request; links already shared or
+      // indexed land on the plans instead of a 404.
+      { source: "/arfapos-alternative", destination: "/pricing", permanent: true },
       // One hostname for search engines: www is a permanent redirect to the apex, path and query kept.
       { source: "/:path*", has: [{ type: "host", value: "www.easalpha.com" }], destination: "https://easalpha.com/:path*", permanent: true },
       { source: "/admin/stock/deduction-audits", destination: "/admin/inventory-reports/deduction-health", permanent: true },

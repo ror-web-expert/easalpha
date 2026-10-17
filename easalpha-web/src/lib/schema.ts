@@ -1,6 +1,6 @@
 // JSON-LD for the public site, built as typed objects from the same data the pages render (plans, contact, FAQ),
 // so the structured data cannot drift from the visible content. Rendered through <JsonLd> (components/site/json-ld.tsx).
-import { CONTACT, OFFICE, PLANS, SITE_DESCRIPTION, TRIAL_DAYS, formatMoney, monthlyMinor, type Currency, type Plan, type SiteContact } from "@/components/site/site-helpers";
+import { CONTACT, OFFICE, OG_IMAGE_PATH, PLANS, SITE_DESCRIPTION, TRIAL_DAYS, formatMoney, monthlyMinor, type Currency, type Plan, type SiteContact } from "@/components/site/site-helpers";
 import { SITE_URL } from "@/app/sitemap";
 
 const CONTEXT = "https://schema.org" as const;
@@ -66,7 +66,7 @@ export function softwareApplication(): SoftwareApplication {
   return {
     "@context": CONTEXT, "@type": "SoftwareApplication", name: "EasAlpha", url: SITE_URL, description: SITE_DESCRIPTION,
     applicationCategory: "BusinessApplication", operatingSystem: "Windows, Linux, macOS, Android, iOS, Web",
-    image: `${SITE_URL}/og.png`, featureList: FEATURE_LIST, offers: allOffers(), publisher: { "@id": ORG_ID },
+    image: `${SITE_URL}${OG_IMAGE_PATH}`, featureList: FEATURE_LIST, offers: allOffers(), publisher: { "@id": ORG_ID },
   };
 }
 
@@ -77,16 +77,16 @@ export function faqPage(items: { q: string; a: string }[]): FaqPage {
 
 /** Block 5: the pricing page's product with offers. */
 export function pricingProduct(): Product {
-  return { "@context": CONTEXT, "@type": "Product", name: "EasAlpha restaurant POS", description: SITE_DESCRIPTION, image: `${SITE_URL}/og.png`, brand: { "@type": "Brand", name: "EasAlpha" }, offers: allOffers() };
+  return { "@context": CONTEXT, "@type": "Product", name: "EasAlpha restaurant POS", description: SITE_DESCRIPTION, image: `${SITE_URL}${OG_IMAGE_PATH}`, brand: { "@type": "Brand", name: "EasAlpha" }, offers: allOffers() };
 }
 
 /** The Lahore office as a local business for the contact page: address, phone, email and the support hours. */
 export function localBusiness(contact: SiteContact = CONTACT): LocalBusiness {
   return {
     "@context": CONTEXT, "@type": "LocalBusiness", "@id": `${SITE_URL}/contact#office`, name: `${contact.productName} (Lahore office)`, url: `${SITE_URL}/contact`,
-    image: `${SITE_URL}/og.png`, telephone: contact.whatsapp, email: contact.email,
+    image: `${SITE_URL}${OG_IMAGE_PATH}`, telephone: contact.whatsapp, email: contact.email,
     address: { "@type": "PostalAddress", streetAddress: OFFICE.street, addressLocality: OFFICE.city, addressRegion: OFFICE.region, addressCountry: OFFICE.countryCode },
-    openingHoursSpecification: [{ "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "10:00", closes: "23:00" }],
+    openingHoursSpecification: [{ "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], opens: "00:00", closes: "23:59" }],
     priceRange: `${formatMoney(PLANS[0].pricePkrMinor, "PKR")} to ${formatMoney(PLANS[PLANS.length - 1].pricePkrMinor, "PKR")} a month`,
     parentOrganization: { "@id": ORG_ID },
   };

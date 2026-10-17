@@ -16,7 +16,8 @@ export interface Plan {
   tagline: string;
   pricePkrMinor: number;
   priceUsdMinor: number;
-  limits: { tills: number; staff: number | null; branches: number; whatsappMessages: number };
+  /** null means unlimited. */
+  limits: { tills: number | null; staff: number | null; branches: number; whatsappMessages: number };
   highlights: string[];
   features: Record<FeatureKey, boolean>;
   popular?: boolean;
@@ -59,8 +60,8 @@ export const PLANS: Plan[] = [
     tagline: "Kitchen, stock, riders and tax for a busy restaurant.",
     pricePkrMinor: 4_999_00,
     priceUsdMinor: 39_00,
-    limits: { tills: 3, staff: null, branches: 1, whatsappMessages: 1000 },
-    highlights: ["3 tills", "Unlimited staff", "Inventory with recipe deduction", "Riders and tables", "Kitchen display", "Online ordering and tax invoices", "1,000 WhatsApp messages a month"],
+    limits: { tills: 10, staff: null, branches: 1, whatsappMessages: 1000 },
+    highlights: ["10 tills", "Unlimited staff", "Inventory with recipe deduction", "Riders and tables", "Kitchen display", "Online ordering and tax invoices", "1,000 WhatsApp messages a month"],
     features: { kitchen_display: true, tables: true, riders: true, inventory: true, tax: true, online_ordering: true, multi_branch: false, payroll: false, loyalty: false, aggregators: false, own_whatsapp_number: false, custom_domain: false },
     popular: true,
   },
@@ -70,8 +71,8 @@ export const PLANS: Plan[] = [
     tagline: "Every branch, every surface, every report.",
     pricePkrMinor: 8_999_00,
     priceUsdMinor: 69_00,
-    limits: { tills: 10, staff: null, branches: 20, whatsappMessages: 3000 },
-    highlights: ["10 tills", "Up to 20 branches", "Loyalty and vouchers", "Attendance and payroll", "Foodpanda and aggregators", "Custom domain", "WhatsApp from your own number", "3,000 WhatsApp messages a month"],
+    limits: { tills: null, staff: null, branches: 20, whatsappMessages: 3000 },
+    highlights: ["Unlimited tills", "Up to 20 branches", "Loyalty and vouchers", "Attendance and payroll", "Foodpanda and aggregators", "Custom domain", "WhatsApp from your own number", "3,000 WhatsApp messages a month"],
     features: { kitchen_display: true, tables: true, riders: true, inventory: true, tax: true, online_ordering: true, multi_branch: true, payroll: true, loyalty: true, aggregators: true, own_whatsapp_number: true, custom_domain: true },
   },
 ];
@@ -266,6 +267,12 @@ export function signupPayload(input: SignupInput) {
 // Defaults only. The live values come from the product owner's platform settings (GET /platform, edited in the super
 // panel); contactFromPlatform maps them and every link helper takes the contact as its last argument.
 
+/** The link-preview image every page shares, with the one tagline used everywhere ("for any restaurant, anywhere").
+ *  The version query changes whenever the picture does, so WhatsApp, Facebook and X fetch the new one instead of
+ *  showing the copy they cached for the old address (17 Oct 2026: the old picture said "built for Pakistan"). */
+export const OG_IMAGE_PATH = "/og.png?v=20261017";
+export const OG_IMAGE_ALT = "EasAlpha: the restaurant POS for any restaurant, anywhere";
+
 /** The one-line description used by the layout metadata, Open Graph and the schema. 155 characters. */
 export const SITE_DESCRIPTION = "EasAlpha is the restaurant POS that keeps selling offline: till, kitchen display, inventory, accounts, payroll, riders and WhatsApp receipts. 90 days free.";
 
@@ -283,7 +290,7 @@ export const CONTACT: SiteContact = {
   phone: "+923437172731",
   phoneDisplay: "+92 343 7172731",
   address: OFFICE_ADDRESS,
-  hours: "10 am to 11 pm Pakistan time, every day",
+  hours: "24/7, every day of the year",
   productName: "EasAlpha",
 };
 

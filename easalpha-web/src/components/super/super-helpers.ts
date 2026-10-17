@@ -135,7 +135,7 @@ export const PLATFORM_FIELDS: PlatformField[] = [
   { key: "support_email", label: "Support email", hint: "Restaurants write here from the Help & Support box.", type: "email" },
   { key: "support_whatsapp", label: "Support WhatsApp", hint: "International format, e.g. +923001234567. Opens a WhatsApp chat from the Help box.", type: "tel" },
   { key: "support_phone", label: "Support phone", hint: "Optional. A number to call; leave blank to hide it.", type: "tel" },
-  { key: "support_hours", label: "Support hours", hint: "Plain words, e.g. 10 am to 11 pm Pakistan time, every day.", type: "text" },
+  { key: "support_hours", label: "Support hours", hint: "Plain words, e.g. 24/7, every day of the year.", type: "text" },
   { key: "support_url", label: "Support page URL", hint: "Optional. A help desk or contact page link.", type: "url" },
   { key: "docs_url", label: "Documentation URL", hint: "Optional. User guide link shown in the Help box.", type: "url" },
   { key: "powered_by", label: "Powered-by line", hint: "Printed on receipts and shown under the Help box, e.g. Powered by EasAlpha.", type: "text" },

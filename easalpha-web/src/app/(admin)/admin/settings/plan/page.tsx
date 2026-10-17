@@ -3,13 +3,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BadgeDollarSign, CreditCard } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Billing, BillingInvoice, BillingPlan } from "@/lib/types";
+import type { Billing, BillingInvoice } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { Cards, PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, Field, Input, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR, type BadgeVariant } from "@/components/ui";
+import { EXTRA_TILL_MINOR, billingCurrency, includedTills, planEstimate } from "@/lib/plan-price";
 
 // SPEC Plan: the subscription tier (Business in the reviewed account), trial or subscription state, invoices, and
 // how to pay. Choosing a plan issues an invoice; the owner reports the payment and EasAlpha confirms it.
@@ -44,14 +45,13 @@ export default function PlanPage() {
   const sub = b.subscription;
   const biz = b.business;
   const current = b.plans.find((p) => p.code === (sub?.plan_code ?? biz.plan?.code));
-  const price = (p: BillingPlan, cycle: "monthly" | "yearly") => (cycle === "yearly" ? p.price_pkr_minor * 10 : p.price_pkr_minor);
   const unpaid = b.invoices.filter((i) => ["unpaid", "pending", "overdue", "issued"].includes(i.status));
   const pi = b.payment_instructions;
   return (
     <>
       <PageHeader icon={BadgeDollarSign} title="Plan" description="Your subscription tier, what it allows, and the invoices behind it." actions={<Button onClick={() => setChoose({ plan_code: current?.code ?? b.plans[0]?.code ?? "", cycle: (sub?.billing_cycle as "monthly" | "yearly") ?? "monthly", tills: String(sub?.tills ?? 1) })}><CreditCard className="h-4 w-4" /> Choose plan</Button>} />
       <Cards>
-        <SummaryCard label="Current plan" value={current?.name ?? biz.plan?.name ?? "None"} sub={sub ? `${titleCase(sub.billing_cycle)} · ${sub.tills} till${sub.tills === 1 ? "" : "s"}` : biz.status === "trial" ? "On trial" : ""} />
+        <SummaryCard label="Current plan" value={current?.name ?? biz.plan?.name ?? "None"} sub={sub ? `${titleCase(sub.billing_cycle)} · ${tillsLabel(current ? includedTills(current) : 1, sub.tills)}` : biz.status === "trial" ? "On trial" : ""} />
         <SummaryCard label="State" value={<Badge variant={subscriptionVariant(sub?.status ?? biz.status)} className="text-sm">{titleCase(sub?.status ?? biz.status)}</Badge>}
           sub={biz.trial_ends_on && (sub?.status === "trialing" || biz.status === "trial") ? `Trial ends ${formatDate(biz.trial_ends_on)} (${biz.trial_days_left} days left)` : sub?.current_period_end ? `Period ends ${formatDate(sub.current_period_end)}` : ""} tone="info" />
         <SummaryCard label="Open invoices" value={unpaid.length} sub={unpaid.length ? formatMoney(unpaid.reduce((a, i) => a + i.amount_minor, 0)) + " due" : "Nothing due"} tone={unpaid.length ? "warning" : "success"} />
@@ -116,7 +116,7 @@ export default function PlanPage() {
             <Field label="Plan"><Select value={choose.plan_code} onChange={(e) => setChoose({ ...choose, plan_code: e.target.value })}>{b.plans.map((p) => <option key={p.code} value={p.code}>{p.name} - {formatMoney(p.price_pkr_minor)}/month</option>)}</Select></Field>
             <Field label="Billing cycle" hint="Yearly is ten months for the price of twelve"><Select value={choose.cycle} onChange={(e) => setChoose({ ...choose, cycle: e.target.value as "monthly" | "yearly" })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></Select></Field>
             <Field label="Tills"><Input type="number" min={1} className="tabular" value={choose.tills} onChange={(e) => setChoose({ ...choose, tills: e.target.value })} /></Field>
-            {(() => { const p = b.plans.find((x) => x.code === choose.plan_code); return p ? <p className="rounded-md bg-muted px-3 py-2 text-sm">Invoice for about <span className="font-medium">{formatMoney(price(p, choose.cycle) * Math.max(1, Number(choose.tills) || 1))}</span> per {choose.cycle === "yearly" ? "year" : "month"}. The exact amount is on the invoice.</p> : null; })()}
+            {(() => { const p = b.plans.find((x) => x.code === choose.plan_code); if (!p) return null; const inc = includedTills(p); const cur = billingCurrency(biz.country); return <p className="rounded-md bg-muted px-3 py-2 text-sm">Invoice for about <span className="font-medium">{formatMoney(planEstimate(p, choose.cycle, Math.max(1, Number(choose.tills) || 1), cur), cur)}</span> per {choose.cycle === "yearly" ? "year" : "month"}. {inc === null ? `${p.name} includes unlimited tills.` : `${p.name} includes ${inc} till${inc === 1 ? "" : "s"}; each extra till is ${formatMoney(EXTRA_TILL_MINOR[cur], cur)} a month.`} The exact amount is on the invoice.</p>; })()}
           </div>
         ) : null}
       </Dialog>
@@ -131,4 +131,11 @@ export default function PlanPage() {
       </Dialog>
     </>
   );
+}
+
+/** Tills on the current plan: what it includes, or the tills paid for when that is more; Business includes every till. */
+function tillsLabel(included: number | null, paid: number): string {
+  if (included === null) return "unlimited tills";
+  const n = Math.max(included, paid);
+  return `${n} till${n === 1 ? "" : "s"}`;
 }

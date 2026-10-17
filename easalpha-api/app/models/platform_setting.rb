@@ -8,7 +8,7 @@ class PlatformSetting < ApplicationRecord
     "support_email" => "hello@easalpha.com",
     "support_whatsapp" => "+923437172731",
     "support_phone" => "+923437172731",
-    "support_hours" => "10 am to 11 pm Pakistan time, every day",
+    "support_hours" => "24/7, every day of the year",
     "support_url" => nil,
     "docs_url" => nil,
     "powered_by" => "Powered by EasAlpha",
