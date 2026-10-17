@@ -15,6 +15,7 @@ import { useAuthStore, useCan } from "@/store/auth";
 import { useList } from "@/components/admin/crud";
 import { OrderStory } from "@/components/admin/order-story";
 import { isSpecOpen, orderCode, paymentMethods, reopenLine, sourceLabel, specPaymentVariant, specStatusVariant } from "@/components/admin/order-helpers";
+import { billRows } from "@/lib/bill";
 
 type Tab = "details" | "cost" | "payments";
 
@@ -121,7 +122,7 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
               <div>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-secondary">Items</h3>
                 <Table>
-                  <THead><tr><TH>Item</TH><TH right>Qty</TH><TH right>Unit price</TH><TH right>Line total</TH></tr></THead>
+                  <THead><tr><TH>Item</TH><TH right>Qty</TH><TH right>Unit price</TH><TH right>Amount</TH></tr></THead>
                   <TBody>
                     {o.items.map((it) => (
                       <TR key={it.id} className={it.status === "cancelled" ? "opacity-50 line-through" : ""}>
@@ -133,7 +134,8 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
                         </TD>
                         <TD right>{formatQty(it.quantity)}</TD>
                         <TD right>{formatMoney(it.unit_price_minor, currency)}</TD>
-                        <TD right className="font-medium">{formatMoney(it.line_total_minor, currency)}</TD>
+                        {/* Unit price with modifiers times quantity: the lines add up to the Subtotal below. */}
+                        <TD right className="font-medium">{formatMoney(it.line_subtotal_minor ?? it.line_total_minor, currency)}</TD>
                       </TR>
                     ))}
                     {!o.items.length ? <EmptyRow colSpan={4}>No items</EmptyRow> : null}
@@ -142,13 +144,10 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
               </div>
               <div className="rounded-lg border p-3">
                 <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-secondary">Payment summary</h3>
-                <Stat label="Subtotal" value={formatMoney(o.subtotal_minor, currency)} />
-                {o.discount_minor ? <Stat label="Discount" value={`-${formatMoney(o.discount_minor, currency)}`} tone="danger" /> : null}
-                {o.service_charge_minor ? <Stat label={`Service charge${o.service_charge_percent ? ` (${o.service_charge_percent}%)` : ""}`} value={formatMoney(o.service_charge_minor, currency)} /> : null}
-                {o.tax_minor ? <Stat label="Tax" value={formatMoney(o.tax_minor, currency)} /> : null}
-                {o.delivery_charge_minor ? <Stat label="Delivery" value={formatMoney(o.delivery_charge_minor, currency)} /> : null}
-                {o.rounding_minor ? <Stat label="Rounding" value={formatMoney(o.rounding_minor, currency)} /> : null}
-                {o.tip_minor ? <Stat label="Tip" value={formatMoney(o.tip_minor, currency)} /> : null}
+                {/* The shared bill block (lib/bill.ts), so this view adds up exactly like the till and the receipt. */}
+                {billRows({ subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, delivery_charge_minor: o.delivery_charge_minor, tax_minor: o.tax_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, tax_inclusive_minor: o.items.filter((it) => it.tax_inclusive && it.status !== "cancelled").reduce((s, it) => s + (it.line_tax_minor ?? 0), 0), service_charge_label: `Service charge${o.service_charge_percent ? ` (${o.service_charge_percent}%)` : ""}` }, currency).map((r) => (
+                  <Stat key={r.key} label={r.label} value={r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)} tone={r.amount_minor < 0 ? "danger" : undefined} />
+                ))}
                 <Stat label="Total" value={<span className="text-base font-semibold">{formatMoney(o.total_minor, currency)}</span>} />
                 <Stat label="Method" value={paymentMethods(o.payment_method_summary, currency) || "-"} />
                 <Stat label="Status" value={<Badge variant={specPaymentVariant(o.spec_payment_status)}>{titleCase(o.spec_payment_status)}</Badge>} />

@@ -2,7 +2,8 @@
 import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent, Receipt } from "lucide-react";
 import type { Cart } from "@/store/cart";
 import type { OrderType } from "@/lib/types";
-import { lineTotals, type CartLine } from "@/lib/pricing";
+import { lineAmount, lineTotals, type CartLine } from "@/lib/pricing";
+import { billRows } from "@/lib/bill";
 import { chargeDisplay, resolveServiceCharge, totalsWithCharges } from "@/lib/pos-charges";
 import { discountRows } from "@/lib/pos-discounts";
 import { SALES_PERMISSION } from "@/lib/pos-rules";
@@ -90,7 +91,8 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
                     {lt.line_discount_minor ? <span className="text-success"> · {l.discount_type === "percent" ? `${Number(l.discount_value)}% off` : "discount"} -{formatMoney(lt.line_discount_minor, currency)}</span> : null}
                   </div>
                 </button>
-                <div className="text-right font-semibold tabular">{formatMoney(lt.line_total_minor, currency)}</div>
+                {/* Unit price times quantity: the lines add up to the subtotal; discounts and tax are summary lines. */}
+                <div className="text-right font-semibold tabular">{formatMoney(lineAmount(l), currency)}</div>
               </div>
               <div className="mt-1 flex items-center gap-1">
                 {canDecrease ? <button className="grid h-11 w-11 place-items-center rounded-md border disabled:opacity-40" onClick={() => onQty(l.key, l.quantity - 1)} disabled={!canRemove && l.quantity <= 1} aria-label="Less"><Minus className="h-4 w-4" /></button> : null}
@@ -108,14 +110,12 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           order list keeps room for several lines instead of one. The total and every button stay. */}
       <div className="border-t p-3 [@media(max-height:700px)]:py-2">
         <div className="space-y-0.5 text-sm text-fg-secondary [@media(max-height:700px)]:hidden">
-          <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(t.subtotal_minor, currency)}</span></div>
-          {/* SPEC discounts: one row per applied line (voucher with its code, loyalty, the automatic regular discount) plus the item discounts. */}
-          {discountRows(cart.discounts, t.discount_minor).map((d) => <div key={d.key} className="flex justify-between gap-2"><span className="truncate">{d.label}</span><span className="shrink-0 tabular">-{formatMoney(d.amount_minor, currency)}</span></div>)}
-          {t.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(resolveServiceCharge(cart, settings), currency)}</span><span className="tabular">{formatMoney(t.service_charge_minor, currency)}</span></div> : null}
-          {t.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery</span><span className="tabular">{formatMoney(t.delivery_charge_minor, currency)}</span></div> : null}
-          {t.tax_minor ? <div className="flex justify-between"><span>Tax</span><span className="tabular">{formatMoney(t.tax_minor, currency)}</span></div> : null}
-          {t.rounding_minor ? <div className="flex justify-between"><span>Cash rounding</span><span className="tabular">{formatMoney(t.rounding_minor, currency)}</span></div> : null}
-          {t.tip_minor ? <div className="flex justify-between"><span>Tip</span><span className="tabular">{formatMoney(t.tip_minor, currency)}</span></div> : null}
+          {/* One bill block for every surface (lib/bill.ts): Subtotal, each discount (voucher with its code, loyalty, the
+              automatic regular discount, item discounts), charges, exclusive tax, tip and a Rounding line when the shown
+              figures need it, so the block always adds up to the total by hand. */}
+          {billRows({ ...t, discounts: discountRows(cart.discounts, t.discount_minor), service_charge_label: `Service charge ${chargeDisplay(resolveServiceCharge(cart, settings), currency)}`.trim() }, currency).map((r) => (
+            <div key={r.key} className={cn("flex justify-between gap-2", r.info && "text-xs text-fg-muted")}><span className="truncate">{r.label}</span><span className="shrink-0 tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</span></div>
+          ))}
           {paid ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(t.total_minor, currency)}</span></div> : null}
           {paid ? <div className="flex justify-between"><span>Paid</span><span className="tabular">-{formatMoney(paid, currency)}</span></div> : null}
         </div>

@@ -43,6 +43,8 @@ export interface Cart {
   /** Money already taken against this order (part payments, or the payments of a reopened order). */
   paid_minor?: number;
   /** Cash rounding and tips the server stored with earlier payments; they stay in the order's total (Orders::Pricing). */
+  /** The cash rounding an earlier cash payment stored on the order (the server's cash_rounding_minor). The whole-rupee
+   *  rounding is worked out again from the lines every time, so it is not kept here. */
   rounding_minor?: number;
   tip_minor?: number;
   /** "cash:4500,khata:2000" from the server; a reopened order pre-selects its original method from it. */

@@ -29,7 +29,9 @@ export interface LocalOrder {
   discount_minor: number;
   service_charge_minor: number;
   tax_minor: number;
+  /** All the rounding in total_minor (whole-rupee plus cash); cash_rounding_minor is the cash part a payment stored. */
   rounding_minor: number;
+  cash_rounding_minor?: number;
   tip_minor: number;
   total_minor: number;
   paid_minor: number;

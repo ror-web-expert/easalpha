@@ -24,10 +24,15 @@ module RequestHelpers
 
   # Signs up a fresh business and returns the owner membership (already in an unscoped test context). A real signup
   # starts with the customer accounts and payroll modules off; specs get them on unless they pass modules: false.
-  def signup_business(name: "Karachi Grill", email: nil, password: "password123", modules: true)
+  # whole_rupees: false keeps paisa in order totals (total_rounding 0). The specs written before whole-rupee totals
+  # (17 Oct 2026) assert paisa figures from the test menu (a Rs 80 chai with 16% tax is Rs 92.80); the rounding itself,
+  # including the blank PKR default, is covered by order_rounding_spec.rb, which signs up with whole_rupees: true.
+  def signup_business(name: "Karachi Grill", email: nil, password: "password123", modules: true, whole_rupees: false)
     email ||= "owner-#{SecureRandom.hex(4)}@example.com"
     r = Auth::Signup.call(name: "Owner #{name}", business_name: name, email: email, password: password)
     set_modules!(r.membership.business, customer_accounts: modules, payroll: modules) if modules
+    # Into the business settings JSON rather than the settings store, so the settings version the specs count stays 0.
+    r.membership.business.update_columns(settings: r.membership.business.settings.merge("total_rounding" => 0)) unless whole_rupees
     r.membership.reload
   end
 

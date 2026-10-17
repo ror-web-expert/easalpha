@@ -26,7 +26,29 @@ export interface CartLine {
 }
 
 export interface LineTotals { modifiers_minor: number; line_subtotal_minor: number; line_discount_minor: number; line_tax_minor: number; line_total_minor: number }
-export interface Totals { subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; tip_minor: number; total_minor: number; service_charge_percent: number; delivery_charge_minor: number }
+/** rounding_minor is all the rounding in the total (the whole-rupee rounding plus any cash rounding), so subtotal -
+ *  discount + charges + exclusive tax + tip + rounding is exactly the total; cash_rounding_minor is the cash part. */
+export interface Totals { subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; tip_minor: number; total_minor: number; service_charge_percent: number; delivery_charge_minor: number; tax_inclusive_minor?: number; cash_rounding_minor?: number }
+
+/** Nearest step, halves up (Rs 1,391.50 to Rs 1,392), exactly as Orders::Rounding.round on the server. */
+export function roundToStep(amount_minor: number, step_minor: number): number {
+  if (!step_minor || step_minor <= 1) return amount_minor;
+  return Math.floor((amount_minor + step_minor / 2) / step_minor) * step_minor;
+}
+
+/** The step every order total is rounded to, sent by the server with the till's settings (100 = whole rupees, the
+ *  default for PKR; 0 = none). A catalog cached before the setting existed rounds nothing, and the payment check moves
+ *  a gap under Rs 1 to the server's figure. */
+export function totalRoundingStep(settings: BusinessSettings | Record<string, unknown> | undefined | null): number {
+  const v = Number((settings as Record<string, unknown> | undefined | null)?.["total_rounding_minor"] ?? 0);
+  return Number.isFinite(v) && v > 1 ? Math.round(v) : 0;
+}
+
+/** What a cart or bill line shows: unit price (with modifiers) times quantity, before discounts and tax, so the lines
+ *  always add up to the subtotal. Discounts and exclusive tax are their own summary lines. */
+export function lineAmount(line: CartLine): number {
+  return lineTotals(line).line_subtotal_minor;
+}
 
 export function effectiveUnit(line: CartLine) {
   return line.price_override_minor !== null && line.price_override_minor !== undefined ? line.price_override_minor : line.unit_price_minor;
@@ -90,6 +112,7 @@ export function displaySettings(settings: BusinessSettings | undefined | null) {
 export function computeTotals(lines: CartLine[], opts: { orderType: string; settings?: BusinessSettings; tip_minor?: number; rounding_minor?: number; staffMeal?: boolean; discount_minor?: number; delivery_charge_minor?: number }): Totals {
   const active = lines.filter((l) => l.status !== "cancelled");
   let lt = active.map(lineTotals);
+  // The subtotal is the sum of the line amounts the cart shows (lineAmount), never anything else.
   const subtotal_minor = lt.reduce((s, t) => s + t.line_subtotal_minor, 0);
   const product_discount_minor = lt.reduce((s, t) => s + t.line_discount_minor, 0);
   // Order-level discount (e.g. loyalty points) comes after the product discounts and is allocated to lines in proportion
@@ -112,12 +135,13 @@ export function computeTotals(lines: CartLine[], opts: { orderType: string; sett
   const service_charge_percent = serviceChargeFor(opts.orderType, opts.settings);
   const service_charge_minor = Math.round(((subtotal_minor - discount_minor) * service_charge_percent) / 100);
   const tax_minor = lt.reduce((s, t) => s + t.line_tax_minor, 0);
+  const tax_inclusive_minor = lt.reduce((s, t, i) => s + (active[i].tax_inclusive ? t.line_tax_minor : 0), 0);
   const rounding_minor = opts.rounding_minor ?? 0;
   const tip_minor = opts.tip_minor ?? 0;
   const delivery_charge_minor = Math.max(0, opts.delivery_charge_minor ?? 0);
   let total_minor = lt.reduce((s, t) => s + t.line_total_minor, 0) + service_charge_minor + delivery_charge_minor + rounding_minor + tip_minor;
   if (opts.staffMeal) total_minor = 0;
-  return { subtotal_minor, discount_minor, service_charge_minor, tax_minor, rounding_minor, tip_minor, total_minor, service_charge_percent, delivery_charge_minor };
+  return { subtotal_minor, discount_minor, service_charge_minor, tax_minor, tax_inclusive_minor, rounding_minor, cash_rounding_minor: rounding_minor, tip_minor, total_minor, service_charge_percent, delivery_charge_minor };
 }
 
 /** Cash rounding as the server does it: nearest step (settings.cash_rounding in rupees). Returns the rounding adjustment in minor units. */

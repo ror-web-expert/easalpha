@@ -2,7 +2,7 @@
 // Service charge and delivery charge are each a percent or a fixed amount from the synced settings; they pre-fill the
 // payment page and the cashier may change or remove either per order. The No Tax / rate choice only appears when the
 // selected payment method's finance account is linked to a tax rate. Everything here is pure so it works offline.
-import { computeTotals, settingValue, type CartLine, type Totals } from "@/lib/pricing";
+import { computeTotals, settingValue, type CartLine, type Totals, roundToStep, totalRoundingStep } from "@/lib/pricing";
 import type { BusinessSettings, OrderType, PaymentMethod, TaxRate } from "@/lib/types";
 
 export type ChargeMode = "percent" | "fixed";
@@ -94,8 +94,14 @@ export function totalsWithCharges(lines: CartLine[], order: ChargeFields, opts: 
   const service = resolveServiceCharge(order, settings);
   const service_charge_minor = chargeAmount(service, net);
   const delivery_charge_minor = chargeAmount(resolveDeliveryCharge(order, settings), net);
-  const total_minor = opts.staffMeal ? 0 : base.total_minor - base.service_charge_minor + service_charge_minor + delivery_charge_minor;
-  return { ...base, service_charge_minor, delivery_charge_minor, total_minor, service_charge_percent: service.mode === "percent" ? service.value : 0 };
+  const service_charge_percent = service.mode === "percent" ? service.value : 0;
+  if (opts.staffMeal) return { ...base, service_charge_minor, delivery_charge_minor, rounding_minor: 0, cash_rounding_minor: 0, total_minor: 0, service_charge_percent };
+  // Rounded once, here, as Orders::Pricing does: the whole-rupee step on everything before cash rounding, then the cash
+  // rounding a cash payment stored (opts.rounding_minor) on top. rounding_minor carries both so the bill balances.
+  const cash_rounding_minor = opts.rounding_minor ?? 0;
+  const raw = base.total_minor - base.rounding_minor - base.service_charge_minor + service_charge_minor + delivery_charge_minor;
+  const rounded = roundToStep(raw, totalRoundingStep(settings));
+  return { ...base, service_charge_minor, delivery_charge_minor, rounding_minor: rounded - raw + cash_rounding_minor, cash_rounding_minor, total_minor: rounded + cash_rounding_minor, service_charge_percent };
 }
 
 /**

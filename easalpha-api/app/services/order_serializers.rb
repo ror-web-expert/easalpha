@@ -7,7 +7,7 @@ module OrderSerializers
       reopen_count: o.reopen_count, edit_count: o.edit_count, reopened_at: o.reopened_at, unpaid_direct: o.unpaid_direct, completed_by_membership_id: o.completed_by_membership_id, table_id: o.table_id, table_code: o.dining_table&.code, guest_name: o.guest_name, covers: o.covers,
       customer_id: o.customer_id, rider_id: o.rider_id, shift_id: o.shift_id, is_staff_meal: o.is_staff_meal, scheduled_for: o.scheduled_for,
       subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor,
-      rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, delivery_charge_minor: o.delivery_charge_minor, total_minor: o.total_minor,
+      rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor, tip_minor: o.tip_minor, delivery_charge_minor: o.delivery_charge_minor, total_minor: o.total_minor,
       paid_minor: o.paid_minor, due_minor: o.due_minor, item_count: o.items.count { |i| !i.cancelled? },
       placed_at: o.placed_at, ready_at: o.ready_at, served_at: o.served_at, paid_at: o.paid_at, closed_at: o.closed_at, voided_at: o.voided_at,
       void_reason: o.void_reason, notes: o.notes, payment_method_summary: o.payment_method_summary, receipt_number: o.receipt_number, taken_by_membership_id: o.taken_by_membership_id, device_id: o.device_id,

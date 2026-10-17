@@ -41,7 +41,7 @@ export function cartToLocal(cart: Cart, status: string, extra: Partial<LocalOrde
     id: cart.id, serial: null, till_serial: null, label: cart.label ?? "draft", status, payment_status: "unpaid", order_type: cart.order_type, table_id: cart.table_id, table_code: cart.table_code,
     guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, customer_name: cart.customer?.name ?? null, customer_phone: cart.customer?.phone ?? null,
     notes: cart.notes || null, is_staff_meal: cart.is_staff_meal, staff_meal_reason: cart.staff_meal_reason || null, lines: cart.lines,
-    subtotal_minor: t.subtotal_minor, discount_minor: t.discount_minor, service_charge_minor: t.service_charge_minor, tax_minor: t.tax_minor, rounding_minor: t.rounding_minor, tip_minor: t.tip_minor, total_minor: t.total_minor,
+    subtotal_minor: t.subtotal_minor, discount_minor: t.discount_minor, service_charge_minor: t.service_charge_minor, tax_minor: t.tax_minor, rounding_minor: t.rounding_minor, cash_rounding_minor: t.cash_rounding_minor ?? 0, tip_minor: t.tip_minor, total_minor: t.total_minor,
     paid_minor: 0, payments: [], receipt_number: null, void_reason: null, membership_id: membershipId, cashier_name: cashier, business_day: businessDayFor(branch?.day_end_time),
     client_created_at: cart.client_created_at, created_at: now, updated_at: now, local_only: true, open: OPEN_STATUSES.includes(status as never) ? 1 : 0,
     delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null,
@@ -61,7 +61,7 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     id: o.id, serial: o.serial, till_serial: o.till_serial, label: o.label, status: o.status, payment_status: o.payment_status, order_type: o.order_type, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name, covers: o.covers, customer_id: o.customer_id, customer_name: prev?.customer_name ?? null, customer_phone: prev?.customer_phone ?? null, notes: o.notes,
     is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? null, lines, subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor,
-    tax_minor: o.tax_minor, rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, payments: prev?.payments ?? [], receipt_number: o.receipt_number,
+    tax_minor: o.tax_minor, rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor ?? o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, payments: prev?.payments ?? [], receipt_number: o.receipt_number,
     void_reason: o.void_reason, membership_id: o.taken_by_membership_id, cashier_name: prev?.cashier_name ?? null, business_day: o.business_day, client_created_at: o.client_created_at ?? o.created_at,
     created_at: o.created_at, updated_at: o.updated_at, local_only: false, open: OPEN_STATUSES.includes(o.status) ? 1 : 0,
     delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: prev?.address_id ?? null,
@@ -104,7 +104,7 @@ export function localToCart(o: LocalOrder): Cart {
     customer: o.customer_id ? { id: o.customer_id, name: o.customer_name ?? "Customer", phone: o.customer_phone } : null, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name ?? "", covers: o.covers, notes: o.notes ?? "", is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? "", label: o.label, client_created_at: o.client_created_at,
     discount_minor: orderLevelDiscount(o), discounts: o.order_discounts, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
-    paid_minor: o.paid_minor || undefined, rounding_minor: o.rounding_minor || undefined, tip_minor: o.tip_minor || undefined,
+    paid_minor: o.paid_minor || undefined, rounding_minor: (o.cash_rounding_minor ?? o.rounding_minor) || undefined, tip_minor: o.tip_minor || undefined,
     service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
   };
@@ -256,7 +256,7 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   const prev = (await db.orders.get(current.id)) ?? cartToLocal(current, "placed");
   // Priced as the server will when the queue reaches it, with the order-level discount once: the lines carry the
   // product discounts when the till stored the order, and the server's figure holds them when it came from there.
-  const totals = payableTotals({ ...prev, discount_minor: orderLevelPool(prev) }, { settings, tip_minor, cash });
+  const totals = payableTotals({ ...prev, discount_minor: orderLevelPool(prev), rounding_minor: prev.cash_rounding_minor ?? prev.rounding_minor }, { settings, tip_minor, cash });
   let due = totals.total_minor - prev.paid_minor;
   let change = 0;
   const now = new Date().toISOString();
@@ -272,7 +272,7 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   }
   const paid = prev.paid_minor + newPayments.reduce((s, p) => s + p.amount_minor, 0);
   const status = paid >= totals.total_minor ? "paid" : prev.status === "draft" || prev.status === "held" ? "placed" : prev.status;
-  const local = await saveLocal({ ...prev, ...totals, paid_minor: paid, payments: [...prev.payments, ...newPayments], status, payment_status: paid >= totals.total_minor ? "paid" : paid > 0 ? "partial" : "unpaid", receipt_number: prev.receipt_number ?? (paid >= totals.total_minor ? `${prev.till_serial ?? prev.label}` : null) });
+  const local = await saveLocal({ ...prev, ...totals, cash_rounding_minor: totals.cash_rounding_minor ?? 0, paid_minor: paid, payments: [...prev.payments, ...newPayments], status, payment_status: paid >= totals.total_minor ? "paid" : paid > 0 ? "partial" : "unpaid", receipt_number: prev.receipt_number ?? (paid >= totals.total_minor ? `${prev.till_serial ?? prev.label}` : null) });
   // Payments ride along only with an order still queued as new; a queued order_update (same id) does not carry them.
   const merged = await patchQueued(current.id, (p) => ({ ...p, status: "placed", payments: [...((p.payments as unknown[]) ?? []), ...newPayments.map((np) => ({ id: np.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at }))], tip_minor: ((p.tip_minor as number) ?? 0) + tip_minor }), "order");
   if (!merged) {
@@ -281,7 +281,7 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
     }
   }
   // The cart keeps everything the cashier set (customer, discount lines, reopen state); only the payment moved on.
-  const next: Cart = { ...current, saved: true, local_only: local.local_only, status: local.status, label: local.label, paid_minor: local.paid_minor, rounding_minor: local.rounding_minor || undefined, tip_minor: local.tip_minor || undefined };
+  const next: Cart = { ...current, saved: true, local_only: local.local_only, status: local.status, label: local.label, paid_minor: local.paid_minor, rounding_minor: (local.cash_rounding_minor ?? local.rounding_minor) || undefined, tip_minor: local.tip_minor || undefined };
   return { receipt: buildLocalReceipt(local), change_minor: change, offline: true, local, cart: next };
 }
 
@@ -564,7 +564,7 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
     branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
     header: receipt.header ?? null, footer: receipt.footer ?? null, language: receipt.language ?? "en", paper: receipt.paper ?? "80",
     order: { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type as Receipt["order"]["order_type"], table: o.table_code, business_day: o.business_day, placed_at: o.created_at, paid_at: o.updated_at, cashier: o.cashier_name, customer: o.customer_id ? { name: o.customer_name ?? "", phone: o.customer_phone, khata_no: null } : null, guest_name: o.guest_name, notes: o.notes },
-    lines: active.map((l) => { const t = lineTotals(l); return { name: l.name, quantity: String(l.quantity), unit_price_minor: l.price_override_minor ?? l.unit_price_minor, modifiers: l.modifiers.map((m) => ({ name: m.name, price_minor: m.price_minor })), line_total_minor: t.line_total_minor, discount_minor: t.line_discount_minor, notes: l.notes ?? null }; }),
+    lines: active.map((l) => { const t = lineTotals(l); return { name: l.name, quantity: String(l.quantity), unit_price_minor: l.price_override_minor ?? l.unit_price_minor, modifiers: l.modifiers.map((m) => ({ name: m.name, price_minor: m.price_minor })), line_subtotal_minor: t.line_subtotal_minor, line_total_minor: t.line_total_minor, discount_minor: t.line_discount_minor, notes: l.notes ?? null }; }),
     totals: { subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor, tax_lines: [...taxGroups.values()].filter((g) => g.rate), delivery_charge_minor: o.delivery_charge_minor ?? 0, rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, due_minor: Math.max(0, o.total_minor - o.paid_minor) },
     payments: o.payments.map((p) => ({ method: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? null, change_minor: p.change_minor ?? 0, reference: p.reference ?? null })),
     refunds: [], khata: null,

@@ -18,6 +18,12 @@ export function formatMoney(minor: number | string | null | undefined, currency 
   return n < 0 ? `-${body}` : body;
 }
 
+/** The smallest amount a currency shows, in minor units: 100 for PKR (whole rupees), 1 for currencies with decimals. */
+export function displayStepMinor(currency = "PKR"): number {
+  const cfg = SYMBOLS[currency] ?? { decimals: 2 };
+  return cfg.decimals === 0 ? 100 : 1;
+}
+
 /** Major units as a plain number string for inputs, e.g. 123456 -> "1234.56" (PKR: "1235" when whole). */
 export function minorToMajor(minor: number | null | undefined): string {
   const n = Number(minor ?? 0) / 100;

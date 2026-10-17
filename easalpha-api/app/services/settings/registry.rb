@@ -106,6 +106,7 @@ module Settings
 
       # EasAlpha extras that already lived in businesses.settings, kept under their old keys.
       [ "cash_rounding", "charges_tax", "Service Charge", "integer", 0, "Round cash to Rs 5 or Rs 10" ],
+      [ "total_rounding", "charges_tax", "Service Charge", "integer", nil, "Round every order total to this many rupees (1 = whole rupees, 0 = keep paisa); blank uses whole rupees for PKR" ],
       [ "staff_meal_requires_approval", "point_of_sale", "Order Behavior", "boolean", true, "A staff meal needs a manager PIN" ],
       [ "discount_requires_reason", "point_of_sale", "Order Behavior", "boolean", true, "A discount needs a reason" ],
       [ "kitchen_ticket_print", "point_of_sale", "KDS Alerts", "boolean", true, "Print kitchen tickets as well as showing the KDS" ],

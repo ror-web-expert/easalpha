@@ -7,6 +7,7 @@ import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { settingValue } from "@/lib/pricing";
 import { formatQty } from "@/components/pos/receipt";
+import { billRows } from "./bill";
 
 export type PrintLine =
   | { text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: 1 | 2 }
@@ -135,7 +136,7 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   lines.push({ divider: true });
   for (const l of r.lines ?? []) {
     const qty = Number(l.quantity ?? 1);
-    lines.push(...row(`${formatQty(l.quantity)} x ${l.name}`, m(l.line_total_minor), width));
+    lines.push(...row(`${formatQty(l.quantity)} x ${l.name}`, m(l.line_subtotal_minor ?? l.line_total_minor), width));
     if (qty !== 1 && l.unit_price_minor) lines.push(text(`  @ ${m(l.unit_price_minor)} each`));
     for (const mo of l.modifiers ?? []) lines.push(...row(`  + ${mo.name}`, mo.price_minor ? m(mo.price_minor) : "", width));
     if (l.discount_minor) lines.push(...row("  Discount", `-${m(l.discount_minor)}`, width));
@@ -143,13 +144,8 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   }
   lines.push({ divider: true });
   const t = r.totals;
-  lines.push(...row("Subtotal", m(t?.subtotal_minor), width));
-  if (t?.discount_minor) lines.push(...row("Discount", `-${m(t.discount_minor)}`, width));
-  if (t?.service_charge_minor) lines.push(...row("Service charge", m(t.service_charge_minor), width));
-  for (const tl of t?.tax_lines ?? []) lines.push(...row(`Tax ${tl.rate}%${tl.inclusive ? " incl." : ""}`, m(tl.tax_minor), width));
-  if (t?.delivery_charge_minor) lines.push(...row("Delivery", m(t.delivery_charge_minor), width));
-  if (t?.rounding_minor) lines.push(...row("Rounding", m(t.rounding_minor), width));
-  if (t?.tip_minor) lines.push(...row("Tip", m(t.tip_minor), width));
+  // The shared bill block (lib/bill.ts): the lines add up to the Subtotal and these rows add up to TOTAL.
+  if (t) for (const b of billRows(t, r.business?.currency)) lines.push(...row(b.label, b.amount_minor < 0 ? `-${m(-b.amount_minor)}` : m(b.amount_minor), width));
   lines.push(...row("TOTAL", m(t?.total_minor), width, true));
   lines.push({ divider: true });
   for (const p of r.payments ?? []) {

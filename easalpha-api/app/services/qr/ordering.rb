@@ -30,8 +30,9 @@ module Qr
     def bill(table)
       order = table.current_order_id && Order.open.find_by(id: table.current_order_id)
       return nil unless order
-      { order_id: order.id, label: order.label, status: order.status, guest_name: order.guest_name, items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F"), line_total_minor: i.line_total_minor } },
-        subtotal_minor: order.subtotal_minor, discount_minor: order.discount_minor, service_charge_minor: order.service_charge_minor, tax_minor: order.tax_minor, total_minor: order.total_minor, paid_minor: order.paid_minor }
+      { order_id: order.id, label: order.label, status: order.status, guest_name: order.guest_name, items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F"), line_subtotal_minor: i.line_subtotal_minor, line_total_minor: i.line_total_minor } },
+        subtotal_minor: order.subtotal_minor, discount_minor: order.discount_minor, service_charge_minor: order.service_charge_minor, tax_minor: order.tax_minor, tax_inclusive_minor: Receipts::Builder.inclusive_tax_minor(order),
+        rounding_minor: order.rounding_minor, total_minor: order.total_minor, paid_minor: order.paid_minor }
     end
 
     # Places a guest order. With cashier_accept it stays a draft marked pending until a cashier accepts; otherwise it goes straight to the kitchen.

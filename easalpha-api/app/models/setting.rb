@@ -14,7 +14,8 @@ class Setting < ApplicationRecord
   end
 
   # What a till or a screen may hold: the effective values over the legacy jsonb, without secrets.
-  def self.for_clients(business, branch: nil) = without_secrets(business.settings.merge(effective(business, branch: branch)))
+  # total_rounding_minor is the effective whole-rupee step (Orders::Rounding), so the till rounds exactly as the server does.
+  def self.for_clients(business, branch: nil) = without_secrets(business.settings.merge(effective(business, branch: branch)).merge("total_rounding_minor" => Orders::Rounding.step_minor(business)))
 
   # Drops what only the server uses (PRA credentials, the expense and report PIN digest, the Foodpanda webhook secret)
   # from a settings hash. The settings screens show those masked through their own endpoints.

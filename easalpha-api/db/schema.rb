@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_000005) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1356,6 +1356,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_000005) do
     t.bigint "service_charge_minor", default: 0, null: false
     t.bigint "tax_minor", default: 0, null: false
     t.bigint "rounding_minor", default: 0, null: false
+    t.bigint "cash_rounding_minor", default: 0, null: false
     t.bigint "tip_minor", default: 0, null: false
     t.bigint "delivery_charge_minor", default: 0, null: false
     t.bigint "total_minor", default: 0, null: false

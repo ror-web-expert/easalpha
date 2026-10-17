@@ -57,8 +57,8 @@ module Api
 
       def guest_order(order)
         { id: order.id, guest_token: order.qr_guest_token, label: order.label, status: order.status, qr_status: order.qr_status, guest_name: order.guest_name, table_code: @table.code,
-          items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F"), line_total_minor: i.line_total_minor, status: i.status } },
-          subtotal_minor: order.subtotal_minor, tax_minor: order.tax_minor, service_charge_minor: order.service_charge_minor, total_minor: order.total_minor,
+          items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F"), line_subtotal_minor: i.line_subtotal_minor, line_total_minor: i.line_total_minor, status: i.status } },
+          subtotal_minor: order.subtotal_minor, discount_minor: order.discount_minor, tax_minor: order.tax_minor, tax_inclusive_minor: Receipts::Builder.inclusive_tax_minor(order), service_charge_minor: order.service_charge_minor, rounding_minor: order.rounding_minor, total_minor: order.total_minor,
           message: order.qr_status == "pending" ? "Waiting for the cashier to accept your order" : (order.qr_status == "rejected" ? "Sorry, the cashier could not accept this order" : "Your order is with the kitchen") }
       end
     end

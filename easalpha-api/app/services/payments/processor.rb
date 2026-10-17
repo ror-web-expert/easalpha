@@ -84,13 +84,14 @@ module Payments
 
     private
 
+    # Cash rounding (Rs 5 or Rs 10) on the first cash payment, on top of the whole-rupee total Pricing already rounded;
+    # kept in cash_rounding_minor so every later recalculation keeps it.
     def apply_rounding!(lines)
       step = @business.setting("cash_rounding").to_i * 100
       return unless step.positive? && lines.any? { |l| l[:method_code].to_s == "cash" } && @order.paid_minor.zero?
+      @order.cash_rounding_minor = 0
       Orders::Pricing.recalculate!(@order)
-      total_before = @order.total_minor - @order.rounding_minor
-      rounded = ((total_before + step / 2) / step) * step
-      @order.rounding_minor = rounded - total_before
+      @order.cash_rounding_minor = Orders::Rounding.round(@order.total_minor, step) - @order.total_minor
     end
 
     def handle_khata!(method, amount)

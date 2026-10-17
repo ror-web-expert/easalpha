@@ -53,8 +53,9 @@ module Storefront
       { id: order.id, label: order.label, guest_token: order.qr_guest_token, order_type: order.order_type, status: order.status, qr_status: order.qr_status,
         spec_status: order.spec_status, stage: stage(order), eta_minutes: order.order_type == "delivery" ? eta : nil, created_at: order.created_at, placed_at: order.placed_at, ready_at: order.ready_at,
         customer: { name: order.guest_name, address: order.address&.to_s },
-        items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, ""), line_total_minor: i.line_subtotal_minor - i.line_discount_minor } },
-        subtotal_minor: order.subtotal_minor, delivery_charge_minor: order.delivery_charge_minor, tax_minor: order.tax_minor, total_minor: order.total_minor, currency: order.business.currency }
+        items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, ""), line_subtotal_minor: i.line_subtotal_minor, line_total_minor: i.line_subtotal_minor - i.line_discount_minor } },
+        subtotal_minor: order.subtotal_minor, discount_minor: order.discount_minor, service_charge_minor: order.service_charge_minor, delivery_charge_minor: order.delivery_charge_minor,
+        tax_minor: order.tax_minor, tax_inclusive_minor: Receipts::Builder.inclusive_tax_minor(order), rounding_minor: order.rounding_minor, total_minor: order.total_minor, currency: order.business.currency }
     end
 
     # One word the storefront shows: waiting, accepted, preparing, ready, on_the_way, done, rejected, cancelled.

@@ -21,15 +21,15 @@ export interface QrMenu {
 
 export interface QrBill {
   order_id: string | null; label?: string | null; status?: string; guest_name?: string | null;
-  items: { name: string; quantity: string; line_total_minor: number }[];
-  subtotal_minor?: number; discount_minor?: number; service_charge_minor?: number; tax_minor?: number; total_minor: number; paid_minor?: number;
+  items: { name: string; quantity: string; line_subtotal_minor?: number; line_total_minor: number }[];
+  subtotal_minor?: number; discount_minor?: number; service_charge_minor?: number; tax_minor?: number; tax_inclusive_minor?: number; rounding_minor?: number; total_minor: number; paid_minor?: number;
 }
 
 /** POST /qr/:token/orders and GET /qr/:token/orders/:id: what the guest sees after ordering. */
 export interface QrGuestOrder {
   id: string; guest_token: string; label: string | null; status: string; qr_status: "pending" | "accepted" | "rejected" | string | null; guest_name: string | null; table_code: string;
-  items: { name: string; quantity: string; line_total_minor: number; status: string }[];
-  subtotal_minor: number; tax_minor: number; service_charge_minor: number; total_minor: number; message: string;
+  items: { name: string; quantity: string; line_subtotal_minor?: number; line_total_minor: number; status: string }[];
+  subtotal_minor: number; discount_minor?: number; tax_minor: number; tax_inclusive_minor?: number; service_charge_minor: number; rounding_minor?: number; total_minor: number; message: string;
 }
 
 export interface QrCartModifier { modifier_id: string; name: string; price_minor: number; quantity: number }

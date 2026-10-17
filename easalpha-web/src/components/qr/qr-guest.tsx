@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/money";
 import { cn, uuid } from "@/lib/utils";
 import { Dialog, Loading, Sheet, Spinner } from "@/components/ui";
 import { DishImage } from "@/components/store/dish-placeholder";
+import { billRows } from "@/lib/bill";
 import {
   EMPTY_GUEST, qrAddLine, qrCartLabel, qrCount, qrGroupsFor, qrIsFinal, qrLineTotal, qrModifierProblem, qrOrderLines, qrPrice, qrSetQuantity, qrStage, qrStageText, qrSubtotal, qrToggleModifier,
   readGuestState, writeGuestState, type QrBill, type QrCartLine, type QrCartModifier, type QrGuestOrder, type QrGuestState, type QrMenu,
@@ -386,11 +387,9 @@ function TrackView({ token, menu, state, update, onMenu }: { token: string; menu
         </ol>
       ) : null}
       <div className="rounded-2xl border bg-card">
-        <ul className="divide-y">{o.items.map((it, i) => <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"><span><span className="tabular text-fg-secondary">{Number(it.quantity)} ×</span> {it.name}</span><span className="tabular">{formatMoney(it.line_total_minor, currency)}</span></li>)}</ul>
+        <ul className="divide-y">{o.items.map((it, i) => <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"><span><span className="tabular text-fg-secondary">{Number(it.quantity)} ×</span> {it.name}</span><span className="tabular">{formatMoney(it.line_subtotal_minor ?? it.line_total_minor, currency)}</span></li>)}</ul>
         <dl className="space-y-1 border-t px-4 py-3 text-sm">
-          <div className="flex justify-between"><dt className="text-fg-secondary">Subtotal</dt><dd className="tabular">{formatMoney(o.subtotal_minor, currency)}</dd></div>
-          {o.service_charge_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Service charge</dt><dd className="tabular">{formatMoney(o.service_charge_minor, currency)}</dd></div> : null}
-          {o.tax_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Tax</dt><dd className="tabular">{formatMoney(o.tax_minor, currency)}</dd></div> : null}
+          <BillBlock bill={o} currency={currency} />
           <div className="flex justify-between pt-1 text-base font-bold"><dt>Total</dt><dd className="tabular">{formatMoney(o.total_minor, currency)}</dd></div>
         </dl>
       </div>
@@ -409,12 +408,9 @@ function BillView({ bill, loading, currency, canAsk, onAsk, asked }: { bill: QrB
   return (
     <div className="space-y-4 pb-4">
       <div className="rounded-2xl border bg-card">
-        <ul className="divide-y">{bill.items.map((it, i) => <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"><span><span className="tabular text-fg-secondary">{Number(it.quantity)} ×</span> {it.name}</span><span className="tabular">{formatMoney(it.line_total_minor, currency)}</span></li>)}</ul>
+        <ul className="divide-y">{bill.items.map((it, i) => <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"><span><span className="tabular text-fg-secondary">{Number(it.quantity)} ×</span> {it.name}</span><span className="tabular">{formatMoney(it.line_subtotal_minor ?? it.line_total_minor, currency)}</span></li>)}</ul>
         <dl className="space-y-1 border-t px-4 py-3 text-sm">
-          {bill.subtotal_minor !== undefined ? <div className="flex justify-between"><dt className="text-fg-secondary">Subtotal</dt><dd className="tabular">{formatMoney(bill.subtotal_minor, currency)}</dd></div> : null}
-          {bill.discount_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Discount</dt><dd className="tabular">-{formatMoney(bill.discount_minor, currency)}</dd></div> : null}
-          {bill.service_charge_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Service charge</dt><dd className="tabular">{formatMoney(bill.service_charge_minor, currency)}</dd></div> : null}
-          {bill.tax_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Tax</dt><dd className="tabular">{formatMoney(bill.tax_minor, currency)}</dd></div> : null}
+          {bill.subtotal_minor !== undefined ? <BillBlock bill={{ ...bill, subtotal_minor: bill.subtotal_minor }} currency={currency} /> : null}
           <div className="flex justify-between pt-1 text-base font-bold"><dt>Total</dt><dd className="tabular">{formatMoney(bill.total_minor, currency)}</dd></div>
           {bill.paid_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Paid</dt><dd className="tabular">{formatMoney(bill.paid_minor, currency)}</dd></div> : null}
           {bill.paid_minor ? <div className="flex justify-between font-semibold"><dt>Still to pay</dt><dd className="tabular">{formatMoney(Math.max(0, due), currency)}</dd></div> : null}
@@ -423,5 +419,16 @@ function BillView({ bill, loading, currency, canAsk, onAsk, asked }: { bill: QrB
       {canAsk ? <button type="button" onClick={onAsk} disabled={asked} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full text-base font-semibold text-white disabled:opacity-60" style={{ backgroundColor: THEME }}>{asked ? <><Check className="h-5 w-5" /> Bill requested</> : <><ReceiptText className="h-5 w-5" /> Ask for the bill</>}</button> : null}
       <p className="text-xs text-fg-muted">Pay at the counter or with the waiter.</p>
     </div>
+  );
+}
+
+/** The shared bill block (lib/bill.ts): the lines add up to the Subtotal and these rows add up to the Total. */
+function BillBlock({ bill, currency }: { bill: { subtotal_minor: number; discount_minor?: number; service_charge_minor?: number; tax_minor?: number; tax_inclusive_minor?: number; total_minor: number }; currency: string }) {
+  return (
+    <>
+      {billRows(bill, currency).map((r) => (
+        <div key={r.key} className={cn("flex justify-between", r.info && "text-xs")}><dt className="text-fg-secondary">{r.label}</dt><dd className="tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</dd></div>
+      ))}
+    </>
   );
 }

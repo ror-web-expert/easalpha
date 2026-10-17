@@ -44,8 +44,16 @@ module Orders
       order.service_charge_minor = order.service_charge_fixed_minor.to_i.positive? ? order.service_charge_fixed_minor : (net * order.service_charge_percent.to_d / 100).round
       order.delivery_charge_minor = (net * order.delivery_charge_percent.to_d / 100).round if order.delivery_charge_percent.to_d.positive?
       order.tax_minor = items.sum(&:line_tax_minor)
-      order.total_minor = items.sum(&:line_total_minor) + order.service_charge_minor + order.delivery_charge_minor + order.rounding_minor + order.tip_minor
-      order.total_minor = 0 if order.is_staff_meal
+      # Rounded once, here (Orders::Rounding): rounding_minor is that rounding plus the cash rounding a cash payment
+      # stored, so subtotal - discount + charges + exclusive tax + tip + rounding is exactly the total.
+      raw = items.sum(&:line_total_minor) + order.service_charge_minor + order.delivery_charge_minor + order.tip_minor
+      rounded = Rounding.round(raw, Rounding.step_minor(order.business))
+      order.rounding_minor = rounded - raw + order.cash_rounding_minor.to_i
+      order.total_minor = rounded + order.cash_rounding_minor.to_i
+      if order.is_staff_meal
+        order.total_minor = 0
+        order.rounding_minor = 0
+      end
       order.payment_status = payment_status_for(order)
       order
     end

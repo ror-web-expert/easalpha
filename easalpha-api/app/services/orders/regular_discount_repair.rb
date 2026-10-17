@@ -62,8 +62,9 @@ module Orders
     def reround!(order)
       step = order.business.setting("cash_rounding").to_i * 100
       return unless step.positive? && order.payments.any? { |p| p.status == "captured" && p.method_code == "cash" }
-      before = order.total_minor - order.rounding_minor
-      order.rounding_minor = ((before + step / 2) / step) * step - before
+      order.cash_rounding_minor = 0
+      Pricing.recalculate!(order)
+      order.cash_rounding_minor = Rounding.round(order.total_minor, step) - order.total_minor
       Pricing.recalculate!(order)
     end
   end

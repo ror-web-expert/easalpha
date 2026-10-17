@@ -1,7 +1,7 @@
 // Pure till rules from SPEC "Orders, order taking and tables", "Payments, charges, tax and the finance ledger",
 // "Kitchen display, printing and devices" and "Roles and permissions". Every rule reads the synced settings object
 // (settingValue) and the session's permission codes, so the till behaves the same offline as online.
-import { cashRounding, settingValue, type CartLine, type Totals } from "@/lib/pricing";
+import { cashRounding, roundToStep, settingValue, totalRoundingStep, type CartLine, type Totals } from "@/lib/pricing";
 import { totalsWithCharges, type ChargeFields } from "@/lib/pos-charges";
 import type { BusinessSettings, OrderType } from "@/lib/types";
 
@@ -153,7 +153,8 @@ export function roundingForPayment(unroundedMinor: number, storedMinor: number, 
   return cashRounding(unroundedMinor, (settings ?? undefined) as BusinessSettings | undefined);
 }
 
-/** An order as the payment screen prices it. discount_minor is the order-level discount only: the lines carry the product discounts. */
+/** An order as the payment screen prices it. discount_minor is the order-level discount only: the lines carry the
+ *  product discounts. rounding_minor is the cash rounding an earlier cash payment stored (the cart's meaning). */
 export type PayableOrder = ChargeFields & { lines: CartLine[]; is_staff_meal: boolean; discount_minor?: number; rounding_minor?: number; tip_minor?: number; paid_minor?: number };
 
 /**
@@ -162,19 +163,25 @@ export type PayableOrder = ChargeFields & { lines: CartLine[]; is_staff_meal: bo
  */
 export function payableTotals(order: PayableOrder, opts: { settings?: Settings; tip_minor?: number; cash: boolean }): Totals {
   const tip_minor = (order.tip_minor ?? 0) + Math.max(0, opts.tip_minor ?? 0);
+  // t is already rounded to whole rupees (totalsWithCharges); cash rounding, when it applies, goes on top of that.
   const t = totalsWithCharges(order.lines, order, { settings: opts.settings, staffMeal: order.is_staff_meal, tip_minor, discount_minor: order.discount_minor });
-  const rounding_minor = roundingForPayment(t.total_minor, order.rounding_minor ?? 0, order.paid_minor ?? 0, opts.cash, opts.settings);
-  return { ...t, rounding_minor, total_minor: order.is_staff_meal ? 0 : t.total_minor + rounding_minor };
+  const cash_rounding_minor = roundingForPayment(t.total_minor, order.rounding_minor ?? 0, order.paid_minor ?? 0, opts.cash, opts.settings);
+  if (order.is_staff_meal) return { ...t, rounding_minor: 0, cash_rounding_minor: 0, total_minor: 0 };
+  return { ...t, rounding_minor: t.rounding_minor + cash_rounding_minor, cash_rounding_minor, total_minor: t.total_minor + cash_rounding_minor };
 }
 
 /**
  * What Payments::Processor will ask for when this payment reaches it, from the order as the server just saved it. Its
  * total already holds the stored rounding and tips; the payment adds its tip and, as the first cash payment, rounds.
  */
-export function serverDueForPayment(order: { total_minor: number; rounding_minor: number; paid_minor: number; is_staff_meal: boolean }, opts: { settings?: Settings; tip_minor?: number; cash: boolean }): number {
-  const unrounded = order.total_minor - order.rounding_minor + Math.max(0, opts.tip_minor ?? 0);
-  const rounding = roundingForPayment(unrounded, order.rounding_minor, order.paid_minor, opts.cash, opts.settings);
-  return Math.max(0, (order.is_staff_meal ? 0 : unrounded + rounding) - order.paid_minor);
+export function serverDueForPayment(order: { total_minor: number; rounding_minor: number; cash_rounding_minor?: number; paid_minor: number; is_staff_meal: boolean }, opts: { settings?: Settings; tip_minor?: number; cash: boolean }): number {
+  // The server's rounding_minor is all of the rounding; without it, plus this payment's tip, the total is rounded to
+  // whole rupees again and then the cash step, as Orders::Pricing and Payments::Processor will. An order saved before
+  // cash_rounding_minor existed stored only cash rounding in rounding_minor.
+  const raw = order.total_minor - order.rounding_minor + Math.max(0, opts.tip_minor ?? 0);
+  const rounded = roundToStep(raw, totalRoundingStep(opts.settings));
+  const cash = roundingForPayment(rounded, order.cash_rounding_minor ?? order.rounding_minor, order.paid_minor, opts.cash, opts.settings);
+  return Math.max(0, (order.is_staff_meal ? 0 : rounded + cash) - order.paid_minor);
 }
 
 /**

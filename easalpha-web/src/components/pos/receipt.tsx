@@ -6,6 +6,7 @@ import type { Receipt } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
+import { billRows } from "@/lib/bill";
 
 export type ReceiptBranding = { secondaryPhone?: string | null; footerQrUrl?: string | null; showLogo?: boolean; paper?: string | null };
 
@@ -79,7 +80,7 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
           <div className="grid grid-cols-[1fr_auto_auto] gap-x-2">
             <span className="break-words">{l.name}</span>
             <span className="tabular whitespace-nowrap text-right opacity-80">{formatQty(l.quantity)} x {m(l.unit_price_minor)}</span>
-            <span className="tabular whitespace-nowrap text-right">{m(l.line_total_minor)}</span>
+            <span className="tabular whitespace-nowrap text-right">{m(l.line_subtotal_minor ?? l.line_total_minor)}</span>
           </div>
           {l.modifiers?.map((mo, j) => <div key={j} className="flex justify-between pl-3 text-[0.9em]"><span>+ {mo.name}</span><span className="tabular">{mo.price_minor ? m(mo.price_minor) : ""}</span></div>)}
           {l.discount_minor ? <div className="flex justify-between pl-3 text-[0.9em]"><span>Discount</span><span className="tabular">-{m(l.discount_minor)}</span></div> : null}
@@ -89,13 +90,8 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
       <Rule />
 
       {/* Totals */}
-      {row("Subtotal", m(r.totals?.subtotal_minor))}
-      {r.totals?.discount_minor ? row("Discount", `-${m(r.totals.discount_minor)}`) : null}
-      {r.totals?.service_charge_minor ? row("Service charge", m(r.totals.service_charge_minor)) : null}
-      {r.totals?.tax_lines?.map((t) => row(`Tax ${t.rate}%${t.inclusive ? " (incl.)" : ""}`, m(t.tax_minor)))}
-      {r.totals?.delivery_charge_minor ? row("Delivery charge", m(r.totals.delivery_charge_minor)) : null}
-      {r.totals?.rounding_minor ? row("Rounding", m(r.totals.rounding_minor)) : null}
-      {r.totals?.tip_minor ? row("Tip", m(r.totals.tip_minor)) : null}
+      {/* The shared bill block (lib/bill.ts): the lines above add up to the Subtotal, and these rows add up to TOTAL. */}
+      {r.totals ? billRows({ ...r.totals, delivery_label: "Delivery charge" }, r.business?.currency).map((b) => <div key={b.key}>{row(b.label, b.amount_minor < 0 ? `-${m(-b.amount_minor)}` : m(b.amount_minor), b.info ? { muted: true } : undefined)}</div>) : null}
       <div className="my-1 border-t border-black" />
       {row("TOTAL", m(r.totals?.total_minor), { bold: true, big: true })}
       <Rule />

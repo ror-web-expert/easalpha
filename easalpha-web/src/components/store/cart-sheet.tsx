@@ -12,6 +12,7 @@ import {
   canDeliver, checkoutProblems, count, deliveryEnabled, deliveryLine, isFinalStage, stageLabel, subtotal, trackingSteps, type DeliverySettings,
 } from "./cart-helpers";
 import { themeInk } from "./storefront-helpers";
+import { billRows } from "@/lib/bill";
 
 // The guest's cart on the public storefront: a right-hand sheet with the lines, the checkout form and, once an order is
 // placed, a live tracking view polled every 10 s until the order is done, rejected or cancelled. The sheet renders in a
@@ -305,13 +306,15 @@ function TrackingView({ slug, data, theme, onTheme, onClose }: CartSheetProps) {
       <div className="rounded-xl border bg-card">
         <ul className="divide-y">
           {order.items.map((it, i) => (
-            <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"><span><span className="tabular text-fg-secondary">{Number(it.quantity)} ×</span> {it.name}</span><span className="tabular">{formatMoney(it.line_total_minor, order.currency)}</span></li>
+            <li key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"><span><span className="tabular text-fg-secondary">{Number(it.quantity)} ×</span> {it.name}</span><span className="tabular">{formatMoney(it.line_subtotal_minor ?? it.line_total_minor, order.currency)}</span></li>
           ))}
         </ul>
         <dl className="space-y-1 border-t px-4 py-3 text-sm">
-          <div className="flex justify-between"><dt className="text-fg-secondary">Subtotal</dt><dd className="tabular">{formatMoney(order.subtotal_minor, order.currency)}</dd></div>
-          {order.order_type === "delivery" ? <div className="flex justify-between"><dt className="text-fg-secondary">Delivery charge</dt><dd className="tabular">{order.delivery_charge_minor ? formatMoney(order.delivery_charge_minor, order.currency) : "Free"}</dd></div> : null}
-          {order.tax_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Tax</dt><dd className="tabular">{formatMoney(order.tax_minor, order.currency)}</dd></div> : null}
+          {/* The shared bill block (lib/bill.ts): the lines add up to the Subtotal and these rows add up to the Total. */}
+          {billRows({ ...order, delivery_label: "Delivery charge" }, order.currency).map((r) => (
+            <div key={r.key} className={cn("flex justify-between", r.info && "text-xs")}><dt className="text-fg-secondary">{r.label}</dt><dd className="tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, order.currency)}` : formatMoney(r.amount_minor, order.currency)}</dd></div>
+          ))}
+          {order.order_type === "delivery" && !order.delivery_charge_minor ? <div className="flex justify-between"><dt className="text-fg-secondary">Delivery charge</dt><dd className="tabular">Free</dd></div> : null}
           <div className="flex justify-between pt-1 text-base font-semibold"><dt>Total</dt><dd className="tabular">{formatMoney(order.total_minor, order.currency)}</dd></div>
         </dl>
       </div>

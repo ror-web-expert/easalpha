@@ -40,7 +40,7 @@ describe("PaymentDialog totals", () => {
     const onPay = vi.fn(async () => {});
     render(<PaymentDialog open onClose={() => {}} cart={order({ paid_minor: 50000, rounding_minor: 400 })} onPay={onPay} busy={false} />);
     expect(figure("Amount due")).toBe("Rs 760");
-    expect(figure("Cash rounding")).toBe("Rs 4");
+    expect(figure("Rounding")).toBe("Rs 4");
     fireEvent.click(screen.getByRole("button", { name: "Card" }));
     expect(figure("Amount due")).toBe("Rs 760");
     fireEvent.click(screen.getByRole("button", { name: /Pay Rs 760/ }));

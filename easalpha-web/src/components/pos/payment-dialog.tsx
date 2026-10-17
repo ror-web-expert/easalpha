@@ -4,6 +4,7 @@ import { Banknote, Trash2 } from "lucide-react";
 import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
 import { api } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { billRows, cashSuggestions } from "@/lib/bill";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "@/lib/pos-rules";
 import { chargeAmount, chargeDisplay, deliveryChargeFields, linkedTaxRate, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, taxRateLabel, type ChargeState } from "@/lib/pos-charges";
 import type { Cart, CartCustomer } from "@/store/cart";
@@ -63,7 +64,6 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const cash = roundsCash([...splits.map((s) => s.method.code), draft.method?.code]);
   const base = payableTotals(cart, { settings, tip_minor: tip, cash });
   const net = base.subtotal_minor - base.discount_minor;
-  const rounding = base.rounding_minor;
   const total = base.total_minor;
   const paidBefore = cart.paid_minor ?? 0;
   const due = Math.max(0, total - paidBefore);
@@ -122,7 +122,8 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
     if (sum <= 0 && !(cart.is_staff_meal && total === 0)) return;
     await onPay(toInputs(list), tip, due);
   };
-  const quick = [remaining, Math.ceil(remaining / 10000) * 10000, Math.ceil(remaining / 50000) * 50000, Math.ceil(remaining / 100000) * 100000].filter((v, i, a) => v >= remaining && v > 0 && a.indexOf(v) === i).slice(0, 4);
+  // The exact amount first, then what a customer can hand over in notes (Rs 50, 100, 500, 1,000, 5,000).
+  const quick = cashSuggestions(remaining, currency ?? "PKR");
   const draftOk = !!draft.method && remaining > 0 && draft.amount > 0 && !needsRef && !khataBlocked && !offlineBlocked && (draft.method.kind !== "cash" || draft.tendered >= draftAmount);
   const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0);
   const payLabel = remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
@@ -205,13 +206,9 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
           <div className="text-sm text-fg-secondary">{paidBefore ? "Amount due" : "Total due"}</div>
           <div className="text-4xl font-bold tabular">{formatMoney(due, currency)}</div>
           <div className="mt-2 space-y-1 text-sm text-fg-secondary">
-            <div className="flex justify-between"><span>Subtotal</span><span className="tabular">{formatMoney(base.subtotal_minor, currency)}</span></div>
-            {discountLines.map((d) => <div key={d.key} className="flex justify-between gap-2"><span className="truncate">{d.label}</span><span className="shrink-0 tabular">-{formatMoney(d.amount_minor, currency)}</span></div>)}
-            {base.service_charge_minor ? <div className="flex justify-between"><span>Service charge {chargeDisplay(service, currency)}</span><span className="tabular">{formatMoney(base.service_charge_minor, currency)}</span></div> : null}
-            {base.delivery_charge_minor ? <div className="flex justify-between"><span>Delivery {delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}</span><span className="tabular">{formatMoney(base.delivery_charge_minor, currency)}</span></div> : null}
-            {base.tax_minor || cart.tax_choice ? <div className="flex justify-between"><span>Tax{cart.tax_choice === "none" ? " (none)" : ""}</span><span className="tabular">{formatMoney(base.tax_minor, currency)}</span></div> : null}
-            {rounding ? <div className="flex justify-between"><span>Cash rounding</span><span className="tabular">{formatMoney(rounding, currency)}</span></div> : null}
-            {base.tip_minor ? <div className="flex justify-between"><span>Tip</span><span className="tabular">{formatMoney(base.tip_minor, currency)}</span></div> : null}
+            {billRows({ ...base, discounts: discountLines, service_charge_label: `Service charge ${chargeDisplay(service, currency)}`.trim(), delivery_label: `Delivery ${delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}`.trim(), tax_label: cart.tax_choice === "none" ? "Tax (none)" : "Tax" }, currency).map((r) => (
+              <div key={r.key} className={cn("flex justify-between gap-2", r.info && "text-xs text-fg-muted")}><span className="truncate">{r.label}</span><span className="shrink-0 tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</span></div>
+            ))}
             {paidBefore ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(total, currency)}</span></div> : null}
             {paidBefore ? <div className="flex justify-between"><span>Already paid</span><span className="tabular">-{formatMoney(paidBefore, currency)}</span></div> : null}
           </div>

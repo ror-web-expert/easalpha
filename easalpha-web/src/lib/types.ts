@@ -216,7 +216,8 @@ export interface OrderSummary {
   id: ID; serial: number | null; label: string; till_serial: string | null; business_day: string; order_type: OrderType; source: string;
   status: OrderStatus; payment_status: string; table_id: ID | null; table_code: string | null; guest_name: string | null; covers: number | null;
   customer_id: ID | null; rider_id: ID | null; shift_id: ID | null; is_staff_meal: boolean;
-  subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; tip_minor: number;
+  /** rounding_minor: all the rounding in total_minor (whole rupees plus cash); cash_rounding_minor: the cash part (absent before 17 Oct 2026). */
+  subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; cash_rounding_minor?: number; tip_minor: number;
   delivery_charge_minor: number; total_minor: number; paid_minor: number; due_minor: number; item_count: number;
   placed_at: string | null; ready_at: string | null; served_at: string | null; paid_at: string | null; closed_at: string | null; voided_at: string | null;
   void_reason: string | null; notes: string | null; payment_method_summary: string | null; receipt_number: string | null;
@@ -316,7 +317,8 @@ export interface Receipt {
   header: string | null; footer: string | null; language: string; paper: string;
   order: { id: ID; serial: number | null; label: string; order_type: OrderType; table: string | null; business_day: string; placed_at: string | null; paid_at: string | null;
     cashier: string | null; customer: { name: string; phone: string | null; khata_no: string | null } | null; guest_name: string | null; notes: string | null };
-  lines: { name: string; quantity: string; unit_price_minor: number; modifiers: { name: string; price_minor: number }[]; line_total_minor: number; discount_minor: number; notes: string | null }[];
+  /** line_subtotal_minor (unit price with modifiers times quantity) is what a bill line shows; receipts from before 17 Oct 2026 lack it. */
+  lines: { name: string; quantity: string; unit_price_minor: number; modifiers: { name: string; price_minor: number }[]; line_subtotal_minor?: number; line_total_minor: number; discount_minor: number; notes: string | null }[];
   totals: { subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; tax_lines: { rate: number; inclusive: boolean; taxable_minor: number; tax_minor: number }[];
     delivery_charge_minor: number; rounding_minor: number; tip_minor: number; total_minor: number; paid_minor: number; due_minor: number };
   payments: { method: string; amount_minor: number; tendered_minor: number | null; change_minor: number; reference: string | null }[];
@@ -1086,8 +1088,9 @@ export interface StorefrontOrder {
   id: ID; label: string | null; guest_token: string; order_type: "delivery" | "takeaway"; status: string; qr_status: string | null; spec_status: string | null;
   stage: StorefrontOrderStage; eta_minutes: number | null; created_at: string; placed_at: string | null; ready_at: string | null;
   customer: { name: string | null; address: string | null };
-  items: { name: string; quantity: string; line_total_minor: number }[];
-  subtotal_minor: number; delivery_charge_minor: number; tax_minor: number; total_minor: number; currency: string;
+  /** line_subtotal_minor: unit price times quantity, what a bill line shows (absent before 17 Oct 2026). */
+  items: { name: string; quantity: string; line_subtotal_minor?: number; line_total_minor: number }[];
+  subtotal_minor: number; discount_minor?: number; service_charge_minor?: number; delivery_charge_minor: number; tax_minor: number; tax_inclusive_minor?: number; rounding_minor?: number; total_minor: number; currency: string;
 }
 
 // ---- POS discounts and reviews (SPEC "Three discount mechanisms", reviews "from the tablet") ----

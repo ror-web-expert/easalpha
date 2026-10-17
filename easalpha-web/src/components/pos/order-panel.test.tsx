@@ -18,7 +18,7 @@ const figure = (label: string) => screen.getByText(label).nextElementSibling?.te
 describe("OrderPanel", () => {
   it("counts the rounding and tip earlier payments stored in what is still due", () => {
     panel(order({ paid_minor: 50000, rounding_minor: 400, tip_minor: 5000 }));
-    expect(figure("Cash rounding")).toBe("Rs 4");
+    expect(figure("Rounding")).toBe("Rs 4");
     expect(figure("Tip")).toBe("Rs 50");
     expect(figure("Total")).toBe("Rs 1,310");
     expect(figure("Due")).toBe("Rs 810");
