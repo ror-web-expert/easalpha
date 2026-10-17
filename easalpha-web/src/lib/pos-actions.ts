@@ -12,6 +12,9 @@ import { useCartStore, type Cart } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
 import { useSyncStore, type OpenCounts } from "@/store/sync";
+import { useCustomerStore } from "@/store/customers";
+import { rememberRecentCustomer, readRecentCustomers } from "@/lib/pos-customers";
+import { saleTime, withRegularDiscount } from "@/lib/pos-regular";
 import type { HeaderPills, Order, OrderInput, PaymentInput, PaymentResult, Receipt, Shift, ZReport, CashMovement } from "@/lib/types";
 import { OPEN_STATUSES } from "@/lib/types";
 
@@ -33,8 +36,24 @@ async function nextTillSerial(): Promise<string> {
   return `${code}-${String(n).padStart(3, "0")}`;
 }
 
-export function cartToLocal(cart: Cart, status: string, extra: Partial<LocalOrder> = {}): LocalOrder {
+/**
+ * The cart priced as the server will price it, regular customer discount included. Online the server adds that
+ * discount when the order is saved (the payment screen saves first), so the till only works it out itself while it is
+ * offline or the order is still waiting in the queue: otherwise a khata sale would be put on account at the full price
+ * and the server would refuse it as more than the amount due.
+ */
+export function regularPricing(cart: Cart): Cart {
+  const { settings, catalog } = ctx();
+  const offline = !isOnline() || useSyncStore.getState().status === "offline";
+  const saved = cart.customer ? useCustomerStore.getState().byId.get(cart.customer.id) : undefined;
+  const customer = cart.customer ? { id: cart.customer.id, is_walk_in: saved?.is_walk_in ?? cart.customer.is_walk_in ?? false, last_order_at: saved?.last_order_at ?? cart.customer.last_order_at ?? null } : null;
+  const categories = new Map((catalog?.products ?? []).map((p) => [p.id, p.category_id]));
+  return withRegularDiscount(cart, { apply: offline || cart.local_only, customer, tiers: catalog?.regular_discount_tiers, settings, at: saleTime(cart), categoryOf: (id) => categories.get(id) });
+}
+
+export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrder> = {}): LocalOrder {
   const { settings, membershipId, cashier, branch } = ctx();
+  const cart = regularPricing(input);
   const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, tip_minor: extra.tip_minor ?? cart.tip_minor, rounding_minor: extra.rounding_minor ?? cart.rounding_minor, discount_minor: cart.discount_minor });
   const now = new Date().toISOString();
   return {
@@ -46,6 +65,8 @@ export function cartToLocal(cart: Cart, status: string, extra: Partial<LocalOrde
     client_created_at: cart.client_created_at, created_at: now, updated_at: now, local_only: true, open: OPEN_STATUSES.includes(status as never) ? 1 : 0,
     delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null,
     ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null,
+    // Kept so the order opens again with its discount lines (the till's own regular discount among them) and not twice.
+    order_discounts: cart.discounts?.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })),
     ...extra,
   };
 }
@@ -225,7 +246,7 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
     if (!current.local_only) {
       try {
         // Always sync the cart to the server first so the payment applies to the latest lines.
-        const shownDue = opts.shownDue ?? Math.max(0, payableTotals(cart, { settings, tip_minor, cash }).total_minor - (cart.paid_minor ?? 0));
+        const shownDue = opts.shownDue ?? Math.max(0, payableTotals(regularPricing(cart), { settings, tip_minor, cash }).total_minor - (cart.paid_minor ?? 0));
         const saved = await saveOrder(current, { approver_pin, pin: opts.pin });
         current = saved.cart;
         synced = true; // saved on the server, or stored and queued when it could not be reached
@@ -280,9 +301,23 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
       await enqueue({ type: "payment", id: np.id, membership_id: membershipId ?? undefined, payload: { order_id: current.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at, tip_minor } });
     }
   }
+  if (local.customer_id) await noteOfflineSale(local.customer_id, newPayments, local.payment_status === "paid", now);
   // The cart keeps everything the cashier set (customer, discount lines, reopen state); only the payment moved on.
   const next: Cart = { ...current, saved: true, local_only: local.local_only, status: local.status, label: local.label, paid_minor: local.paid_minor, rounding_minor: (local.cash_rounding_minor ?? local.rounding_minor) || undefined, tip_minor: local.tip_minor || undefined };
   return { receipt: buildLocalReceipt(local), change_minor: change, offline: true, local, cart: next };
+}
+
+/**
+ * A sale finished offline for a customer: the khata it added and (once paid) the last order date go on the till's
+ * saved copy and the recent list, so the next search shows what they owe now and the next order gets the right tier.
+ */
+async function noteOfflineSale(customerId: string, payments: LocalPayment[], paid: boolean, at: string) {
+  const khata = (useCatalogStore.getState().paymentMethods ?? []).filter((m) => m.kind === "khata").map((m) => m.code);
+  const khata_minor = payments.filter((p) => khata.includes(p.method_code) || p.method_code === "khata").reduce((s, p) => s + p.amount_minor, 0);
+  if (!khata_minor && !paid) return;
+  await useCustomerStore.getState().noteSale(customerId, { khata_minor, paid, at });
+  const recent = readRecentCustomers().find((r) => r.id === customerId);
+  if (recent) rememberRecentCustomer({ ...recent, balance_minor: (recent.balance_minor ?? 0) + khata_minor, ...(paid ? { last_order_at: at, orders_count: (recent.orders_count ?? 0) + 1 } : {}) });
 }
 
 export async function voidOrder(id: string, reason: string, approver_pin?: string): Promise<{ offline: boolean }> {

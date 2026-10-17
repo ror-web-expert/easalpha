@@ -24,6 +24,10 @@ module Sync
         floors: changed.call(Floor.where(branch_id: branch.id)).map { |f| CustomerSerializers.floor(f) },
         tables: changed.call(DiningTable.where(branch_id: branch.id)).map { |t| CustomerSerializers.table(t) },
         customers: changed.call(Customer.where(archived_at: nil)).order(updated_at: :desc).limit(2000).map { |c| CustomerSerializers.customer(c) },
+        # Archived customers since the cursor, so the till drops them from its offline search.
+        archived_customer_ids: since ? Customer.where.not(archived_at: nil).where("customers.updated_at > ?", since).pluck(:id) : [],
+        # The whole (short) list every time, like quick_add_items: the till replaces its copy.
+        regular_discount_tiers: RegularDiscountTier.active.order(:within_days).map { |t| MarketingSerializers.tier(t) },
         staff: staff_payload(branch, device, since),
         settings: Setting.for_clients(Current.business, branch: branch), settings_version: Current.business.settings_version, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now))
       }

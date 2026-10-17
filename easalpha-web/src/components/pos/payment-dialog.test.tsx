@@ -64,7 +64,7 @@ describe("PaymentDialog khata line", () => {
     fireEvent.click(screen.getByRole("button", { name: "Khata (account)" }));
     expect(screen.getByText("Customer")).toBeInTheDocument();
     expect(screen.queryByText(/owes nothing|no limit|after this sale/)).toBeNull();
-    await waitFor(() => expect(onCustomer).toHaveBeenCalledWith({ id: "c-1", name: "Ali Raza", phone: "+923001112233", balance_minor: 450000, credit_limit_minor: 500000 }));
+    await waitFor(() => expect(onCustomer).toHaveBeenCalledWith({ id: "c-1", name: "Ali Raza", phone: "+923001112233", balance_minor: 450000, credit_limit_minor: 500000, last_order_at: null, is_walk_in: false }));
     expect(h.api).toHaveBeenCalledWith("/customers/c-1", { auth: "pos" });
     // Once the page puts the figures on the cart, the line and the limit warning appear.
     rerender(<PaymentDialog open onClose={() => {}} cart={{ ...cart, customer: onCustomer.mock.calls[0][0] }} onPay={vi.fn()} busy={false} onCustomer={onCustomer} />);

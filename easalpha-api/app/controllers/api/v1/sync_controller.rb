@@ -21,6 +21,16 @@ module Api
         raise Api::Errors::BadRequest.new("sync.cursor", "since must be an ISO 8601 time")
       end
 
+      # GET /sync/customers?after=&limit=  every customer the till can search while offline, by id, up to 1,000 a page.
+      # /sync/changes then keeps the copy current (it sends only the customers changed since the cursor).
+      def customers
+        limit = (params[:limit].presence || 1000).to_i.clamp(1, 1000)
+        scope = Customer.active.where(is_walk_in: false).reorder(:id)
+        scope = scope.where("customers.id > ?", params[:after].to_s) if params[:after].present?
+        rows = scope.limit(limit).to_a
+        render json: { data: rows.map { |c| CustomerSerializers.customer(c) }, next_after: rows.size == limit ? rows.last.id : nil, generated_at: Time.current }
+      end
+
       # GET /sync/rejections  the needs-attention list
       def rejections
         scope = SyncRejection.where(branch_id: current_branch.id).order(created_at: :desc)

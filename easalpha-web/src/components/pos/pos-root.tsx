@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useDeviceStore } from "@/store/device";
 import { useCartStore } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
+import { useCustomerStore } from "@/store/customers";
 import { startSync, pullChanges } from "@/lib/sync";
 import { loadCurrentShift, pruneOldOrders } from "@/lib/pos-actions";
 import { Loading } from "@/components/ui";
@@ -32,6 +33,7 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") navigator.serviceWorker.register("/sw.js").catch(() => {});
     useCartStore.persist.rehydrate();
     useCatalogStore.getState().loadLocal();
+    useCustomerStore.getState().load();
   }, []);
 
   // Route guards
@@ -47,6 +49,8 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
     const stop = startSync();
     const cs = useCatalogStore.getState();
     (cs.catalog ? pullChanges() : cs.refresh().catch(() => {})).then(() => loadCurrentShift());
+    // The offline customer search needs the whole list once (a till paired before it existed has none yet).
+    void useCustomerStore.getState().downloadIfStale();
     pruneOldOrders();
     return stop;
   }, [session]);

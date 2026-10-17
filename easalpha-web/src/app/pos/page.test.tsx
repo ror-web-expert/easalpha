@@ -46,7 +46,7 @@ vi.mock("@/components/pos/receipt-dialog", () => ({ ReceiptDialog: () => null })
 vi.mock("@/components/approval", () => ({ useApproval: () => ({ run: (fn: (pin?: string) => Promise<unknown>) => fn(), dialog: null, open: h.approvalOpen }) }));
 vi.mock("@/lib/pos-actions", () => ({
   holdOrder: () => h.hold(), payOrder: vi.fn(), saveOrder: vi.fn(), loadOrderForEdit: vi.fn(), completeUnpaid: vi.fn(), applyTaxChoice: vi.fn(),
-  applyServerDiscount: vi.fn(), syncForPayment: vi.fn(), TotalChangedError: class extends Error {},
+  applyServerDiscount: vi.fn(), syncForPayment: vi.fn(), TotalChangedError: class extends Error {}, regularPricing: (c: unknown) => c,
 }));
 
 import PosPage from "./page";

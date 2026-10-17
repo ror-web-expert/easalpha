@@ -10,7 +10,11 @@ module Payments
     end
 
     # payments: [{ id?, method_code, amount_minor, tendered_minor?, reference?, card_terminal_ref?, tip_minor? }]
-    def call(payments:, tip_minor: 0)
+    # offline: the payments were taken on a till with no connection and arrive through the sync queue. The sale has
+    # already happened, so a non-cash payment above what the server asks for is taken at the amount due instead of
+    # refusing the whole order (a khata sale then puts the server's figure on the account), and one that finds nothing
+    # left to pay is skipped. Either is written to the audit log with what the till sent.
+    def call(payments:, tip_minor: 0, offline: false)
       lines = Array(payments).map { |p| p.to_h.with_indifferent_access }
       existing = lines.map { |l| l[:id].presence && Payment.find_by(id: l[:id]) }
       return Result.new(order: @order, payments: existing.compact, change_minor: 0) if lines.any? && existing.all?
@@ -36,6 +40,12 @@ module Payments
           raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount.positive?
           raise Api::Errors::BadRequest.new("payment.reference_required", "#{method.name} needs a reference") if method.needs_reference && l[:reference].blank? && l[:card_terminal_ref].blank?
           remaining = due - created.sum(&:amount_minor)
+          # Cash above the due is change, as on the till; only cash with nothing left to pay counts as too much.
+          if offline && amount > remaining && (!method.cash? || remaining <= 0)
+            record_offline_overpayment!(l, method, amount, [ remaining, 0 ].max)
+            next if remaining <= 0
+            amount = remaining
+          end
           raise Api::Errors::Conflict.new("payment.overpaid", "Payment exceeds the amount due") if amount > remaining && !method.cash?
           applied = [ amount, remaining ].min
           raise Api::Errors::Conflict.new("payment.overpaid", "Order is already paid") if applied <= 0
@@ -94,6 +104,14 @@ module Payments
       @order.cash_rounding_minor = Orders::Rounding.round(@order.total_minor, step) - @order.total_minor
     end
 
+    # The till priced the order offline and took more than the server asks for (a regular discount or a price the till
+    # did not know yet). Kept in the audit log so a manager can see what the till charged against what was recorded.
+    def record_offline_overpayment!(line, method, sent_minor, taken_minor)
+      AuditLog.record(action: "offline_payment_adjusted", record: @order,
+                      before: { payment_id: line[:id], method_code: method.code, amount_minor: sent_minor },
+                      after: { amount_minor: taken_minor, order_total_minor: @order.total_minor, reason: taken_minor.zero? ? "nothing left to pay" : "more than the amount due" })
+    end
+
     def handle_khata!(method, amount)
       return unless method.khata?
       BusinessModules.require!(@business, "customer_accounts")
@@ -115,7 +133,9 @@ module Payments
 
     def update_customer_stats!
       return if @order.customer_id.blank?
-      Customer.where(id: @order.customer_id).update_all([ "orders_count = orders_count + 1, net_spent_minor = net_spent_minor + ?, last_order_at = ?", @order.total_minor, Time.current ])
+      # updated_at too, so /sync/changes carries the new last order to the tills (their offline regular discount needs it).
+      now = Time.current
+      Customer.where(id: @order.customer_id).update_all([ "orders_count = orders_count + 1, net_spent_minor = net_spent_minor + ?, last_order_at = ?, updated_at = ?", @order.total_minor, now, now ])
     end
   end
 end

@@ -7,10 +7,12 @@ module Marketing
     def blocked_ids(business = Current.business) = Array(business.setting("marketing.regular_discounts.blocked_customer_ids")).map(&:to_s)
     def enabled?(business = Current.business) = ActiveModel::Type::Boolean.new.cast(business.setting("marketing.regular_discounts.enabled"))
 
-    # The tier the customer qualifies for right now, or nil.
+    # The tier the customer qualified for when the order was taken, or nil. An offline order reaches the server later,
+    # so recency is counted to the till's time of sale (as the till worked it out), never past now.
     def tier_for(customer, order)
       return nil unless regular?(customer, order.business)
-      days_since = ((Time.current - customer.last_order_at) / 86_400).floor
+      at = [ order.client_created_at || Time.current, Time.current ].min
+      days_since = ((at - customer.last_order_at) / 86_400).floor
       RegularDiscountTier.active.order(:within_days).find { |t| days_since <= t.within_days && !t.excludes?(order) }
     end
 

@@ -9,7 +9,9 @@ import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
 import type { BarcodeMatch } from "@/lib/barcode";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError } from "@/lib/pos-actions";
+import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError, regularPricing } from "@/lib/pos-actions";
+import { useSyncStore } from "@/store/sync";
+import { useCustomerStore } from "@/store/customers";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
@@ -41,6 +43,12 @@ function SellScreen() {
   const session = useDeviceStore((s) => s.session);
   const can = usePosCan();
   const { cart, reset, load, patch, addLine, updateLine, removeLine, restoreLine, setQty } = useCartStore();
+  // The cart as it will be charged. Offline the till takes a regular customer's discount off itself (pos-regular), so
+  // the panel, the bill and the payment screen show the figure the server will ask for once the order syncs.
+  const syncStatus = useSyncStore((s) => s.status);
+  const savedCustomers = useCustomerStore((s) => s.byId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- regularPricing reads the sync status, catalog and saved customers from their stores
+  const shownCart = useMemo(() => regularPricing(cart), [cart, catalog, syncStatus, savedCustomers]);
   const { run, dialog: pinDialog, open: approvalOpen } = useApproval();
   const searchRef = useRef<HTMLInputElement>(null);
   const [product, setProduct] = useState<Product | null>(null);
@@ -371,7 +379,7 @@ function SellScreen() {
         <div className="flex min-h-0 flex-col border-l">
           <QuickAddBar items={catalog.quick_add_items} currency={currency} showPrices={display.showPrices} onPick={quickAdd} />
           <div className="min-h-0 flex-1">
-            <OrderPanel cart={cart} currency={currency} settings={settings} onQty={qtyWithUndo} onEditLine={editLine} onOverride={setOverride} onRemove={removeWithUndo}
+            <OrderPanel cart={shownCart} currency={currency} settings={settings} onQty={qtyWithUndo} onEditLine={editLine} onOverride={setOverride} onRemove={removeWithUndo}
               onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? patch({ is_staff_meal: false, staff_meal_reason: "" }) : setStaffOpen(true))}
               onHold={hold} onSend={send} onPay={openPay} onNew={newOrder} busy={busy} canOverride={true} overrideNeedsPin={!can("prices.override")} onPreview={() => setBillOpen(true)}
               canRemove={canRemove} canDecrease={canDecrease} onPlaceUnpaid={unpaidOk ? placeUnpaid : undefined} unpaidLabel={unpaidLabel} />
@@ -387,8 +395,8 @@ function SellScreen() {
       <Dialog open={notesOpen} onClose={() => setNotesOpen(false)} title={editing ? `Notes for ${editing.name}` : "Order notes"} size="sm" footer={<><Button variant="secondary" onClick={() => setNotesOpen(false)}>Cancel</Button><Button onClick={() => { if (editing) updateLine(editing.key, { notes: notes || null }); else patch({ notes }); setNotesOpen(false); setEditing(null); }}>Save</Button></>}>
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
-      <BillPreviewDialog open={billOpen} onClose={() => setBillOpen(false)} cart={cart} />
-      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={cart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c })} />
+      <BillPreviewDialog open={billOpen} onClose={() => setBillOpen(false)} cart={shownCart} />
+      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={shownCart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c })} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />

@@ -10,6 +10,9 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { CustomerSearch } from "./customer-search";
+import { ApiError } from "@/lib/api";
+import { toCachedCustomer } from "@/lib/offline-customers";
+import { useCustomerStore } from "@/store/customers";
 
 const customer = (id: string, name: string, over: Partial<Customer> = {}): Customer => ({
   id, khata_no: null, name, phone: null, email: null, company: null, group_id: null, source: "in_store", status: "active", is_walk_in: false,
@@ -120,5 +123,42 @@ describe("CustomerSearch before typing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add “Nobody” as a new customer" }));
     expect(onAddNew).toHaveBeenCalledWith("Nobody");
     localStorage.removeItem("easalpha.pos.recent_customers");
+  });
+});
+
+describe("CustomerSearch with no internet", () => {
+  // 18 Oct 2026: offline, the khata search found nobody ("Searching customers needs the internet"), so a canteen till
+  // could not put a student's sale on account. It now searches the customers saved on the till.
+  const saved = [
+    toCachedCustomer(customer("s1", "Sadia Akhtar", { khata_no: "32", phone: "+923001807130", balance_minor: 194_500 })),
+    toCachedCustomer(customer("s2", "Hamza Ali", { member_no: "R-12", guardian_phone: "+923451112233" })),
+  ];
+  beforeEach(() => { useCustomerStore.setState({ list: saved, byId: new Map(saved.map((c) => [c.id, c])), loaded: true }); });
+
+  it("finds a student by name, roll no. or a guardian's phone from the saved list and picks with Enter", async () => {
+    const offline = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    try {
+      const { onPick, box } = renderSearch();
+      expect(await screen.findByText(/searching the 2 customers saved on this till/)).toBeInTheDocument();
+      fireEvent.change(box, { target: { value: "sadia" } });
+      expect(screen.getByText("Sadia Akhtar")).toBeInTheDocument();
+      fireEvent.keyDown(box, { key: "Enter" });
+      expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: "s1", balance_minor: 194_500 }));
+      fireEvent.change(box, { target: { value: "0345 1112233" } });
+      expect(screen.getByText("Hamza Ali")).toBeInTheDocument();
+      fireEvent.change(box, { target: { value: "nobody here" } });
+      expect(screen.getByText(/No customer matches/)).toBeInTheDocument();
+      expect(apiMock).not.toHaveBeenCalled();
+    } finally {
+      offline.mockRestore();
+    }
+  });
+
+  it("falls back to the saved list when the server cannot be reached", async () => {
+    apiMock.mockRejectedValue(new ApiError("network", "Network error", 0));
+    const { box } = renderSearch();
+    fireEvent.change(box, { target: { value: "hamza" } });
+    expect(await screen.findByText("Hamza Ali")).toBeInTheDocument();
+    expect(screen.getByText(/No internet: searching/)).toBeInTheDocument();
   });
 });

@@ -21,7 +21,9 @@ describe("till customer search helpers", () => {
   });
 
   it("keeps what the cart needs", () => {
-    expect(toCartCustomer({ id: "c1", name: "Ali", phone: null, balance_minor: 500, credit_limit_minor: null })).toEqual({ id: "c1", name: "Ali", phone: null, balance_minor: 500, credit_limit_minor: null });
+    expect(toCartCustomer({ id: "c1", name: "Ali", phone: null, balance_minor: 500, credit_limit_minor: null })).toEqual({ id: "c1", name: "Ali", phone: null, balance_minor: 500, credit_limit_minor: null, last_order_at: null, is_walk_in: false });
+    // The last order and walk-in flag go along so the till can work out a regular discount offline (pos-regular).
+    expect(toCartCustomer({ id: "c2", name: "Sadia", phone: null, balance_minor: 0, credit_limit_minor: null, last_order_at: "2026-10-17T10:00:00Z", is_walk_in: false })).toMatchObject({ last_order_at: "2026-10-17T10:00:00Z" });
   });
 
   it("explains the account and warns before the limit is passed", () => {

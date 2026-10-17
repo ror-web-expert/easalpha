@@ -197,6 +197,8 @@ export interface Catalog {
   tax_rates: TaxRate[]; stations: Station[]; menus: Menu[]; categories: Category[]; products: Product[];
   modifier_groups: ModifierGroup[]; deals: Deal[]; promotions: Promotion[]; since: string | null;
   quick_add_items?: QuickAddItem[];
+  /** Active regular discount tiers, so the till prices a regular customer's order offline (pos-regular). */
+  regular_discount_tiers?: RegularDiscountTier[];
 }
 
 // ---- Orders ----
@@ -430,6 +432,8 @@ export interface SyncChanges {
   modifier_groups: ModifierGroup[]; deals: Deal[]; promotions: Promotion[]; tax_rates: TaxRate[]; stations: Station[]; payment_methods: PaymentMethod[];
   floors: Floor[]; tables: DiningTable[]; customers: Customer[]; staff: unknown[]; settings: BusinessSettings; day_locked: boolean;
   quick_add_items?: QuickAddItem[]; settings_version?: number;
+  /** The whole active list every time; customers archived since the cursor. */
+  regular_discount_tiers?: RegularDiscountTier[]; archived_customer_ids?: ID[];
 }
 
 // ---- Tax invoices ----

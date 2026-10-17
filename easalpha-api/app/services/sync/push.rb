@@ -3,6 +3,7 @@ module Sync
   # records: [{ type, id, membership_id?, payload }]
   class Push
     TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement].freeze
+    CHARGE_KEYS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent].freeze
 
     def initialize(device:, branch:, actor:)
       @device, @branch, @actor = device, branch, actor
@@ -50,10 +51,17 @@ module Sync
       { id: record[:id], type: record[:type], status: "rejected", code: code, message: message }
     end
 
-    # An order from the till: lines, optional payments, and the status it reached offline.
+    # An order from the till: lines, optional payments, and the status it reached offline. Sent again (Try again on the
+    # till) after its payments were refused, the order is already here: only the payments it does not have yet are
+    # taken, so the sale can still be completed.
     def apply_order(id, payload, actor)
-      return "duplicate" if Order.exists?(id: id)
-      attrs = payload.slice(:order_type, :source, :table_id, :guest_name, :covers, :customer_id, :address_id, :notes, :client_created_at, :till_serial, :is_staff_meal, :staff_meal_reason, :delivery_charge_minor).to_h.symbolize_keys
+      if (existing = Order.includes(items: :modifiers).find_by(id: id))
+        return apply_missing_payments(existing, payload, actor) ? "accepted" : "duplicate"
+      end
+      # The charges travel too: a service charge the cashier changed or removed offline (prices.override, as online)
+      # must price the order here as it did on the till, or the payment no longer matches the total.
+      attrs = payload.slice(:order_type, :source, :table_id, :guest_name, :covers, :customer_id, :address_id, :notes, :client_created_at, :till_serial, :is_staff_meal, :staff_meal_reason,
+                            :delivery_charge_minor, *CHARGE_KEYS).to_h.symbolize_keys
       attrs[:id] = id
       attrs[:source] ||= "till"
       attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
@@ -65,16 +73,28 @@ module Sync
       if payload[:voided].present? || payload[:status].to_s == "voided"
         Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: nil, device: @device)
       elsif payload[:payments].present?
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i)
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
       end
       "accepted"
+    end
+
+    # True when the order took payments it was missing. A voided or settled order, or one whose payments are all
+    # recorded, is left as it is.
+    def apply_missing_payments(order, payload, actor)
+      return false if payload[:voided].present? || payload[:status].to_s == "voided"
+      return false unless order.status.in?(%w[draft held placed preparing ready served dispatched])
+      missing = Array(payload[:payments]).map { |p| p.to_h.with_indifferent_access }.reject { |p| p[:id].present? && Payment.exists?(id: p[:id]) }
+      return false if missing.empty?
+      tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
+      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: missing, tip_minor: tip, offline: true)
+      true
     end
 
     def apply_order_update(id, payload, actor)
       order = Order.includes(items: :modifiers).find(id)
       return "duplicate" if payload[:client_seq].present? && order.notes.to_s.include?("seq:#{payload[:client_seq]}")
       builder = Orders::Builder.new(order, actor: actor, device: @device, branch: @branch)
-      builder.update!(attrs: payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes).to_h.symbolize_keys, lines: Array(payload[:lines]).map(&:to_h), approvals: {})
+      builder.update!(attrs: payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, *CHARGE_KEYS).to_h.symbolize_keys, lines: Array(payload[:lines]).map(&:to_h), approvals: {})
       Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
       "accepted"
     end
@@ -82,7 +102,7 @@ module Sync
     def apply_payment(id, payload, actor)
       return "duplicate" if Payment.exists?(id: id)
       order = Order.includes(items: :modifiers).find(need(payload, :order_id))
-      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: [ payload.merge(id: id) ], tip_minor: payload[:tip_minor].to_i)
+      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: [ payload.merge(id: id) ], tip_minor: payload[:tip_minor].to_i, offline: true)
       "accepted"
     end
 

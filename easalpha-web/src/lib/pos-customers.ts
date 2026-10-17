@@ -17,8 +17,8 @@ export function newCustomerPrefill(query: string): { name: string; phone: string
 }
 
 /** The customer as the cart keeps it. */
-export function toCartCustomer(c: Pick<Customer, "id" | "name" | "phone" | "balance_minor" | "credit_limit_minor">): CartCustomer {
-  return { id: c.id, name: c.name, phone: c.phone, balance_minor: c.balance_minor, credit_limit_minor: c.credit_limit_minor };
+export function toCartCustomer(c: Pick<Customer, "id" | "name" | "phone" | "balance_minor" | "credit_limit_minor"> & Partial<Pick<Customer, "last_order_at" | "is_walk_in">>): CartCustomer {
+  return { id: c.id, name: c.name, phone: c.phone, balance_minor: c.balance_minor, credit_limit_minor: c.credit_limit_minor, last_order_at: c.last_order_at ?? null, is_walk_in: c.is_walk_in ?? false };
 }
 
 /** "Khata 12 · Roll R-12 · Room C-7 · 0300 1112233", leaving out what is missing. */

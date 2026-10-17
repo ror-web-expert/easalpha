@@ -189,6 +189,7 @@ Rails.application.routes.draw do
       %w[overview by_day by_hour items categories cashiers order_takers voids discounts modified customers shifts grand].each { |r| get "reports/#{r}", to: "reports##{r}" }
       post "sync/push", to: "sync#push"
       get "sync/changes", to: "sync#changes"
+      get "sync/customers", to: "sync#customers"
       get "settings", to: "settings#show"
       patch "settings", to: "settings#update"
       get "settings/version", to: "settings#version"

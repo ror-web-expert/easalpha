@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { api } from "@/lib/api";
 import { db, kvGet, kvSet } from "@/lib/db";
 import type { Catalog, DiningTable, PaymentMethod, Shift, SyncChanges } from "@/lib/types";
+import { useCustomerStore } from "@/store/customers";
 
 interface CatalogState {
   catalog: Catalog | null;
@@ -46,6 +47,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     const cursor = catalog.generated_at ?? new Date().toISOString();
     await Promise.all([kvSet("catalog", catalog), kvSet("payment_methods", pm.data), kvSet("tables", tables.data), kvSet("sync_cursor", cursor)]);
     set({ catalog, paymentMethods: pm.data, tables: tables.data, cursor, loaded: true });
+    // The catalog carries no customers: fetch the whole list for the offline search, without holding up the till.
+    void useCustomerStore.getState().download().catch(() => {});
   },
   applyChanges: async (c) => {
     const cur = get().catalog;
@@ -64,11 +67,15 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       stations: upsert(cur.stations, c.stations ?? []),
       // SPEC "Quick Add Menu": the API always sends the whole (short) list, so the latest payload replaces it.
       quick_add_items: c.quick_add_items ?? cur.quick_add_items ?? [],
+      // The same for the regular discount tiers (an older API sends none: keep what the till has).
+      regular_discount_tiers: c.regular_discount_tiers ?? cur.regular_discount_tiers ?? [],
     };
     const paymentMethods = upsert(get().paymentMethods, c.payment_methods ?? []);
     const tables = upsert(get().tables, c.tables ?? []);
     await Promise.all([kvSet("catalog", catalog), kvSet("payment_methods", paymentMethods), kvSet("tables", tables), kvSet("sync_cursor", c.cursor)]);
     set({ catalog, paymentMethods, tables, cursor: c.cursor });
+    // Customers changed since the cursor (balances, new students) keep the offline search current.
+    await useCustomerStore.getState().apply(c.customers, c.archived_customer_ids ?? []);
   },
   setShift: (shift) => { set({ shift }); kvSet("shift", shift); },
   refreshTables: async () => {
@@ -77,5 +84,5 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 }));
 
 export async function clearTillData() {
-  await Promise.all([db.kv.clear(), db.orders.clear(), db.attention.clear()]);
+  await Promise.all([db.kv.clear(), db.orders.clear(), db.attention.clear(), useCustomerStore.getState().clear()]);
 }

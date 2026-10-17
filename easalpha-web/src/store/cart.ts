@@ -8,7 +8,8 @@ import { uuid } from "@/lib/utils";
 /** One applied order-level discount line as the server reports it (the fields the till shows). */
 export type CartDiscount = Pick<OrderDiscount, "id" | "kind" | "value" | "amount_minor" | "reason" | "order_item_id">;
 
-export interface CartCustomer { id: string; name: string; phone: string | null; balance_minor?: number; credit_limit_minor?: number | null; addresses?: Address[] }
+/** last_order_at and is_walk_in let the till work out a regular customer's discount itself while offline (pos-regular). */
+export interface CartCustomer { id: string; name: string; phone: string | null; balance_minor?: number; credit_limit_minor?: number | null; addresses?: Address[]; last_order_at?: string | null; is_walk_in?: boolean }
 
 export interface Cart {
   id: string;
@@ -35,7 +36,8 @@ export interface Cart {
   zone_name?: string | null;
   /** Order-level discount already applied on the server: the sum of `discounts` (loyalty points, vouchers, regular tiers, promotions). */
   discount_minor?: number;
-  /** SPEC discounts: the applied discount lines as the server reports them, so the till shows each by kind. Server-side only. */
+  /** SPEC discounts: the applied discount lines as the server reports them, so the till shows each by kind. Server-side,
+   *  except the regular discount the till works out itself while offline (id LOCAL_REGULAR_ID, pos-regular). */
   discounts?: CartDiscount[];
   /** SPEC reopen flow: set when the order was reopened on the server and is being edited; it must go back through payment. */
   reopened?: boolean;

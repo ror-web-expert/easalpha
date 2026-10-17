@@ -6,6 +6,7 @@ import { db, type QueueItem } from "@/lib/db";
 import { useSyncStore } from "@/store/sync";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
+import { useCustomerStore } from "@/store/customers";
 import type { SyncChanges, SyncPushResponse, SyncRecordType } from "@/lib/types";
 
 let running = false;
@@ -124,7 +125,7 @@ export async function pullChanges() {
 
 export function startSync() {
   stopped = false;
-  const onOnline = () => { useSyncStore.getState().set({ status: "online" }); pullChanges(); schedule(0); };
+  const onOnline = () => { useSyncStore.getState().set({ status: "online" }); pullChanges(); schedule(0); void useCustomerStore.getState().downloadIfStale(); };
   const onOffline = () => useSyncStore.getState().set({ status: "offline" });
   window.addEventListener("online", onOnline);
   window.addEventListener("offline", onOffline);
@@ -135,6 +136,13 @@ export function startSync() {
     if (!useDeviceStore.getState().deviceToken) return;
     schedule(0);
   }, 15000);
+  // Menu, settings and customers changed on the server or other tills (a balance paid at the counter, a new student)
+  // reach this till every few minutes, so what it shows and searches offline is never far behind.
+  const pull = setInterval(() => {
+    if (!isOnline() || !useDeviceStore.getState().deviceToken) return;
+    pullChanges();
+    void useCustomerStore.getState().downloadIfStale();
+  }, 5 * 60_000);
   const heartbeat = setInterval(() => {
     if (isOnline() && useDeviceStore.getState().deviceToken) api("/devices/heartbeat", { method: "POST", auth: "pos", body: { app_version: "web" } }).catch(() => {});
   }, 60000);
@@ -143,6 +151,7 @@ export function startSync() {
     window.removeEventListener("online", onOnline);
     window.removeEventListener("offline", onOffline);
     clearInterval(interval);
+    clearInterval(pull);
     clearInterval(heartbeat);
     if (timer) clearTimeout(timer);
   };

@@ -2,6 +2,7 @@
 import Dexie, { type Table } from "dexie";
 import type { SyncRecordType } from "@/lib/types";
 import type { CartLine } from "@/lib/pricing";
+import type { CachedCustomer } from "@/lib/offline-customers";
 
 export interface LocalPayment { id: string; method_code: string; amount_minor: number; tendered_minor?: number; change_minor?: number; reference?: string; client_created_at: string }
 
@@ -83,6 +84,8 @@ export class EasAlphaDB extends Dexie {
   orders!: Table<LocalOrder, string>;
   queue!: Table<QueueItem, string>;
   attention!: Table<AttentionItem, string>;
+  /** The customers the till can search with no internet (offline-customers.ts). */
+  customers!: Table<CachedCustomer, string>;
   constructor() {
     super("easalpha-till");
     this.version(1).stores({
@@ -91,6 +94,7 @@ export class EasAlphaDB extends Dexie {
       queue: "id, status, next_at, created_at",
       attention: "id, created_at",
     });
+    this.version(2).stores({ customers: "id" });
   }
 }
 

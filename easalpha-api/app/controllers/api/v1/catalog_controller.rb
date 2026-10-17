@@ -25,6 +25,8 @@ module Api
           deals: Deal.active.includes(:deal_items).map { |d| MenuSerializers.deal(d) },
           promotions: Promotion.active.map { |p| MenuSerializers.promotion(p) },
           quick_add_items: QuickAddItem.ordered.includes(:product, :variant).map { |q| MenuSerializers.quick_add_item(q) },
+          # The till applies a regular customer's discount itself while offline, as Marketing::RegularDiscounts does.
+          regular_discount_tiers: RegularDiscountTier.active.order(:within_days).map { |t| MarketingSerializers.tier(t) },
           since: since
         }
       end

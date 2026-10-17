@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   queued: [] as { type: string; id: string; payload: Record<string, unknown> }[],
   calls: [] as string[],
   handler: null as null | ((path: string, opts: { method?: string; body?: unknown }) => unknown),
+  tiers: [] as unknown[],
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -38,7 +39,7 @@ vi.mock("@/lib/sync", () => ({
     h.queued.push(r);
   },
 }));
-vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Test Cafe", currency: "PKR", settings: h.settings } } }) } }));
+vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Test Cafe", currency: "PKR", settings: h.settings }, regular_discount_tiers: h.tiers, products: [] }, paymentMethods: [] }) } }));
 vi.mock("@/store/device", () => ({ useDeviceStore: { getState: () => ({ device: null, branch: null, session: null, business: null }) } }));
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
@@ -46,7 +47,9 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { localToCart, payOrder, reopenFields, serverToLocal, TotalChangedError } from "./pos-actions";
+import { localToCart, payOrder, regularPricing, reopenFields, serverToLocal, TotalChangedError } from "./pos-actions";
+import { useCustomerStore } from "@/store/customers";
+import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
 
 type Discount = { id: string; kind: string; value: number; amount_minor: number; reason: string | null; order_item_id: string | null };
@@ -126,6 +129,7 @@ beforeEach(() => {
   h.calls.length = 0;
   h.online = true;
   for (const k of Object.keys(h.settings)) delete h.settings[k];
+  h.tiers = [];
   h.handler = (path, opts) => {
     const [, id, action] = /^\/orders\/([^/]+)(?:\/(\w+))?$/.exec(path) ?? [];
     if (id === server.id && opts.method === "PATCH" && !action) {
@@ -321,5 +325,40 @@ describe("payOrder when the server takes a payment but answers too late", () => 
     expect(server.paid_minor).toBe(40000);
     expect(sentIds).toHaveLength(1);
     expect(h.queued.filter((q) => q.type === "payment").map((q) => q.id)).toEqual(sentIds);
+  });
+});
+
+describe("an offline khata sale for a regular customer", () => {
+  // 18 Oct 2026: offline, the till charged Rs 4,114 to Sadia's khata; the server took her 10% regular discount off and
+  // asked for Rs 3,703, refused the payment as overpaid and left the order unpaid. The till now takes it off itself.
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+  const line = (key: string, price: number): CartLine => ({ key, product_id: key, name: key, unit_price_minor: price, quantity: 1, modifiers: [], tax_rate: 16, tax_inclusive: false });
+  const cart = (): Cart => ({
+    id: "khata-1", saved: false, local_only: false, status: "draft", order_type: "dine_in", lines: [line("half", 120_000), line("full", 220_000)],
+    customer: { id: "sadia", name: "Sadia Akhtar", phone: "+923001807130", balance_minor: 194_500, credit_limit_minor: null }, table_id: null, table_code: null,
+    guest_name: "", covers: null, notes: "", is_staff_meal: false, staff_meal_reason: "", label: null, client_created_at: new Date().toISOString(),
+  });
+
+  it("queues the khata payment at the server's figure and adds it to her saved balance", async () => {
+    h.online = false;
+    Object.assign(h.settings, { "charges.service_charge.value": 5, service_charge_order_types: ["dine_in"], total_rounding_minor: 100 });
+    h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
+    const saved = toCachedCustomer({ id: "sadia", name: "Sadia Akhtar", phone: "+923001807130", khata_no: "32", status: "active", is_walk_in: false, balance_minor: 194_500, credit_limit_minor: null, orders_count: 4, last_order_at: yesterday } as never);
+    useCustomerStore.setState({ list: [saved], byId: new Map([["sadia", saved]]), loaded: true });
+
+    const shown = regularPricing(cart()); // what the payment screen shows (the customer came from the saved list)
+    const due = payableTotals(shown, { settings: h.settings, cash: false }).total_minor;
+    expect(due).toBe(370_300);
+    const r = await payOrder(cart(), [{ method_code: "khata", amount_minor: due }]);
+    expect(r.offline).toBe(true);
+    expect(r.local).toMatchObject({ total_minor: 370_300, paid_minor: 370_300, status: "paid", discount_minor: 34_000 });
+    const order = h.queued.find((q) => q.type === "order")!;
+    expect(order.payload).toMatchObject({ customer_id: "sadia", payments: [expect.objectContaining({ method_code: "khata", amount_minor: 370_300 })] });
+    expect(useCustomerStore.getState().byId.get("sadia")).toMatchObject({ balance_minor: 194_500 + 370_300, orders_count: 5 });
+  });
+
+  it("leaves the discount to the server while online", () => {
+    h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
+    expect(regularPricing({ ...cart(), customer: { ...cart().customer!, last_order_at: yesterday } }).discounts ?? []).toEqual([]);
   });
 });
