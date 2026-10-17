@@ -115,7 +115,8 @@ def logo(name):
 
 def request(method, path, body=None, token=None, files=None):
     url = f"{API}{path}"
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    # Cloudflare in front of the production API refuses Python's default "Python-urllib" agent with a 403.
+    headers = {"User-Agent": "EasAlpha-demo-images/1.0", **({"Authorization": f"Bearer {token}"} if token else {})}
     if files:
         boundary = uuid.uuid4().hex
         data = b""
