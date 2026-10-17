@@ -8,34 +8,62 @@ import { displaySettings, priceFor } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import { modalOpen } from "./scanner";
 
+export type TileSize = "small" | "large";
+
+/** Every small tile is this tall, whatever its name, so a row never mixes short and tall tiles. */
+export const SMALL_TILE_HEIGHT = "6rem";
+/** The narrowest a tile may get: wide enough for two lines of a name like "Chicken Karahi (half)" and its price. A
+ *  small tile shows its photo only from 13rem wide (a container query), so a narrow tile gives the name that room. */
+const MIN_TILE_WIDTH: Record<TileSize, string> = { small: "11rem", large: "13rem" };
+
+/** The grid's columns: Display Settings' tiles per row, but never narrower than the tile size allows. */
+export function tileColumns(columns: number, size: TileSize): string {
+  return `repeat(auto-fill, minmax(max(${MIN_TILE_WIDTH[size]}, calc((100% - ${columns - 1} * 0.5rem) / ${columns})), 1fr))`;
+}
+
 /**
- * A product or deal on the till (review 3.4): a compact, text-first tile. The name and the price carry the tile; a
- * real photo, when the product has one and images are on in Display Settings, is a small thumbnail beside the name.
- * There is no placeholder artwork, so about three times as many items fit on the screen as with picture tiles.
- * `onQuick` adds a quick-add button (review 3.6): one tap adds the item with the options dialog's defaults.
+ * A product or deal on the till. Small (review 3.4): a compact, text-first tile with a real photo, when there is one,
+ * as a thumbnail; there is no placeholder artwork, so many items fit on the screen. Large (Display Settings, Tile size):
+ * a big picture on top, or the first letter on a tint when the item has no photo. Either way every tile in the grid has
+ * the same height, the name has the whole width for two lines (the full name shows on hover), and the price and the
+ * quick-add button share the bottom row. `onQuick` (review 3.6): one tap adds the item with the options dialog's defaults.
  */
-export function ItemTile({ name, price, imageKey, onClick, badge, currency, showPrice = true, showImage = true, onQuick }: { name: string; price: number; imageKey?: string | null; id?: string; onClick: () => void; badge?: React.ReactNode; currency?: string; showPrice?: boolean; showImage?: boolean; onQuick?: () => void }) {
+export function ItemTile({ name, price, imageKey, onClick, badge, currency, showPrice = true, showImage = true, onQuick, size = "small" }: { name: string; price: number; imageKey?: string | null; id?: string; onClick: () => void; badge?: React.ReactNode; currency?: string; showPrice?: boolean; showImage?: boolean; onQuick?: () => void; size?: TileSize }) {
   const [broken, setBroken] = useState(false);
-  const thumb = showImage && imageKey && !broken;
+  const photo = showImage && imageKey && !broken ? imageKey : null;
+  const large = size === "large";
+  const nameText = <span className="line-clamp-2 shrink-0 text-[15px] font-semibold leading-5 tracking-[0.1px] text-fg">{name}</span>;
+  // The quick-add button sits over the bottom right corner; the price row leaves it room.
+  const priceRow = (
+    <span className={cn("flex min-w-0 flex-wrap items-baseline gap-x-2", onQuick && "pr-10")}>
+      {showPrice ? <span className="whitespace-nowrap text-base font-bold text-fg tabular">{formatMoney(price, currency)}</span> : null}
+      {badge ? <span className="whitespace-nowrap text-xs font-medium text-fg-secondary">{badge}</span> : null}
+    </span>
+  );
   return (
-    <div className="relative">
-      <button onClick={onClick} className={cn("flex min-h-[4.5rem] w-full items-center gap-3 rounded-xl border bg-pos-tile p-2.5 text-left shadow-[0_1px_2px_rgb(0_0_0/0.06)] transition hover:border-primary/50 active:scale-[0.98] active:bg-primary-soft", onQuick && "pr-14")}>
-        {thumb ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageKey} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-lg bg-muted object-cover [filter:var(--pos-media-filter)]" onError={() => setBroken(true)} />
-        ) : null}
-        <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 text-[15px] font-semibold leading-5 tracking-[0.1px] text-fg">{name}</span>
-          <span className="mt-1 flex flex-wrap items-baseline gap-x-2">
-            {showPrice ? <span className="text-base font-bold text-fg tabular">{formatMoney(price, currency)}</span> : null}
-            {badge ? <span className="text-xs font-medium text-fg-secondary">{badge}</span> : null}
+    <div className="@container relative h-full" data-tile={size}>
+      <button onClick={onClick} title={name} className={cn("flex h-full w-full rounded-xl border bg-pos-tile text-left shadow-[0_1px_2px_rgb(0_0_0/0.06)] transition hover:border-primary/50 active:scale-[0.98] active:bg-primary-soft",
+        large ? "flex-col overflow-hidden" : "items-stretch gap-3 p-2.5")}>
+        {large && showImage ? (
+          <span className="relative block aspect-[4/3] w-full shrink-0 bg-muted">
+            {photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photo} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover [filter:var(--pos-media-filter)]" onError={() => setBroken(true)} />
+            ) : <span aria-hidden className="absolute inset-0 grid place-items-center bg-primary-soft text-4xl font-bold uppercase text-primary-ink">{name.trim().charAt(0) || "?"}</span>}
           </span>
+        ) : !large && photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo} alt="" loading="lazy" className="hidden h-11 w-11 shrink-0 self-start rounded-lg bg-muted object-cover [filter:var(--pos-media-filter)] @min-[13rem]:block" onError={() => setBroken(true)} />
+        ) : null}
+        <span className={cn("flex min-w-0 flex-1 flex-col justify-between gap-1", large && "min-h-[5.5rem] p-2.5")}>
+          {nameText}
+          {priceRow}
         </span>
       </button>
       {onQuick ? (
         <button type="button" onClick={onQuick} aria-label={`Quick add ${name}`} title="Add with the usual options"
-          className="absolute right-1 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-primary hover:bg-primary-soft active:bg-primary/15">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/50 bg-pos-tile"><Plus className="h-5 w-5" strokeWidth={2.5} /></span>
+          className="absolute bottom-0.5 right-0.5 flex h-11 w-11 items-center justify-center rounded-full text-primary hover:bg-primary-soft active:bg-primary/15">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary/50 bg-pos-tile"><Plus className="h-4 w-4" strokeWidth={2.75} /></span>
         </button>
       ) : null}
     </div>
@@ -115,11 +143,13 @@ export const ItemGrid = forwardRef<HTMLInputElement, ItemGridProps>(
             </div>
             {searchAction}
           </div>
-          {/* Tiles per row from Display Settings, but never narrower than 144px: a portrait tablet gets fewer, bigger tiles
-              that a finger can hit, instead of squeezing the same count into slivers. */}
-          <div className="grid flex-1 auto-rows-min gap-2 overflow-y-auto bg-page p-3" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(max(10rem, calc((100% - ${display.columns - 1} * 0.5rem) / ${display.columns})), 1fr))` }}>
-            {shownDeals.map((d) => <ItemTile key={d.id} id={d.id} name={d.name} price={d.price_minor} imageKey={display.images ? d.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onDeal(d)} badge={<span className="flex items-center gap-1"><Gift className="h-3.5 w-3.5" /> Deal</span>} />)}
-            {shown.map((p) => <ItemTile key={p.id} id={p.id} name={p.name} price={priceFor(p, orderType, null, branchId)} imageKey={display.images ? p.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onProduct(p)} badge={p.variants?.length ? `${p.variants.length} sizes` : null}
+          {/* Tiles per row from Display Settings, but never narrower than the tile size allows: a smaller screen gets
+              fewer tiles that a finger can hit and a name can fit in, instead of squeezing the same count into slivers.
+              Small tiles share one fixed height; large ones are all the same shape, so the rows line up. */}
+          <div className="grid flex-1 content-start gap-2 overflow-y-auto bg-page p-3" data-testid="item-grid"
+            style={{ gridTemplateColumns: tileColumns(display.columns, display.tileSize), gridAutoRows: display.tileSize === "small" ? SMALL_TILE_HEIGHT : "auto" }}>
+            {shownDeals.map((d) => <ItemTile key={d.id} id={d.id} size={display.tileSize} name={d.name} price={d.price_minor} imageKey={display.images ? d.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onDeal(d)} badge={<span className="flex items-center gap-1"><Gift className="h-3.5 w-3.5" /> Deal</span>} />)}
+            {shown.map((p) => <ItemTile key={p.id} id={p.id} size={display.tileSize} name={p.name} price={priceFor(p, orderType, null, branchId)} imageKey={display.images ? p.image_key : null} showImage={display.images} currency={currency} showPrice={display.showPrices} onClick={() => onProduct(p)} badge={p.variants?.length ? `${p.variants.length} sizes` : null}
               onQuick={onQuickAdd && canQuickAdd(p, catalog.modifier_groups) ? () => onQuickAdd(p) : undefined} />)}
             {!shown.length && !showDeals ? <div className="col-span-full py-12 text-center text-fg-muted">{q ? "No items match" : cat === "fav" ? "Star items in the admin to show them here" : "No items in this category"}</div> : null}
           </div>

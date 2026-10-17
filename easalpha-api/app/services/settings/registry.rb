@@ -78,6 +78,7 @@ module Settings
       [ "pos.receipt.language", "point_of_sale", "Receipt Branding", "string", "en", "Receipt language" ],
       [ "catalog.display.images", "point_of_sale", "Display Settings", "boolean", true, "Show product images on POS tiles and the catalog" ],
       [ "catalog.display.columns", "point_of_sale", "Display Settings", "integer", 4, "Tiles per row on the POS" ],
+      [ "catalog.display.tile_size", "point_of_sale", "Display Settings", "string", "small", "Item tiles on the POS: small fits more items, large shows a big picture of each" ],
       [ "catalog.display.show_prices", "point_of_sale", "Display Settings", "boolean", true, "Show prices on POS tiles" ],
       [ "catalog.display.show_inactive", "point_of_sale", "Display Settings", "boolean", false, "Show inactive products in the admin catalog" ],
       [ "pos.print_server.ip", "point_of_sale", "Print Server", "string", nil, "IP address of the desktop computer every order-taker tablet prints through" ],

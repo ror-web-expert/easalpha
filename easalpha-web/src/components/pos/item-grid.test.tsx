@@ -88,3 +88,30 @@ describe("tiles, quick add and the opening category (reviews 3.4 to 3.6)", () =>
     expect(onProduct).not.toHaveBeenCalled();
   });
 });
+
+describe("tile size (Display Settings)", () => {
+  // 18 Oct 2026: tiles grew with their names (72, 90 or 114 px on one screen) and the photo and the + button left the
+  // name 58 px, so "Chicken Karahi (half)" lost "(half)". Every tile now has one height and the name its full width.
+  const cat = (settings: Record<string, unknown>) => ({ ...catalog, business: { ...catalog.business, settings } }) as unknown as Catalog;
+  const grid = () => screen.getByTestId("item-grid");
+
+  it("gives small tiles one fixed height and the full name on hover", () => {
+    render(<ItemGrid catalog={cat({})} orderType="takeaway" onProduct={vi.fn()} onDeal={vi.fn()} onOpenItem={vi.fn()} canOpenItem />);
+    expect(grid().style.gridAutoRows).toBe("6rem");
+    expect(grid().querySelectorAll('[data-tile="small"]')).toHaveLength(2);
+    expect(screen.getByTitle("Chicken Karahi")).toBeInTheDocument();
+  });
+
+  it("draws large tiles with a picture area, the first letter when the item has no photo", () => {
+    render(<ItemGrid catalog={cat({ "catalog.display.tile_size": "large" })} orderType="takeaway" onProduct={vi.fn()} onDeal={vi.fn()} onOpenItem={vi.fn()} canOpenItem />);
+    expect(grid().querySelectorAll('[data-tile="large"]')).toHaveLength(2);
+    expect(grid().style.gridAutoRows).toBe("auto");
+    expect(grid().querySelector('[data-tile="large"] [aria-hidden]')?.textContent).toBe("C");
+  });
+
+  it("keeps a large tile's columns at least 13rem and a small tile's at least 11rem", async () => {
+    const { tileColumns } = await import("./item-grid");
+    expect(tileColumns(4, "small")).toContain("max(11rem");
+    expect(tileColumns(4, "large")).toContain("max(13rem");
+  });
+});

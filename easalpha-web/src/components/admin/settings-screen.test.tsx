@@ -13,6 +13,8 @@ describe("controlFor", () => {
     expect(controlFor(k("pos.kds.timeout_minutes", "integer")).control).toBe("number");
     expect(controlFor(k("charges.service_charge.value", "number")).control).toBe("number");
     expect(controlFor(k("pos.receipt.header", "string")).control).toBe("text");
+    // Display Settings, Tile size: small or large tiles on the till.
+    expect(controlFor(k("catalog.display.tile_size", "string"))).toEqual({ control: "select", options: [expect.objectContaining({ value: "small" }), expect.objectContaining({ value: "large" })] });
     expect(controlFor(k("security.expense_report_pin", "pin")).control).toBe("pin");
     expect(controlFor(k("store.linked_stores", "json")).control).toBe("json");
   });

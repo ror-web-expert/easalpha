@@ -99,13 +99,15 @@ export function settingValue<T>(settings: BusinessSettings | Record<string, unkn
   return v === undefined || v === null || v === "" ? fallback : (v as T);
 }
 
-/** SPEC "Display Settings": how the POS tile grid draws. Columns are clamped to 3-6. */
+/** SPEC "Display Settings": how the POS tile grid draws. Columns are clamped to 3-6; tiles are small (text first,
+ *  more on the screen) unless the owner picks large (a big picture on each). */
 export function displaySettings(settings: BusinessSettings | undefined | null) {
   const cols = Number(settingValue(settings, "catalog.display.columns", 4));
   return {
     images: settingValue<boolean>(settings, "catalog.display.images", true) !== false,
     columns: Number.isFinite(cols) ? Math.min(6, Math.max(3, Math.round(cols))) : 4,
     showPrices: settingValue<boolean>(settings, "catalog.display.show_prices", true) !== false,
+    tileSize: (settingValue<unknown>(settings, "catalog.display.tile_size", "small") === "large" ? "large" : "small") as "small" | "large",
   };
 }
 

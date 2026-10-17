@@ -98,10 +98,12 @@ describe("product discount helpers", () => {
 
 describe("displaySettings", () => {
   it("defaults to 4 columns with images and prices", () => {
-    expect(displaySettings(undefined)).toEqual({ images: true, columns: 4, showPrices: true });
+    expect(displaySettings(undefined)).toEqual({ images: true, columns: 4, showPrices: true, tileSize: "small" });
   });
   it("reads the dotted keys and clamps columns to 3-6", () => {
-    expect(displaySettings({ "catalog.display.columns": 8, "catalog.display.images": false, "catalog.display.show_prices": false })).toEqual({ images: false, columns: 6, showPrices: false });
+    expect(displaySettings({ "catalog.display.columns": 8, "catalog.display.images": false, "catalog.display.show_prices": false })).toEqual({ images: false, columns: 6, showPrices: false, tileSize: "small" });
+    expect(displaySettings({ "catalog.display.tile_size": "large" }).tileSize).toBe("large");
+    expect(displaySettings({ "catalog.display.tile_size": "huge" }).tileSize).toBe("small");
     expect(displaySettings({ "catalog.display.columns": "2" }).columns).toBe(3);
     expect(displaySettings({ "catalog.display.columns": "x" }).columns).toBe(4);
   });
