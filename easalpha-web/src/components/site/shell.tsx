@@ -3,6 +3,7 @@ import { SiteFooter } from "./footer";
 import { WhatsAppFab } from "./whatsapp-fab";
 import { getSiteContact } from "./platform-server";
 import { Analytics } from "./analytics";
+import { TagManager } from "./tag-manager";
 import { RevealObserver } from "./reveal-observer";
 
 /** Public-site wrapper: light theme regardless of the app's dark mode, larger reading type than the admin.
@@ -17,6 +18,7 @@ export async function SiteShell({ children }: { children: React.ReactNode }) {
       <SiteFooter contact={contact} />
       <WhatsAppFab contact={contact} />
       <Analytics />
+      <TagManager />
       <RevealObserver />
     </div>
   );

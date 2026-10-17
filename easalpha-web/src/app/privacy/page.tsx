@@ -14,7 +14,7 @@ export default function PrivacyPage() {
   return (
     <SiteShell>
       <JsonLd data={breadcrumbs("Privacy policy", "/privacy")} />
-      <PageHero eyebrow="Privacy policy" title="Your data stays yours" visual={<HeroStack chips={[{ icon: ShieldCheck, title: "Your data stays yours", text: "never sold, never shared" }, { icon: Lock, title: "Encrypted", text: "in transit and at rest" }, { icon: FileText, title: "Plain language", text: "no legal maze" }]} />}><p className="mt-4 text-sm text-white/60">Last updated 11 October 2026</p></PageHero>
+      <PageHero eyebrow="Privacy policy" title="Your data stays yours" visual={<HeroStack chips={[{ icon: ShieldCheck, title: "Your data stays yours", text: "never sold, never shared" }, { icon: Lock, title: "Encrypted", text: "in transit and at rest" }, { icon: FileText, title: "Plain language", text: "no legal maze" }]} />}><p className="mt-4 text-sm text-white/60">Last updated 17 October 2026</p></PageHero>
       <Container className="max-w-3xl py-16 sm:py-20">
         <div>
           <Prose>
@@ -25,7 +25,7 @@ export default function PrivacyPage() {
               <li><strong>Your restaurant&apos;s records:</strong> menu, orders, payments, stock, suppliers, expenses, accounts, staff records (including attendance, fingerprint identifiers from your kiosk and payroll), riders, customers (names, phone numbers, khata balances, loyalty points) and settings. You enter this data or your staff and customers generate it while using the service.</li>
               <li><strong>Device and usage records:</strong> which devices are paired, login sessions, and an audit log of changes made in your account, so you can see who did what.</li>
               <li><strong>Messages:</strong> if you link a WhatsApp number or use the included messaging, we keep a log of what was sent, to whom and whether it was delivered.</li>
-              <li><strong>Website visits:</strong> this public website uses no advertising trackers. Page views and button clicks on the public pages are counted with a cookieless analytics script that sets no cookies and stores no personal data, which is why there is no cookie banner. Server logs record IP address and pages requested for security and capacity planning and are kept for a short period.</li>
+              <li><strong>Website visits:</strong> page views and button clicks on the public pages are counted with our own cookieless analytics, which stores no personal data. The public pages also load Google Tag Manager, which we use to run Google measurement tags such as Google Analytics; those tags may set cookies and send Google the pages you view, your device and browser, and your approximate location. The admin panel, the till, the kitchen and rider screens and restaurants&apos; own ordering pages do not load Google Tag Manager. Server logs record IP address and pages requested for security and capacity planning and are kept for a short period.</li>
             </ul>
             <h2>Who can see it</h2>
             <ul>

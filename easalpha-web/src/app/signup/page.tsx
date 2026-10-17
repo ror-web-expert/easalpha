@@ -6,6 +6,7 @@ import { Check } from "lucide-react";
 import { SignupForm } from "@/components/site/signup-form";
 import { WhatsAppFab } from "@/components/site/whatsapp-fab";
 import { Analytics } from "@/components/site/analytics";
+import { TagManager } from "@/components/site/tag-manager";
 import { TRIAL_DAYS } from "@/components/site/site-helpers";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs } from "@/lib/schema";
@@ -59,6 +60,7 @@ export default function SignupPage() {
       </section>
       <WhatsAppFab />
       <Analytics />
+      <TagManager />
     </main>
   );
 }

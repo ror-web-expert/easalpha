@@ -361,8 +361,10 @@ function SellScreen() {
   }
   return (
     <PosShell title={<span className="hidden md:inline">{session?.user?.name}</span>}>
-      <div className="grid h-full grid-cols-[1fr_360px] xl:grid-cols-[1fr_400px]">
-        <div className="flex min-h-0 flex-col">
+      {/* minmax(0,1fr): a bare 1fr can't shrink below its content, so a long switch or search row would push the
+          order panel past the right edge of the screen. */}
+      <div className="grid h-full grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="flex min-h-0 min-w-0 flex-col">
           <div className="border-b bg-pos-panel p-2"><OrderTypeSwitch value={cart.order_type} onChange={changeType} allowed={allowedTypes} /></div>
           <div className="min-h-0 flex-1"><ItemGrid ref={searchRef} catalog={catalog} orderType={cart.order_type} settings={settings} onProduct={addProduct} onDeal={(d) => { setEditing(null); setDeal(d); }} onOpenItem={() => setOpenItem(true)} canOpenItem={true} onCode={scanner.lookupTyped} searchAction={scanner.cameraButton} onQuickAdd={(p) => addPicked(p, p.variants?.[0] ?? null)} /></div>
         </div>

@@ -6,24 +6,45 @@ const API_ORIGIN = (() => { try { return new URL(process.env.NEXT_PUBLIC_API_URL
 // on every page (which also cost the Lighthouse best-practices score).
 const CLOUDFLARE_BEACON = "https://static.cloudflareinsights.com";
 const CLOUDFLARE_RUM = "https://cloudflareinsights.com";
-const CSP = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_BEACON}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self' ${API_ORIGIN} ${API_ORIGIN.replace(/^http/, "ws")} ${CLOUDFLARE_RUM}`,
-  "frame-ancestors 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "upgrade-insecure-requests",
-].join("; ");
+type Extra = { script?: string; style?: string; img?: string; font?: string; connect?: string; frame?: string };
+const add = (base: string, more?: string) => (more ? `${base} ${more}` : base);
+/** One policy, with extra sources per surface. Scripts and styles come from this origin (Next's own inline bootstrap
+ *  needs 'unsafe-inline'; a per-request nonce would make every page dynamic), and pages talk to the API. */
+function policy(x: Extra = {}): string {
+  return [
+    "default-src 'self'",
+    add(`script-src 'self' 'unsafe-inline' ${CLOUDFLARE_BEACON}`, x.script),
+    add("style-src 'self' 'unsafe-inline'", x.style),
+    add("img-src 'self' data: blob:", x.img),
+    add("font-src 'self' data:", x.font),
+    add(`connect-src 'self' ${API_ORIGIN} ${API_ORIGIN.replace(/^http/, "ws")} ${CLOUDFLARE_RUM}`, x.connect),
+    ...(x.frame ? [`frame-src 'self' ${x.frame}`] : []),
+    "frame-ancestors 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "upgrade-insecure-requests",
+  ].join("; ");
+}
 
-/** Appendix A.1: the admin, the platform console and the login page get the same policy, with images also allowed
- *  from the API (uploaded logos and product pictures) and over https. The till is left out for now: it talks to the
- *  print server on the shop's own network (http://<lan address>), which a policy would have to allow wholesale. */
-const APP_CSP = CSP.replace("img-src 'self' data: blob:", `img-src 'self' data: blob: ${API_ORIGIN} https:`) + "; worker-src 'self'";
+/** Google Tag Manager runs on the public pages only (components/site/tag-manager.tsx). These are the hosts Google lists
+ *  for Tag Manager, Google Analytics 4 and Tag Manager's preview mode (Tag Assistant). A tag added in Tag Manager that
+ *  loads from elsewhere (an ads pixel, a chat widget) needs its hosts here too, or the browser blocks it. */
+const GOOGLE_TAGS: Extra = {
+  script: "https://www.googletagmanager.com https://*.googletagmanager.com https://tagmanager.google.com",
+  style: "https://tagmanager.google.com https://fonts.googleapis.com",
+  img: "https://*.google-analytics.com https://*.googletagmanager.com https://ssl.gstatic.com https://www.gstatic.com",
+  font: "https://fonts.gstatic.com",
+  connect: "https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
+  frame: "https://www.googletagmanager.com https://tagassistant.google.com",
+};
+const CSP = policy(GOOGLE_TAGS);
+
+/** Appendix A.1: the admin, the platform console and the login page get the policy without Google's hosts, with images
+ *  also allowed from the API (uploaded logos and product pictures) and over https. The till is left out for now: it
+ *  talks to the print server on the shop's own network (http://<lan address>), which a policy would have to allow
+ *  wholesale. */
+const APP_CSP = policy({ img: `${API_ORIGIN} https:` }) + "; worker-src 'self'";
 const APP_HEADERS = [
   { key: "Content-Security-Policy", value: APP_CSP },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },

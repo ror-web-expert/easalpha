@@ -12,6 +12,7 @@ interface AnalyticsWindow extends Window {
   umami?: { track: (name: string, props?: EventProps) => void };
   plausible?: (name: string, options?: { props?: EventProps }) => void;
   __easalphaEvents?: TrackedEvent[];
+  dataLayer?: Record<string, unknown>[];
 }
 
 /** Sends one event to whichever provider is loaded and records it in window.__easalphaEvents. Safe to call anywhere. */
@@ -24,6 +25,8 @@ export function track(name: string, props: EventProps = {}): void {
   try {
     if (w.umami) w.umami.track(name, props);
     else if (w.plausible) w.plausible(name, { props });
+    // Google Tag Manager (public pages only) reads the same events from its dataLayer, so tags can fire on them.
+    if (Array.isArray(w.dataLayer)) w.dataLayer.push({ event: name, ...props });
   } catch {
     // a blocked or failed tracker must never break the page
   }

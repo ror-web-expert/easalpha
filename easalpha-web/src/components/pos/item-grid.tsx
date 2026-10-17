@@ -35,7 +35,7 @@ export function ItemTile({ name, price, imageKey, onClick, badge, currency, show
       {onQuick ? (
         <button type="button" onClick={onQuick} aria-label={`Quick add ${name}`} title="Add with the usual options"
           className="absolute right-1 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-primary hover:bg-primary-soft active:bg-primary/15">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/40 bg-pos-tile"><Plus className="h-4 w-4" /></span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary/50 bg-pos-tile"><Plus className="h-5 w-5" strokeWidth={2.5} /></span>
         </button>
       ) : null}
     </div>
