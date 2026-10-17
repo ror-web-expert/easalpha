@@ -15,6 +15,15 @@ const CSP = [
   "upgrade-insecure-requests",
 ].join("; ");
 
+/** Appendix A.1: the admin, the platform console and the login page get the same policy, with images also allowed
+ *  from the API (uploaded logos and product pictures) and over https. The till is left out for now: it talks to the
+ *  print server on the shop's own network (http://<lan address>), which a policy would have to allow wholesale. */
+const APP_CSP = CSP.replace("img-src 'self' data: blob:", `img-src 'self' data: blob: ${API_ORIGIN} https:`) + "; worker-src 'self'";
+const APP_HEADERS = [
+  { key: "Content-Security-Policy", value: APP_CSP },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+];
+
 /** The marketing pages and the sign-up page; app screens are everything else. */
 const PUBLIC_PAGES = "/(features|pricing|download|contact|privacy|terms|signup|guides|restaurant-pos-pakistan|fbr-pos-integration|offline-pos-system|arfapos-alternative|kitchen-display-system|restaurant-inventory-software)";
 const PUBLIC_HEADERS = [
@@ -55,14 +64,14 @@ const nextConfig: NextConfig = {
       // The public site only: a Content-Security-Policy and a same-origin opener policy. Scripts and styles come from
       // this origin (Next's own inline bootstrap needs 'unsafe-inline'; a per-request nonce would make every page
       // dynamic), the sign-up form talks to the API, and the analytics script and collector are first-party under
-      // /stats. The app screens (admin, till, kitchen, rider, storefront) are left out: they open blobs, cameras and
-      // the API's WebSocket and get their own policy when they are reviewed.
+      // /stats. The admin, the platform console and the login page follow with APP_HEADERS (Appendix A.1); the till,
+      // kitchen, rider and storefront screens are still left out (cameras, the print server, guest payment pages).
       source: "/",
       headers: PUBLIC_HEADERS,
     }, {
       source: PUBLIC_PAGES,
       headers: PUBLIC_HEADERS,
-    }];
+    }, ...["/admin", "/admin/:path*", "/super", "/super/:path*", "/login"].map((source) => ({ source, headers: APP_HEADERS }))];
   },
   // The self-hosted Umami (deploy/docker-compose.yml) answers at /stats: its UI, its tracker script and its collector,
   // all first-party, so no DNS, certificate or Caddy change is needed and ad blockers leave it alone.

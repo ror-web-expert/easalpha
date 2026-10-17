@@ -19,9 +19,11 @@ module Orders
       order.business_day ||= branch.business_day_for(order.client_created_at || Time.current)
       builder = new(order, actor: actor, device: device, branch: branch)
       builder.approvals.merge!(approvals)
+      builder.guard_charges!(default_charges(order.order_type, branch.business))
       Order.transaction do
         builder.validate_customer!
         order.save!
+        builder.audit_charges!
         builder.apply_lines!(lines)
         Pricing.recalculate!(order)
         Marketing::RegularDiscounts.apply!(order) # SPEC: the till applies the best recency tier automatically
@@ -31,6 +33,42 @@ module Orders
         builder.assign_table!(order.table_id) if order.table_id
       end
       builder
+    end
+
+    CHARGE_FIELDS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent delivery_charge_minor].freeze
+    SERVICE_FIELDS = %i[service_charge_percent service_charge_fixed_minor].freeze
+
+    # The four charge settings of an order, normalised so 10 and 10.0 compare equal.
+    def self.charge_values(order)
+      CHARGE_FIELDS.index_with { |f| v = order.public_send(f); f.to_s.end_with?("percent") ? v.to_d.to_s : v.to_i }
+    end
+
+    # What a fresh order of this type would carry from the settings.
+    def self.default_charges(order_type, business)
+      tmp = Order.new(order_type: order_type, delivery_charge_minor: 0, delivery_charge_percent: 0, service_charge_percent: 0, service_charge_fixed_minor: 0)
+      apply_charge_defaults!(tmp, { order_type: order_type }, business)
+      charge_values(tmp)
+    end
+
+    # Review 3.9 and Appendix A.6: a service charge set to anything but what the order already had (or the settings
+    # default for its type) is a price change. It needs prices.override, or a manager PIN that holds it; the till hides
+    # the control from roles without it. Every charge change, service or delivery, goes to the audit log with the old
+    # and new values. The delivery charge is logged but not blocked: the till legitimately sets it from a zone quote.
+    def guard_charges!(before)
+      after = Builder.charge_values(order)
+      return if after == before
+      service_changed = SERVICE_FIELDS.any? { |f| after[f] != before[f] } && SERVICE_FIELDS.any? { |f| after[f] != Builder.default_charges(order.order_type, @branch.business)[f] }
+      raise Api::Errors::Forbidden.new("approval.required", "A manager PIN is required to change the service charge") if service_changed && !can?("prices.override")
+      @charge_audit = { before: before.select { |k, v| after[k] != v }, after: after.select { |k, v| before[k] != v } }
+    end
+
+    # Written after the order is saved, so the audit row points at a real record.
+    def audit_charges!
+      return unless @charge_audit
+      approver = approvals["prices.override"]
+      AuditLog.record(action: "price_change", record: order, before: @charge_audit[:before], after: @charge_audit[:after].merge(charge: true),
+                      approved_by: approver && approver != @actor ? approver.user : nil)
+      @charge_audit = nil
     end
 
     def self.service_charge_for(order_type, business)
@@ -67,8 +105,11 @@ module Orders
       @approvals.merge!(approvals)
       raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
       Order.transaction do
+        charges_before = Builder.charge_values(order)
         order.assign_attributes(attrs.except(:id))
         Builder.apply_charge_defaults!(order, attrs, order.business) if attrs.key?(:order_type) && order.order_type_changed?
+        guard_charges!(charges_before)
+        audit_charges!
         validate_customer! if order.customer_id_changed?
         apply_lines!(lines, amend: true) if lines
         reprice_lines! if attrs.key?(:order_type)

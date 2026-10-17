@@ -247,10 +247,14 @@ module Api
         require_permission!("orders.create", "discounts.apply")
         order = Order.includes(items: :modifiers).find(params[:id])
         raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+        # Review 3.9: every discount change is logged with the order's discount and total before and after.
+        before = { discount_minor: order.discount_minor, total_minor: order.total_minor }
         if params[:voucher_code].present?
           # SPEC: a voucher's value was fixed when the batch was created, so it never counts against the cashier's limit.
           Marketing::Vouchers.redeem!(order, code: params[:voucher_code], actor: current_membership)
-          return render json: OrderSerializers.full(order.reload)
+          order.reload
+          audit!("discount", record: order, before: before, after: { kind: "voucher", code: params[:voucher_code].to_s.upcase, discount_minor: order.discount_minor, total_minor: order.total_minor })
+          return render json: OrderSerializers.full(order)
         end
         kind, value, promotion = params[:kind].to_s, params[:value].to_d, nil
         if params[:coupon_code].present?
@@ -272,7 +276,7 @@ module Api
         Orders::Pricing.recalculate!(order.reload)
         Orders::Pricing.save_all!(order)
         promotion&.increment!(:units_sold)
-        audit!("discount", record: order, after: { kind: kind, value: value.to_f, amount_minor: d.amount_minor, reason: d.reason }, approved_by: approver&.user)
+        audit!("discount", record: order, before: before, after: { kind: kind, value: value.to_f, amount_minor: d.amount_minor, reason: d.reason, discount_minor: order.discount_minor, total_minor: order.total_minor }, approved_by: approver&.user)
         render json: OrderSerializers.full(order.reload)
       end
 
@@ -280,10 +284,12 @@ module Api
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
         d = order.discounts.find(params[:discount_id])
+        before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
         Marketing::Vouchers.release!(d) if d.kind == "voucher"
         d.destroy!
         Orders::Pricing.recalculate!(order.reload)
         Orders::Pricing.save_all!(order)
+        audit!("discount", record: order, before: before, after: { removed: true, discount_minor: order.discount_minor, total_minor: order.total_minor })
         render json: OrderSerializers.full(order.reload)
       end
 

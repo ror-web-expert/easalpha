@@ -25,7 +25,7 @@ module Permission
     "orders.staff_meal" => "Mark an order as staff meal or complimentary",
     "discounts.apply" => "Apply a discount up to the role limit",
     "discounts.above_limit" => "Apply a discount above the limit",
-    "prices.override" => "Override an item price",
+    "prices.override" => "Override an item price or change an order's service charge",
     "items.open" => "Sell an open item",
     "payments.take" => "Take payment",
     "payments.cod" => "Collect cash on delivery",
