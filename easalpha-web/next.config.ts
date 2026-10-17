@@ -1,13 +1,18 @@
 import type { NextConfig } from "next";
 
 const API_ORIGIN = (() => { try { return new URL(process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1").origin; } catch { return "http://localhost:3001"; } })();
+// Cloudflare, in front of easalpha.com, injects its Web Analytics beacon into every page; the policy allows that one
+// script and the address it reports to, as Cloudflare documents, so the browser no longer logs a blocked-script error
+// on every page (which also cost the Lighthouse best-practices score).
+const CLOUDFLARE_BEACON = "https://static.cloudflareinsights.com";
+const CLOUDFLARE_RUM = "https://cloudflareinsights.com";
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline' ${CLOUDFLARE_BEACON}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  `connect-src 'self' ${API_ORIGIN} ${API_ORIGIN.replace(/^http/, "ws")}`,
+  `connect-src 'self' ${API_ORIGIN} ${API_ORIGIN.replace(/^http/, "ws")} ${CLOUDFLARE_RUM}`,
   "frame-ancestors 'self'",
   "object-src 'none'",
   "base-uri 'self'",
