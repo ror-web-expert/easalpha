@@ -4,7 +4,9 @@
 #      The web image bakes in the API address: repository variable API_PUBLIC_URL (Settings > Secrets and variables >
 #      Actions > Variables), e.g. https://api.easalpha.com.
 #   2. deploy: over SSH, copies deploy/ to the server, logs the server into ghcr.io with this run's token, pulls the new
-#      images and restarts the stack (migrations and seeds run on API start). Waits for the API health check.
+#      images (three tries of at most 15 minutes each; the server's .env keeps naming the running images until every
+#      new one is there, so a stalled pull leaves the site as it was), then restarts the stack (migrations and seeds run
+#      on API start), waits for the API health check and removes EasAlpha images older than the previous release.
 #      Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key whose public half is in the server's
 #      ~/.ssh/authorized_keys). Optional DEPLOY_PATH (default ~/easalpha). scripts/github-setup.sh sets all of these.
 #      No DEPLOY_HOST secret: images are built and the deploy step is skipped.
@@ -62,6 +64,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'pull_request' }}
     concurrency: { group: deploy-production, cancel-in-progress: false }
+    # 18 Oct 2026: a pull stalled on the server and the job hung for 2 h 13 m until the SSH connection dropped.
+    timeout-minutes: 60
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -77,12 +81,17 @@ jobs:
         env: { DEPLOY_SSH_KEY: "${{ secrets.DEPLOY_SSH_KEY }}" }
         run: |
           mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # The server is sometimes briefly unreachable: try the key scan a few times before giving up.
+          for i in 1 2 3 4 5; do ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null; test -s ~/.ssh/known_hosts && break; sleep 10; done
+          # Keep-alives: a connection that stops answering ends after 3 minutes instead of hanging the job.
           echo "Host server
             HostName $DEPLOY_HOST
             User $DEPLOY_USER
             IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes" > ~/.ssh/config
+            IdentitiesOnly yes
+            ServerAliveInterval 30
+            ServerAliveCountMax 6
+            ConnectTimeout 30" > ~/.ssh/config
       - if: ${{ env.DEPLOY_HOST != '' }}
         name: Copy compose files (never .env or downloads)
         run: |
@@ -100,16 +109,29 @@ jobs:
           ssh server "set -e
             cd $DEPLOY_PATH
             test -f .env || { echo '.env missing on the server: copy deploy/.env.example to $DEPLOY_PATH/.env and fill it in'; exit 1; }
+            echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin
+            # Pull first, naming the new images only in this shell: .env still names the running ones, so nothing
+            # changes on the server until every new image is here.
+            ok=
+            for n in 1 2 3; do
+              if IMAGE_REPO=$REPO IMAGE_TAG=$TAG timeout 900 docker compose pull --quiet; then ok=1; break; fi
+              echo \"Pull attempt \$n failed or took over 15 minutes, trying again\"; sleep 20
+            done
+            test -n \"\$ok\" || { echo 'Could not pull the new images; the running version was left as it was'; exit 1; }
+            PREV=\$(docker inspect -f '{{.Config.Image}}' \$(docker compose ps -q api) 2>/dev/null | sed 's/.*://' || true)
             sed -i -e 's#^IMAGE_REPO=.*#IMAGE_REPO=$REPO#' -e 's#^IMAGE_TAG=.*#IMAGE_TAG=$TAG#' .env
             grep -q '^IMAGE_REPO=' .env || echo 'IMAGE_REPO=$REPO' >> .env
             grep -q '^IMAGE_TAG=' .env || echo 'IMAGE_TAG=$TAG' >> .env
-            echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin
-            docker compose pull --quiet
             docker compose up -d --remove-orphans
-            docker image prune -f >/dev/null
             echo 'Waiting for the API...'
+            healthy=
             for i in \$(seq 1 60); do
-              if docker compose exec -T api curl -fsS http://localhost:3001/api/v1/health >/dev/null 2>&1; then echo 'API healthy'; exit 0; fi
+              if docker compose exec -T api curl -fsS http://localhost:3001/api/v1/health >/dev/null 2>&1; then healthy=1; break; fi
               sleep 5
             done
-            echo 'API did not become healthy in 5 minutes'; docker compose logs --tail=100 api; exit 1"
+            test -n \"\$healthy\" || { echo 'API did not become healthy in 5 minutes'; docker compose logs --tail=100 api; exit 1; }
+            echo \"API healthy on $TAG (previous release \$PREV)\"
+            # Keep this release and the one before it for a rollback; older EasAlpha images only fill the disk
+            # (72 of them had taken it to 87% by 18 Oct 2026).
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep '^$REPO-' | grep -v -e ':$TAG\$' -e \":\$PREV\\\$\" | xargs -r docker rmi >/dev/null 2>&1 || true
+            docker image prune -f >/dev/null"
