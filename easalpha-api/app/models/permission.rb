@@ -61,6 +61,8 @@ module Permission
     "finance.view" => "View finance and accounts",
     "payroll.manage" => "Manage payroll",
     "wages.pay" => "Pay daily and weekly wages",
+    "canteen.manage" => "Set up the canteen: meal sessions, daily plans, workers; cancel meals",
+    "canteen.serve" => "Serve meals at the canteen counter and run the kiosk",
     "audit.view" => "View the audit log"
   }.freeze
 

@@ -13,7 +13,8 @@ module Orders
         order.placed_at ||= Time.current
         change!(order, "placed", actor: actor, device: device)
         order.items.each { |i| i.update!(status: "sent", sent_at: Time.current) if i.status == "pending" }
-        Kitchen::Tickets.create_for!(order, kind: "new", items: order.active_items)
+        # A canteen meal is served from the day's plan at the counter, not cooked to order: no kitchen ticket.
+        Kitchen::Tickets.create_for!(order, kind: "new", items: order.active_items) unless order.source == "kiosk" && MealClaim.exists?(order_id: order.id)
         Story.record!(order, "punched", actor: actor, device: device, amount_after: order.total_minor)
         SetupChecklistItem.complete!("first_order")
       end

@@ -81,7 +81,7 @@ RSpec.describe "Modules through the business profile", type: :request do
     expect(response).to have_http_status(:forbidden)
     expect(json[:error][:code]).to eq("modules.owner_only")
     get "/api/v1/me", headers: h
-    expect(json[:modules]).to eq(customer_accounts: false, payroll: false)
+    expect(json[:modules]).to eq(customer_accounts: false, payroll: false, canteen: false)
 
     # The rest of the profile, and settings that leave the modules as they are, still save.
     api_patch "/api/v1/business", { phone: "+923001234567", settings: biz.reload.settings.merge("kitchen_ticket_print" => false) }, headers: h
@@ -91,7 +91,7 @@ RSpec.describe "Modules through the business profile", type: :request do
     api_patch "/api/v1/business", { settings: biz.reload.settings.merge("modules.customer_accounts" => true) }, headers: auth_headers(owner)
     expect(response).to have_http_status(:ok)
     get "/api/v1/me", headers: auth_headers(owner)
-    expect(json[:modules]).to eq(customer_accounts: true, payroll: false)
+    expect(json[:modules]).to eq(customer_accounts: true, payroll: false, canteen: false)
 
     # Nor can the manager switch it off again by leaving the key out.
     api_patch "/api/v1/business", { settings: biz.reload.settings.except("modules.customer_accounts") }, headers: h

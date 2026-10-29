@@ -8,8 +8,8 @@ import { useApplyModules, useModules } from "./modules";
 
 vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), api: vi.fn() }));
 
-const ON: BusinessModules = { customer_accounts: true, payroll: true };
-const OFF: BusinessModules = { customer_accounts: false, payroll: false };
+const ON: BusinessModules = { customer_accounts: true, payroll: true, canteen: false };
+const OFF: BusinessModules = { customer_accounts: false, payroll: false, canteen: false };
 const sessionFor = (id: string, modules: BusinessModules) => ({ business: { id, name: id }, branch: { id: `${id}-main` }, modules } as unknown as Session);
 
 let qc: QueryClient;
@@ -42,7 +42,7 @@ describe("useModules", () => {
   });
 
   it("refreshes the saved session from /me but keeps the branch picked in the top bar", async () => {
-    vi.mocked(api).mockResolvedValue({ modules: { customer_accounts: true, payroll: false } });
+    vi.mocked(api).mockResolvedValue({ modules: { customer_accounts: true, payroll: false, canteen: false } });
     act(() => { useAuthStore.getState().setSession(sessionFor("a", OFF)); useAuthStore.getState().setBranch("a-second"); });
     renderHook(() => useModules(), { wrapper });
     await waitFor(() => expect(useAuthStore.getState().session?.modules?.customer_accounts).toBe(true));
@@ -52,12 +52,12 @@ describe("useModules", () => {
 
 describe("useApplyModules", () => {
   it("updates this business's cached modules and session at once, and keeps the branch", async () => {
-    vi.mocked(api).mockResolvedValue({ modules: { customer_accounts: true, payroll: false } });
+    vi.mocked(api).mockResolvedValue({ modules: { customer_accounts: true, payroll: false, canteen: false } });
     act(() => { useAuthStore.getState().setSession(sessionFor("a", OFF)); useAuthStore.getState().setBranch("a-second"); });
     const { result } = renderHook(() => ({ modules: useModules(), apply: useApplyModules() }), { wrapper });
-    act(() => result.current.apply({ customer_accounts: true, payroll: false }));
+    act(() => result.current.apply({ customer_accounts: true, payroll: false, canteen: false }));
     expect(result.current.modules.customer_accounts).toBe(true);
-    expect(qc.getQueryData(["modules", "a"])).toEqual({ customer_accounts: true, payroll: false });
+    expect(qc.getQueryData(["modules", "a"])).toEqual({ customer_accounts: true, payroll: false, canteen: false });
     expect(useAuthStore.getState().session?.modules?.customer_accounts).toBe(true);
     expect(useAuthStore.getState().branchId).toBe("a-second");
   });

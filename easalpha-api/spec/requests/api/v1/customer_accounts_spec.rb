@@ -31,7 +31,7 @@ RSpec.describe "Customer accounts", type: :request do
       fresh = signup_business(name: "Hostel Canteen", modules: false)
       h = auth_headers(fresh)
       get "/api/v1/me", headers: h
-      expect(json[:modules]).to eq(customer_accounts: false, payroll: false)
+      expect(json[:modules]).to eq(customer_accounts: false, payroll: false, canteen: false)
       c = within(fresh.business) { Customer.create!(name: "Bilal") }
       get "/api/v1/customers/#{c.id}/ledger", headers: h
       expect(response).to have_http_status(:forbidden)
@@ -49,7 +49,7 @@ RSpec.describe "Customer accounts", type: :request do
 
       api_patch "/api/v1/settings", { values: { "modules.customer_accounts" => true } }, headers: h
       expect(response).to have_http_status(:ok)
-      expect(json[:modules]).to eq(customer_accounts: true, payroll: false)
+      expect(json[:modules]).to eq(customer_accounts: true, payroll: false, canteen: false)
       get "/api/v1/customers/#{c.id}/ledger", headers: h
       expect(response).to have_http_status(:ok)
     end
@@ -66,7 +66,7 @@ RSpec.describe "Customer accounts", type: :request do
 
     it "logs in with the module state" do
       api_post "/api/v1/auth/login", { email: owner.user.email, password: "password123" }
-      expect(json[:modules]).to eq(customer_accounts: true, payroll: true)
+      expect(json[:modules]).to eq(customer_accounts: true, payroll: true, canteen: false)
     end
   end
 

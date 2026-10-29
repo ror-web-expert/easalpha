@@ -65,3 +65,16 @@ Before you start: the demo business has a real phone linked to WhatsApp. To try 
 11. Touch: open the till on a touch screen (or a tablet). Swipe the item tiles, the category list, the order list and the payment screen; nothing zooms, bounces, reloads or slides sideways, and a swipe never adds an item. The desktop app's EasAlpha menu has Open full screen at launch and Kiosk mode (Ctrl+Shift+K).
 
 Scripts: `node scripts/manual-api-check.mjs <folder>` walks every new API flow on the demo data (26 checks, writes the bill PDFs to the folder); `node scripts/touch-check.mjs <label>` drives the till with touch on three tablet sizes; `node scripts/e2e-web.mjs` is the full browser gate.
+
+## Canteen (factory mess), 29 Oct 2026
+
+1. Admin, Settings, Modules: switch **Canteen** on (as the owner). Customer accounts come on with it.
+2. Admin, Canteen, Meal Sessions: "Add Breakfast, Lunch, Dinner", then edit one so its window covers the current time.
+3. Admin, Canteen, Workers: the employees from Payroll. Enrol a few with a fingerprint id (type `FP-001`, `FP-002`...).
+4. Admin, Canteen, Meal Plans: for today's session add two or three dishes with a cooked quantity and a worker price, **Save & publish**.
+5. Kiosk: open http://localhost:3000/canteen, pair with a code from Settings, Devices (kind Kiosk), or from `/setup` as "Canteen kiosk". The reader types the id and Enter, so on a laptop just type `FP-001` and press Enter: the kiosk greets the worker and asks for the dish (or tap the dish first). A token appears; type `FP-001` + Enter again and it refuses with the earlier token and time.
+6. Counter: http://localhost:3000/canteen/serve on a second browser profile, paired as another kiosk device: tap a token to serve it.
+7. Offline: in the browser's devtools set the network to Offline and repeat a scan: the token still comes (marked offline) and reaches the server when the network returns. Admin, Canteen, Meals and Reports show every meal; a manager cancels one with a reason.
+8. Payroll: Admin, Payroll, Run Payroll for the month: each worker's payslip carries "Canteen meals (n)"; paying the run clears the worker's account.
+
+Scripted: `node scripts/canteen-walkthrough.mjs` runs all of this in a browser and leaves screenshots in `tmp/canteen-shots/`.

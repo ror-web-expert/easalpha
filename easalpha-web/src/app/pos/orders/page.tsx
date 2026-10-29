@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw, Printer, Ban, RotateCcw, Play, Pencil, Unlock } from "lucide-react";
 import { type LocalOrder } from "@/lib/db";
@@ -30,7 +30,8 @@ function OrdersScreen() {
   const params = useSearchParams();
   const branch = useDeviceStore((s) => s.branch);
   const can = usePosCan();
-  const methods = useCatalogStore((s) => s.paymentMethods);
+  const allMethods = useCatalogStore((s) => s.paymentMethods);
+  const methods = useMemo(() => allMethods.filter((m) => !m.internal), [allMethods]);
   const currency = useCatalogStore((s) => s.catalog?.business.currency);
   const settings = useCatalogStore((s) => s.catalog?.business.settings);
   const status = useSyncStore((s) => s.status);

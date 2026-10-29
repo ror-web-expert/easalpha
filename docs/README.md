@@ -20,6 +20,7 @@ EasAlpha is a cloud restaurant POS sold by subscription in Pakistan and internat
 | [06-implementation-plan.md](06-implementation-plan.md) | How to build it: week 0 foundations, the 7 SPEC phases (the original 10-sprint plan is kept for reference), working agreements, pilot launch, risks, first-week tasks |
 | [07-design-system.md](07-design-system.md) | Colour scheme with light and dark tokens, colour by meaning, validated chart palette, typography, components, layouts, receipts, accessibility |
 | [08-database-schema.md](08-database-schema.md) | PostgreSQL schema: conventions, Row-Level Security, about 110 tables with columns in 9 groups, the SPEC additions, relationships, indexes and constraints |
+| [09-canteen.md](09-canteen.md) | **Canteen (factory mess), 29 Oct 2026**: fingerprint kiosk, meal sessions and daily plans, tokens and the counter, worker accounts and payroll deduction, offline behaviour, API |
 
 Companion documents on claude.ai:
 

@@ -3,7 +3,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Bike, Check, ChefHat, KeyRound, Megaphone, Monitor, Tablet, Users } from "lucide-react";
+import { Bike, Check, ChefHat, KeyRound, Megaphone, Monitor, Tablet, Users, Utensils, ClipboardCheck } from "lucide-react";
 import { api, errorMessage, type RequestOptions } from "@/lib/api";
 import type { Branch, Device, PairedDevice, Session, SetupStaff } from "@/lib/types";
 import { useDeviceStore } from "@/store/device";
@@ -23,7 +23,7 @@ import {
  * the machine keeps just its device token. A browser that is already set up is forwarded straight to its screen, so
  * the desktop app and every installed home-screen icon can open /setup every time. "?again=1" re-runs the setup.
  */
-const ICONS: Record<DeviceRole, React.ComponentType<{ className?: string }>> = { till: Monitor, tablet: Tablet, kitchen: ChefHat, token: Megaphone, queue: Users, rider: Bike };
+const ICONS: Record<DeviceRole, React.ComponentType<{ className?: string }>> = { till: Monitor, tablet: Tablet, kitchen: ChefHat, token: Megaphone, queue: Users, rider: Bike, canteen: Utensils, counter: ClipboardCheck };
 type Step = "checking" | "login" | "choose" | "ready";
 
 const readScreenChoice = () => { try { return localStorage.getItem(SCREEN_CHOICE_KEY); } catch { return null; } };
@@ -109,7 +109,7 @@ function Flow() {
       await clearTillData();
       useDeviceStore.getState().pair(payload);
     }
-    writeScreenChoice(opt.screen === "/queue" ? "/queue" : "/token");
+    writeScreenChoice(opt.screen);
     setSession(null);
     router.replace(opt.screen);
   };

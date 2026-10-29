@@ -1,4 +1,4 @@
-import { LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, Barcode, FileText, HandCoins as Wage, ToggleRight, LayoutGrid, type LucideIcon } from "lucide-react";
+import { Utensils, LayoutDashboard, ClipboardList, FileStack, Trash2, Ruler, Warehouse, ReceiptText, UtensilsCrossed, Layers, Package, SlidersHorizontal, Gift, Percent, Landmark, Wallet, CalendarCheck, FileCheck2, PiggyBank, Users, UserCircle, Shield, MonitorSmartphone, BarChart3, Settings, Building2, CreditCard, ListChecks, ScrollText, RefreshCw, Grid3X3, ChefHat, Tag, Boxes, BookOpenText, PieChart, Factory, PackageOpen, Flame, ShieldCheck, Truck, ShoppingCart, FileInput, Undo2, CalendarClock, TrendingUp, Receipt, Banknote, Gauge, Bike, MapPinned, QrCode, CalendarRange, Route, Star, Megaphone, CalendarDays, HandCoins, ClipboardCheck, Scale, GitCompare, Plug, Contact, BadgeDollarSign, Fingerprint, Wallet2, CircleDollarSign, Zap, Clock, History, LineChart, Sparkles, Activity, BookOpen, Lightbulb, Globe, Bell, MessageCircle, Ticket, Store, Timer, Printer, KeyRound, Lock, ListTree, Calculator, FileSpreadsheet, Scroll, Coins, ClipboardSignature, Palette, Barcode, FileText, HandCoins as Wage, ToggleRight, LayoutGrid, type LucideIcon } from "lucide-react";
 import type { BusinessModule } from "@/lib/types";
 
 /** module: shown only while the owner has that module switched on (Settings, Modules). */
@@ -162,6 +162,18 @@ export const NAV: NavGroup[] = [
       { href: "/admin/payroll/fingerprint", label: "Fingerprint", icon: Fingerprint, perms: ["payroll.manage", "staff.manage", "PAYROLL"], module: "payroll" },
       { href: "/admin/payroll/reports", label: "Reports", icon: BarChart3, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
       { href: "/admin/payroll/settings", label: "Settings", icon: Wallet2, perms: ["payroll.manage", "settings.manage"], module: "payroll" },
+    ],
+  },
+  {
+    label: "Canteen",
+    icon: Utensils,
+    items: [
+      { href: "/admin/canteen", label: "Today", icon: Utensils, exact: true, perms: ["canteen.manage", "canteen.serve", "settings.manage"], module: "canteen" },
+      { href: "/admin/canteen/plans", label: "Meal Plans", icon: CalendarDays, perms: ["canteen.manage", "settings.manage"], module: "canteen" },
+      { href: "/admin/canteen/claims", label: "Meals", icon: ListChecks, perms: ["canteen.manage", "canteen.serve", "settings.manage"], module: "canteen" },
+      { href: "/admin/canteen/workers", label: "Workers", icon: Fingerprint, perms: ["canteen.manage", "settings.manage"], module: "canteen" },
+      { href: "/admin/canteen/sessions", label: "Meal Sessions", icon: Timer, perms: ["canteen.manage", "settings.manage"], module: "canteen" },
+      { href: "/admin/canteen/reports", label: "Reports", icon: BarChart3, perms: ["canteen.manage", "canteen.serve", "settings.manage", ...REPORTS], module: "canteen" },
     ],
   },
   {

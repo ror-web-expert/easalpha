@@ -47,7 +47,9 @@ interface Split { method: PaymentMethod; amount_minor: number; tendered_minor: n
  */
 export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onTaxChoice, onDiscount, onCustomer }: Props) {
   const [changingCustomer, setChangingCustomer] = useState(false);
-  const methods = useCatalogStore((s) => s.paymentMethods);
+  // Internal methods (the canteen's company subsidy, salary deductions) are the system's, never a button on the till.
+  const allMethods = useCatalogStore((s) => s.paymentMethods);
+  const methods = useMemo(() => allMethods.filter((m) => !m.internal), [allMethods]);
   const catalog = useCatalogStore((s) => s.catalog);
   const status = useSyncStore((s) => s.status);
   const settings = catalog?.business.settings;

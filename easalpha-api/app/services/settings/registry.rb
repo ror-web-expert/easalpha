@@ -17,6 +17,10 @@ module Settings
       # Modules the owner switches on (off for a new business). Only the owner may change them.
       [ "modules.customer_accounts", "store", "Modules", "boolean", false, "Customer accounts (khata): sell on account, customer ledger, opening balances, adjustments and monthly bills" ],
       [ "modules.payroll", "store", "Modules", "boolean", false, "Payroll and wages: employees, attendance, advances, monthly salary and daily or weekly wages" ],
+      [ "modules.canteen", "store", "Modules", "boolean", false, "Canteen (factory mess): fingerprint kiosk, meal sessions and daily plans, tokens for the counter, every meal on the worker's account" ],
+      [ "canteen.payroll_deduction", "store", "Canteen", "boolean", true, "Take each worker's meals for the month off the payroll run and settle their account" ],
+      [ "canteen.manual_lookup", "store", "Canteen", "boolean", true, "The kiosk may find a worker by name, phone or CNIC when the fingerprint reader fails" ],
+      [ "canteen.print_token", "store", "Canteen", "boolean", true, "Print a token slip for every meal (the screen shows it either way)" ],
       [ "khata.notify_each_sale", "store", "Customer Accounts", "boolean", true, "WhatsApp the customer each time an order is put on their account" ],
       [ "khata.notify_adjustments", "store", "Customer Accounts", "boolean", true, "WhatsApp the customer when their balance is adjusted or an opening balance is entered" ],
       [ "khata.monthly_bills.enabled", "store", "Customer Accounts", "boolean", false, "Send every customer who owes money their bill for last month on WhatsApp" ],

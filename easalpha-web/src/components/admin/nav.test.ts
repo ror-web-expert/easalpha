@@ -8,9 +8,9 @@ describe("SPEC sidebar", () => {
     expect(NAV[0].items.map((i) => i.label)).toEqual(["Dashboard", "Orders", "Pending Orders", "Expenses", "Tables"]);
   });
 
-  it("has the 12 SPEC groups in SPEC order", () => {
+  it("has the 12 SPEC groups in SPEC order, plus Canteen (29 Oct 2026) before Reports", () => {
     expect(NAV.slice(1).map((g) => g.label)).toEqual([
-      "Products", "Inventory", "Inventory Reports", "Purchasing", "Suppliers", "Customers", "Staff", "Finance", "Payroll", "Reports", "Riders", "Settings",
+      "Products", "Inventory", "Inventory Reports", "Purchasing", "Suppliers", "Customers", "Staff", "Finance", "Payroll", "Canteen", "Reports", "Riders", "Settings",
     ]);
   });
 
@@ -48,7 +48,7 @@ describe("SPEC sidebar", () => {
 
   it("uses the SPEC route roots", () => {
     const hrefs = NAV.flatMap((g) => g.items.map((i) => i.href.split("#")[0]));
-    for (const h of hrefs) expect(h).toMatch(/^\/admin(\/(products|inventory|inventory-reports|purchasing|suppliers|customers|staff|finance|payroll|reports|riders|settings|orders|expenses|tables)(\/.*)?)?$/);
+    for (const h of hrefs) expect(h).toMatch(/^\/admin(\/(products|inventory|inventory-reports|purchasing|suppliers|customers|staff|finance|payroll|canteen|reports|riders|settings|orders|expenses|tables)(\/.*)?)?$/);
   });
 });
 

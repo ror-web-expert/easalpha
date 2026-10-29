@@ -127,7 +127,7 @@ export interface Session {
   modules?: BusinessModules;
 }
 /** Optional parts of EasAlpha, off for a new business. */
-export interface BusinessModules { customer_accounts: boolean; payroll: boolean }
+export interface BusinessModules { customer_accounts: boolean; payroll: boolean; canteen: boolean }
 export type BusinessModule = keyof BusinessModules;
 
 // ---- Menu ----
@@ -291,6 +291,8 @@ export interface OrdersSummary {
 // ---- Payments ----
 export interface PaymentMethod {
   id: ID; code: string; name: string; kind: string; payment_account_id: ID | null; active: boolean; works_offline: boolean; needs_reference: boolean; sort_order: number;
+  /** Used by the system (canteen subsidy, salary deduction); the till never offers it. */
+  internal?: boolean;
 }
 export interface Payment {
   id: ID; order_id: ID; method_code: string; amount_minor: number; tendered_minor: number | null; change_minor: number; tip_minor: number;
@@ -419,7 +421,7 @@ export interface DiningTable {
 export interface Floor { id: ID; branch_id: ID; name: string; sort_order: number; layout: Record<string, unknown> | null; tables?: DiningTable[] }
 
 // ---- Sync ----
-export type SyncRecordType = "order" | "order_update" | "payment" | "refund" | "void" | "shift_open" | "shift_close" | "cash_movement";
+export type SyncRecordType = "order" | "order_update" | "payment" | "refund" | "void" | "shift_open" | "shift_close" | "cash_movement" | "meal_claim";
 export interface SyncRecord { type: SyncRecordType; id: ID; membership_id?: ID; payload: Record<string, unknown> }
 export interface SyncResult { id: ID; type: string; status: "accepted" | "duplicate" | "rejected"; code?: string; message?: string }
 export interface SyncPushResponse { batch_id: ID; results: SyncResult[]; server_time: string }
@@ -433,7 +435,7 @@ export interface SyncChanges {
   floors: Floor[]; tables: DiningTable[]; customers: Customer[]; staff: unknown[]; settings: BusinessSettings; day_locked: boolean;
   quick_add_items?: QuickAddItem[]; settings_version?: number;
   /** The whole active list every time; customers archived since the cursor. */
-  regular_discount_tiers?: RegularDiscountTier[]; archived_customer_ids?: ID[];
+  regular_discount_tiers?: RegularDiscountTier[]; archived_customer_ids?: ID[];  canteen?: CanteenSync | null;
 }
 
 // ---- Tax invoices ----
@@ -865,6 +867,36 @@ export interface FixedAsset {
 }
 export interface FixedAssetsResponse { data: FixedAsset[]; totals: { cost_minor: number; accumulated_minor: number; book_value_minor: number } }
 export interface PaymentMethodCatalogueEntry { code: string; name: string; kind: string; added: boolean }
+
+// ---- Canteen (factory mess), 29 Oct 2026 ----
+export interface MealSession { id: ID; branch_id: ID; name: string; starts_at: string; ends_at: string; max_claims: number; active: boolean; sort_order: number }
+export interface MealPlanItem {
+  id: ID; product_id: ID; name: string; name_ur: string | null; image_key: string | null; price_minor: number; worker_price_minor: number | null;
+  planned_qty: number | null; claims_count: number; sold_out: boolean; sort_order: number;
+}
+export interface MealPlan {
+  id: ID; branch_id: ID; meal_session_id: ID; session: MealSession | null; plan_date: string; status: "draft" | "published" | "closed"; notes: string | null;
+  published_at: string | null; items: MealPlanItem[]; claims: number; planned: number;
+}
+export interface MealClaim {
+  id: ID; employee_id: ID; employee_name: string | null; customer_id: ID | null; order_id: ID | null; meal_session_id: ID; session: string | null; meal_plan_item_id: ID; dish: string | null;
+  plan_date: string; token_no: number; token_label: string; status: "claimed" | "served" | "cancelled"; scanned_at: string; served_at: string | null; cancelled_at: string | null;
+  cancel_reason: string | null; source: string; device_id: ID | null; worker_price_minor: number; company_share_minor: number;
+}
+export interface CanteenWorker {
+  id: ID; name: string; phone: string | null; cnic: string | null; department: string | null; designation: string | null; customer_id: ID | null;
+  fingerprint_enrolled: boolean; fingerprint_id: string | null; branch_id: ID | null;
+}
+export interface CanteenToday {
+  date: string; now: string; branch: { id: ID; name: string }; session: MealSession | null; sessions: MealSession[]; plans: MealPlan[];
+  counts: { claimed: number; served: number; workers: number }; settings: { manual_lookup: boolean; print_token: boolean };
+}
+export interface CanteenSummaryRow { key: string; meals: number; served: number; workers: number; planned: number | null; worker_minor: number; company_minor: number; total_minor: number }
+export interface CanteenSummary { from: string; to: string; group_by: string; rows: CanteenSummaryRow[]; totals: { meals: number; served: number; worker_minor: number; company_minor: number; total_minor: number } }
+export interface CanteenWorkerRow { employee_id: ID; name: string; department: string | null; designation: string | null; customer_id: ID | null; meals: number; worker_minor: number; company_minor: number; last_meal_at: string | null }
+export interface CanteenWorkersReport { from: string; to: string; rows: CanteenWorkerRow[]; totals: { meals: number; worker_minor: number; company_minor: number } }
+/** What a kiosk keeps for the counter without internet (GET /sync/changes for a kiosk device). */
+export interface CanteenSync { date: string; sessions: MealSession[]; plans: MealPlan[]; workers: CanteenWorker[]; claims: MealClaim[] }
 
 // ---- Purchasing and supplier screens (Phase 5: SPEC "Purchasing, suppliers and expenses") ----
 /** Direction of a supplier balance: positive = we owe them (To Pay), negative = they owe us (To Receive). */

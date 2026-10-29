@@ -3,10 +3,15 @@ import { canSetUpDevices, defaultDeviceName, existingScreen, ROLE_OPTIONS, roleO
 
 describe("setup helpers", () => {
   it("offers one role per screen a machine can be, each with a kind the API knows", () => {
-    expect(ROLE_OPTIONS.map((r) => r.role)).toEqual(["till", "tablet", "kitchen", "token", "queue", "rider"]);
-    for (const r of ROLE_OPTIONS) expect(["till", "tablet", "kitchen", "token_screen", "rider"]).toContain(r.kind);
+    expect(ROLE_OPTIONS.map((r) => r.role)).toEqual(["till", "tablet", "kitchen", "token", "queue", "rider", "canteen", "counter"]);
+    for (const r of ROLE_OPTIONS) expect(["till", "tablet", "kitchen", "token_screen", "rider", "kiosk"]).toContain(r.kind);
     expect(roleOption("rider").store).toBe("rider");
     expect(roleOption("kitchen").login).toBe(false);
+    // 29 Oct 2026: the canteen kiosk and counter are kiosk devices that open their own screens
+    expect(roleOption("canteen")).toMatchObject({ kind: "kiosk", screen: "/canteen", login: false });
+    expect(roleOption("counter")).toMatchObject({ kind: "kiosk", screen: "/canteen/serve", login: false });
+    expect(existingScreen({ deviceKind: "kiosk", riderPaired: false, screenChoice: "/canteen/serve" })).toBe("/canteen/serve");
+    expect(existingScreen({ deviceKind: "kiosk", riderPaired: false, screenChoice: null })).toBe("/canteen");
   });
 
   it("names the device after its role with the next free number at the branch", () => {

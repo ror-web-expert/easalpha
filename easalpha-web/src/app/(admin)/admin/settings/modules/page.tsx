@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ToggleRight, Wallet2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ToggleRight, Utensils, Wallet2 } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { BusinessModule, BusinessModules } from "@/lib/types";
 import { MODULE_INFO, MODULE_KEYS, useApplyModules, useModules } from "@/lib/modules";
@@ -13,11 +13,12 @@ import { toast } from "@/store/toast";
 
 // Modules the owner switches on. Customer accounts (khata) and payroll start off for a new business so the menu stays
 // short; turning one on brings its screens into the sidebar, its controls onto the POS and its WhatsApp messages.
-const ORDER: BusinessModule[] = ["customer_accounts", "payroll"];
-const ICONS = { customer_accounts: BookOpen, payroll: Wallet2 };
+const ORDER: BusinessModule[] = ["customer_accounts", "payroll", "canteen"];
+const ICONS = { customer_accounts: BookOpen, payroll: Wallet2, canteen: Utensils };
 const FIRST_STEP: Record<BusinessModule, { href: string; label: string }> = {
   customer_accounts: { href: "/admin/customers/ledger", label: "Open Customer Ledger" },
   payroll: { href: "/admin/payroll/employees", label: "Add employees" },
+  canteen: { href: "/admin/canteen/plans", label: "Plan today's meals" },
 };
 
 export default function ModulesPage() {

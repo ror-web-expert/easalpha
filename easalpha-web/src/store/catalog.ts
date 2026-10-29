@@ -76,6 +76,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     set({ catalog, paymentMethods, tables, cursor: c.cursor });
     // Customers changed since the cursor (balances, new students) keep the offline search current.
     await useCustomerStore.getState().apply(c.customers, c.archived_customer_ids ?? []);
+    // A canteen kiosk keeps the day's plans, the workers and the claims for the counter without internet.
+    if (c.canteen) await kvSet("canteen_sync", c.canteen);
   },
   setShift: (shift) => { set({ shift }); kvSet("shift", shift); },
   refreshTables: async () => {

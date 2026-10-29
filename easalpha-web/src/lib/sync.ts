@@ -153,9 +153,11 @@ export async function pullChanges() {
   } catch {}
 }
 
-export function startSync() {
+/** pull: false for a screen that pushes its queue but keeps no till catalogue (the canteen kiosk has its own sync call). */
+export function startSync(opts: { pull?: boolean } = {}) {
   stopped = false;
-  const onOnline = () => { useSyncStore.getState().set({ status: "online" }); pullChanges(); schedule(0); void useCustomerStore.getState().downloadIfStale(); };
+  const pull = opts.pull !== false;
+  const onOnline = () => { useSyncStore.getState().set({ status: "online" }); if (pull) pullChanges(); schedule(0); if (pull) void useCustomerStore.getState().downloadIfStale(); };
   const onOffline = () => useSyncStore.getState().set({ status: "offline" });
   window.addEventListener("online", onOnline);
   window.addEventListener("offline", onOffline);
@@ -169,8 +171,8 @@ export function startSync() {
   }, 15000);
   // Menu, settings and customers changed on the server or other tills (a balance paid at the counter, a new student)
   // reach this till every few minutes, so what it shows and searches offline is never far behind.
-  const pull = setInterval(() => {
-    if (!isOnline() || !useDeviceStore.getState().deviceToken) return;
+  const pullTimer = setInterval(() => {
+    if (!pull || !isOnline() || !useDeviceStore.getState().deviceToken) return;
     pullChanges();
     void useCustomerStore.getState().downloadIfStale();
   }, 5 * 60_000);
@@ -182,7 +184,7 @@ export function startSync() {
     window.removeEventListener("online", onOnline);
     window.removeEventListener("offline", onOffline);
     clearInterval(interval);
-    clearInterval(pull);
+    clearInterval(pullTimer);
     clearInterval(heartbeat);
     if (timer) clearTimeout(timer);
   };

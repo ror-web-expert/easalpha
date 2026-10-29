@@ -6,7 +6,7 @@ import { useAuthStore } from "@/store/auth";
 import type { BusinessModule, BusinessModules, BusinessSettings, Session } from "@/lib/types";
 
 /** Settings keys behind each module (the till reads them from its synced settings). */
-export const MODULE_KEYS: Record<BusinessModule, string> = { customer_accounts: "modules.customer_accounts", payroll: "modules.payroll" };
+export const MODULE_KEYS: Record<BusinessModule, string> = { customer_accounts: "modules.customer_accounts", payroll: "modules.payroll", canteen: "modules.canteen" };
 
 export const MODULE_INFO: Record<BusinessModule, { title: string; summary: string; screens: string[] }> = {
   customer_accounts: {
@@ -18,6 +18,11 @@ export const MODULE_INFO: Record<BusinessModule, { title: string; summary: strin
     title: "Payroll and wages",
     summary: "Staff pay: monthly salary, daily or weekly wages, advances, attendance and the fingerprint device.",
     screens: ["Employees, Advances and Run Payroll", "Pay Wages and Employee Statement", "Attendance and Fingerprint", "WhatsApp messages to staff"],
+  },
+  canteen: {
+    title: "Canteen (factory mess)",
+    summary: "Workers scan a finger at a kiosk, take one dish from the day's plan and collect with a token. Every meal goes on the worker's account and comes off the payroll run. Switching it on also switches on customer accounts.",
+    screens: ["Kiosk and counter screens (paired devices)", "Meal sessions and daily plans", "Workers, meals and cancellations", "Daily, weekly and monthly reports"],
   },
 };
 
@@ -49,13 +54,13 @@ export function useModules(): BusinessModules & { loaded: boolean } {
   const businessId = session?.business.id ?? null;
   const q = useQuery({
     queryKey: modulesKey(businessId),
-    queryFn: async () => (await fetchMe(qc, businessId)).modules ?? { customer_accounts: false, payroll: false },
+    queryFn: async () => (await fetchMe(qc, businessId)).modules ?? { customer_accounts: false, payroll: false, canteen: false },
     enabled: !!session,
     staleTime: 60_000,
   });
   useEffect(() => { if (q.data && businessId) saveModules(businessId, q.data); }, [q.data, businessId]);
   const m = q.data ?? session?.modules;
-  return { customer_accounts: !!m?.customer_accounts, payroll: !!m?.payroll, loaded: !!m };
+  return { customer_accounts: !!m?.customer_accounts || !!m?.canteen, payroll: !!m?.payroll, canteen: !!m?.canteen, loaded: !!m };
 }
 
 /** After the owner switches a module, everyone on this browser sees the new sidebar at once. */

@@ -148,6 +148,11 @@ curl -s https://api.easalpha.com/api/v1/health
   (503) until `PADDLE_WEBHOOK_SECRET` is in `.env` (Paddle, Notifications, the endpoint's secret), and checks the signature
   and a five-minute freshness window on every event.
 - **Errors**: set `SENTRY_DSN` in `.env` (a free sentry.io project) and the API reports exceptions there; blank means off.
+- **Cache**: production uses Rails' file store. Solid Cache is configured (`config/cache.yml`, the `cache` database in
+  `database.yml`) but off: the 29 Oct 2026 deploy that switched it on failed because the server's cache database existed
+  empty (earlier `db:prepare` runs created it before the store used it, so its schema was never loaded). To switch it on:
+  `docker compose exec api bin/rails db:schema:load:cache` once on the server, set `config.cache_store = :solid_cache_store`
+  in `config/environments/production.rb`, deploy, and watch `GET /api/v1/health` (Rack::Attack reads the cache on every request).
 - **Email**: the API sends a welcome email at signup and scheduled reports only when `SMTP_ADDRESS` is set in `.env`
   (with `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM`). Create an account at a transactional provider (Resend, Postmark,
   Brevo or Amazon SES), verify the easalpha.com domain there (two DNS records they show you), paste the SMTP values and

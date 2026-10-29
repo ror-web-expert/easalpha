@@ -4,11 +4,13 @@
 module BusinessModules
   module_function
 
-  KEYS = { "customer_accounts" => "modules.customer_accounts", "payroll" => "modules.payroll" }.freeze
-  LABELS = { "customer_accounts" => "Customer accounts", "payroll" => "Payroll and wages" }.freeze
+  KEYS = { "customer_accounts" => "modules.customer_accounts", "payroll" => "modules.payroll", "canteen" => "modules.canteen" }.freeze
+  LABELS = { "customer_accounts" => "Customer accounts", "payroll" => "Payroll and wages", "canteen" => "Canteen" }.freeze
 
+  # The canteen puts every meal on the worker's account, so switching it on brings customer accounts with it.
   def on?(business, name)
     return false unless business
+    return true if name.to_s == "customer_accounts" && business.setting("modules.canteen") == true
     business.setting(KEYS.fetch(name.to_s)) == true
   end
 

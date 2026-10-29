@@ -38,7 +38,7 @@ function areaFromPath(): AuthArea {
   if (typeof window === "undefined") return "none";
   const p = window.location.pathname;
   if (p.startsWith("/pos")) return "pos";
-  if (p.startsWith("/kitchen") || p.startsWith("/token") || p.startsWith("/queue")) {
+  if (p.startsWith("/kitchen") || p.startsWith("/token") || p.startsWith("/queue") || p.startsWith("/canteen")) {
     const d = useDeviceStore.getState();
     if (d.session?.access_token || d.deviceToken) return "pos";
     return "admin";

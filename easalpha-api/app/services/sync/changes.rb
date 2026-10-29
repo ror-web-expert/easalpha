@@ -29,8 +29,10 @@ module Sync
         # The whole (short) list every time, like quick_add_items: the till replaces its copy.
         regular_discount_tiers: RegularDiscountTier.active.order(:within_days).map { |t| MarketingSerializers.tier(t) },
         staff: staff_payload(branch, device, since),
-        settings: Setting.for_clients(Current.business, branch: branch), settings_version: Current.business.settings_version, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now))
-      }
+        settings: Setting.for_clients(Current.business, branch: branch), settings_version: Current.business.settings_version, day_locked: DayClose.locked?(branch.id, branch.business_day_for(now)),
+        # A canteen kiosk keeps the sessions, today's plans, the workers and today's claims for the counter without internet.
+        canteen: (device&.kind == "kiosk" && BusinessModules.on?(Current.business, "canteen") ? Canteen::Sync.payload(branch) : nil)
+      }.compact
     end
 
     def staff_payload(branch, device, since)

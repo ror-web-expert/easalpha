@@ -4,12 +4,12 @@ import type { Device } from "@/lib/types";
  * "Set up this device": one app for every machine. A manager signs in once on the machine, picks what it is, and from
  * then on the machine opens only that screen. These helpers are pure so the choices can be unit tested.
  */
-export type DeviceRole = "till" | "tablet" | "kitchen" | "token" | "queue" | "rider";
+export type DeviceRole = "till" | "tablet" | "kitchen" | "token" | "queue" | "rider" | "canteen" | "counter";
 
 export interface RoleOption {
   role: DeviceRole;
   /** The Device.kind the API stores. */
-  kind: "till" | "tablet" | "kitchen" | "token_screen" | "rider";
+  kind: "till" | "tablet" | "kitchen" | "token_screen" | "rider" | "kiosk";
   title: string;
   text: string;
   /** Where the machine goes once it is set up. */
@@ -28,6 +28,8 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { role: "token", kind: "token_screen", title: "Token screen", text: "Faces the pickup counter and shows which orders are ready.", screen: "/token", store: "device", login: false, namePrefix: "Token screen" },
   { role: "queue", kind: "token_screen", title: "Queue screen", text: "Shows customers what is preparing and what is ready.", screen: "/queue", store: "device", login: false, namePrefix: "Queue screen" },
   { role: "rider", kind: "rider", title: "Rider phone", text: "The rider's deliveries and status. Riders sign in with a PIN.", screen: "/rider/pin", store: "rider", login: true, namePrefix: "Rider phone" },
+  { role: "canteen", kind: "kiosk", title: "Canteen kiosk", text: "Workers scan a finger, pick a dish and get a token. Needs the Canteen module.", screen: "/canteen", store: "device", login: false, namePrefix: "Kiosk" },
+  { role: "counter", kind: "kiosk", title: "Canteen counter", text: "Shows the tokens waiting; tap one when the meal is handed over.", screen: "/canteen/serve", store: "device", login: false, namePrefix: "Counter" },
 ];
 
 export const SCREEN_CHOICE_KEY = "easalpha.setup.screen";
@@ -63,6 +65,8 @@ export function existingScreen(input: { deviceKind: string | null; riderPaired: 
       return "/kitchen";
     case "token_screen":
       return input.screenChoice === "/queue" ? "/queue" : "/token";
+    case "kiosk":
+      return input.screenChoice === "/canteen/serve" ? "/canteen/serve" : "/canteen";
     default:
       return null;
   }

@@ -2,7 +2,7 @@ module Sync
   # Applies a till's offline queue in order. Every record carries the UUID the device made; repeats are duplicates, never double writes.
   # records: [{ type, id, membership_id?, payload }]
   class Push
-    TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement].freeze
+    TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement meal_claim].freeze
     CHARGE_KEYS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent].freeze
 
     def initialize(device:, branch:, actor:)
@@ -24,7 +24,7 @@ module Sync
       return reject(record, batch, "sync.type", "Unknown record type #{type}") unless TYPES.include?(type)
       return reject(record, batch, "sync.id", "Record id must be a UUID") unless id.match?(/\A[0-9a-f-]{36}\z/i)
       actor = actor_for(record)
-      return reject(record, batch, "sync.member", "Staff member is not active at this branch") unless actor
+      return reject(record, batch, "sync.member", "Staff member is not active at this branch") unless actor || type == "meal_claim" # a kiosk has no cashier
       status = send("apply_#{type}", id, payload, actor)
       { id: id, type: type, status: status }
     rescue Api::Errors::ApiError => e
@@ -145,6 +145,15 @@ module Sync
       shift = Shift.find(id)
       return "duplicate" unless shift.open?
       Shifts::Manager.close!(shift, counted_cash_minor: payload[:counted_cash_minor].to_i, count_detail: payload[:count_detail].to_h, by: actor, note: payload[:note])
+      "accepted"
+    end
+
+    # A meal taken at a kiosk while it was offline. The same id again is a duplicate; a second helping is refused with
+    # canteen.already_taken, which the kiosk shows in its attention list.
+    def apply_meal_claim(id, payload, actor)
+      return "duplicate" if MealClaim.exists?(id: id)
+      Canteen::Claims.claim!(branch: @branch, device: @device, actor: actor, id: id, fingerprint_id: payload[:fingerprint_id], employee_id: payload[:employee_id], meal_plan_item_id: payload[:meal_plan_item_id],
+                             meal_session_id: payload[:meal_session_id], token_label: payload[:token_label], source: payload[:source], client_created_at: payload[:client_created_at])
       "accepted"
     end
 

@@ -32,6 +32,11 @@ module Payroll
         absence = (BigDecimal(e.base_salary_minor.to_s) / divisor * absence_days).round
         overtime = rule.overtime_enabled ? (BigDecimal(att[:overtime_minutes].to_s) / 60 * rule.overtime_rate_minor_per_hour).round : 0
         comps = e.employee_salary_components.includes(:salary_component).map { |c| { name: c.salary_component.name, kind: c.salary_component.kind, amount_minor: c.amount_for(base) } }
+        # Canteen: the month's meals come off the salary; pay! then settles the worker's account (Canteen::Payroll).
+        if Canteen::Payroll.enabled?
+          meals = Canteen::Payroll.for(e, from: from, to: to)
+          comps << { name: "Canteen meals (#{meals[:meals]})", kind: "deduction", amount_minor: meals[:amount_minor], canteen: true } if meals[:amount_minor].positive?
+        end
         earnings = comps.select { |c| c[:kind] == "earning" }.sum { |c| c[:amount_minor] }
         deductions = comps.select { |c| c[:kind] == "deduction" }.sum { |c| c[:amount_minor] }
         commission = e.membership_id ? (commissions[e.membership_id] || []).sum { |r| r[:commission_minor] } : 0
@@ -66,6 +71,7 @@ module Payroll
           next if p.net_minor <= 0
           e = Expenses::Recorder.create!({ category_id: category.id, amount_minor: p.net_minor, method_code: method_code, paid_to: p.employee.name, note: "Salary #{run.label}", spent_on: Date.current.to_s }, actor: actor, branch: branch, source: "payroll_sync")
           p.update!(paid_at: Time.current, expense_id: e.id, payment_account_id: e.payment_account_id)
+          Canteen::Payroll.settle!(p, actor: actor, branch: branch) if Canteen::Payroll.enabled?
           Array(p.detail["advances"]).each do |ad|
             a = Advance.find_by(employee_id: p.employee_id, number: ad["advance"].to_s.delete_prefix("ADV-").to_i) or next
             a.update!(outstanding_minor: a.outstanding_minor - ad["taken_minor"].to_i, status: a.outstanding_minor - ad["taken_minor"].to_i <= 0 ? "repaid" : "paid")

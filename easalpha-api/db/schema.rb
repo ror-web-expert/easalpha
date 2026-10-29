@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -790,7 +790,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
     t.datetime "fingerprint_enrolled_at"
     t.datetime "fingerprint_revoked_at"
     t.boolean "whatsapp_notify", default: true, null: false
+    t.uuid "customer_id"
     t.index ["branch_id"], name: "index_employees_on_branch_id"
+    t.index ["business_id", "customer_id"], name: "index_employees_on_business_id_and_customer_id", unique: true, where: "(customer_id IS NOT NULL)"
     t.index ["business_id", "fingerprint_id"], name: "index_employees_on_business_id_and_fingerprint_id", unique: true, where: "(fingerprint_id IS NOT NULL)"
     t.index ["business_id", "membership_id"], name: "index_employees_on_business_id_and_membership_id", unique: true, where: "(membership_id IS NOT NULL)"
     t.index ["business_id"], name: "index_employees_on_business_id"
@@ -1136,6 +1138,96 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
     t.check_constraint "kind::text = ANY (ARRAY['earn'::character varying, 'redeem'::character varying, 'adjust'::character varying, 'expire'::character varying, 'refund'::character varying]::text[])", name: "loyalty_transactions_kind_check"
   end
 
+  create_table "meal_claims", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id", null: false
+    t.uuid "meal_session_id", null: false
+    t.uuid "meal_plan_id", null: false
+    t.uuid "meal_plan_item_id", null: false
+    t.uuid "employee_id", null: false
+    t.uuid "customer_id"
+    t.uuid "order_id"
+    t.date "plan_date", null: false
+    t.integer "token_no", null: false
+    t.string "token_label", null: false
+    t.string "status", default: "claimed", null: false
+    t.datetime "scanned_at", null: false
+    t.datetime "served_at"
+    t.uuid "served_by_membership_id"
+    t.datetime "cancelled_at"
+    t.uuid "cancelled_by_membership_id"
+    t.text "cancel_reason"
+    t.uuid "device_id"
+    t.string "source", default: "fingerprint", null: false
+    t.string "fingerprint_id"
+    t.bigint "worker_price_minor", default: 0, null: false
+    t.bigint "company_share_minor", default: 0, null: false
+    t.datetime "client_created_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["branch_id", "plan_date", "meal_session_id", "token_no"], name: "index_meal_claims_token", unique: true
+    t.index ["branch_id"], name: "index_meal_claims_on_branch_id"
+    t.index ["business_id", "employee_id", "plan_date", "meal_session_id"], name: "index_meal_claims_one_per_session", unique: true, where: "((status)::text <> 'cancelled'::text)"
+    t.index ["business_id", "plan_date", "status"], name: "index_meal_claims_on_business_id_and_plan_date_and_status"
+    t.index ["business_id"], name: "index_meal_claims_on_business_id"
+    t.index ["employee_id"], name: "index_meal_claims_on_employee_id"
+    t.index ["meal_plan_id"], name: "index_meal_claims_on_meal_plan_id"
+    t.index ["meal_plan_item_id"], name: "index_meal_claims_on_meal_plan_item_id"
+    t.index ["meal_session_id"], name: "index_meal_claims_on_meal_session_id"
+    t.index ["order_id"], name: "index_meal_claims_on_order_id"
+    t.check_constraint "source::text = ANY (ARRAY['fingerprint'::character varying, 'card'::character varying, 'manual'::character varying, 'code'::character varying]::text[])", name: "meal_claims_source_check"
+    t.check_constraint "status::text = ANY (ARRAY['claimed'::character varying, 'served'::character varying, 'cancelled'::character varying]::text[])", name: "meal_claims_status_check"
+  end
+
+  create_table "meal_plan_items", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "meal_plan_id", null: false
+    t.uuid "product_id", null: false
+    t.integer "planned_qty"
+    t.bigint "worker_price_minor"
+    t.integer "claims_count", default: 0, null: false
+    t.integer "sort_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_meal_plan_items_on_business_id"
+    t.index ["meal_plan_id", "product_id"], name: "index_meal_plan_items_on_meal_plan_id_and_product_id", unique: true
+    t.index ["meal_plan_id"], name: "index_meal_plan_items_on_meal_plan_id"
+    t.index ["product_id"], name: "index_meal_plan_items_on_product_id"
+  end
+
+  create_table "meal_plans", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id", null: false
+    t.uuid "meal_session_id", null: false
+    t.date "plan_date", null: false
+    t.string "status", default: "draft", null: false
+    t.text "notes"
+    t.datetime "published_at"
+    t.uuid "created_by_membership_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["branch_id"], name: "index_meal_plans_on_branch_id"
+    t.index ["business_id", "branch_id", "meal_session_id", "plan_date"], name: "index_meal_plans_one_per_session_day", unique: true
+    t.index ["business_id"], name: "index_meal_plans_on_business_id"
+    t.index ["meal_session_id"], name: "index_meal_plans_on_meal_session_id"
+    t.check_constraint "status::text = ANY (ARRAY['draft'::character varying, 'published'::character varying, 'closed'::character varying]::text[])", name: "meal_plans_status_check"
+  end
+
+  create_table "meal_sessions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "branch_id", null: false
+    t.string "name", null: false
+    t.time "starts_at", null: false
+    t.time "ends_at", null: false
+    t.integer "max_claims", default: 1, null: false
+    t.boolean "active", default: true, null: false
+    t.integer "sort_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["branch_id"], name: "index_meal_sessions_on_branch_id"
+    t.index ["business_id"], name: "index_meal_sessions_on_business_id"
+  end
+
   create_table "memberships", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "user_id", null: false
@@ -1359,7 +1451,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
     t.bigint "service_charge_minor", default: 0, null: false
     t.bigint "tax_minor", default: 0, null: false
     t.bigint "rounding_minor", default: 0, null: false
-    t.bigint "cash_rounding_minor", default: 0, null: false
     t.bigint "tip_minor", default: 0, null: false
     t.bigint "delivery_charge_minor", default: 0, null: false
     t.bigint "total_minor", default: 0, null: false
@@ -1396,6 +1487,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
     t.decimal "delivery_charge_percent", precision: 5, scale: 2, default: "0.0", null: false
     t.string "tax_choice"
     t.uuid "tax_rate_id"
+    t.bigint "cash_rounding_minor", default: 0, null: false
     t.index ["branch_id", "business_day", "serial"], name: "index_orders_on_branch_id_and_business_day_and_serial", unique: true, where: "(serial IS NOT NULL)"
     t.index ["branch_id", "qr_status"], name: "index_orders_on_branch_id_and_qr_status", where: "(qr_status IS NOT NULL)"
     t.index ["branch_id", "scheduled_for"], name: "index_orders_on_branch_id_and_scheduled_for", where: "(scheduled_for IS NOT NULL)"
@@ -1488,6 +1580,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "catalogue_code"
+    t.boolean "internal", default: false, null: false
     t.index ["business_id", "code"], name: "index_payment_methods_on_business_id_and_code", unique: true
     t.index ["business_id"], name: "index_payment_methods_on_business_id"
     t.index ["payment_account_id"], name: "index_payment_methods_on_payment_account_id"
@@ -3060,6 +3153,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
   add_foreign_key "employee_salary_components", "salary_components"
   add_foreign_key "employees", "branches"
   add_foreign_key "employees", "businesses"
+  add_foreign_key "employees", "customers"
   add_foreign_key "employees", "departments"
   add_foreign_key "employees", "memberships"
   add_foreign_key "expense_categories", "businesses"
@@ -3099,6 +3193,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_040000) do
   add_foreign_key "loyalty_transactions", "businesses"
   add_foreign_key "loyalty_transactions", "customers"
   add_foreign_key "loyalty_transactions", "orders"
+  add_foreign_key "meal_claims", "branches"
+  add_foreign_key "meal_claims", "businesses"
+  add_foreign_key "meal_claims", "employees"
+  add_foreign_key "meal_claims", "meal_plan_items"
+  add_foreign_key "meal_claims", "meal_plans"
+  add_foreign_key "meal_claims", "meal_sessions"
+  add_foreign_key "meal_plan_items", "businesses"
+  add_foreign_key "meal_plan_items", "meal_plans"
+  add_foreign_key "meal_plan_items", "products"
+  add_foreign_key "meal_plans", "branches"
+  add_foreign_key "meal_plans", "businesses"
+  add_foreign_key "meal_plans", "meal_sessions"
+  add_foreign_key "meal_sessions", "branches"
+  add_foreign_key "meal_sessions", "businesses"
   add_foreign_key "memberships", "businesses"
   add_foreign_key "memberships", "roles"
   add_foreign_key "memberships", "users"
