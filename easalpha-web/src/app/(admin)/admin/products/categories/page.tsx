@@ -49,7 +49,7 @@ export default function CategoriesPage() {
       </TD>
       <TD className="text-fg-secondary">{menus.data?.find((m) => m.id === c.menu_id)?.name ?? "-"}</TD>
       <TD className="text-fg-secondary">{stations.data?.find((s) => s.id === c.station_id)?.name ?? "-"}</TD>
-      <TD>{c.show_online ? <Badge variant="success">online</Badge> : <Badge>hidden</Badge>}</TD>
+      <TD>{c.show_online ? <Badge variant="success">Online</Badge> : <Badge>Till only</Badge>}</TD>
       <TD right>{c.product_count ?? 0}</TD>
       <TD right className="whitespace-nowrap">
         <Button variant="ghost" size="icon-sm" onClick={() => move(i, -1)} disabled={i === 0 || reorder.isPending} aria-label="Move up"><ArrowUp className="h-4 w-4" /></Button>

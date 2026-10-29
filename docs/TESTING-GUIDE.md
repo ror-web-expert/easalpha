@@ -78,3 +78,13 @@ Scripts: `node scripts/manual-api-check.mjs <folder>` walks every new API flow o
 8. Payroll: Admin, Payroll, Run Payroll for the month: each worker's payslip carries "Canteen meals (n)"; paying the run clears the worker's account.
 
 Scripted: `node scripts/canteen-walkthrough.mjs` runs all of this in a browser and leaves screenshots in `tmp/canteen-shots/`.
+
+## Catalog grid and Product Analysis (30 Oct 2026)
+
+1. Admin, Products, Catalog opens as a grid of photo tiles with category chips across the top. Pick a category: its banner and count appear and the tiles filter. Tap Favourites: only starred products. The Grid/List switch is at the right of the filter bar; the choice is remembered.
+2. A product without a photo shows a coloured tile with its initials, never a grey icon. Inactive products are grey with an Inactive badge; a discount shows as an orange badge on the photo.
+3. Products with a recipe show a margin badge (green on target, amber when the food cost is over the target in Inventory Settings, red when a serving loses money). Products without a recipe show none.
+4. Every tile and list row has three buttons: analysis (trend icon), edit (pencil) and archive (bin, red). Archive asks first; the product leaves the till on the next sync and past orders keep it. Tick Include inactive to find it again.
+5. The trend icon on a tile (or on the product page's Analysis button) opens Product Analysis: selling price, ingredient cost, profit and margin, the ingredient list with its share of the cost, and a row per order type. Give the product a delivery box on the Order Inventory tab and the Delivery row's total cost rises by the box while Dine-in does not. A tax-inclusive rate shows the price before tax under the selling price.
+6. A product with variants shows one tab per variant in the analysis; a variant without its own recipe uses the product's shared one.
+

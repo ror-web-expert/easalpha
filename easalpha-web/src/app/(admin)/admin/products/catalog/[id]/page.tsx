@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Package, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Package, Plus, Sparkles, Trash2, TrendingUp } from "lucide-react";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { Category, DiscountType, ModifierGroup, Product, Station, TaxRate } from "@/lib/types";
 import { FORMAT_LABELS, barcodeFormat, looksLikeBadEan } from "@/lib/barcode";
@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/admin/page";
 import { useList, useRemove, useSave } from "@/components/admin/crud";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { ConsumablesTab } from "@/components/admin/catalog-consumables";
+import { ProductAnalysisDialog } from "@/components/admin/product-analysis";
 import { IngredientsTab } from "@/components/admin/catalog-ingredients";
 import { discountLabel, discountPayload, discountProblem, discountedPriceMinor } from "@/components/admin/catalog-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, ConfirmDialog, Field, Input, Loading, MoneyInput, Select, Tabs, Textarea } from "@/components/ui";
@@ -94,6 +95,7 @@ export default function ProductEditPage() {
   const [tab, setTab] = useState<Tab>("basic");
   const [form, setForm] = useState<Form>(blank);
   const [del, setDel] = useState(false);
+  const [analyse, setAnalyse] = useState(false);
   const [barcodeError, setBarcodeError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   useEffect(() => {
@@ -145,6 +147,7 @@ export default function ProductEditPage() {
     <>
       <PageHeader icon={Package} title={isNew ? "New product" : form.name || "Product"} description="Basic Info holds price, discount and variants; Ingredients the recipe per variant; Order Inventory the supplies deducted by order type." actions={<>
         <Link href="/admin/products/catalog"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Catalog</Button></Link>
+        {!isNew ? <Button variant="secondary" onClick={() => setAnalyse(true)}><TrendingUp className="h-4 w-4" /> Analysis</Button> : null}
         {!isNew ? <Button variant="destructive" onClick={() => setDel(true)}><Trash2 className="h-4 w-4" /> Archive</Button> : null}
         {tab === "basic" ? <Button onClick={submit} loading={save.isPending} disabled={!canSave}>Save</Button> : null}
       </>} />
@@ -269,6 +272,7 @@ export default function ProductEditPage() {
       ) : null}
 
       {!isNew && product && tab !== "basic" && form.variants.length !== savedVariants.length ? <p className="mt-3 text-xs text-fg-muted"><Badge variant="warning">Unsaved variants</Badge> Variants added on Basic Info appear here once saved.</p> : null}
+      <ProductAnalysisDialog productId={isNew ? null : id} open={analyse} onClose={() => setAnalyse(false)} />
       <ConfirmDialog open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate(id, { onSuccess: () => router.replace("/admin/products/catalog") })} title={`Archive ${form.name}?`} description="It leaves the till on the next sync; past orders keep it." confirmLabel="Archive" destructive loading={remove.isPending} />
     </>
   );

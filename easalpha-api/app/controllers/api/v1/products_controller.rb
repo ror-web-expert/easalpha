@@ -1,24 +1,32 @@
 module Api
   module V1
     class ProductsController < BaseController
-      before_action -> { require_permission!("menu.view", "menu.edit") }, only: %i[index show barcodes]
+      before_action -> { require_permission!("menu.view", "menu.edit") }, only: %i[index show barcodes analysis]
       before_action -> { require_permission!("menu.view", "menu.edit", "orders.create") }, only: %i[barcode_lookup]
       before_action -> { require_permission!("orders.create", "menu.edit") }, only: %i[add_barcode]
-      before_action -> { require_permission!("menu.edit") }, except: %i[index show barcodes barcode_lookup add_barcode]
-      before_action :read_only_guard!, except: %i[index show barcodes barcode_lookup]
+      before_action -> { require_permission!("menu.edit") }, except: %i[index show barcodes barcode_lookup add_barcode analysis]
+      before_action :read_only_guard!, except: %i[index show barcodes barcode_lookup analysis]
 
       def index
-        scope = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups, :barcodes).order(:sort_order, :name)
+        scope = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups, :barcodes, :tax_rate).order(:sort_order, :name)
         scope = scope.where(category_id: params[:category_id]) if params[:category_id].present?
         scope = scope.where(is_favourite: true) if params[:favourites] == "true"
         scope = scope.where(active: true) unless params[:include_inactive] == "true"
         scope = scope.where("products.name ILIKE :q OR products.sku ILIKE :q OR products.name_ur ILIKE :q OR products.id IN (SELECT product_id FROM product_barcodes WHERE code = :code)", q: "%#{params[:q]}%", code: params[:q].to_s.strip) if params[:q].present?
         rows, cursor = paginate(scope)
-        render_page(rows, cursor) { |p| MenuSerializers.product(p, full: true) }
+        costs = Catalog::Analysis.costs_for(rows)
+        render_page(rows, cursor) { |p| MenuSerializers.product(p, full: true, costs: costs) }
       end
 
       def show
-        render json: MenuSerializers.product(Product.includes(:variants, :product_prices, :product_modifier_groups, :barcodes).find(params[:id]), full: true)
+        product = Product.includes(:variants, :product_prices, :product_modifier_groups, :barcodes, :tax_rate).find(params[:id])
+        render json: MenuSerializers.product(product, full: true, costs: Catalog::Analysis.costs_for([ product ]))
+      end
+
+      # GET /products/:id/analysis  Product Analysis: price, ingredient cost, profit and margin per variant and per order type
+      def analysis
+        product = Product.includes(:variants, :product_prices, :tax_rate).find(params[:id])
+        render json: Catalog::Analysis.for_product(product, branch_id: current_branch&.id)
       end
 
       def create

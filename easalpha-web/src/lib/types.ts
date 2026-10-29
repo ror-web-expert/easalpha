@@ -154,8 +154,21 @@ export interface Product {
   discount_value?: string | null; discount_type?: DiscountType | null;
   /** SPEC: PCT code for PRA e-IMS tax reporting. */
   pct_code?: string | null;
+  /** The margin badge on the catalogue, from the recipe at average costs; null = no recipe yet. */
+  cost?: ProductCost | null;
 }
 export type DiscountType = "percent" | "amount";
+export interface ProductCost { cost_minor: number; margin_percent: number | null; food_cost_percent: number | null; over_target: boolean; variant_name: string | null }
+/** Product Analysis figures for one price: the recipe cost plus the order type's consumables, profit and margin before tax. */
+export interface AnalysisFigures {
+  price_minor: number; price_ex_tax_minor: number; ingredient_cost_minor: number | null; extra_cost_minor: number; total_cost_minor: number | null;
+  profit_minor: number | null; margin_percent: number | null; food_cost_percent: number | null; over_target: boolean;
+}
+export interface AnalysisLine { item_name: string; quantity: string; unit_code: string; cost_minor: number; waste_percent?: number }
+export interface AnalysisOrderType extends AnalysisFigures { order_type: string; consumables: AnalysisLine[] }
+export interface AnalysisBlock extends AnalysisFigures { variant_id: ID | null; name: string; recipe: { id: ID; name: string; yield_qty: string } | null; lines: AnalysisLine[]; order_types: AnalysisOrderType[] }
+/** GET /products/:id/analysis: one block per variant (or the base product), each with a row per order type. */
+export interface ProductAnalysis { product: { id: ID; name: string; image_key: string | null; category_id: ID; base_price_minor: number }; target_percent: number; variants: AnalysisBlock[] }
 export interface ProductBarcode { id?: ID; code: string; variant_id: ID | null; quantity: string; /** product form only: names a size created in the same save */ variant_name?: string }
 /** GET /products/barcodes and /products/barcode_lookup */
 export type BarcodeFormat = "ean13" | "upca" | "ean8" | "code128" | "qr";

@@ -15,10 +15,13 @@ module Recipes
 
     # Selling price before tax for a product or variant, using the base price.
     def price_ex_tax_minor(product, variant = nil)
-      price = variant ? variant.price_minor : product.base_price_minor
-      tax = product.tax_rate
-      return price unless tax&.inclusive
-      (price / (1 + tax.rate.to_d / 100)).round
+      ex_tax_minor(variant ? variant.price_minor : product.base_price_minor, product.tax_rate)
+    end
+
+    # A price before tax: a tax-inclusive rate is taken out of it, an added-on rate leaves it as it is.
+    def ex_tax_minor(price, tax_rate)
+      return price unless tax_rate&.inclusive
+      (price / (1 + tax_rate.rate.to_d / 100)).round
     end
 
     def food_cost(recipe)

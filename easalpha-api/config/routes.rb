@@ -69,6 +69,7 @@ Rails.application.routes.draw do
       put "products/codes", to: "products#set_codes"
       resources :products, only: %i[index show create update destroy] do
         member do
+          get :analysis
           get :consumables
           put :consumables, action: :set_consumables
         end

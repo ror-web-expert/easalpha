@@ -19,7 +19,8 @@ module MenuSerializers
       show_online: c.show_online, station_id: c.station_id, product_count: product_count, archived_at: c.archived_at }
   end
 
-  def product(p, full: false)
+  # costs: Catalog::Analysis.costs_for, so the catalogue can show a margin badge (null = no recipe).
+  def product(p, full: false, costs: nil)
     h = { id: p.id, category_id: p.category_id, name: p.name, name_ur: p.name_ur, description: p.description, sku: p.sku, image_key: p.image_key,
           base_price_minor: p.base_price_minor, tax_rate_id: p.tax_rate_id, is_favourite: p.is_favourite, show_online: p.show_online, active: p.active,
           sold_by_weight: p.sold_by_weight, weight_unit: p.weight_unit, allergens: p.allergens, dietary_tags: p.dietary_tags, station_id: p.station_id,
@@ -30,6 +31,7 @@ module MenuSerializers
       h[:prices] = p.product_prices.map { |pp| { id: pp.id, variant_id: pp.variant_id, branch_id: pp.branch_id, order_type: pp.order_type, price_minor: pp.price_minor } }
       h[:modifier_group_ids] = p.product_modifier_groups.map(&:modifier_group_id)
       h[:barcodes] = p.barcodes.map { |b| barcode(b) }
+      h[:cost] = costs[p.id] if costs
     end
     h
   end
