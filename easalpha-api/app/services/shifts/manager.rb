@@ -28,6 +28,8 @@ module Shifts
       open_orders = Order.open.where(shift_id: shift.id).where.not(status: %w[draft held])
       raise Api::Errors::Conflict.new("shift.open_orders", "#{open_orders.count} order(s) are still open. Pay, void or hand them over first.") if open_orders.exists? && !force
       Shift.transaction do
+        shift.lock!
+        raise Api::Errors::Conflict.new("shift.closed", "Shift is already closed") unless shift.open?
         expected = shift.expected_cash
         over_short = counted_cash_minor - expected
         shift.update!(status: force ? "force_closed" : "closed", closed_at: Time.current, expected_cash_minor: expected, counted_cash_minor: counted_cash_minor,
@@ -43,7 +45,9 @@ module Shifts
     def settle!(shift, by:)
       raise Api::Errors::Conflict.new("shift.open", "Close the shift before settling") if shift.open?
       Shift.transaction do
-        drawer = shift.drawer_account
+        shift.lock!
+        raise Api::Errors::Conflict.new("shift.settled", "This shift is already settled") if shift.settlement_status == "settled"
+        drawer = shift.drawer_account&.lock!
         company_cash = PaymentAccount.active.company.find_by(kind: "cash", is_default: true) || PaymentAccount.active.company.find_by(kind: "cash")
         drawer_amount = drawer&.current_balance_minor
         if drawer && drawer.current_balance_minor != 0

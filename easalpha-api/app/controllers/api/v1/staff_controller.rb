@@ -113,6 +113,7 @@ module Api
           elsif params[:preset].present? then PermissionPreset.codes_for(params[:preset])
           else Array(params.require(:codes))
           end
+          guard_escalation!(codes)
           m.set_permissions!(codes, granted_by: current_user)
         end
         after = permissions_payload(m.reload)

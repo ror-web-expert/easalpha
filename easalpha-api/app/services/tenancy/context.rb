@@ -17,7 +17,12 @@ module Tenancy
     ensure
       # Nested use (a login that reads another business's settings) hands the connection back to the outer business.
       outer = previous && previous[:business]
-      outer ? EasAlpha::Rls.set_business!(ActiveRecord::Base.connection, outer.id) : EasAlpha::Rls.reset!(ActiveRecord::Base.connection)
+      if outer
+        EasAlpha::Rls.set_business!(ActiveRecord::Base.connection, outer.id)
+      else
+        # Back to the enclosing unscoped block (bypass on) or to no context at all (nothing visible).
+        previous && previous[:allow_unscoped] ? EasAlpha::Rls.bypass!(ActiveRecord::Base.connection, true) : EasAlpha::Rls.reset!(ActiveRecord::Base.connection)
+      end
       Current.attributes = previous
     end
 
@@ -33,9 +38,11 @@ module Tenancy
     def unscoped
       previous = Current.allow_unscoped
       Current.allow_unscoped = true
+      EasAlpha::Rls.bypass!(ActiveRecord::Base.connection, true) unless Current.business_id
       yield
     ensure
       Current.allow_unscoped = previous
+      EasAlpha::Rls.bypass!(ActiveRecord::Base.connection, previous ? true : false) unless Current.business_id
     end
   end
 end

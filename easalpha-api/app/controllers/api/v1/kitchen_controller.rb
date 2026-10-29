@@ -72,7 +72,12 @@ module Api
       private
 
       def require_kitchen!
-        return if current_device&.paired? && current_device.kind.in?(%w[kitchen till tablet token_screen])
+        if current_device&.paired?
+          return if current_device.kind.in?(%w[kitchen till tablet])
+          # A token or queue screen faces the customers: it reads what is ready and never bumps.
+          return if current_device.kind == "token_screen" && action_name.in?(%w[ready queue])
+          raise Api::Errors::Forbidden.new("permission.denied", "This screen can only read the ready list") if current_device.kind == "token_screen"
+        end
         require_permission!("kitchen.view", "kitchen.bump", "orders.create")
         raise Api::Errors::Forbidden.new("permission.denied", "Bumping needs kitchen.bump") if action_name.in?(%w[start bump bump_item]) && !current_membership.can?("kitchen.bump") && !current_membership.can?("orders.create")
       end

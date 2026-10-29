@@ -2,6 +2,7 @@ module Api
   module V1
     class SyncController < BaseController
       before_action :require_device!
+      before_action :read_only_guard!, only: :push
 
       # POST /sync/push  records: [...]
       def push
@@ -54,10 +55,24 @@ module Api
 
       private
 
+      TILL_KINDS = %w[till tablet kiosk].freeze
+
+      # Pushing is the till's alone. The catalogue and customer downloads belong to a till too, or to a POS session of
+      # someone who takes orders; a kitchen or rider token gets neither. The needs-attention lists are for managers.
       def require_device!
-        return if current_device&.paired?
-        authenticate!
-        raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired device") if action_name.in?(%w[push])
+        till = current_device&.paired? && current_device.kind.in?(TILL_KINDS)
+        case action_name
+        when "push"
+          raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") unless till
+        when "changes", "customers"
+          return if till
+          raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") if current_device&.paired? # a kitchen screen or rider phone
+          authenticate!
+          pos_session = @claims[:app].to_s == "pos" && %w[orders.create customers.view].any? { |c| current_membership.can?(c) }
+          raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") unless pos_session
+        else
+          require_permission!("settings.manage", "devices.manage", "reports.view_all", "reports.view_branch")
+        end
       end
     end
   end

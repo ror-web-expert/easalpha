@@ -4,6 +4,7 @@ module Api
     class StockController < BaseController
       before_action :authenticate!
       before_action -> { require_permission!("stock.view", "stock.actions", "stock.count", "reports.view_all") }
+      before_action :read_only_guard!, only: %i[reset rebuild_balances retry_deduction safety_net_run]
 
       def levels
         render json: Reports::Stock.levels(section_id: params[:section_id], q: params[:q], low_only: params[:low] == "true")

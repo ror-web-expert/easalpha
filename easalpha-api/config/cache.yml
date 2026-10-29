@@ -1,0 +1,18 @@
+# Solid Cache: the Rails cache in the "cache" database (config/database.yml), shared by the API and the job worker.
+# Rate limits (Rack::Attack), PIN lockouts (Auth::PinThrottle) and report caches live here, so they survive a restart
+# and a deploy, which a per-process file store did not.
+default: &default
+  store_options:
+    max_age: <%= 60.days.to_i %>
+    max_size: <%= 256.megabytes %>
+    namespace: <%= Rails.env %>
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+
+production:
+  database: cache
+  <<: *default

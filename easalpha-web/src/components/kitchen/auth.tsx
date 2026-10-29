@@ -7,6 +7,7 @@ import { api, errorMessage } from "@/lib/api";
 import type { Branch, Business, Device } from "@/lib/types";
 import { Button, Keypad, Loading } from "@/components/ui";
 import { clearTillData } from "@/store/catalog";
+import { confirmDiscardUnsynced } from "@/lib/sync";
 
 /** The kitchen and token screens accept a paired device token or a logged-in admin user. */
 export function useKitchenToken(): { token: string | null; ready: boolean; kind: "device" | "user" | null } {
@@ -37,6 +38,7 @@ export function KitchenGate({ children, title }: { children: React.ReactNode; ti
   if (!ready) return <Loading />;
   if (token) return <>{children}</>;
   const submit = async () => {
+    if (!(await confirmDiscardUnsynced())) return;
     setBusy(true); setError(null);
     try {
       const r = await api<{ device_token: string; device: Device; business: Business; branch: Branch }>("/devices/pair", { method: "POST", auth: "none", body: { pairing_code: code, platform: "web", app_version: "web" } });

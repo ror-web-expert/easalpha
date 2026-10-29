@@ -73,6 +73,8 @@ export interface QueueItem {
   next_at: number;
   last_error: string | null;
   status: "pending" | "sending";
+  /** When the push carrying this row started; a row still "sending" long after that never came back (recoverStuck). */
+  sending_at?: number;
 }
 
 export interface AttentionItem { id: string; type: string; code: string; message: string; payload: Record<string, unknown>; created_at: string }

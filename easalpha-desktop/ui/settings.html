@@ -150,7 +150,8 @@
   function renderServer(s) {
     var el = $("#serverLine");
     if (s.running) {
-      el.innerHTML = '<span class="ok">Running.</span> Tablets print through <span class="status">http://' + s.host + ":" + s.port + "/print</span>";
+      el.innerHTML = '<span class="ok">Running.</span> Tablets print through <span class="status">http://' + s.host + ":" + s.port + "/print</span>" +
+        (s.token ? '<br>Token <span class="status">' + s.token + "</span> &mdash; enter the address, port and token once in Admin, Settings, Print Server." : "");
     } else {
       el.innerHTML = '<span class="bad">Not running.</span> ' + (s.error || "") + " Change the port and save to try again.";
     }

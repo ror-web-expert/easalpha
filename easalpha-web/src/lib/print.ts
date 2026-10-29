@@ -49,12 +49,19 @@ export function isDesktop(): boolean {
 }
 
 /** The print server this device prints through, from the till settings; null when none is configured. */
-export function printServer(settings: BusinessSettings | undefined | null): { ip: string; port: number } | null {
+export function printServer(settings: BusinessSettings | undefined | null): { ip: string; port: number; token?: string } | null {
   const ip = String(settingValue<string | null>(settings, "pos.print_server.ip", null) ?? "").trim();
   if (!ip) return null;
   const raw = Number(settingValue<number | string>(settings, "pos.print_server.port", PRINT_SERVER_PORT));
   const port = !Number.isFinite(raw) || raw <= 0 || raw === 9100 ? PRINT_SERVER_PORT : raw;
-  return { ip, port };
+  const token = String(settingValue<string | null>(settings, "pos.print_server.token", null) ?? "").trim();
+  return token ? { ip, port, token } : { ip, port };
+}
+
+/** Headers for a request to the print server: the install's token when the owner has entered it. */
+export function printServerHeaders(settings: BusinessSettings | undefined | null): Record<string, string> {
+  const token = printServer(settings)?.token;
+  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 export function printServerUrl(settings: BusinessSettings | undefined | null): string | null {
@@ -216,7 +223,7 @@ export async function printJob(job: PrintJob, opts: { settings?: BusinessSetting
   const url = printServerUrl(opts.settings);
   if (url) {
     try {
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(job) });
+      const res = await fetch(url, { method: "POST", headers: printServerHeaders(opts.settings), body: JSON.stringify(job) });
       return res.ok ? { ok: true, via: "server" } : { ok: false, via: "server", error: `Print server replied ${res.status}` };
     } catch (e) { return { ok: false, via: "server", error: `Print server unreachable: ${errText(e)}` }; }
   }

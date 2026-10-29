@@ -2,14 +2,18 @@ module Payments
   # Refunds part or all of a paid order back through a payment method. Manager only.
   class Refunder
     def self.call(order, amount_minor:, method_code:, reason:, actor:, approver: nil, device: nil, shift: nil, id: nil)
-      raise Api::Errors::Conflict.new("refund.not_paid", "Only a paid order can be refunded") unless order.paid_minor.positive?
-      refunded = Refund.where(order_id: order.id).sum(:amount_minor)
-      captured = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor)
-      raise Api::Errors::Conflict.new("refund.too_much", "Refund exceeds what was paid") if amount_minor <= 0 || refunded + amount_minor > captured
       method = PaymentMethod.active.find_by!(code: method_code)
       refund = nil
+      refunded = captured = full = nil
       Order.transaction do
+        # Row lock first: a second refund of the same order waits here, then sees this one and is refused below.
+        order.lock!
         return Refund.find(id) if id && Refund.exists?(id: id)
+        raise Api::Errors::Conflict.new("refund.not_paid", "Only a paid order can be refunded") unless order.paid_minor.positive?
+        raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
+        refunded = Refund.where(order_id: order.id).sum(:amount_minor)
+        captured = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor)
+        raise Api::Errors::Conflict.new("refund.too_much", "Refund exceeds what was paid") if amount_minor <= 0 || refunded + amount_minor > captured
         refund = Refund.create!(id: id, order: order, branch_id: order.branch_id, payment_method: method, payment_account: method.payment_account, amount_minor: amount_minor,
                                 reason: reason, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, shift_id: shift&.id, business_day: order.business_day || Date.current, refunded_at: Time.current)
         account = method.cash? && shift&.drawer_account ? shift.drawer_account : method.payment_account

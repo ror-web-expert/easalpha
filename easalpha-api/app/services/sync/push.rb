@@ -31,6 +31,8 @@ module Sync
       reject(record, batch, e.code, e.message)
     rescue ActiveRecord::RecordNotFound => e
       reject(record, batch, "not_found", e.message)
+    rescue ActiveRecord::RecordNotUnique
+      reject(record, batch, "sync.duplicate_id", "A record with this id already exists")
     rescue ActiveRecord::RecordInvalid => e
       reject(record, batch, "validation_failed", e.record.errors.full_messages.to_sentence)
     end
@@ -43,6 +45,16 @@ module Sync
       return @actor if record[:membership_id].blank? || record[:membership_id] == @actor&.id
       m = Membership.includes(:role, :user).find_by(id: record[:membership_id])
       m if m && (m.active? || m.deactivated_at && record.dig(:payload, :client_created_at) && Time.iso8601(record[:payload][:client_created_at].to_s) < m.deactivated_at) && m.branch_allowed?(@branch.id)
+    end
+
+    # A manager approval made on the till names the approving member. It counts only if that member is active and
+    # holds the permission; a cashier who holds it approves their own action, as online.
+    def approver_for(payload, permission, actor)
+      return nil if actor.can?(permission)
+      id = payload[:approved_by_membership_id].presence || payload[:staff_meal_approved_by_id].presence
+      m = id && Membership.includes(:role, :user).find_by(id: id)
+      raise Api::Errors::Forbidden.new("approval.required", "A manager with #{permission} must approve this") unless m&.active? && m.can?(permission)
+      m
     end
 
     def reject(record, batch, code, message)
@@ -65,13 +77,14 @@ module Sync
       attrs[:id] = id
       attrs[:source] ||= "till"
       attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
+      attrs[:staff_meal_approved_by_id] = (approver_for(payload, "orders.staff_meal", actor) || actor).id if attrs[:is_staff_meal]
       day = @branch.business_day_for(attrs[:client_created_at].present? ? Time.iso8601(attrs[:client_created_at].to_s) : Time.current)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
       builder = Orders::Builder.create!(attrs, lines: Array(payload[:lines]).map(&:to_h), actor: actor, device: @device, branch: @branch, approvals: {})
       order = builder.order
       Orders::Transitions.place!(order, actor: actor, device: @device) if payload[:status].to_s != "draft" && payload[:status].present?
       if payload[:voided].present? || payload[:status].to_s == "voided"
-        Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: nil, device: @device)
+        Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for(payload, "orders.void", actor), device: @device)
       elsif payload[:payments].present?
         Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
       end
@@ -109,7 +122,7 @@ module Sync
     def apply_refund(id, payload, actor)
       return "duplicate" if Refund.exists?(id: id)
       order = Order.find(need(payload, :order_id))
-      approver = payload[:approved_by_membership_id].present? ? Membership.find_by(id: payload[:approved_by_membership_id]) : nil
+      approver = approver_for(payload, "orders.refund", actor)
       Payments::Refunder.call(order, amount_minor: payload[:amount_minor].to_i, method_code: payload[:method_code], reason: payload[:reason].to_s, actor: actor, approver: approver, device: @device, id: id)
       "accepted"
     end
@@ -117,7 +130,7 @@ module Sync
     def apply_void(id, payload, actor)
       order = Order.find(need(payload, :order_id))
       return "duplicate" if order.status == "voided"
-      approver = payload[:approved_by_membership_id].present? ? Membership.find_by(id: payload[:approved_by_membership_id]) : nil
+      approver = approver_for(payload, "orders.void", actor)
       Orders::Transitions.void!(order, reason: payload[:reason].presence || "voided on till", actor: actor, approver: approver, device: @device)
       "accepted"
     end

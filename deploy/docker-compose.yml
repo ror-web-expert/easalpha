@@ -14,7 +14,9 @@ services:
   api:
     build: ../easalpha-api
     restart: unless-stopped
-    command: bash -c "bin/rails db:prepare && bin/rails db:seed && bin/rails server -b 0.0.0.0 -p 3001"
+    # bin/start: migrations, seeds and the Row-Level Security policies, then Puma (as the easalpha_app role when
+    # EASALPHA_APP_DB_PASSWORD is set, so the policies apply; a superuser ignores them).
+    command: bin/start api
     environment: &api_env
       RAILS_ENV: production
       RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
@@ -22,6 +24,9 @@ services:
       PGPORT: "5432"
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      EASALPHA_APP_DB_PASSWORD: ${EASALPHA_APP_DB_PASSWORD:-}
+      PADDLE_WEBHOOK_SECRET: ${PADDLE_WEBHOOK_SECRET:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
       FORCE_SSL: ${FORCE_SSL:-true}
       PUBLIC_URL: ${PUBLIC_URL}
       CORS_ORIGINS: ${PUBLIC_URL}
@@ -52,7 +57,7 @@ services:
   jobs:
     build: ../easalpha-api
     restart: unless-stopped
-    command: bin/jobs
+    command: bin/start jobs
     environment: *api_env
     depends_on: [api]
     volumes: ["storage:/rails/storage"]
@@ -85,6 +90,27 @@ services:
       PORT: "3010"
       WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
     volumes: ["wasessions:/app/sessions"]
+
+  # Nightly backup of the database, uploads and linked WhatsApp phones into ./backups (BACKUP_DIR), kept BACKUP_KEEP_DAYS.
+  # One-off: docker compose run --rm backup now. Restore steps: docs/DEPLOY.md. Copy the folder off the server
+  # (BACKUP_COPY_CMD, or an rsync cron on another machine): a backup on the same disk is only half a backup.
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_NAME: ${DATABASE_NAME:-easalpha_production}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_AT: ${BACKUP_AT:-03:30}
+      BACKUP_COPY_CMD: ${BACKUP_COPY_CMD:-}
+      TZ: ${TZ:-Asia/Karachi}
+    volumes:
+      - "${BACKUP_DIR:-./backups}:/backups"
+      - "./backup.sh:/backup.sh:ro"
+      - "storage:/data/storage:ro"
+      - "wasessions:/data/wasessions:ro"
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on: { db: { condition: service_healthy } }
 
   # Self-hosted Umami, the public site's analytics, built with BASE_PATH=/stats so the web container can proxy it at
   # easalpha.com/stats (dashboard, tracker script and collector, all first-party: no DNS, certificate or Caddy change,

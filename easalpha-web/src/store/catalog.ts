@@ -83,6 +83,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 }));
 
+/** Everything this browser holds for a till, including the sync queue: a new pairing starts clean (confirmDiscardUnsynced first). */
 export async function clearTillData() {
-  await Promise.all([db.kv.clear(), db.orders.clear(), db.attention.clear(), useCustomerStore.getState().clear()]);
+  await Promise.all([db.kv.clear(), db.orders.clear(), db.queue.clear(), db.attention.clear(), useCustomerStore.getState().clear()]);
 }

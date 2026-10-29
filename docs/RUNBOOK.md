@@ -66,7 +66,7 @@ cd easalpha-api && bundle exec brakeman -q      # security scan
 
 ## Production notes
 
-- Connect the API as the `easalpha_app` database role, not `postgres`, so Row-Level Security applies. Create it with the password in `EASALPHA_APP_DB_PASSWORD`; migrations create the role and grants.
+- Row-Level Security applies only when the API connects as the `easalpha_app` role, not `postgres`. `bin/start api` runs `db:rls` (role, grants and policies) at every start and, when `EASALPHA_APP_DB_PASSWORD` is set, switches the server and the job worker to that role. Unscoped work (login, super admin, jobs) runs inside `Tenancy::Context.unscoped`, which sets the `app.rls_bypass` session flag the policies honour.
 - Run `bin/jobs` as a separate process. Recurring jobs are in `config/recurring.yml` (tax queue sweep every 5 minutes, daily summaries at 23:00 Asia/Karachi). Add `BillingLifecycleJob` daily.
 - Set `CORS_ORIGINS` to the web app's origin(s). Set `RAILS_MASTER_KEY`.
 - Deploy by tag between 3 pm and 5 pm Pakistan time, as the blueprint says.

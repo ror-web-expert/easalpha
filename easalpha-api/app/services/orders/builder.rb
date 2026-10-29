@@ -36,6 +36,20 @@ module Orders
     end
 
     CHARGE_FIELDS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent delivery_charge_minor].freeze
+
+    # The keys a guest may send in a line (storefront, QR ordering). Prices, open items and approvals never come from
+    # the public: a guest line is priced from the catalogue alone.
+    GUEST_LINE_KEYS = %w[product_id variant_id quantity notes modifiers deal_id deal_choices course].freeze
+
+    def self.guest_lines(lines)
+      plain = ->(v) { (v.respond_to?(:to_unsafe_h) ? v.to_unsafe_h : v.to_h).with_indifferent_access }
+      Array(lines).map do |l|
+        h = plain.call(l).slice(*GUEST_LINE_KEYS)
+        h[:modifiers] = Array(h[:modifiers]).map { |m| plain.call(m).slice("modifier_id", "quantity").to_h } if h.key?(:modifiers)
+        h[:deal_choices] = Array(h[:deal_choices]).map { |c| plain.call(c).slice("product_id", "variant_id", "quantity").to_h } if h.key?(:deal_choices)
+        h.to_h.symbolize_keys
+      end
+    end
     SERVICE_FIELDS = %i[service_charge_percent service_charge_fixed_minor].freeze
 
     # The four charge settings of an order, normalised so 10 and 10.0 compare equal.
@@ -104,6 +118,7 @@ module Orders
     def update!(attrs: {}, lines: nil, approvals: {})
       @approvals.merge!(approvals)
       raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+      raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
       Order.transaction do
         charges_before = Builder.charge_values(order)
         order.assign_attributes(attrs.except(:id))
@@ -169,8 +184,10 @@ module Orders
 
     private
 
+    # A guest (storefront, QR) has no actor and holds no permission: only a recorded approval allows a guarded step.
     def can?(code)
-      @actor.nil? || @actor.can?(code) || approvals[code].present?
+      return approvals[code].present? if @actor.nil?
+      @actor.can?(code) || approvals[code].present?
     end
 
     def update_existing!(item, line, idx)
@@ -225,9 +242,15 @@ module Orders
         next if di.choice_group
         { product_id: di.product_id, variant_id: di.variant_id, quantity: di.quantity, name: di.product.name, station_id: di.product.station_id || di.product.category.station_id }
       end.compact
+      # A choice must be one the deal offers (a deal item in a choice group); the deal, not the client, sets its quantity.
+      options = deal.deal_items.select(&:choice_group)
       Array(line[:deal_choices]).each do |c|
-        product = Product.find(c[:product_id])
-        components << { product_id: product.id, variant_id: c[:variant_id], quantity: (c[:quantity].presence || 1).to_i, name: product.name, station_id: product.station_id || product.category.station_id }
+        c = c.to_h.with_indifferent_access
+        option = options.find { |di| di.product_id == c[:product_id] && (c[:variant_id].blank? || di.variant_id.nil? || di.variant_id == c[:variant_id]) }
+        raise Api::Errors::Unprocessable.new("deal.choice_invalid", "#{deal.name} does not offer that choice") unless option
+        product = option.product
+        qty = option.quantity.to_d.positive? ? option.quantity : (c[:quantity].presence || 1).to_d
+        components << { product_id: product.id, variant_id: c[:variant_id].presence || option.variant_id, quantity: qty, name: product.name, station_id: product.station_id || product.category.station_id }
       end
       tax = deal.tax_rate || default_tax
       OrderItem.new(order: order, deal: deal, name_snapshot: deal.name, unit_price_minor: deal.price_minor, quantity: (line[:quantity].presence || 1).to_d,

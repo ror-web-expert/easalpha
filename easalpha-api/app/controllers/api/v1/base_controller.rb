@@ -9,6 +9,7 @@ module Api
       rescue_from Api::Errors::ApiError, with: :render_api_error
       rescue_from ActiveRecord::RecordNotFound do |_e| render_error("not_found", "Not found", 404) end
       rescue_from ActiveRecord::RecordInvalid do |e| render_error("validation_failed", e.record.errors.full_messages.to_sentence, 422, e.record.errors.to_hash) end
+      rescue_from ActiveRecord::RecordNotUnique do |_e| render_error("conflict", "A record with this id already exists", 409) end
       rescue_from ActionController::ParameterMissing do |e| render_error("missing_parameter", e.message, 400) end
       rescue_from ArgumentError do |e| render_error("bad_request", e.message, 400) end
       rescue_from Tenanted::NoTenantError do |e| render_error("no_tenant", e.message, 500) end
@@ -133,6 +134,13 @@ module Api
 
       def day_lock_guard!(day)
         raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if day && DayClose.locked?(current_branch.id, day)
+      end
+
+      # Nobody hands out a permission they do not hold themselves; the owner holds them all.
+      def guard_escalation!(codes)
+        return if current_membership.role.owner?
+        extra = Permission.expand(codes.map(&:to_s)) - current_membership.permission_codes
+        raise Api::Errors::Forbidden.new("permission.escalation", "You cannot grant permissions you do not hold: #{extra.first(5).join(', ')}") if extra.any?
       end
 
       # Manager approval by PIN for a sensitive action. Returns the approving membership.

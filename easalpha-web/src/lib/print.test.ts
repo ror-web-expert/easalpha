@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { hasPrinter, paperWidth, printJob, printServer, receiptLines, row, zReportLines, type PrintLine } from "./print";
+import { hasPrinter, paperWidth, printJob, printServer, receiptLines, row, zReportLines, type PrintLine, printServerHeaders } from "./print";
 import type { Receipt, ZReport } from "./types";
 
 const receipt: Receipt = {
@@ -95,6 +95,9 @@ describe("printServer", () => {
     expect(printServer({ "pos.print_server.ip": "192.168.1.5" })).toEqual({ ip: "192.168.1.5", port: 9977 });
     expect(printServer({ "pos.print_server.ip": "192.168.1.5", "pos.print_server.port": 9100 })).toEqual({ ip: "192.168.1.5", port: 9977 });
     expect(printServer({ "pos.print_server.ip": "192.168.1.5", "pos.print_server.port": "9200" })).toEqual({ ip: "192.168.1.5", port: 9200 });
+    expect(printServer({ "pos.print_server.ip": "192.168.1.5", "pos.print_server.token": " K7PQ2M9X " })).toEqual({ ip: "192.168.1.5", port: 9977, token: "K7PQ2M9X" });
+    expect(printServerHeaders({ "pos.print_server.ip": "192.168.1.5", "pos.print_server.token": "K7PQ2M9X" })).toEqual({ "Content-Type": "application/json", Authorization: "Bearer K7PQ2M9X" });
+    expect(printServerHeaders({ "pos.print_server.ip": "192.168.1.5" })).toEqual({ "Content-Type": "application/json" });
   });
   it("paperWidth is 32 for 58 mm and 48 otherwise", () => {
     expect(paperWidth("58")).toBe(32);

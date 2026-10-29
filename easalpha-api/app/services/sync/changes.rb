@@ -1,6 +1,6 @@
 module Sync
-  # Everything a till needs that changed since its cursor. Staff PIN digests go only to paired devices, for offline PIN login;
-  # secret settings never leave the server (Setting.without_secrets).
+  # Everything a till needs that changed since its cursor. PIN digests never leave the server (a four-digit PIN behind
+  # bcrypt is still ten thousand guesses on a stolen till); secret settings neither (Setting.without_secrets).
   module Changes
     module_function
 
@@ -39,7 +39,6 @@ module Sync
       scope.select { |m| m.branch_allowed?(branch.id) }.map do |m|
         h = { id: m.id, user_id: m.user_id, name: m.user.name, role: m.role.name, role_key: m.role.system_key, status: m.status, permissions: m.permission_codes,
               limits: m.role.role_permissions.where.not(limit_value: nil).pluck(:permission_code, :limit_value).to_h, pin_locked: m.pin_locked?, updated_at: m.updated_at }
-        h[:pin_digest] = m.pin_digest if device&.paired?
         h
       end
     end

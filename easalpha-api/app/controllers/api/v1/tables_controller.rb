@@ -54,6 +54,7 @@ module Api
 
       # GET /tables/:id/qr  the link printed on the table card
       def qr_card
+        require_permission!("tables.manage", "orders.create")
         t = DiningTable.find(params[:id])
         # The guest page lives on this install's own web address at /q/<token> unless the owner points cards elsewhere.
         base = ENV["EASALPHA_QR_BASE_URL"].presence || current_business.setting("qr_base_url").presence || ENV["PUBLIC_URL"].presence || (Rails.env.production? ? "https://easalpha.com" : "http://localhost:3000")

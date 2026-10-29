@@ -95,8 +95,10 @@ faq_open, whatsapp_click, download_click, signup_started, signup_completed) appe
 git push                      # that is all
 ```
 
-`images.yml` builds the API, web and WhatsApp images on GitHub's machines (not on the 2-CPU server), pushes them to
-`ghcr.io/<you>/easalpha-api|web|whatsapp` tagged `latest` and the short commit SHA, then the `deploy` job:
+`ci.yml` runs first: API specs, Rubocop and Brakeman, web lint, typecheck and unit tests, desktop tests. Only when it
+passes does `images.yml` start (29 Oct 2026; before that a red suite still deployed). It builds the API, web and WhatsApp
+images on GitHub's machines (not on the 2-CPU server), pushes them to `ghcr.io/<you>/easalpha-api|web|whatsapp` tagged
+`latest` and the short commit SHA, then the `deploy` job:
 
 1. copies `deploy/` to `~/easalpha/` over SSH (never `.env`, never `downloads/`),
 2. writes `IMAGE_REPO` and `IMAGE_TAG` (the commit SHA) into the server's `.env`,
@@ -104,8 +106,11 @@ git push                      # that is all
    `docker compose up -d --remove-orphans`, prunes old images,
 4. waits up to five minutes for `GET /api/v1/health` inside the api container.
 
-Migrations and seeds run when the api container starts (`db:prepare && db:seed`), before Puma listens; the old web
-container keeps serving until the new one is up. A failed health check fails the run and prints the API log; the previous
+Migrations, seeds and the Row-Level Security policies run when the api container starts (`bin/start api`: `db:prepare`,
+`db:seed`, `db:rls`), before Puma listens; the old web container keeps serving until the new one is up. With
+`EASALPHA_APP_DB_PASSWORD` set in `.env`, the API and the job worker then connect as the `easalpha_app` role, which the
+policies apply to (the `postgres` superuser ignores them, so until that variable is set tenant isolation rests on the
+application's own scoping alone). Set it once: `openssl rand -hex 24`, paste, `docker compose up -d api jobs`. A failed health check fails the run and prints the API log; the previous
 images stay on the server, so `IMAGE_TAG=<previous sha>` in `.env` and `docker compose up -d` rolls back.
 
 Watch a run: `gh run watch`, or Actions on GitHub. Tagged release: `git tag v1.0.0 && git push --tags` also builds and
@@ -130,10 +135,19 @@ curl -s https://api.easalpha.com/api/v1/health
   workflow uploads new builds there on every `v*` tag and restarts the web container, because Next.js lists `public/`
   files only at start (a file copied by hand is 404 until `docker compose restart web`). The installers default to
   `https://easalpha.com`; a self-hosted shop changes the address once in the app's Printers window.
-- **Backup** (nightly cron suggested):
-  `docker compose exec -T db pg_dump -U postgres easalpha_production | gzip > ~/backups/easalpha-$(date +%F).sql.gz`
-  plus the volumes `easalpha_storage` (uploads) and `easalpha_wasessions`. Restore:
-  `gunzip -c FILE | docker compose exec -T db psql -U postgres easalpha_production`.
+- **Backup**: the `backup` service (29 Oct 2026, `deploy/backup.sh`) writes every night at `BACKUP_AT` (03:30 server time)
+  into `BACKUP_DIR` (`~/easalpha/backups`): `easalpha-<date>.dump` (main database, pg_dump custom format),
+  `umami-<date>.dump`, `storage-<date>.tar.gz` (uploads) and `wasessions-<date>.tar.gz` (linked WhatsApp phones, keep it
+  as private as a password), and deletes files older than `BACKUP_KEEP_DAYS` (14). Run one now:
+  `docker compose run --rm backup now`. A backup on the same disk is only half a backup: set `BACKUP_COPY_CMD`
+  (for example `rclone copy "$1" remote:easalpha-backups`) or pull the folder nightly from another machine with rsync.
+  Restore the database: `docker compose stop api jobs`, then
+  `docker compose exec -T db pg_restore -U postgres --clean --if-exists -d easalpha_production < backups/easalpha-<date>.dump`,
+  then `docker compose start api jobs`. Restore uploads: `docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data`.
+- **Paddle**: international card subscriptions arrive as webhooks at `POST /api/v1/webhooks/paddle`. The API refuses them
+  (503) until `PADDLE_WEBHOOK_SECRET` is in `.env` (Paddle, Notifications, the endpoint's secret), and checks the signature
+  and a five-minute freshness window on every event.
+- **Errors**: set `SENTRY_DSN` in `.env` (a free sentry.io project) and the API reports exceptions there; blank means off.
 - **Email**: the API sends a welcome email at signup and scheduled reports only when `SMTP_ADDRESS` is set in `.env`
   (with `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM`). Create an account at a transactional provider (Resend, Postmark,
   Brevo or Amazon SES), verify the easalpha.com domain there (two DNS records they show you), paste the SMTP values and
@@ -148,6 +162,7 @@ curl -s https://api.easalpha.com/api/v1/health
 | `deploy/docker-compose.yml` | the five services; builds from source when used alone |
 | `deploy/docker-compose.images.yml` | overlay: use the ghcr.io images instead of building |
 | `deploy/docker-compose.proxy.yml` | overlay: no published ports, web and api join the `kamal` network for Caddy |
+| `deploy/backup.sh` | the nightly backup loop the `backup` service runs; `backup.sh now` for one backup |
 | `deploy/Caddyfile.easalpha` | the Caddy site blocks for easalpha.com and api.easalpha.com |
 | `deploy/.env.example` | template of the server's `~/easalpha/.env` (`COMPOSE_FILE` selects the overlays) |
 | `.github/workflows/images.yml` | build + deploy on every push to master |

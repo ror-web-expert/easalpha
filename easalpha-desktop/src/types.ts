@@ -52,6 +52,8 @@ export type PrinterInfo = {
 export type Settings = {
   webUrl: string;
   printServerPort: number;
+  /** Tablets send this with every print job (Authorization: Bearer); without it anyone on the shop's network could print or open the drawer. */
+  printServerToken?: string;
   printers: PrinterConfig[];
   /** Release feed for self-update (a folder holding latest.yml and the installers). Empty = the feed built into the app. */
   updateUrl?: string;
@@ -61,7 +63,7 @@ export type Settings = {
   kiosk?: boolean;
 };
 
-export type PrintServerStatus = { host: string; port: number; running: boolean };
+export type PrintServerStatus = { host: string; port: number; running: boolean; token?: string };
 
 export const DEFAULT_SETTINGS: Settings = {
   webUrl: "https://easalpha.com",

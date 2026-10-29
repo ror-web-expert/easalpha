@@ -20,9 +20,14 @@ RSpec.describe "Row-Level Security" do
     expect(conn.exec("SELECT count(*) FROM branches").getvalue(0, 0).to_i).to eq(0)
     conn.exec("RESET app.current_business_id")
     expect(conn.exec("SELECT count(*) FROM branches").getvalue(0, 0).to_i).to eq(0)
+    # The unscoped paths (login, super admin, jobs) set the bypass flag and see every business; off again, nothing.
+    conn.exec("SET app.rls_bypass = 'on'")
+    expect(conn.exec("SELECT count(*) FROM branches WHERE business_id IN ('#{a}', '#{b}')").getvalue(0, 0).to_i).to eq(1)
+    conn.exec("SET app.rls_bypass = 'off'")
+    expect(conn.exec("SELECT count(*) FROM branches").getvalue(0, 0).to_i).to eq(0)
   ensure
     if conn
-      conn.exec("RESET app.current_business_id") rescue nil
+      conn.exec("RESET app.current_business_id; RESET app.rls_bypass") rescue nil
       ActiveRecord::Base.connection.execute("DELETE FROM branches WHERE business_id IN ('#{a}', '#{b}')")
       ActiveRecord::Base.connection.execute("DELETE FROM businesses WHERE id IN ('#{a}', '#{b}')")
       conn.close

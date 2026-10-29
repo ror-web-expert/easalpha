@@ -10,6 +10,9 @@ easalpha-desktop/dist
 easalpha-desktop/out
 easalpha-desktop/*.log
 
+# nightly backups written by the backup service
+deploy/backups/
+
 # desktop installers served by the Download page (binaries, not committed)
 deploy/downloads/*
 !deploy/downloads/README.md

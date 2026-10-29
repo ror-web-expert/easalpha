@@ -6,6 +6,8 @@ class Rack::Attack
       body["phone"].to_s.presence
     end
   end
+  # A pairing code is six digits and lives 24 hours: five tries a minute per address keeps guessing hopeless.
+  throttle("pair/ip", limit: 5, period: 1.minute) { |req| req.ip if req.path == "/api/v1/devices/pair" && req.post? }
   throttle("public/ip", limit: 120, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/v1/public/") }
   throttle("api/ip", limit: 600, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/") }
   self.throttled_responder = lambda do |_req|

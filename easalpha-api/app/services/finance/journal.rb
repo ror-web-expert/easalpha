@@ -26,7 +26,7 @@ module Finance
     end
 
     # The business day for a posting made now: the current branch's, else the first branch's, else the calendar date.
-    def today = (Current.branch || Branch.unscoped.order(:created_at).first)&.business_day_for(Time.current) || Date.current
+    def today = (Current.branch || (Current.business_id && Branch.unscoped.where(business_id: Current.business_id).order(:created_at).first))&.business_day_for(Time.current) || Date.current
 
     def reverse!(entry, actor:, business_day: nil, description: nil)
       business_day ||= today

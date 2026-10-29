@@ -7,6 +7,7 @@ import { useDeviceStore } from "@/store/device";
 import type { Branch, Business, Device } from "@/lib/types";
 import { Button, Keypad, ThemeToggle } from "@/components/ui";
 import { clearTillData } from "@/store/catalog";
+import { confirmDiscardUnsynced } from "@/lib/sync";
 
 export default function PairPage() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function PairPage() {
   const [error, setError] = useState<string | null>(null);
   const submit = async () => {
     if (code.length < 6) return;
+    if (!(await confirmDiscardUnsynced())) return;
     setBusy(true); setError(null);
     try {
       const r = await api<{ device_token: string; device: Device; business: Business; branch: Branch }>("/devices/pair", { method: "POST", auth: "none", body: { pairing_code: code, platform: "web", app_version: "web" } });

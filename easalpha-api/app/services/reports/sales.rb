@@ -85,8 +85,10 @@ module Reports
       rows.map { |cid, c, t, last| cu = custs[cid]; { customer_id: cid, name: cu&.name, phone: cu&.phone, orders: c, revenue_minor: t.to_i, last_order_at: last, balance_minor: cu&.balance_minor } }.sort_by { |r| -r[:revenue_minor] }.first(limit)
     end
 
-    def shifts
-      Shift.where(branch_id: branch.id, business_day: from..to).order(opened_at: :desc).map { |s| ShiftSerializers.shift(s, with_expected: true).merge(cashier: Membership.unscoped.includes(:user).find_by(id: s.cashier_membership_id)&.user&.name, net_sales_minor: s.z_report.dig("sales", "net_minor")) }
+    def shifts(only_membership_id: nil)
+      scope = Shift.where(branch_id: branch.id, business_day: from..to)
+      scope = scope.where(cashier_membership_id: only_membership_id) if only_membership_id
+      scope.order(opened_at: :desc).map { |s| ShiftSerializers.shift(s, with_expected: true).merge(cashier: Membership.unscoped.includes(:user).find_by(id: s.cashier_membership_id)&.user&.name, net_sales_minor: s.z_report.dig("sales", "net_minor")) }
     end
   end
 end

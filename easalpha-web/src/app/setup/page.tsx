@@ -9,6 +9,7 @@ import type { Branch, Device, PairedDevice, Session, SetupStaff } from "@/lib/ty
 import { useDeviceStore } from "@/store/device";
 import { useRiderStore } from "@/components/rider/store";
 import { clearTillData } from "@/store/catalog";
+import { confirmDiscardUnsynced } from "@/lib/sync";
 import { Button, Field, Input, Loading, Select, ThemeToggle } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import {
@@ -103,7 +104,11 @@ function Flow() {
     const opt = roleOption(role);
     const payload: PairedDevice = { device_token: result.device_token, device: result.device, business: result.business, branch: result.branch };
     if (opt.store === "rider") useRiderStore.getState().pair(payload);
-    else { await clearTillData(); useDeviceStore.getState().pair(payload); }
+    else {
+      if (!(await confirmDiscardUnsynced())) return;
+      await clearTillData();
+      useDeviceStore.getState().pair(payload);
+    }
     writeScreenChoice(opt.screen === "/queue" ? "/queue" : "/token");
     setSession(null);
     router.replace(opt.screen);

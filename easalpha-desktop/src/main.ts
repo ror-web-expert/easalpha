@@ -156,7 +156,7 @@ function openPrinterSettings(): void {
 function showPrintServerStatus(): void {
   const s = printServerStatus();
   const detail = s.running
-    ? `Running.\n\nTablets print through:\nhttp://${s.host}:${s.port}/print\n\nEnter ${s.host}:${s.port} as the Print Server in the admin panel.`
+    ? `Running.\n\nTablets print through:\nhttp://${s.host}:${s.port}/print\n\nIn the admin panel, Settings, Print Server: address ${s.host}, port ${s.port}, token ${s.token ?? ""}.`
     : `Not running.\n\n${s.error ?? "Unknown error"}\n\nChange the port in Printers and the server restarts.`;
   void dialog.showMessageBox({
     type: s.running ? "info" : "warning",
@@ -229,8 +229,8 @@ function buildMenu(): void {
         { role: "zoomIn", label: "Zoom in" },
         { role: "zoomOut", label: "Zoom out" },
         { role: "resetZoom", label: "Reset zoom" },
-        { type: "separator" },
-        { role: "toggleDevTools", label: "Developer tools" },
+        // Developer tools only in a development run: a cashier on a packaged till has no business in them.
+        ...(app.isPackaged ? [] : [{ type: "separator" } as MenuItemConstructorOptions, { role: "toggleDevTools", label: "Developer tools" } as MenuItemConstructorOptions]),
       ],
     },
   ];
@@ -249,7 +249,7 @@ function registerIpc(): void {
   ipcMain.handle("settings:save", async (_e, next: Partial<Settings>) => {
     const before = loadSettings();
     const saved = saveSettings(next);
-    if (saved.printServerPort !== before.printServerPort) await restartPrintServer(saved.printServerPort, VERSION);
+    if (saved.printServerPort !== before.printServerPort) await restartPrintServer(saved.printServerPort, VERSION, () => loadSettings().printServerToken ?? "");
     if (saved.webUrl !== before.webUrl) void mainWindow?.loadURL(appUrl());
     return saved;
   });
@@ -283,7 +283,7 @@ app.whenReady().then(async () => {
   registerIpc();
   buildMenu();
   createMainWindow();
-  await startPrintServer(loadSettings().printServerPort, VERSION);
+  await startPrintServer(loadSettings().printServerPort, VERSION, () => loadSettings().printServerToken ?? "");
   startUpdater({ updateUrl: loadSettings().updateUrl });
 });
 

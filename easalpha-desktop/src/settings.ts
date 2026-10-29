@@ -1,5 +1,6 @@
 // settings.json in app.getPath("userData"). Read on every access so edits made
 // from the settings window and from the main process never go stale.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DEFAULT_SETTINGS, type PrinterConfig, type Settings } from "./types";
@@ -17,6 +18,14 @@ export function initSettings(userDataDir: string): void {
   } catch {
     // Read-only location: the app still runs with defaults in memory.
   }
+  // Every install gets a print server token once; installs from before 0.4.0 get theirs on the first start after updating.
+  if (!loadSettings().printServerToken) saveSettings({ printServerToken: newToken() });
+}
+
+/** Eight characters a manager can read off the screen and type into Admin, Settings, Print Server. No 0/O or 1/I. */
+export function newToken(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from(crypto.randomBytes(8), (b) => alphabet[b % alphabet.length]).join("");
 }
 
 export function getSettingsPath(): string {
@@ -68,6 +77,7 @@ export function loadSettings(): Settings {
         ? raw.webUrl.trim().replace(/\/+$/, "")
         : DEFAULT_SETTINGS.webUrl,
     printServerPort: Number.isInteger(port) && port > 0 && port < 65536 ? port : DEFAULT_SETTINGS.printServerPort,
+    ...(typeof raw.printServerToken === "string" && raw.printServerToken.trim() ? { printServerToken: raw.printServerToken.trim() } : {}),
     printers: Array.isArray(raw.printers)
       ? (raw.printers.map(sanitizePrinter).filter(Boolean) as PrinterConfig[])
       : [],

@@ -2,6 +2,8 @@
 //   GET  /health   -> { ok, version }
 //   GET  /printers -> PrinterInfo[]
 //   POST /print    -> PrintJob -> { ok } | { ok:false, error }
+// /printers and /print need the install's token (Authorization: Bearer <token>, or ?token=), shown under Printers and
+// entered once in Admin, Settings, Print Server. Without it any phone on the shop's Wi-Fi could print or open the drawer.
 import http from "node:http";
 import { lanIPv4 } from "./lanIp";
 import { listPrinters, print } from "./printers";
@@ -10,6 +12,7 @@ import type { PrintJob, PrintServerStatus } from "./types";
 let server: http.Server | null = null;
 let currentPort = 0;
 let lastError = "";
+let tokenProvider: () => string = () => "";
 
 function cors(res: http.ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -42,7 +45,14 @@ function readBody(req: http.IncomingMessage, limit = 1_000_000): Promise<string>
   });
 }
 
-export function createPrintServer(version: string): http.Server {
+function authorized(req: http.IncomingMessage, expected: string): boolean {
+  if (!expected) return true;
+  const header = String(req.headers.authorization ?? "").replace(/^Bearer\s+/i, "").trim();
+  const query = new URL(req.url ?? "/", "http://localhost").searchParams.get("token") ?? "";
+  return header === expected || query === expected;
+}
+
+export function createPrintServer(version: string, token: () => string = () => ""): http.Server {
   return http.createServer(async (req, res) => {
     cors(res);
     const url = (req.url ?? "/").split("?")[0];
@@ -52,7 +62,8 @@ export function createPrintServer(version: string): http.Server {
       return;
     }
     try {
-      if (req.method === "GET" && url === "/health") return json(res, 200, { ok: true, version });
+      if (req.method === "GET" && url === "/health") return json(res, 200, { ok: true, version, token_required: !!token() });
+      if (!authorized(req, token())) return json(res, 401, { ok: false, error: "Print server token missing or wrong. It is shown on the till under Printers; enter it in Admin, Settings, Print Server." });
       if (req.method === "GET" && url === "/printers") return json(res, 200, listPrinters());
       if (req.method === "POST" && url === "/print") {
         let job: PrintJob;
@@ -71,9 +82,10 @@ export function createPrintServer(version: string): http.Server {
   });
 }
 
-export function startPrintServer(port: number, version: string): Promise<PrintServerStatus> {
+export function startPrintServer(port: number, version: string, token?: () => string): Promise<PrintServerStatus> {
+  if (token) tokenProvider = token;
   return new Promise((resolve) => {
-    const s = createPrintServer(version);
+    const s = createPrintServer(version, tokenProvider);
     s.once("error", (e: NodeJS.ErrnoException) => {
       lastError = e.code === "EADDRINUSE" ? `Port ${port} is already in use` : e.message;
       server = null;
@@ -98,13 +110,13 @@ export function stopPrintServer(): Promise<void> {
   });
 }
 
-export async function restartPrintServer(port: number, version: string): Promise<PrintServerStatus> {
+export async function restartPrintServer(port: number, version: string, token?: () => string): Promise<PrintServerStatus> {
   await stopPrintServer();
-  return startPrintServer(port, version);
+  return startPrintServer(port, version, token);
 }
 
 export function printServerStatus(): PrintServerStatus & { error?: string } {
-  const status: PrintServerStatus & { error?: string } = { host: lanIPv4(), port: currentPort, running: server !== null };
+  const status: PrintServerStatus & { error?: string } = { host: lanIPv4(), port: currentPort, running: server !== null, token: tokenProvider() || undefined };
   if (lastError) status.error = lastError;
   return status;
 }

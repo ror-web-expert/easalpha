@@ -10,6 +10,7 @@ class OrderItem < ApplicationRecord
   validates :name_snapshot, presence: true
   validates :status, inclusion: { in: STATUSES }
   validates :quantity, numericality: { greater_than: 0 }
+  validates :unit_price_minor, numericality: { greater_than_or_equal_to: 0 }
 
   def cancelled? = status == "cancelled"
   def gross_unit_minor = unit_price_minor + modifiers_minor

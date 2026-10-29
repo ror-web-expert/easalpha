@@ -25,6 +25,7 @@ module Api
 
       # POST /orders/:order_id/receipt/send  phone?  sends the digital receipt by WhatsApp
       def send_receipt
+        require_permission!("orders.create", "payments.take", "receipts.reprint")
         order = Order.includes(:customer).find(params[:id])
         phone = User.normalize_phone(params[:phone].presence || order.customer&.phone)
         raise Api::Errors::BadRequest.new("receipt.no_phone", "No phone number for this order") if phone.blank?

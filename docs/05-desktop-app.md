@@ -69,6 +69,7 @@ Three columns on every order screen: categories on the left, item grid with phot
 
 ### 1.4 Printing
 
+- The print server takes a token (29 Oct 2026): every install shows an eight-character token under Printers and in Print server status; the admin enters address, port and token once in Settings, Print Server, and tablets send it with each job. Without it nobody on the shop's Wi-Fi can print or kick the cash drawer.
 - ESC/POS thermal printers, 58 mm and 80 mm, over USB or network, set up on the desktop POS. Tablets print through the desktop computer whose IP the admin stores as the print server (SPEC).
 - Receipt: logo, restaurant name with primary and secondary phone, serial, items, modifiers, tax lines, FBR or PRA invoice number and QR, payment method, change, rounding line, tips, WhatsApp number for feedback, and a footer QR code for a review link or menu URL (SPEC). English or Urdu; Urdu rendered as an image.
 - Kitchen tickets per station on network printers; a station with a kitchen display can still print as fallback.

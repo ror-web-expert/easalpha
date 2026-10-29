@@ -83,6 +83,7 @@ module Settings
       [ "catalog.display.show_inactive", "point_of_sale", "Display Settings", "boolean", false, "Show inactive products in the admin catalog" ],
       [ "pos.print_server.ip", "point_of_sale", "Print Server", "string", nil, "IP address of the desktop computer every order-taker tablet prints through" ],
       [ "pos.print_server.port", "point_of_sale", "Print Server", "integer", 9100, "Print server port" ],
+      [ "pos.print_server.token", "point_of_sale", "Print Server", "string", nil, "The token the desktop app shows under Printers; tablets send it with every print job" ],
 
       [ "charges.service_charge.mode", "charges_tax", "Service Charge", "string", "percent", "percent or fixed" ],
       [ "charges.service_charge.value", "charges_tax", "Service Charge", "number", 0, "Pre-filled on the POS payment page; zero or blank disables" ],

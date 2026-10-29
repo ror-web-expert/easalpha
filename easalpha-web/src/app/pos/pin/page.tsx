@@ -7,6 +7,7 @@ import type { Session } from "@/lib/types";
 import { Button, Keypad, PinDots, ThemeToggle } from "@/components/ui";
 import { SyncBadge } from "@/components/pos/sync-badge";
 import { useCatalogStore } from "@/store/catalog";
+import { unsyncedCount } from "@/lib/sync";
 import { Unplug } from "lucide-react";
 
 export default function PinPage() {
@@ -52,7 +53,11 @@ export default function PinPage() {
         <PinDots length={4} filled={pin.length} />
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Keypad large onKey={(d) => setPin((p) => (p.length < 4 ? p + d : p))} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} />
-        <Button variant="ghost" size="sm" className="text-fg-muted" onClick={() => { if (confirm("Unpair this device? Unsynced records stay on this browser.")) { unpair(); router.replace("/pos/pair"); } }}><Unplug className="h-4 w-4" /> Unpair device</Button>
+        <Button variant="ghost" size="sm" className="text-fg-muted" onClick={async () => {
+          const n = await unsyncedCount();
+          if (n) { alert(`${n} record${n === 1 ? "" : "s"} on this device ${n === 1 ? "has" : "have"} not reached the server yet. Wait for the sync, or check Needs attention, before unpairing.`); return; }
+          if (confirm("Unpair this device?")) { unpair(); router.replace("/pos/pair"); }
+        }}><Unplug className="h-4 w-4" /> Unpair device</Button>
       </div>
     </main>
   );

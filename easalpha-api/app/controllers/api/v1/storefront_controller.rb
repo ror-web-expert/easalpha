@@ -38,7 +38,7 @@ module Api
         cfg = Tenancy::Context.unscoped { WebsiteConfig.find_by!(slug: params[:slug], published: true) }
         business = Business.find(cfg.business_id)
         Tenancy::Context.with(business) do
-          lines = Array(params[:lines]).map { |l| l.respond_to?(:to_unsafe_h) ? l.to_unsafe_h.symbolize_keys : l.to_h.symbolize_keys }
+          lines = Orders::Builder.guest_lines(params[:lines])
           customer = params[:customer].respond_to?(:to_unsafe_h) ? params[:customer].to_unsafe_h : {}
           order = Storefront::Ordering.place!(business, cfg, lines: lines, order_type: params[:order_type], customer: customer, notes: params[:notes], client_id: params[:client_id])
           render json: Storefront::Ordering.guest_view(order, cfg), status: :created

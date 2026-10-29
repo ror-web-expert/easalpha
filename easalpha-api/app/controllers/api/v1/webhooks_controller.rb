@@ -11,10 +11,11 @@ module Api
       end
 
       def whatsapp
-        if ENV["WHATSAPP_APP_SECRET"].present?
-          expected = "sha256=" + OpenSSL::HMAC.hexdigest("SHA256", ENV["WHATSAPP_APP_SECRET"], request.raw_post)
-          return head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(expected, request.headers["X-Hub-Signature-256"].to_s)
-        end
+        secret = ENV["WHATSAPP_APP_SECRET"].to_s
+        # Fail closed: the Cloud API webhook is only accepted when its app secret is configured and the body is signed.
+        return render(json: { error: { code: "webhook.unconfigured", message: "WHATSAPP_APP_SECRET is not set" } }, status: :service_unavailable) if secret.blank?
+        expected = "sha256=" + OpenSSL::HMAC.hexdigest("SHA256", secret, request.raw_post)
+        return head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(expected, request.headers["X-Hub-Signature-256"].to_s)
         body = JSON.parse(request.raw_post) rescue {}
         Array(body["entry"]).each do |entry|
           Array(entry["changes"]).each do |change|
@@ -32,7 +33,11 @@ module Api
               text = m.dig("text", "body").to_s.strip.upcase
               next unless text == "STOP"
               phone = "+#{m['from']}"
-              Tenancy::Context.unscoped { Customer.unscoped.where(phone: phone).update_all(whatsapp_opt_in: false, opted_out_at: Time.current) }
+              # Only the businesses that actually messaged this phone: STOP never touches a tenant that never wrote to it.
+              Tenancy::Context.unscoped do
+                business_ids = WhatsappMessage.where(to_phone: phone).where.not(business_id: nil).distinct.pluck(:business_id)
+                Customer.unscoped.where(business_id: business_ids, phone: phone).update_all(whatsapp_opt_in: false, opted_out_at: Time.current) if business_ids.any?
+              end
             end
           end
         end

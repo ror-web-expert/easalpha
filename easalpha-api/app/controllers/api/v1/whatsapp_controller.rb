@@ -2,6 +2,7 @@ module Api
   module V1
     class WhatsappController < BaseController
       before_action -> { require_permission!("settings.manage") }
+      before_action :read_only_guard!, only: %i[send_one bulk create_template update_template destroy_template start_connection]
 
       def templates
         render json: { data: WhatsappTemplate.where(business_id: [ nil, current_business.id ]).order(:name, :language).map { |t| { id: t.id, name: t.name, language: t.language, category: t.category, body: t.body, variables: t.variables, approval_status: t.approval_status, shared: t.business_id.nil? } } }

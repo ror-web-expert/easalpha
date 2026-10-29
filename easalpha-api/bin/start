@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Container start for the API and the job worker (deploy/docker-compose.yml).
+#   bin/start api    migrations, seeds and Row-Level Security policies as the database owner, then Puma
+#   bin/start jobs   Solid Queue worker
+# With EASALPHA_APP_DB_PASSWORD set, the running process connects as the easalpha_app role, which the policies apply
+# to (a superuser ignores them). Without it the process keeps the PGUSER it was given, as before.
+set -euo pipefail
+role="${1:-api}"
+if [ "$role" = "api" ]; then
+  bin/rails db:prepare
+  bin/rails db:seed
+  bin/rails db:rls
+fi
+if [ -n "${EASALPHA_APP_DB_PASSWORD:-}" ]; then
+  export PGUSER=easalpha_app PGPASSWORD="$EASALPHA_APP_DB_PASSWORD"
+  echo "Connecting as the easalpha_app role: Row-Level Security applies"
+fi
+case "$role" in
+  api) exec bin/rails server -b 0.0.0.0 -p "${PORT:-3001}" ;;
+  jobs) exec bin/jobs ;;
+  *) echo "usage: bin/start api|jobs" >&2; exit 2 ;;
+esac

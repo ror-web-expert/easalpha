@@ -26,7 +26,7 @@ module Api
 
       # POST /qr/:token/orders { guest_name, notes, client_id, lines: [{product_id, variant_id, quantity, modifiers: [{modifier_id, quantity}], notes}] }
       def create_order
-        lines = Array(params[:lines]).map { |l| l.respond_to?(:to_unsafe_h) ? l.to_unsafe_h.symbolize_keys : l.to_h.symbolize_keys }
+        lines = Orders::Builder.guest_lines(params[:lines])
         order = Qr::Ordering.place!(@table, lines: lines, guest_name: params[:guest_name], notes: params[:notes], client_id: params[:client_id])
         render json: guest_order(order), status: :created
       end

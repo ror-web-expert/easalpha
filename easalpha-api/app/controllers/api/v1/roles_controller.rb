@@ -38,6 +38,7 @@ module Api
         role.update!(name: params[:name]) if params[:name].present? && !role.is_system
         if params[:permissions].is_a?(Array)
           map = params[:permissions].to_h { |p| [ p[:code].to_s, p[:limit].presence&.to_d ] }
+          guard_escalation!(map.keys)
           role.set_permissions!(map)
         end
         audit!("permission_change", record: role, before: before, after: Serializers.role(role.reload))

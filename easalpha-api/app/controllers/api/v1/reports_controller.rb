@@ -45,7 +45,8 @@ module Api
       def discounts = render(json: report.discounts.merge(from: @from, to: @to))
       def modified = render(json: { from: @from, to: @to, data: report.modified })
       def customers = render(json: { from: @from, to: @to, data: report.customers })
-      def shifts = render(json: { from: @from, to: @to, data: report.shifts })
+      # Without a branch or all-reports permission a cashier sees their own shifts only.
+      def shifts = render(json: { from: @from, to: @to, data: report.shifts(only_membership_id: (current_membership.can?("reports.view_all") || current_membership.can?("reports.view_branch")) ? nil : current_membership.id) })
       # SPEC Cashier Till and Delivery Riders reports
       def cashier_till = render(json: Reports::CashierTill.run(branch: current_branch, from: @from, to: @to))
       # SPEC report catalogue (Phase 7)

@@ -3,13 +3,16 @@ module Api
     # Paddle webhooks for international subscriptions. Signature checked when PADDLE_WEBHOOK_SECRET is set.
     class BillingWebhooksController < ActionController::API
       def paddle
-        if ENV["PADDLE_WEBHOOK_SECRET"].present?
-          sig = request.headers["Paddle-Signature"].to_s
-          ts = sig[/ts=(\d+)/, 1]
-          h1 = sig[/h1=([a-f0-9]+)/, 1]
-          expected = OpenSSL::HMAC.hexdigest("SHA256", ENV["PADDLE_WEBHOOK_SECRET"], "#{ts}:#{request.raw_post}")
-          return head :unauthorized unless h1 && ActiveSupport::SecurityUtils.secure_compare(expected, h1)
-        end
+        secret = ENV["PADDLE_WEBHOOK_SECRET"].to_s
+        # Fail closed: with no secret configured nobody can activate or cancel a subscription by posting here.
+        return render(json: { error: { code: "webhook.unconfigured", message: "PADDLE_WEBHOOK_SECRET is not set" } }, status: :service_unavailable) if secret.blank?
+        sig = request.headers["Paddle-Signature"].to_s
+        ts = sig[/ts=(\d+)/, 1]
+        h1 = sig[/h1=([a-f0-9]+)/, 1]
+        # A signed event older than five minutes is a replay.
+        return head :unauthorized unless ts && h1 && (Time.current.to_i - ts.to_i).abs <= 300
+        expected = OpenSSL::HMAC.hexdigest("SHA256", secret, "#{ts}:#{request.raw_post}")
+        return head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(expected, h1)
         body = JSON.parse(request.raw_post) rescue {}
         data = body["data"] || {}
         business_id = data.dig("custom_data", "business_id")

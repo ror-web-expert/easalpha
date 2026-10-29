@@ -96,12 +96,12 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
       expect(response).to have_http_status(:no_content)
     end
 
-    it "pulls changes since a cursor with staff PIN digests only for a paired device" do
+    it "pulls changes since a cursor; staff PIN digests never leave the server (29 Oct 2026)" do
       cashier
       get "/api/v1/sync/changes", headers: device_headers(device)
       expect(response).to have_http_status(:ok)
       expect(json[:products].size).to eq(2)
-      expect(json[:staff].find { |s| s[:id] == cashier.id }[:pin_digest]).to be_present
+      expect(json[:staff].find { |s| s[:id] == cashier.id }.keys).not_to include(:pin_digest)
       expect(json[:payment_methods].map { |p| p[:code] }).to include("cash")
       cursor = json[:cursor]
       get "/api/v1/sync/changes?since=#{cursor}", headers: device_headers(device)
@@ -110,7 +110,7 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
       get "/api/v1/sync/changes?since=#{cursor}", headers: device_headers(device)
       expect(json[:products].map { |p| p[:name] }).to eq([ "Chai" ])
       get "/api/v1/sync/changes", headers: headers
-      expect(json[:staff].first[:pin_digest]).to be_nil
+      expect(response).to have_http_status(:forbidden) # the admin panel is not a till
       api_post "/api/v1/sync/push", { records: [] }, headers: headers
       expect(response).to have_http_status(:forbidden)
     end

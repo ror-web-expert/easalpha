@@ -52,6 +52,34 @@ function backoff(attempts: number) {
   return Math.min(5 * 60_000, 2000 * 2 ** Math.min(attempts, 7));
 }
 
+/** Rows in this browser that have not reached the server yet. */
+export async function unsyncedCount(): Promise<number> {
+  try { return await db.queue.count(); } catch { return 0; }
+}
+
+/**
+ * True when this browser's till data may be replaced: nothing is waiting to reach the server, or the person agreed to
+ * lose it. Pairing to another business with a queue still here would push the old business's sales under the new one.
+ */
+export async function confirmDiscardUnsynced(): Promise<boolean> {
+  const n = await unsyncedCount();
+  if (!n) return true;
+  return confirm(`${n} record${n === 1 ? "" : "s"} on this device never reached the server. Pairing again discards ${n === 1 ? "it" : "them"}. Continue?`);
+}
+
+/**
+ * A push that never came back (power cut, tab closed mid-send) leaves its rows marked "sending", and only "pending" rows
+ * are ever picked up again. On a fresh start nothing can be in flight, so every such row goes back to pending; while
+ * running, a row sending for over two minutes (the push times out at one) is treated the same way.
+ */
+export async function recoverStuck(all = false): Promise<number> {
+  const stuck = (await db.queue.where("status").equals("sending").toArray()) as QueueItem[];
+  const cutoff = Date.now() - 120_000;
+  const back = stuck.filter((i) => all || !i.sending_at || i.sending_at < cutoff);
+  if (back.length) await db.queue.bulkPut(back.map((i) => ({ ...i, status: "pending" as const, sending_at: undefined })));
+  return back.length;
+}
+
 export function schedule(ms = 0) {
   if (stopped) return;
   if (timer) clearTimeout(timer);
@@ -64,17 +92,18 @@ export async function processQueue(): Promise<void> {
   if (!isOnline()) { store.set({ status: "offline" }); return; }
   running = true;
   try {
+    await recoverStuck();
     const now = Date.now();
     const items = (await db.queue.where("status").equals("pending").sortBy("created_at")).filter((i) => i.next_at <= now).slice(0, 200);
     if (!items.length) { store.set({ status: "online" }); return; }
     store.set({ status: "syncing" });
-    await db.queue.bulkPut(items.map((i) => ({ ...i, status: "sending" as const })));
+    await db.queue.bulkPut(items.map((i) => ({ ...i, status: "sending" as const, sending_at: now })));
     let res: SyncPushResponse;
     try {
       res = await api<SyncPushResponse>("/sync/push", { method: "POST", auth: "pos", timeoutMs: 60000, body: { records: items.map((i) => ({ type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload })) } });
     } catch (e) {
       const err = e instanceof ApiError ? e : null;
-      await db.queue.bulkPut(items.map((i) => ({ ...i, status: "pending" as const, attempts: i.attempts + 1, next_at: Date.now() + backoff(i.attempts + 1), last_error: err?.message ?? "Sync failed" })));
+      await db.queue.bulkPut(items.map((i) => ({ ...i, status: "pending" as const, sending_at: undefined, attempts: i.attempts + 1, next_at: Date.now() + backoff(i.attempts + 1), last_error: err?.message ?? "Sync failed" })));
       store.set({ status: err?.isNetwork ? "offline" : "online", lastError: err?.message ?? "Sync failed" });
       if (!err?.isNetwork) schedule(backoff(items[0].attempts + 1));
       return;
@@ -86,7 +115,8 @@ export async function processQueue(): Promise<void> {
       } else {
         const item = items.find((i) => i.id === r.id);
         await db.queue.delete(r.id);
-        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: item?.payload ?? {}, created_at: new Date().toISOString() });
+        // __membership_id keeps the cashier who made the record, so Try again is attributed to them, not to whoever is signed in then.
+        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString() });
         await markRejected(r.type as SyncRecordType, r.id);
       }
     }
@@ -131,7 +161,8 @@ export function startSync() {
   window.addEventListener("offline", onOffline);
   useSyncStore.getState().set({ status: isOnline() ? "online" : "offline" });
   refreshCounts();
-  schedule(1000);
+  // Nothing is in flight on a fresh start: rows left "sending" by a crash go back to pending before the first push.
+  recoverStuck(true).catch(() => {}).then(() => schedule(1000));
   const interval = setInterval(() => {
     if (!useDeviceStore.getState().deviceToken) return;
     schedule(0);
@@ -161,7 +192,8 @@ export async function retryAttention(id: string) {
   const a = await db.attention.get(id);
   if (!a) return;
   await db.attention.delete(id);
-  await enqueue({ type: a.type as SyncRecordType, id: a.id, membership_id: a.payload.__membership_id as string | undefined, payload: a.payload });
+  const { __membership_id, ...payload } = a.payload;
+  await enqueue({ type: a.type as SyncRecordType, id: a.id, membership_id: __membership_id as string | undefined, payload });
   await refreshCounts();
 }
 

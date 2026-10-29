@@ -25,6 +25,9 @@ module Payments
       change_total = 0
       raise Api::Errors::Conflict.new("day.locked", "#{@order.business_day} is locked") if @order.business_day && DayClose.locked?(@order.branch_id, @order.business_day)
       Order.transaction do
+        # Row lock: two tills paying the same order at once take turns, and the second sees the first one's payment.
+        @order.lock!
+        raise Api::Errors::Conflict.new("order.status", "Order is #{@order.status} and cannot be paid") unless @order.status.in?(%w[draft held placed preparing ready served dispatched])
         Orders::Transitions.place!(@order, actor: @actor, device: @device) if @order.status.in?(%w[draft held])
         @order.tip_minor += tip_minor.to_i if tip_minor.to_i.positive?
         apply_rounding!(lines)

@@ -67,8 +67,18 @@ RSpec.describe "Billing, onboarding, support, alerts", type: :request do
     expect(response).to have_http_status(:ok)
   end
 
+  # Paddle signs every event with the webhook secret; the API refuses unsigned ones (29 Oct 2026 review).
+  def paddle_post(body, secret: "paddle-test-secret")
+    raw = body.to_json
+    ts = Time.current.to_i
+    post "/api/v1/webhooks/paddle", params: raw, headers: { "Content-Type" => "application/json", "Paddle-Signature" => "ts=#{ts};h1=#{OpenSSL::HMAC.hexdigest('SHA256', secret, "#{ts}:#{raw}")}" }
+  end
+
   it "activates through the Paddle webhook and goes to grace then read-only when an invoice stays unpaid" do
-    api_post "/api/v1/webhooks/paddle", { event_type: "subscription.activated", data: { id: "sub_1", custom_data: { business_id: biz.id, plan_code: "pro", cycle: "monthly" } } }
+    old = ENV["PADDLE_WEBHOOK_SECRET"]
+    ENV["PADDLE_WEBHOOK_SECRET"] = "paddle-test-secret"
+    paddle_post({ event_type: "subscription.activated", data: { id: "sub_1", custom_data: { business_id: biz.id, plan_code: "pro", cycle: "monthly" } } })
+    ENV["PADDLE_WEBHOOK_SECRET"] = old
     expect(response).to have_http_status(:ok)
     expect(biz.reload.status).to eq("active")
     within(biz) do
