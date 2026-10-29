@@ -44,8 +44,9 @@ Rails.application.configure do
   config.active_support.report_deprecations = false
 
   # Replace the default in-process memory cache store with a durable alternative.
-  # Solid Cache in the cache database (config/cache.yml): rate limits and PIN lockouts hold across restarts and deploys.
-  config.cache_store = :solid_cache_store
+  # The default file store for now. Solid Cache (config/cache.yml) is ready but needs its cache database prepared on the
+  # server first: the 29 Oct 2026 deploy failed because solid_cache_entries did not exist. Switch once that is verified.
+  # config.cache_store = :solid_cache_store
 
   # Replace the default in-process and non-durable queuing backend for Active Job.
   # config.active_job.queue_adapter = :resque
