@@ -31,7 +31,7 @@ export default function UnitsPage() {
   const submitConversion = () => saveConversion.mutate({ from_unit_id: conv.from, to_unit_id: conv.to, factor: conv.factor.trim() }, { onSuccess: () => setConv({ from: "", to: "", factor: "" }) });
   return (
     <>
-      <PageHeader icon={Ruler} title="Units and conversions" description="Stock is kept in base units (g, ml, pcs). Add purchase and pack units such as box, bottle, packet or custom ones like Pet12 and Pet6 with their factor to the base unit. Conversion factors are stored in each direction; recipes convert automatically and the ingredient picker only offers compatible units." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New unit</Button>} />
+      <PageHeader icon={Ruler} title="Units" description="Stock is kept in base units (g, ml, pcs). Add purchase and pack units such as box, bottle, packet or custom ones like Pet12 and Pet6 with their factor to the base unit. Conversion factors are stored in each direction; recipes convert automatically and the ingredient picker only offers compatible units." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New unit</Button>} />
       {units.isLoading ? <Loading /> : (
         <Table className="mb-5">
           <THead><tr><TH>Code</TH><TH>Name</TH><TH>Kind</TH><TH right>Factor to base</TH><TH /></tr></THead>

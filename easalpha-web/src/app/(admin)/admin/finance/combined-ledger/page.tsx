@@ -40,7 +40,7 @@ export default function CombinedLedgerPage() {
   });
   return (
     <>
-      <PageHeader icon={BookOpen} title="Combined ledger" description="Every posting in the books: automatic entries from sales, purchases and payments, manual vouchers and reversals." actions={<Button variant="secondary" onClick={exportPdf} disabled={!list.rows.length}><FileDown className="h-4 w-4" /> Export PDF</Button>} />
+      <PageHeader icon={BookOpen} title="Combined Ledger" description="Every posting in the books: automatic entries from sales, purchases and payments, manual vouchers and reversals." actions={<Button variant="secondary" onClick={exportPdf} disabled={!list.rows.length}><FileDown className="h-4 w-4" /> Export PDF</Button>} />
       <FilterBar>
         <DateRangePicker value={range} onChange={setRange} />
         <Select className="w-auto" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind"><option value="">All kinds</option><option value="auto">Auto</option><option value="manual">Manual</option><option value="reversal">Reversal</option></Select>

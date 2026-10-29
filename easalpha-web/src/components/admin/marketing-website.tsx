@@ -1,4 +1,5 @@
 "use client";
+import { useSettingKeys } from "@/components/admin/settings-screen";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { listToText, textToList, websiteFieldLabel, websiteFieldType, websiteSectionLabel } from "@/components/admin/marketing-helpers";
@@ -61,7 +62,7 @@ export function SectionForm({ section, values, onChange, onSave, saving, dirty }
   );
 }
 
-function KeyName({ k }: { k: string }) { return <p className="mt-1 font-mono text-[11px] text-fg-muted">{k}</p>; }
+function KeyName({ k }: { k: string }) { const shown = useSettingKeys((s) => s.shown); return shown ? <p className="mt-1 break-all font-mono text-[11px] text-fg-muted">{k}</p> : null; }
 
 function SectionField({ section, name, value, onChange }: { section: string; name: string; value: unknown; onChange: (v: unknown) => void }) {
   const type = websiteFieldType(section, name, value);

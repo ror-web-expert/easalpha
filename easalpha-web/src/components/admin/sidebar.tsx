@@ -52,9 +52,12 @@ function NavLinks({ groups, onNavigate }: { groups: NavGroup[]; onNavigate?: () 
   // Accordion: one group open at a time, following the current page, so the sidebar stays short.
   const [open, setOpen] = useState<string | null>(activeGroup ?? null);
   useEffect(() => { if (activeGroup) setOpen(activeGroup); }, [activeGroup]);
+  // The selected item scrolls into view (the list is long and the user footer covers its tail).
+  const activeHref = current?.item.href;
+  useEffect(() => { const el = document.querySelector('nav [aria-current="page"]'); if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" }); }, [activeHref]);
 
   return (
-    <nav className="flex-1 overflow-y-auto px-3 pb-4 scrollbar-thin">
+    <nav className="flex-1 overflow-y-auto px-3 pb-24 scrollbar-thin">
       {groups.map((group) => {
         const expanded = open === group.label;
         const hasActive = group.label === activeGroup;
@@ -418,7 +421,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <DayBar />
           <ThemeToggle className="text-white/85 hover:bg-white/10" />
         </header>
-        <main className="mx-auto w-full max-w-[1800px] flex-1 px-4 pb-8 pt-4 sm:px-6">
+        <main className="mx-auto w-full min-w-0 max-w-[1800px] flex-1 px-4 pb-24 pt-4 sm:px-6">
           <AnnouncementBanner />
           <NeedHelpFab />
           <ModuleGate>{children}</ModuleGate>

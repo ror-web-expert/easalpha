@@ -15,7 +15,7 @@ export default function PurchaseReturnsPage() {
   const list = usePagedList<PurchaseReturn>(["purchase_returns"], "/purchase_returns", { supplier_id: supplier });
   return (
     <>
-      <PageHeader icon={Undo2} title="Returns to suppliers" description="Goods sent back. A credit note lowers what you owe; a cash refund puts money back in the drawer or account." actions={<Link href="/admin/purchasing/purchase-returns/new"><Button><Plus className="h-4 w-4" /> New return</Button></Link>} />
+      <PageHeader icon={Undo2} title="Purchase Returns" description="Goods sent back. A credit note lowers what you owe; a cash refund puts money back in the drawer or account." actions={<Link href="/admin/purchasing/purchase-returns/new"><Button><Plus className="h-4 w-4" /> New return</Button></Link>} />
       <FilterBar><SupplierSelect className="w-auto" value={supplier} onChange={(id) => setSupplier(id)} /></FilterBar>
       {list.isLoading ? <Loading /> : (
         <Table>

@@ -25,7 +25,7 @@ export default function ZonesPage() {
   const quote = useQuery({ queryKey: ["zone_quote", dt], queryFn: () => api<ZoneQuote>("/delivery_zones/quote", { query: { text: dt } }), enabled: dt.trim().length > 2 });
   return (
     <>
-      <PageHeader icon={MapPinned} title="Delivery zones" description="Areas with their delivery charge, minimum order and ETA. The till matches the customer's address text to an area." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New zone</Button>} />
+      <PageHeader icon={MapPinned} title="Zones" description="Areas with their delivery charge, minimum order and ETA. The till matches the customer's address text to an area." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New zone</Button>} />
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div>
           {zones.isLoading ? <Loading /> : (

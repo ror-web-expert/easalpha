@@ -52,7 +52,7 @@ export default function JournalVoucherPage() {
   };
   return (
     <>
-      <PageHeader icon={Scroll} title="Journal voucher" description="Manual double-entry postings. Debits must equal credits before a voucher can be posted; posted vouchers are never edited, only reversed." />
+      <PageHeader icon={Scroll} title="Journal Voucher" description="Manual double-entry postings. Debits must equal credits before a voucher can be posted; posted vouchers are never edited, only reversed." />
       <Card className="mb-6">
         <CardHeader><CardTitle>New voucher</CardTitle>{!canPost ? <Badge variant="outline">Read only: needs settings.manage</Badge> : null}</CardHeader>
         <CardBody className="space-y-4">

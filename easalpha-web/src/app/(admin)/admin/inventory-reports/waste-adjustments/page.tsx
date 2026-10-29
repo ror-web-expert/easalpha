@@ -22,7 +22,7 @@ export default function WastePage() {
   const entries = d?.rows.reduce((a, r) => a + r.entries, 0) ?? 0;
   return (
     <>
-      <PageHeader icon={Trash2} title="Waste and adjustments" description="Waste, adjustments and count differences in the period. Negative values are stock lost." actions={<Link href="/admin/inventory/stock-actions/new"><Button><Plus className="h-4 w-4" /> Record waste</Button></Link>} />
+      <PageHeader icon={Trash2} title="Waste & Adjustments" description="Waste, adjustments and count differences in the period. Negative values are stock lost." actions={<Link href="/admin/inventory/stock-actions/new"><Button><Plus className="h-4 w-4" /> Record waste</Button></Link>} />
       <FilterBar>
         <DateRangePicker value={range} onChange={setRange} />
         <Tabs value={groupBy} onChange={setGroupBy} items={[{ value: "reason", label: "By reason" }, { value: "item", label: "By item" }]} />

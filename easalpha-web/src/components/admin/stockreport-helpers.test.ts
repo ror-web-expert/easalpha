@@ -79,6 +79,6 @@ describe("stock status", () => {
   it("shows negative stock as short, in the danger tone", () => {
     expect(stockStatusLabel({ negative: true, below_minimum: true })).toEqual({ label: "short", variant: "danger" });
     expect(stockStatusLabel({ negative: false, below_minimum: true })).toEqual({ label: "low", variant: "warning" });
-    expect(stockStatusLabel({ negative: false, below_minimum: false })).toEqual({ label: "ok", variant: "success" });
+    expect(stockStatusLabel({ negative: false, below_minimum: false })).toEqual({ label: "OK", variant: "success" });
   });
 });

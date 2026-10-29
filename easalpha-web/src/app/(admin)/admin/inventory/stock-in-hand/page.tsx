@@ -24,7 +24,7 @@ export default function StockOverviewPage() {
   const d = levels.data;
   return (
     <>
-      <PageHeader icon={Boxes} title="Stock levels" description="On-hand quantities and value per section. Sales deduct stock automatically; receive, move, waste and count with documents. Negative stock is permitted and shown as short." actions={<>
+      <PageHeader icon={Boxes} title="Stock in Hand" description="On-hand quantities and value per section. Sales deduct stock automatically; receive, move, waste and count with documents. Negative stock is permitted and shown as short." actions={<>
         <Link href="/admin/inventory/items"><Button variant="secondary"><Package className="h-4 w-4" /> Items</Button></Link>
         <Link href="/admin/inventory/stock-actions/new"><Button><Plus className="h-4 w-4" /> New document</Button></Link>
       </>} />

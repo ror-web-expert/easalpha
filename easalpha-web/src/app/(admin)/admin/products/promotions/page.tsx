@@ -38,7 +38,7 @@ export default function PromotionsPage() {
                   <Button variant="ghost" size="icon-sm" onClick={() => setDel(p)} aria-label="Delete"><Trash2 className="h-4 w-4 text-danger" /></Button>
                 </TD>
               </TR>
-            )) : <EmptyRow colSpan={7}>No promotions yet.</EmptyRow>}
+            )) : <EmptyRow colSpan={7} icon={Percent} action={<Button size="sm" onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New promotion</Button>}>No promotions yet. A promotion is a discount for a time, a coupon code or a happy hour.</EmptyRow>}
           </TBody>
         </Table>
       )}

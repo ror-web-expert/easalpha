@@ -57,23 +57,18 @@ export default function DashboardPage() {
   const rangeLabel = d ? (d.from === d.to ? formatDate(d.from) : `${formatDate(d.from)} to ${formatDate(d.to)}`) : "";
   return (
     <>
-      <PageHeader icon={LayoutDashboard} title={`Good day, ${business?.name ?? ""}`} description={`${rangeLabel}${x?.day_locked ? " · day locked" : ""}`}
+      <PageHeader icon={LayoutDashboard} title={`Good day, ${business?.name ?? ""}`} description={`${rangeLabel}${x?.day_locked ? " · day locked" : ""}${fellBack ? " · nothing has sold yet today, so this shows the last 7 days" : ""}`}
         actions={<Button variant="secondary" onClick={refresh} loading={all.isFetching}><RefreshCw className="h-4 w-4" /> Refresh</Button>} />
       <FilterBar>
         <Tabs value={period} onChange={setPeriod} items={DASHBOARD_PERIODS} />
         {period === "custom" ? <DateRangePicker value={custom} onChange={setCustom} /> : null}
+        {fellBack ? <Button variant="ghost" size="sm" onClick={() => setPeriod("today")}>Show today</Button> : null}
       </FilterBar>
       {x?.checklist && checklistDone < x.checklist.length ? (
         <Link href="/admin/settings/checklist" className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft/50 px-4 py-3 text-sm">
           <span>Setup checklist: {checklistDone} of {x.checklist.length} done.</span>
           <span className="font-medium text-primary">Continue setup</span>
         </Link>
-      ) : null}
-      {fellBack ? (
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-info-soft/60 px-4 py-3 text-sm text-info-ink">
-          <span>Nothing has sold yet today, so this shows the last 7 days.</span>
-          <button type="button" className="min-h-10 font-medium underline underline-offset-4" onClick={() => setPeriod("today")}>Show today</button>
-        </div>
       ) : null}
       {all.error ? <ErrorState message={errorMessage(all.error)} onRetry={() => all.refetch()} /> : null}
       {/* Review 4.1: two tiers. The three figures an owner checks first, large; the rest in a compact strip. Skeletons

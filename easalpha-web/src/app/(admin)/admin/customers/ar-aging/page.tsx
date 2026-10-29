@@ -16,7 +16,7 @@ export default function AgingPage() {
   const t = q.data?.totals;
   return (
     <>
-      <PageHeader icon={PiggyBank} title="Khata aging" description="Who owes what and for how long. Payments settle the oldest charges first." />
+      <PageHeader icon={PiggyBank} title="AR Aging" description="Who owes what and for how long. Payments settle the oldest charges first." />
       <FilterBar><Input type="date" className="w-auto" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></FilterBar>
       <Cards>
         <SummaryCard label="Total due" value={formatMoney(t?.total)} sub={`${q.data?.customers_with_due ?? 0} customers`} tone="danger" />

@@ -103,7 +103,8 @@ export function Checkbox({ label, className, ...props }: InputHTMLAttributes<HTM
 
 export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label?: string; disabled?: boolean }) {
   return (
-    <label className={cn("inline-flex items-center gap-3 text-sm", disabled ? "opacity-40" : "cursor-pointer")}>
+    // A block-level flex row (w-fit keeps the click area to the control and its label): two switches in a column never share a line.
+    <label className={cn("flex w-fit max-w-full items-center gap-3 text-sm", disabled ? "opacity-40" : "cursor-pointer")}>
       <button
         type="button"
         role="switch"

@@ -53,7 +53,7 @@ export default function DealsPage() {
                   <Button variant="ghost" size="icon-sm" onClick={() => setDel(d)} aria-label="Delete"><Trash2 className="h-4 w-4 text-danger" /></Button>
                 </TD>
               </TR>
-            )) : <EmptyRow colSpan={7}>No deals yet.</EmptyRow>}
+            )) : <EmptyRow colSpan={7} icon={Gift} action={<Button size="sm" onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New deal</Button>}>No deals yet. A deal sells a few products together at one price, like a family meal.</EmptyRow>}
           </TBody>
         </Table>
       )}

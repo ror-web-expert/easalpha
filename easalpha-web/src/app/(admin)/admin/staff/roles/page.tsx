@@ -43,7 +43,7 @@ export default function RolesPage() {
   const toggleOpen = (name: string) => setClosed((c) => { const n = new Set(c); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   return (
     <>
-      <PageHeader icon={Shield} title="Roles and permissions" description="System roles can change permissions but not names. Copy one to make a custom role." actions={<Button onClick={() => setCreate({ name: "", copy_from_role_id: sel })}><Plus className="h-4 w-4" /> New role</Button>} />
+      <PageHeader icon={Shield} title="Roles" description="System roles can change permissions but not names. Copy one to make a custom role." actions={<Button onClick={() => setCreate({ name: "", copy_from_role_id: sel })}><Plus className="h-4 w-4" /> New role</Button>} />
       {roles.isLoading || registry.isLoading ? <Loading /> : (
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
           <Card>

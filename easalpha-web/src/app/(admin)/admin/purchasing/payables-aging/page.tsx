@@ -19,7 +19,7 @@ export default function PurchasingPage() {
   const overdue = a ? a.totals["31_60"] + a.totals["61_90"] + a.totals.over_90 : 0;
   return (
     <>
-      <PageHeader icon={CalendarClock} title="Payables" description="What you owe suppliers and for how long. Aging is FIFO: payments settle the oldest receipts first." />
+      <PageHeader icon={CalendarClock} title="Payables aging" description="What you owe suppliers and for how long. Aging is FIFO: payments settle the oldest receipts first." />
       <Cards>
         <SummaryCard label="Owed to suppliers" value={formatMoney(s?.payables_minor)} sub={`${s?.suppliers_with_due ?? 0} of ${s?.suppliers ?? 0} suppliers`} tone={s?.payables_minor ? "danger" : "success"} />
         <SummaryCard label="Overdue (31+ days)" value={formatMoney(overdue)} sub={a ? `31–60 ${formatMoney(a.totals["31_60"])} · 61–90 ${formatMoney(a.totals["61_90"])} · 90+ ${formatMoney(a.totals.over_90)}` : ""} tone="warning" />

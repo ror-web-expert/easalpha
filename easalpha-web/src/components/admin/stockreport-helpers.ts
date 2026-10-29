@@ -120,5 +120,5 @@ export const varianceClass = (qty: string | number | null | undefined) => {
 export function stockStatusLabel(row: { negative: boolean; below_minimum: boolean }): { label: string; variant: BadgeVariant } {
   if (row.negative) return { label: "short", variant: "danger" };
   if (row.below_minimum) return { label: "low", variant: "warning" };
-  return { label: "ok", variant: "success" };
+  return { label: "OK", variant: "success" };
 }

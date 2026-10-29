@@ -59,7 +59,7 @@ export default function ProductsPage() {
   };
   return (
     <>
-      <PageHeader icon={Package} title="Products" description="Every product with its photo, price and margin, and whether it sells in the shop and online. Grid reads like the menu; List is for checking codes and prices. Turn on Arrange to drag products into order within a category." actions={<>
+      <PageHeader icon={Package} title="Catalog" description="Every product with its photo, price and margin, and whether it sells in the shop and online. Grid reads like the menu; List is for checking codes and prices. Turn on Arrange to drag products into order within a category." actions={<>
         {/* Review 4.4: one primary action; the menu tools sit together in one overflow menu. */}
         <OverflowMenu label={downloading ? "Downloading…" : "Menu tools"} items={[
           { label: "Download menu", icon: Download, hint: "Every product as a file you can re-import", onSelect: download, disabled: downloading },

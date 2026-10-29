@@ -44,7 +44,9 @@ export default function PlanPage() {
   const b = q.data;
   const sub = b.subscription;
   const biz = b.business;
-  const current = b.plans.find((p) => p.code === (sub?.plan_code ?? biz.plan?.code));
+  // A cancelled or expired subscription row must not outrank the plan the business is actually on.
+  const liveSub = sub && ["active", "trialing", "past_due"].includes(String(sub.status)) ? sub : null;
+  const current = b.plans.find((p) => p.code === (liveSub?.plan_code ?? biz.plan?.code));
   const unpaid = b.invoices.filter((i) => ["unpaid", "pending", "overdue", "issued"].includes(i.status));
   const pi = b.payment_instructions;
   return (

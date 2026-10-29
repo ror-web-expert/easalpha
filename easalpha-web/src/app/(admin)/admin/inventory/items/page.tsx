@@ -51,7 +51,7 @@ export default function StockItemsPage() {
               return (
                 <TR key={i.id} className={i.active === false ? "opacity-60" : ""}>
                   <TD><Link href={`/admin/inventory/items/${i.id}`} className="font-medium text-primary hover:underline">{i.name}</Link>{i.name_ur ? <span className="ml-2 text-fg-muted">{i.name_ur}</span> : null}</TD>
-                  <TD className="font-mono text-xs text-fg-secondary">{i.sku ?? "-"}</TD>
+                  <TD className="whitespace-nowrap font-mono text-xs text-fg-secondary">{i.sku ?? "-"}</TD>
                   <TD className="text-fg-secondary">{i.purchase_category ?? i.category ?? "-"}</TD>
                   <TD className="text-fg-secondary">{code}{i.purchase_unit ? <span className="text-fg-muted"> · buy in {i.purchase_unit.code}</span> : null}</TD>
                   <TD right className={short ? "font-medium text-danger" : lowFlag ? "font-medium text-warning" : "font-medium"}>{short ? `${formatBaseQty(Math.abs(qty), code)} short` : formatBaseQty(i.quantity, code)}</TD>

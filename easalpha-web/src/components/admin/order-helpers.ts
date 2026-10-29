@@ -144,5 +144,6 @@ export function monthGrid(month: Date | string, counts: { day: string; count: nu
 /** "22 open orders today · 80 from previous days". */
 export function openOrdersPill(today: number, previous: number): string {
   const t = `${today} open ${today === 1 ? "order" : "orders"} today`;
+  if (today === 0 && previous > 0) return `${previous} open from earlier days`;
   return previous > 0 ? `${t} · ${previous} from previous days` : t;
 }

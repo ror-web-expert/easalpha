@@ -34,7 +34,7 @@ function LedgerScreen() {
         {can(...SUPPLIER_PERMS.ledger) ? <Button onClick={() => setAdjusting(true)} disabled={!r}><SlidersHorizontal className="h-4 w-4" /> Manual adjustment</Button> : null}
       </>} />
       <FilterBar>
-        <SupplierSearchSelect value={supplierId} onChange={(id) => setSupplierId(id)} autoFocus={!supplierId} />
+        <SupplierSearchSelect value={supplierId} onChange={(id) => setSupplierId(id)} />
         {r ? <span className="text-sm text-fg-secondary">{[r.supplier.contact_name, r.supplier.phone, r.supplier.payment_terms_days ? `${r.supplier.payment_terms_days} day terms` : "Pay on delivery"].filter(Boolean).join(" · ")}</span> : null}
       </FilterBar>
       {!supplierId ? <EmptyState icon={BookOpen} title="Choose a supplier" hint="Search by name, phone or contact to open their ledger." /> : ledger.isLoading || !r || !t ? <Loading /> : (

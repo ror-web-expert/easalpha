@@ -36,7 +36,7 @@ export default function StockSectionsPage() {
   };
   return (
     <>
-      <PageHeader icon={Warehouse} title="Inventory Sections" description="Kitchen and Warehouse are system sections that cannot be removed; Warehouse is the COGS Primary section by default. Add custom areas such as BBQ, Bar or a station. Each carries a slug; a new section appears in the Inventory sidebar and in the catalog's source picker, and items assigned to it must have their location set to that slug." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New section</Button>} />
+      <PageHeader icon={Warehouse} title="Sections" description="Kitchen and Warehouse are system sections that cannot be removed; Warehouse is the COGS Primary section by default. Add custom areas such as BBQ, Bar or a station. Each carries a slug; a new section appears in the Inventory sidebar and in the catalog's source picker, and items assigned to it must have their location set to that slug." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New section</Button>} />
       {sections.isLoading ? <Loading /> : (
         <Table>
           <THead><tr><TH>Name</TH><TH>Slug</TH><TH right>Order</TH><TH right>Items with stock</TH><TH right>Value</TH><TH /></tr></THead>

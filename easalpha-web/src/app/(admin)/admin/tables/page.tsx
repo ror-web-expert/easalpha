@@ -64,7 +64,7 @@ export default function TablesPage() {
   const s = tables.data?.summary;
   return (
     <>
-      <PageHeader icon={Grid3X3} title="Tables and floors" description="Position tables on a grid; the till shows this plan for dine-in." actions={<>
+      <PageHeader icon={Grid3X3} title="Tables" description="Position tables on a grid; the till shows this plan for dine-in." actions={<>
         <Button variant="secondary" onClick={() => setFloorName("")}><Plus className="h-4 w-4" /> Floor</Button>
         <Button variant="secondary" onClick={() => setForm({ code: "", name: "", seats: 4, floor_id: floorId === "none" ? "" : floorId, location: "" })}><Plus className="h-4 w-4" /> Table</Button>
         <span title={dirty ? "Save the new positions" : "Nothing to save yet: drag a table, resize it or place one first"}><Button onClick={saveLayout} loading={saving} disabled={!dirty}><Save className="h-4 w-4" /> {dirty ? "Save layout" : "Layout saved"}</Button></span>

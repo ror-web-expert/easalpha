@@ -26,7 +26,7 @@ export default function AccountsPage() {
   const cur = accounts.find((a) => a.id === sel);
   return (
     <>
-      <PageHeader icon={Landmark} title="Payment accounts" description="Cash drawers, bank and wallet accounts. Every payment posts an entry." actions={<Button onClick={() => setCreate({ name: "", kind: "bank", bank_name: "", account_no: "", opening_balance_minor: 0 })}><Plus className="h-4 w-4" /> New account</Button>} />
+      <PageHeader icon={Landmark} title="Payment Accounts" description="Cash drawers, bank and wallet accounts. Every payment posts an entry." actions={<Button onClick={() => setCreate({ name: "", kind: "bank", bank_name: "", account_no: "", opening_balance_minor: 0 })}><Plus className="h-4 w-4" /> New account</Button>} />
       <Cards>
         <SummaryCard label="Company balance" value={formatMoney(q.data?.total_balance_minor)} sub={`${accounts.length} accounts`} tone="success" />
       </Cards>

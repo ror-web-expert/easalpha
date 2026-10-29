@@ -17,7 +17,7 @@ export default function StationsPage() {
   const [del, setDel] = useState<Station | null>(null);
   return (
     <>
-      <PageHeader icon={ChefHat} title="Kitchen stations" description="BBQ, Karahi, Tandoor, Drinks: each gets its own tickets and display." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New station</Button>} />
+      <PageHeader icon={ChefHat} title="Stations" description="BBQ, Karahi, Tandoor, Drinks: each gets its own tickets and display." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New station</Button>} />
       {list.isLoading ? <Loading /> : (
         <Table>
           <THead><tr><TH>Name</TH><TH>Printer</TH><TH right>Order</TH><TH right>Actions</TH></tr></THead>

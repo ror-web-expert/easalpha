@@ -37,7 +37,7 @@ describe("OrderPanel heading", () => {
   it("calls a saved but unplaced order a new order instead of 'draft draft'", () => {
     panel(order({ label: "draft", status: "draft" }));
     expect(screen.getByText("New order")).toBeInTheDocument();
-    expect(screen.getByText("not placed")).toBeInTheDocument();
+    expect(screen.getByText(/not placed/i)).toBeInTheDocument();
     expect(screen.queryByText("draft")).toBeNull();
   });
 });

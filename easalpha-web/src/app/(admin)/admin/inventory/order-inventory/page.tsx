@@ -22,7 +22,7 @@ export default function PackagingPage() {
   const branchName = (id: string | null) => (id ? branches.data?.find((b) => b.id === id)?.name ?? "…" : "All branches");
   return (
     <>
-      <PageHeader icon={PackageOpen} title="Packaging" description="Boxes, bags and cutlery deducted once per order by order type, on top of the recipes. Mark the items as packaging items first." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New rule</Button>} />
+      <PageHeader icon={PackageOpen} title="Order Inventory" description="Boxes, bags and cutlery deducted once per order by order type, on top of the recipes. Mark the items as packaging items first." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New rule</Button>} />
       {rules.isLoading ? <Loading /> : (
         <Table>
           <THead><tr><TH>Order type</TH><TH>Item</TH><TH right>Per order</TH><TH>Branch</TH><TH right></TH></tr></THead>

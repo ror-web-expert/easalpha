@@ -55,6 +55,7 @@ describe("badges and labels", () => {
   it("builds the open-orders pill text", () => {
     expect(openOrdersPill(22, 80)).toBe("22 open orders today · 80 from previous days");
     expect(openOrdersPill(1, 0)).toBe("1 open order today");
+    expect(openOrdersPill(0, 67)).toBe("67 open from earlier days");
   });
 });
 

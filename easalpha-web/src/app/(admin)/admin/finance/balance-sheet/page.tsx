@@ -37,7 +37,7 @@ export default function BalanceSheetPage() {
   });
   return (
     <>
-      <PageHeader icon={Scale} title="Balance sheet" description="Assets on one side, liabilities and equity on the other, as of a day." actions={<Button variant="secondary" onClick={exportPdf} disabled={!d}><FileDown className="h-4 w-4" /> Export PDF</Button>} />
+      <PageHeader icon={Scale} title="Balance Sheet" description="Assets on one side, liabilities and equity on the other, as of a day." actions={<Button variant="secondary" onClick={exportPdf} disabled={!d}><FileDown className="h-4 w-4" /> Export PDF</Button>} />
       <FilterBar><AsOfPicker value={asOf} onChange={setAsOf} /><BalancedBadge balanced={balanced} /></FilterBar>
       {q.isLoading || !d ? <Loading /> : (
         <>

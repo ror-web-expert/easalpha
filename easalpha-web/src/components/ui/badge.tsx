@@ -18,8 +18,14 @@ const badge = cva("inline-flex h-[22px] items-center gap-1 rounded-full px-2.5 t
   defaultVariants: { variant: "neutral" },
 });
 
-export function Badge({ className, variant, ...props }: React.HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badge>) {
-  return <span className={cn(badge({ variant }), className)} {...props} />;
+/** A plain lowercase word or phrase ("open", "not counted") is shown in sentence case so every chip reads the same;
+ *  anything that looks like a code (digits, dots, colons, slashes) is left exactly as given. */
+export function sentenceCase(children: React.ReactNode): React.ReactNode {
+  return typeof children === "string" && /^[a-z][a-z\s'-]*$/.test(children) ? children.charAt(0).toUpperCase() + children.slice(1) : children;
+}
+
+export function Badge({ className, variant, children, ...props }: React.HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badge>) {
+  return <span className={cn(badge({ variant }), className)} {...props}>{sentenceCase(children)}</span>;
 }
 
 export type BadgeVariant = NonNullable<VariantProps<typeof badge>["variant"]>;

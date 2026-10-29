@@ -28,7 +28,7 @@ export function HeaderPills({ className }: { className?: string }) {
         </Link>
       ) : null}
       {p.open_orders_today > 0 || p.open_orders_previous > 0 ? (
-        <Link href="/admin/orders/pending" className={cn(PILL, danger ? "bg-danger-soft text-danger-ink" : "bg-info-soft text-info-ink")} title={`Open orders by business day: ${openOrdersPill(p.open_orders_today, p.open_orders_previous)}`}>
+        <Link href="/admin/orders/pending" className={cn(PILL, danger ? "bg-warning-soft text-warning-ink" : "bg-info-soft text-info-ink")} title={`Open orders by business day: ${openOrdersPill(p.open_orders_today, p.open_orders_previous)}`}>
           <Clock className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{openOrdersPill(p.open_orders_today, p.open_orders_previous)}</span>
         </Link>
       ) : null}

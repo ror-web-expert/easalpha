@@ -32,7 +32,7 @@ export default function TrialBalancePage() {
   });
   return (
     <>
-      <PageHeader icon={Calculator} title="Trial balance" description="Opening, period and closing balances for every account with activity. Period debits must equal period credits." actions={<Button variant="secondary" onClick={exportPdf} disabled={!d}><FileDown className="h-4 w-4" /> Export PDF</Button>} />
+      <PageHeader icon={Calculator} title="Trial Balance" description="Opening, period and closing balances for every account with activity. Period debits must equal period credits." actions={<Button variant="secondary" onClick={exportPdf} disabled={!d}><FileDown className="h-4 w-4" /> Export PDF</Button>} />
       <FilterBar><DateRangePicker value={range} onChange={setRange} /><BalancedBadge balanced={d?.balanced} /></FilterBar>
       {q.isLoading || !d ? <Loading /> : (
         <Table>

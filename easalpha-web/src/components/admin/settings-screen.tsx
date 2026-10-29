@@ -1,4 +1,5 @@
 "use client";
+import { create } from "zustand";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
@@ -131,8 +132,13 @@ export function SettingsScreenCard({ screen, keys, className }: { screen: string
   );
 }
 
-function KeyName({ k }: { k: string }) {
-  return <p className="mt-1 font-mono text-[11px] text-fg-muted">{k}</p>;
+/** Setting keys are for support staff. Owners see labels only; "Show setting keys" under the page header switches
+ *  them on for this visit (review 30 Oct 2026: a row of mono keys under every control read as developer noise). */
+export const useSettingKeys = create<{ shown: boolean; toggle: () => void }>((set) => ({ shown: false, toggle: () => set((s) => ({ shown: !s.shown })) }));
+
+export function KeyName({ k }: { k: string }) {
+  const shown = useSettingKeys((s) => s.shown);
+  return shown ? <p className="mt-1 break-all font-mono text-[11px] text-fg-muted">{k}</p> : null;
 }
 
 function SettingControl({ setting, value, onChange, error }: { setting: SettingKey; value: unknown; onChange: (v: unknown) => void; error?: string }) {
@@ -221,8 +227,14 @@ function SettingControl({ setting, value, onChange, error }: { setting: SettingK
 }
 
 export function SettingsVersion({ version }: { version: number | undefined }) {
+  const { shown, toggle } = useSettingKeys();
   if (version === undefined) return null;
-  return <p className="-mt-4 mb-6 text-xs text-fg-muted">Settings version {version} · tills re-sync when it changes</p>;
+  return (
+    <p className="-mt-4 mb-6 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
+      <span>Settings version {version} · tills re-sync when it changes</span>
+      <button type="button" className="font-medium underline underline-offset-4 hover:text-fg" onClick={toggle}>{shown ? "Hide setting keys" : "Show setting keys"}</button>
+    </p>
+  );
 }
 
 /** All screens of one SPEC settings group, one card per screen. */

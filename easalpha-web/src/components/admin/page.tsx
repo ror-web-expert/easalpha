@@ -10,8 +10,10 @@ import { daysAgo, isoDay } from "@/lib/dates";
  *  a muted one-line description and the page actions on the right. Same props as before; `meta` is new and optional. */
 export function PageHeader({ icon: Icon, title, description, actions, meta, className }: { icon?: LucideIcon; title: string; description?: string; actions?: React.ReactNode; meta?: React.ReactNode; className?: string }) {
   return (
+    // Review 30 Oct 2026: the text block grows and wraps (flex-1 with a 28rem basis) so the actions keep the right-hand
+    // slot on every page; they drop below only when the card is narrower than text plus buttons.
     <div className={cn("mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card px-6 py-5", className)}>
-      <div className="flex min-w-0 items-center gap-4">
+      <div className="flex min-w-0 flex-1 basis-[28rem] items-center gap-4">
         {Icon ? (
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cta-soft text-cta-ink" aria-hidden="true">
             <Icon className="h-[22px] w-[22px]" />
@@ -25,7 +27,7 @@ export function PageHeader({ icon: Icon, title, description, actions, meta, clas
           {description ? <p className="mt-1 text-sm leading-5 text-fg-muted">{description}</p> : null}
         </div>
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
@@ -55,7 +57,7 @@ export function statGridClasses(n: number): string {
     case n === 4: return "grid-cols-2 lg:grid-cols-4";
     case n === 5: return `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 ${firstWide}`;
     case n === 6: return "grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6";
-    case n === 7: return `grid-cols-2 sm:grid-cols-4 ${firstWide}`;
+    case n === 7: return `grid-cols-2 sm:grid-cols-4 ${firstWide} sm:[&>*:last-child]:col-span-2`; // 4 + 3 with the last card wide: no hole at the end of the row
     case n === 8: return "grid-cols-2 sm:grid-cols-4";
     case n === 9: return `grid-cols-2 sm:grid-cols-3 ${firstWide}`;
     case n === 10: return "grid-cols-2 lg:grid-cols-5";

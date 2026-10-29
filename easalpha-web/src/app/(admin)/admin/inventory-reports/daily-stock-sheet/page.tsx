@@ -29,7 +29,7 @@ export default function DailySheetPage() {
   const totals = d?.rows.reduce((a, r) => ({ in: a.in + Number(r.in), out: a.out + Number(r.out), waste: a.waste + Number(r.waste), sale: a.sale + Number(r.sale) }), { in: 0, out: 0, waste: 0, sale: 0 });
   return (
     <>
-      <PageHeader icon={ClipboardList} title="Daily stock sheet" description="Opening, movements and closing per item for one section and business day. Closing = opening + in - out - waste - sale ± adjusted." />
+      <PageHeader icon={ClipboardList} title="Daily Stock Sheet" description="Opening, movements and closing per item for one section and business day. Closing = opening + in - out - waste - sale ± adjusted." />
       <FilterBar>
         <Select className="w-auto" value={sectionId} onChange={(e) => setSection(e.target.value)}>{sections.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
         <Input type="date" className="w-auto" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Business day" />

@@ -78,7 +78,7 @@ export default function OrdersPage() {
   const bulkCandidates = rows.filter((o) => o.spec_status !== "completed" && !["voided", "refunded", "cancelled"].includes(o.status) && o.payment_status === "paid").length;
   return (
     <>
-      <PageHeader icon={ReceiptText} title="Orders Management" description="Every order with its order status, payment and history. Dates are business days." actions={<>
+      <PageHeader icon={ReceiptText} title="Orders" description="Every order with its order status, payment and history. Dates are business days." actions={<>
         <Button variant="ghost" size="icon" onClick={refreshAll} aria-label="Refresh" title="Refresh"><RefreshCw className="h-5 w-5" /></Button>
         <Link href="/admin/orders/pending"><Button variant="secondary"><Clock className="h-4 w-4" /> Pending Orders</Button></Link>
         {can("settings.manage", "reports.view_all", "billing.manage") ? <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="h-4 w-4" /> Export CSV</Button> : null}

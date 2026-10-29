@@ -53,7 +53,7 @@ export default function ChartOfAccountsPage() {
   const parents = (all.data ?? []).filter((a) => a.kind === form?.kind && a.id !== form?.id);
   return (
     <>
-      <PageHeader icon={ListTree} title="Chart of accounts" description="Pre-numbered system accounts with a code, type, normal side and opening balance. Add your own under any header; system rows stay protected."
+      <PageHeader icon={ListTree} title="Chart of Accounts" description="Pre-numbered system accounts with a code, type, normal side and opening balance. Add your own under any header; system rows stay protected."
         actions={manage ? <Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> Add account</Button> : null} />
       <FilterBar>
         <Select className="w-auto" value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Kind"><option value="">All types</option>{GL_KINDS.map((k) => <option key={k} value={k}>{glKindLabel(k)}</option>)}</Select>

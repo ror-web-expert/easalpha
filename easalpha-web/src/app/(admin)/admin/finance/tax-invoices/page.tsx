@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FileCheck2, RotateCw } from "lucide-react";
 import { api } from "@/lib/api";
 import type { TaxInvoice, TaxQueueSummary } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { usePagedList } from "@/lib/hooks";
@@ -37,7 +38,7 @@ export default function TaxInvoicesPage() {
                 <TD><Badge variant={i.status === "accepted" ? "success" : i.status === "failed" ? "danger" : "info"}>{i.status}</Badge></TD>
                 <TD className="font-mono text-xs">{i.invoice_number ?? "-"}</TD>
                 <TD>{i.attempts}{i.next_attempt_at && i.status !== "accepted" ? <span className="text-xs text-fg-muted"> · next {formatDateTime(i.next_attempt_at)}</span> : null}</TD>
-                <TD className="max-w-xs truncate text-xs text-danger" title={i.last_error ?? ""}>{i.last_error ?? "-"}</TD>
+                <TD className={cn("max-w-xs truncate text-xs", i.last_error ? "text-danger" : "text-fg-muted")} title={i.last_error ?? ""}>{i.last_error ?? "-"}</TD>
                 <TD right>{formatMoney(i.total_minor)}</TD>
                 <TD right>{i.status !== "accepted" ? <Button size="sm" variant="secondary" onClick={() => retry.mutate(i.id)}><RotateCw className="h-3 w-3" /> Retry</Button> : null}</TD>
               </TR>

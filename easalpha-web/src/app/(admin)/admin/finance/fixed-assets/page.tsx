@@ -39,7 +39,7 @@ export default function FixedAssetsPage() {
   const monthly = form ? straightLineMonthly(form.cost_minor, form.salvage_minor, form.useful_life_months) : 0;
   return (
     <>
-      <PageHeader icon={Building2} title="Fixed assets" description="Equipment, furniture and vehicles on the books. Straight-line depreciation posts to 1590 Accumulated Depreciation." actions={manage ? <Button onClick={() => setForm(blank())}><Plus className="h-4 w-4" /> Add asset</Button> : null} />
+      <PageHeader icon={Building2} title="Fixed Assets" description="Equipment, furniture and vehicles on the books. Straight-line depreciation posts to 1590 Accumulated Depreciation." actions={manage ? <Button onClick={() => setForm(blank())}><Plus className="h-4 w-4" /> Add asset</Button> : null} />
       <Cards>
         <SummaryCard label="Cost" value={formatMoney(t?.cost_minor)} sub={`${rows.length} assets`} tone="primary" />
         <SummaryCard label="Accumulated depreciation" value={formatMoney(t?.accumulated_minor)} tone="warning" />
