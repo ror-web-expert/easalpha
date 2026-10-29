@@ -6,6 +6,8 @@ token and collects at the counter. A second try in the same meal session is refu
 Every meal lands on the worker's own account, so "I never ate" is settled by the record, and the month's meals come off
 the payroll run. Works online and offline. Switched on per business by the owner (Settings, Modules, Canteen).
 
+Screenshots of the browser walk-through (29 Oct 2026, 23 of 23 steps): [screenshots/canteen/index.html](screenshots/canteen/index.html).
+
 ---
 
 ## 1. What the owner sets up
