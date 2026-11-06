@@ -79,13 +79,12 @@ module Sync
     # (OrdersController#collect_approvals). A record from a till before 6 Nov 2026 has no codes: its PIN still covers
     # every guarded step, for one release, and the log says so (R6). A wrong PIN counts against the cashier's PIN
     # throttle, as online, and leaves the record with no approval: the guarded step then answers approval.required.
+    # Each step goes to a holder of the PIN who has its permission, so a PIN two staff share still finds the manager.
     def approvals_for(pin, actor, codes)
       return {} if pin.blank? || actor.nil?
-      approver = Auth::PinApproval.find_approver(pin: pin, permission: "app.pos", exclude_membership: actor)
-      return {} unless approver
-      return (codes & approver.permission_codes).index_with { approver } if codes
-      Rails.logger.warn("[approval.legacy] sync push: approver_pin without approval_codes grants every permission of membership #{approver.id} (device #{@device.id})")
-      approver.permission_codes.index_with { approver }
+      approvals = Auth::PinApproval.approvals_for(pin: pin, permissions: codes, exclude_membership: actor)
+      Rails.logger.warn("[approval.legacy] sync push: approver_pin without approval_codes grants every permission of membership #{approvals.values.map(&:id).uniq.join(', ')} (device #{@device.id})") if codes.nil? && approvals.any?
+      approvals
     end
 
     # The member whose PIN approved this step, nil when the cashier holds the permission themselves (as online).
@@ -119,6 +118,8 @@ module Sync
       attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
       attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id if attrs[:is_staff_meal]
       attrs[:client_created_at] = Orders::ClientTime.clamp(attrs[:client_created_at], record_id: id) if attrs.key?(:client_created_at)
+      # Read before anything is written: a payment time the server cannot read refuses the record, not half of it.
+      payments = clamped_payments(payload[:payments])
       day = @branch.business_day_for(attrs[:client_created_at] || Time.current)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
       builder = Orders::Builder.create!(attrs, lines: Array(payload[:lines]).map(&:to_h), actor: actor, device: @device, branch: @branch, approvals: @approvals)
@@ -126,8 +127,8 @@ module Sync
       Orders::Transitions.place!(order, actor: actor, device: @device) if complete?(payload) || payload[:status].to_s != "draft" && payload[:status].present?
       if payload[:voided].present? || payload[:status].to_s == "voided"
         Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for("orders.void", actor), device: @device)
-      elsif payload[:payments].present?
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
+      elsif payments.any?
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payments, tip_minor: payload[:tip_minor].to_i, offline: true)
       end
       complete!(order, actor) if complete?(payload)
       "accepted"
@@ -142,7 +143,7 @@ module Sync
       changed = false
       if missing.any?
         tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: missing, tip_minor: tip, offline: true)
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: clamped_payments(missing), tip_minor: tip, offline: true)
         changed = true
       end
       if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
@@ -189,6 +190,9 @@ module Sync
         end
         builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: @approvals)
         Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
+        # Sent to the kitchen on the till while the order was a draft here (an edit made while the order's own push
+        # was out comes as an update, sync.ts): placed now, as the order record would have been.
+        Orders::Transitions.place!(order, actor: actor, device: @device) if payload[:status].to_s == "placed" && order.reload.status.in?(%w[draft held])
         # A staff meal completed offline on an order the server already held: the till sends complete on the update.
         if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
           Orders::Transitions.place!(order, actor: actor, device: @device) if order.status.in?(%w[draft held])
@@ -201,8 +205,32 @@ module Sync
     def apply_payment(id, payload, actor)
       return "duplicate" if Payment.exists?(id: id)
       order = Order.includes(items: :modifiers).find(need(payload, :order_id))
-      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: [ payload.merge(id: id) ], tip_minor: payload[:tip_minor].to_i, offline: true)
+      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: clamped_payments([ payload.merge(id: id) ]), tip_minor: replayed_tip(order, payload, id), offline: true)
       "accepted"
+    end
+
+    # The till's time on a payment dates it when there is no shift (Payments::Processor#money_day), so it is kept in
+    # the same window as the order's: unclamped, a sale from a till whose clock was days out landed on one day and its
+    # payment on another, or on a locked day that refused it after the order was already in (final round, sync-auth#2).
+    def clamped_payments(lines)
+      Array(lines).map do |raw|
+        line = raw.to_h.with_indifferent_access
+        next line if line[:client_created_at].blank?
+        line.merge(client_created_at: Orders::ClientTime.clamp(line[:client_created_at], table_name: "payments", record_id: line[:id]).iso8601(3))
+      end
+    end
+
+    # A queued payment's tip, taken while the order has none yet. A till from before 6 Nov 2026 put the whole tip on
+    # every split of an offline payment, and each replay added it again (two splits with a 5,000 tip gave 10,000 and
+    # left the order part-paid); the till since puts it on the first split only, but the old records are still in
+    # the tills' queues (final round, deploy#6). A tip refused here goes to the audit log, as an adjusted payment does.
+    def replayed_tip(order, payload, id)
+      tip = payload[:tip_minor].to_i
+      return 0 unless tip.positive?
+      return tip if order.tip_minor.to_i.zero?
+      AuditLog.record(action: "offline_payment_adjusted", record: order, before: { payment_id: id, tip_minor: tip },
+                      after: { tip_minor: 0, order_tip_minor: order.tip_minor, reason: "the order already has a tip" })
+      0
     end
 
     def apply_refund(id, payload, actor)
@@ -221,18 +249,29 @@ module Sync
       "accepted"
     end
 
+    # Shift records go through the checks the online shift endpoints make (ShiftsController): queued, they skipped
+    # them all, so a waiter could close a cashier's shift with any count or take a payout from their drawer (final
+    # round, sync-auth#1). The till's time dates the shift, so it is kept in the orders' window, and that day must be
+    # open: Shifts::Manager.open! checks today only.
     def apply_shift_open(id, payload, actor)
       return "duplicate" if Shift.exists?(id: id)
-      Shifts::Manager.open!(cashier: actor, branch: @branch, device: @device, opening_cash_minor: payload[:opening_cash_minor].to_i, id: id, client_created_at: payload[:client_created_at])
+      require_permission!(actor, "shifts.own", "shifts.any")
+      made_at = Orders::ClientTime.clamp(payload[:client_created_at], table_name: "shifts", record_id: id)
+      day = @branch.business_day_for(made_at || Time.current)
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
+      Shifts::Manager.open!(cashier: actor, branch: @branch, device: @device, opening_cash_minor: payload[:opening_cash_minor].to_i, id: id, client_created_at: made_at)
       "accepted"
     end
 
     # The manager approval on a close or a cash-out is recorded when a PIN came with the record, and not demanded
-    # when none did: the same as the online endpoints.
+    # when none did: the same as the online endpoints. The record's id is the shift's (payload shift_id from a till
+    # that gives the close its own id, so a close queued behind its own shift_open does not replace it).
     def apply_shift_close(id, payload, actor)
-      shift = Shift.find(id)
+      shift = branch_shift(payload[:shift_id].presence || id)
       return "duplicate" unless shift.open?
-      Shifts::Manager.close!(shift, counted_cash_minor: payload[:counted_cash_minor].to_i, count_detail: payload[:count_detail].to_h, by: actor, approver: @approvals["shifts.any"], note: payload[:note])
+      own_shift!(shift, actor, "Only the cashier or a manager can close this shift")
+      fingerprint_checked_in!(shift)
+      Shifts::Manager.close!(shift, counted_cash_minor: payload[:counted_cash_minor].to_i, count_detail: payload[:count_detail].to_h, by: actor, approver: given_approval("shifts.any", actor), note: payload[:note])
       "accepted"
     end
 
@@ -247,8 +286,13 @@ module Sync
 
     def apply_cash_movement(id, payload, actor)
       return "duplicate" if CashMovement.exists?(id: id)
-      shift = Shift.find(need(payload, :shift_id))
-      Shifts::Manager.cash_movement!(shift, kind: payload[:kind].to_s, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, approver: @approvals["shifts.any"], reference: payload[:reference], id: id)
+      require_permission!(actor, "cash.in_out", "shifts.any")
+      shift = branch_shift(need(payload, :shift_id))
+      own_shift!(shift, actor, "Not your shift")
+      kind = payload[:kind].to_s
+      raise Api::Errors::BadRequest.new("cash.kind", "kind must be cash_in, cash_out, payout or drop") unless kind.in?(%w[cash_in cash_out payout drop])
+      approver = kind == "cash_in" ? nil : given_approval("shifts.any", actor)
+      Shifts::Manager.cash_movement!(shift, kind: kind, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, approver: approver, reference: payload[:reference], id: id)
       "accepted"
     end
 
@@ -268,6 +312,33 @@ module Sync
                                     actor: actor, shift: Shift.open.find_by(cashier_membership_id: actor.id), branch: @branch, direction: payload[:direction].presence_in(%w[received paid]) || "received")
       AuditLog.record(action: "approve", record: cp, approved_by: approver.user, after: { permission: "khata.collect", amount_minor: cp.amount_minor }) if approver
       "accepted"
+    end
+
+    # --- the online shift endpoints' checks, for the member a shift record names ---
+
+    def branch_shift(id) = Shift.where(branch_id: @branch.id).find(id)
+
+    def require_permission!(actor, *codes)
+      return if codes.any? { |c| actor.can?(c) }
+      raise Api::Errors::Forbidden.new("permission.denied", "Missing permission: #{codes.join(' or ')}")
+    end
+
+    def own_shift!(shift, actor, message)
+      raise Api::Errors::Forbidden.new("permission.denied", message) unless shift.cashier_membership_id == actor.id || actor.can?("shifts.any")
+    end
+
+    # A manager's PIN with the record, for a step the actor may also take alone (as online: recorded, not demanded).
+    def given_approval(permission, actor) = actor.can?(permission) ? nil : @approvals[permission]
+
+    # The payroll rule "fingerprint to close the shift", as ShiftsController#close: a check-in by fingerprint on the
+    # shift's day or today (a close made offline reaches the server later, and the till sends no time with it).
+    def fingerprint_checked_in!(shift)
+      return unless BusinessModules.on?(@branch.business, "payroll")
+      emp = Employee.active.find_by(membership_id: shift.cashier_membership_id)
+      return unless emp&.rule&.require_fingerprint_to_close_shift
+      days = [ shift.business_day, @branch.business_day_for(Time.current) ].compact.uniq
+      return if ::Attendance.exists?(employee_id: emp.id, business_day: days, source: "fingerprint")
+      raise Api::Errors::Forbidden.new("shift.fingerprint_required", "Check in with the fingerprint device before closing the shift")
     end
   end
 end

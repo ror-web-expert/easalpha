@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_060000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1392,6 +1392,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_180000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "label_price_minor"
+    t.uuid "client_line_id"
     t.index ["business_id", "station_id", "status"], name: "index_order_items_on_business_id_and_station_id_and_status"
     t.index ["business_id"], name: "index_order_items_on_business_id"
     t.index ["order_id", "sort_order"], name: "index_order_items_on_order_id_and_sort_order"
