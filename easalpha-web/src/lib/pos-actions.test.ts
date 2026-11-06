@@ -20,12 +20,28 @@ const h = vi.hoisted(() => ({
   health: true,
   /** The timeout each save asked the API for. */
   timeouts: [] as (number | undefined)[],
+  /** db.kv, and the tail of the read-write transactions on it (IndexedDB runs them one after another). */
+  kv: new Map<string, unknown>(),
+  tx: Promise.resolve() as Promise<unknown>,
 }));
 
+// Every IndexedDB request answers in a later task, so two saves started together interleave as they do in a browser.
+const later = () => new Promise((resolve) => setTimeout(resolve, 0));
 vi.mock("@/lib/db", () => ({
-  db: { orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o) } },
-  kvGet: async () => null,
-  kvSet: async () => undefined,
+  db: {
+    orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o) },
+    kv: {
+      get: async (key: string) => { await later(); return h.kv.has(key) ? { key, value: h.kv.get(key) } : undefined; },
+      put: async (row: { key: string; value: unknown }) => { await later(); h.kv.set(row.key, row.value); },
+    },
+    transaction: (_mode: string, _table: unknown, fn: () => Promise<unknown>) => {
+      const run = h.tx.then(fn);
+      h.tx = run.catch(() => undefined);
+      return run;
+    },
+  },
+  kvGet: async (key: string) => { await later(); return h.kv.get(key); },
+  kvSet: async (key: string, value: unknown) => { await later(); h.kv.set(key, value); },
 }));
 // The queue keeps one record per id, as db.queue does; patchQueued only merges into a record of the given type.
 vi.mock("@/lib/sync", () => ({
@@ -134,6 +150,7 @@ const screenDue = (cart: Cart, codes: string[], tip = 0) => Math.max(0, payableT
 
 beforeEach(() => {
   h.rows.clear();
+  h.kv.clear();
   h.queued.length = 0;
   h.calls.length = 0;
   h.online = true;
@@ -512,5 +529,26 @@ describe("saveOrder carries the staff-meal flag on an order the server already h
     expect(r.offline).toBe(true);
     expect(r.cart.is_staff_meal).toBe(true);
     expect(h.queued.at(-1)).toMatchObject({ type: "order_update", id: "o-1", payload: { is_staff_meal: true, staff_meal_reason: "Rider meal" } });
+  });
+});
+
+describe("offline labels (review R29)", () => {
+  const takeaway = (id: string): Cart => ({
+    id, saved: false, local_only: false, status: "draft", order_type: "takeaway", lines: [openLine("Chai", 15000)], customer: null, table_id: null, table_code: null,
+    guest_name: "", covers: null, notes: "", is_staff_meal: false, staff_meal_reason: "", label: null, client_created_at: new Date().toISOString(),
+  });
+
+  it("gives two offline saves made at the same moment a label each", async () => {
+    h.online = false;
+    const [a, b] = await Promise.all([saveOrder(takeaway("new-a")), saveOrder(takeaway("new-b"))]);
+    expect([a.local.label, b.local.label].sort()).toEqual(["T1-001", "T1-002"]);
+    expect(h.queued.map((q) => q.payload.till_serial).sort()).toEqual(["T1-001", "T1-002"]);
+    expect(h.kv.get("till_serial_seq")).toBe(2);
+  });
+
+  it("carries on from the stored counter", async () => {
+    h.online = false;
+    h.kv.set("till_serial_seq", 41);
+    expect((await saveOrder(takeaway("new-c"))).local.label).toBe("T1-042");
   });
 });

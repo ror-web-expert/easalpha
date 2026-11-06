@@ -1,7 +1,7 @@
 "use client";
 // Till actions. Each one saves locally first and talks to the server when it can; otherwise it queues a sync record.
 import { api, ApiError } from "@/lib/api";
-import { db, kvGet, kvSet, type LocalOrder, type LocalPayment } from "@/lib/db";
+import { db, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, noteNetworkFailure, patchQueued, probeHealth, processQueue, reachabilityUnknown } from "@/lib/sync";
 import { lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
 import { payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
@@ -40,10 +40,17 @@ function ctx() {
   };
 }
 
+/**
+ * The label of an order saved offline (T1-001). The counter is read and bumped in one read-write transaction:
+ * IndexedDB runs those one after another, so two quick offline saves (a double tap, a second tab) never share a label.
+ */
 async function nextTillSerial(): Promise<string> {
   const code = ctx().device?.code ?? "T1";
-  const n = ((await kvGet<number>("till_serial_seq")) ?? 0) + 1;
-  await kvSet("till_serial_seq", n);
+  const n = await db.transaction("rw", db.kv, async () => {
+    const next = (((await db.kv.get("till_serial_seq"))?.value as number | undefined) ?? 0) + 1;
+    await db.kv.put({ key: "till_serial_seq", value: next });
+    return next;
+  });
   return `${code}-${String(n).padStart(3, "0")}`;
 }
 
