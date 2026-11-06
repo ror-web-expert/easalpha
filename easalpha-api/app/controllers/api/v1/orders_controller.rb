@@ -344,6 +344,9 @@ module Api
           points = Loyalty.refund_on_remove!(d, by: current_membership) if d.kind == "loyalty"
           d.destroy!
           Orders::Pricing.recalculate!(order.reload)
+          # Taken off by a decision, the regular discount stays off this order: the next save that carries lines, online
+          # or from the sync queue, no longer puts it back (RegularDiscounts.apply!).
+          order.regular_discount_removed_at = Time.current if d.kind == "regular"
           Orders::Pricing.save_all!(order)
         end
         audit!("discount", record: order, before: before, after: { removed: true, discount_minor: order.discount_minor, total_minor: order.total_minor, points_returned: points.positive? ? points : nil }.compact,
