@@ -98,7 +98,7 @@ RSpec.describe "Staff types, user sessions and the business day", type: :request
   describe "PIN login on a kitchen device" do
     it "prefers the member who may use that device's app when two share a PIN" do
       kitchen = within(owner.business) { Membership.create!(user: create(:user), role: Role.find_by!(system_key: "kitchen"), status: "active").tap { |m| m.set_pin!("2222") } }
-      within(owner.business) { Membership.create!(user: create(:user), role: cashier_role, status: "active").tap { |m| m.set_pin!("2222") } }
+      within(owner.business) { share_pin!(Membership.create!(user: create(:user), role: cashier_role, status: "active"), "2222") }
       device = within(owner.business) { Device.create!(branch: Branch.first, name: "KDS", kind: "kitchen", paired_at: Time.current) }
       api_post "/api/v1/devices/pin_login", { pin: "2222" }, headers: device_headers(device)
       expect(response).to have_http_status(:ok)

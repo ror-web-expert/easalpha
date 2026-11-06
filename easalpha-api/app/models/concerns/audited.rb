@@ -29,7 +29,7 @@ module Audited
   private
 
   def audit_remember_actor
-    @audit_actor = { user_id: Current.user_id, branch_id: Current.branch_id, device_id: Current.device&.id, ip: Current.ip }
+    @audit_actor = AuditLog.current_actor
   end
 
   def audit_create

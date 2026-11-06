@@ -5,13 +5,16 @@ module Auth
     Result = Struct.new(:user, :business, :membership, :branch, keyword_init: true)
     TRIAL_PLAN = "business"
 
-    def self.call(name:, business_name:, email: nil, phone: nil, password: nil, country: "PK", currency: "PKR", time_zone: "Asia/Karachi", locale: "en")
+    # phone_verified: the phone was signed up with its code. business_phone: the business's own contact number, which
+    # stays when the login cannot take the phone (another account has it).
+    def self.call(name:, business_name:, email: nil, phone: nil, password: nil, country: "PK", currency: "PKR", time_zone: "Asia/Karachi", locale: "en",
+                  phone_verified: false, business_phone: phone)
       ActiveRecord::Base.transaction do
-        user = User.create!(name: name, email: email, phone: phone, password: password, locale: locale)
+        user = User.create!(name: name, email: email, phone: phone, password: password, locale: locale, phone_verified_at: phone && phone_verified ? Time.current : nil)
         plan = Plan.find_by(code: TRIAL_PLAN) || Plan.seed! && Plan.find_by!(code: TRIAL_PLAN)
         business = Business.create!(
           name: business_name, slug: Business.generate_slug(business_name), country: country, currency: currency,
-          time_zone: time_zone, phone: phone, email: email, plan: plan, trial_ends_on: Business::TRIAL_DAYS.days.from_now.to_date, status: "trial"
+          time_zone: time_zone, phone: business_phone, email: email, plan: plan, trial_ends_on: Business::TRIAL_DAYS.days.from_now.to_date, status: "trial"
         )
         # The new owner is the actor of every setup row (branch, roles, payment methods) in the audit log.
         Tenancy::Context.with(business, user: user) do

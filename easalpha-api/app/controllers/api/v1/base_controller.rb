@@ -12,6 +12,7 @@ module Api
       rescue_from ActiveRecord::RecordNotUnique do |_e| render_error("conflict", "A record with this id already exists", 409) end
       rescue_from ActionController::ParameterMissing do |e| render_error("missing_parameter", e.message, 400) end
       rescue_from ArgumentError do |e| render_error("bad_request", e.message, 400) end
+      rescue_from Membership::PinTaken do |e| render_error("pin.taken", e.message, 409) end
       rescue_from Tenanted::NoTenantError do |e| render_error("no_tenant", e.message, 500) end
 
       private
@@ -25,6 +26,7 @@ module Api
             Tenancy::Context.with(@business, branch: @branch, user: @user, membership: @membership, device: @device, app: @claims[:app]) do
               Current.ip = request.remote_ip
               Current.request_id = request.request_id
+              Current.support_session = @support_session
               yield
             end
           else
@@ -53,6 +55,11 @@ module Api
           @business = @membership.business
           @membership.permission_codes = Array(@claims[:perms]).map(&:to_s) if @claims[:perms].is_a?(Array)
           raise Api::Errors::Unauthorized.new("business.deleted", "This business was deleted") if @business.status == "deleted"
+          if @claims[:sup].present?
+            # A support token works only while its session does: the owner ending or the hour running out stops it now.
+            @support_session = SupportSession.unscoped.find_by(id: @claims[:sup], business_id: @business.id)
+            raise Api::Errors::Unauthorized.new("support.ended", "This support session has ended") unless @support_session&.active?
+          end
           @device = @claims[:did] && Device.find_by(id: @claims[:did])
           raise Api::Errors::Unauthorized.new("device.revoked", "This device was removed") if @claims[:did] && (@device.nil? || @device.revoked_at)
           @branch = resolve_branch
@@ -112,7 +119,22 @@ module Api
         raise Api::Errors::ReadOnly if @business&.read_only? && !request.get?
       end
 
+      # EasAlpha support may look and fix, never change how anyone signs in: no profile, staff, role, PIN, device or
+      # billing change, so nothing it does outlives the approved hour (QA of 6 Nov 2026, P3: a support login moved the
+      # owner's phone to its own and kept owner access by OTP).
+      def refuse_support!
+        raise Api::Errors::Forbidden.new("support.denied", "EasAlpha support cannot change sign-in details, staff access, devices or billing. Ask the owner.") if support_session?
+      end
+
+      # What the admin's support banner shows: who, why, and until when (GET /me and the support token's answer).
+      def support_info(session)
+        admin = SuperAdmin.find_by(id: session.super_admin_id)
+        { session_id: session.id, reason: session.reason, expires_at: session.expires_at, by: admin && { name: admin.name, email: admin.email } }
+      end
+
       def current_membership = @membership
+      # An EasAlpha support login into this business (POST /super/support_sessions/:id/token), not the owner themself.
+      def support_session? = @claims.is_a?(Hash) && @claims[:sup].present?
       def current_user = @user
       def current_business = @business
       def current_branch = @branch

@@ -15,6 +15,7 @@ module Api
       def show
         kind = params[:kind].to_s
         raise Api::Errors::NotFound.new("export.kind", "Unknown export #{kind}") unless KINDS.include?(kind)
+        require_permission!("staff.manage") if kind == "staff" # phones and emails, as GET /staff (QA of 6 Nov 2026, P7)
         audit!("export", table_name: kind, after: { from: params[:from], to: params[:to] })
         send_data send(:"csv_#{kind}"), filename: "easalpha-#{current_business.slug}-#{kind}-#{today}.csv", type: "text/csv"
       end
@@ -121,9 +122,9 @@ module Api
       end
 
       def csv_audit_logs
-        csv(%w[occurred_at action table record_id user_id device_id approved_by after]) do |out|
+        csv(%w[occurred_at action table record_id user_id device_id approved_by after support_admin_id]) do |out|
           AuditLog.where(business_id: current_business.id, occurred_at: range.begin.beginning_of_day..range.end.end_of_day).find_each do |a|
-            out << [ a.occurred_at, a.action, a.table_name, a.record_id, a.user_id, a.device_id, a.approved_by_user_id, a.after&.to_json ]
+            out << [ a.occurred_at, a.action, a.table_name, a.record_id, a.user_id, a.device_id, a.approved_by_user_id, a.after&.to_json, a.super_admin_id ]
           end
         end
       end

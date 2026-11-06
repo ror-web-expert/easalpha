@@ -3,6 +3,8 @@ module Api
     class DevicesController < BaseController
       before_action :authenticate!, only: [ :index, :create, :register, :update, :regenerate_code, :destroy ]
       before_action -> { require_permission!("devices.manage") }, only: [ :create, :register, :update, :regenerate_code, :destroy ]
+      # A pairing code is a year-long way in: EasAlpha support never makes one (QA of 6 Nov 2026, P3).
+      before_action :refuse_support!, only: [ :create, :register, :update, :regenerate_code, :destroy ]
 
       def index
         scope = Device.includes(:branch).order(:created_at)

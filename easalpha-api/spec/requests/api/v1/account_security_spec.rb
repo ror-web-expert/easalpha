@@ -16,8 +16,9 @@ RSpec.describe "Accounts: linking staff, contact changes, support sessions, OTP 
   end
 
   describe "R8: adding staff" do
-    # Sana signed up for her own cafe first; she also works at this one.
-    let!(:sana) { signup_business(name: "Sana Cafe", email: "sana@example.com", password: "sanas-own-pass") }
+    # Sana signed up for her own cafe first, and confirmed her email; she also works at this one. Since P1 (QA of 6 Nov
+    # 2026) only a proven email links an account; staff_invitations_spec covers the unproven ones.
+    let!(:sana) { signup_business(name: "Sana Cafe", email: "sana@example.com", password: "sanas-own-pass").tap { |m| m.user.verify!(:email) } }
 
     it "links an existing account by email or phone as it is: its name and password stay, the owner's password is not used" do
       api_post "/api/v1/staff", { name: "Someone Else", email: "SANA@example.com", password: "owner-chosen-1", role_id: cashier_role.id }, headers: headers
@@ -55,7 +56,8 @@ RSpec.describe "Accounts: linking staff, contact changes, support sessions, OTP 
       expect(response).to have_http_status(:ok)
       expect(json[:user][:name]).to eq("Ali Raza Khan")
 
-      # Ali takes a second job; from then on his name is his own here too.
+      # Ali confirms his email and takes a second job; from then on his name is his own here too.
+      User.find_by!(email: "ali.new@example.com").verify!(:email)
       api_post "/api/v1/staff", { email: "ali.new@example.com", role_id: within(sana.business) { Role.find_by!(system_key: "cashier").id } }, headers: auth_headers(sana)
       expect(json).to include(linked_existing_user: true)
       api_patch "/api/v1/staff/#{ali[:id]}", { name: "Ali R." }, headers: headers

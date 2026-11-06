@@ -1,0 +1,9 @@
+<div style="font-family: Inter, Roboto, Helvetica, Arial, sans-serif; color: #0B1F3A; max-width: 560px; margin: 0 auto; padding: 24px;">
+  <p style="font-size: 22px; font-weight: 700; margin: 0 0 16px;">Eas<span style="color: #FF7A1A;">Alpha</span></p>
+  <p>Hello <%= @invitation.name %>,</p>
+  <p><strong><%= @business.name %></strong> invited you to work with them on EasAlpha as <strong><%= @role %></strong>.</p>
+  <p>To join, open the link and enter the code we send to this email.</p>
+  <p style="margin: 24px 0;"><a href="<%= @url %>" style="background: #FF7A1A; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 999px; font-weight: 600; display: inline-block;">Open the invitation</a></p>
+  <p>The invitation is open for <%= @days %> days. If you do not know <%= @business.name %>, ignore this email: nothing happens unless you join.</p>
+  <p style="margin-top: 32px;">The EasAlpha team</p>
+</div>

@@ -9,6 +9,8 @@ class Rack::Attack
   safelist("local development") { |req| Rails.env.development? && %w[127.0.0.1 ::1].include?(req.ip) }
 
   throttle("login/ip", limit: 20, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/v1/auth/") && req.post? }
+  # Accepting a staff invitation sends and checks codes like a login (QA of 6 Nov 2026, P1).
+  throttle("invitation/ip", limit: 20, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/v1/invitations/") && req.post? }
   # Per account as well as per address, so a password run spread over many addresses still stops at the account
   # (review of 6 Nov 2026, A10). The super admin login was outside every throttle; it gets both.
   throttle("login/email", limit: 10, period: 10.minutes) { |req| LOGIN_EMAIL.call(req) if req.path == "/api/v1/auth/login" && req.post? }

@@ -1,0 +1,16 @@
+Hello<%= @name.present? ? " #{@name}" : "" %>,
+
+<% if @purpose == "reset_password" -%>
+Someone asked to reset the password of the EasAlpha login for this email. Your code is:
+<% elsif @purpose == "verify_email" -%>
+Confirm this email for your EasAlpha login with this code:
+<% else -%>
+Join the business that invited you on EasAlpha with this code:
+<% end -%>
+
+<%= @code %>
+
+It works for <%= @minutes %> minutes. If you did not ask for it, ignore this email: nothing changes without the code.
+
+The EasAlpha team
+<%= @site %>

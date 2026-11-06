@@ -2,6 +2,7 @@ module Api
   module V1
     class BillingController < BaseController
       before_action -> { require_permission!("billing.manage", "settings.manage") }
+      before_action :refuse_support!, only: %i[choose_plan report_payment] # the owner pays; support only looks
 
       def show
         sub = Subscription.order(created_at: :desc).first
