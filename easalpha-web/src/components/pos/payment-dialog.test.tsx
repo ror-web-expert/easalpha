@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { PaymentMethod } from "@/lib/types";
 import type { Cart } from "@/store/cart";
 import type { CartLine } from "@/lib/pricing";
@@ -9,6 +9,7 @@ vi.mock("@/store/catalog", () => ({ useCatalogStore: Object.assign((sel: (s: Rec
 vi.mock("@/lib/api", async () => ({ ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")), api: (...a: unknown[]) => h.api(...a) }));
 
 import { PaymentDialog } from "./payment-dialog";
+import { useSyncStore } from "@/store/sync";
 
 const method = (code: string, kind: string, name: string, sort_order: number): PaymentMethod =>
   ({ id: `m-${code}`, code, name, kind, payment_account_id: null, active: true, works_offline: true, needs_reference: false, sort_order });
@@ -71,5 +72,36 @@ describe("PaymentDialog khata line", () => {
     expect(screen.getByText(/owes Rs 4,500 · limit Rs 5,000/)).toBeInTheDocument();
     expect(screen.getByText(/passes the limit of Rs 5,000 by Rs 756/)).toBeInTheDocument();
     expect(h.api).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PaymentDialog khata over the limit", () => {
+  // Review item 4: offline, a khata sale over the limit went through here and was lost at replay (the server creates the
+  // order, then refuses the payment). The till now refuses it itself while offline; online the server decides.
+  const sadia = { id: "c-1", name: "Sadia Akhtar", phone: null, balance_minor: 450000, credit_limit_minor: 500000 };
+  const dialog = (cart: Cart) => <PaymentDialog open onClose={() => {}} cart={cart} onPay={vi.fn()} busy={false} />;
+
+  it("refuses an account sale that passes the saved limit while offline, and says why", () => {
+    useSyncStore.setState({ status: "offline" });
+    render(dialog(order({ customer: sadia })));
+    fireEvent.click(screen.getByRole("button", { name: "Khata (account)" }));
+    expect(screen.getByText(/With no internet the till cannot put this on account/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Pay Rs 1,256/ })).toBeDisabled();
+    act(() => useSyncStore.setState({ status: "online" }));
+  });
+
+  it("leaves it to the server online, and allows an amount within the limit offline", () => {
+    useSyncStore.setState({ status: "online" });
+    const { unmount } = render(dialog(order({ customer: sadia })));
+    fireEvent.click(screen.getByRole("button", { name: "Khata (account)" }));
+    expect(screen.getByText(/The till will refuse it/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Pay Rs 1,256/ })).toBeEnabled();
+    unmount();
+    useSyncStore.setState({ status: "offline" });
+    render(dialog(order({ customer: { ...sadia, balance_minor: 100000 } })));
+    fireEvent.click(screen.getByRole("button", { name: "Khata (account)" }));
+    expect(screen.queryByText(/cannot put this on account/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Pay Rs 1,256/ })).toBeEnabled();
+    act(() => useSyncStore.setState({ status: "online" }));
   });
 });

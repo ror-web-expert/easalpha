@@ -368,14 +368,16 @@ function SellScreen() {
       if (e.key === "F1") { e.preventDefault(); newOrder(); }
       if (e.key === "F2") { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
       if (e.key === "F3") { e.preventDefault(); setCustomerOpen(true); }
-      if (e.key === "F4") { e.preventDefault(); if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
-      if (e.key === "F5") { e.preventDefault(); if (cart.lines.length) send(); }
-      if (e.key === "F8") { e.preventDefault(); openPay(); }
+      // F4, F5 and F8 act like the panel's buttons, which are disabled while a save or payment runs: a second press
+      // during one must not send twice or open a dialog over it.
+      if (e.key === "F4") { e.preventDefault(); if (busy) return; if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
+      if (e.key === "F5") { e.preventDefault(); if (busy || !cart.lines.length) return; send(); }
+      if (e.key === "F8") { e.preventDefault(); if (busy) return; openPay(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, newOrder]);
+  }, [cart, newOrder, busy]);
   // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being
   // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
   // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.

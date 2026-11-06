@@ -110,6 +110,10 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const khataBlocked = draft.method?.kind === "khata" && !cart.customer;
   const needsRef = !!draft.method?.needs_reference && !draft.reference.trim();
   const draftAmount = Math.min(draft.amount, remaining);
+  // Offline the server cannot refuse a sale over the credit limit, and the replay rejects it with the order already
+  // created and the sale lost (review item 4): the till refuses it here, from the saved balance and limit. Online the
+  // server decides, with the live balance.
+  const khataOverOffline = status === "offline" && draft.method?.kind === "khata" && !!cart.customer && accountSummary(cart.customer, draftAmount).over;
   const partial = remaining > 0 && draft.amount > 0 && draft.amount < remaining;
   const addSplit = () => {
     if (!draft.method) return;
@@ -127,7 +131,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   };
   // The exact amount first, then what a customer can hand over in notes (Rs 50, 100, 500, 1,000, 5,000).
   const quick = cashSuggestions(remaining, currency ?? "PKR");
-  const draftOk = !!draft.method && remaining > 0 && draft.amount > 0 && !needsRef && !khataBlocked && !offlineBlocked && (draft.method.kind !== "cash" || draft.tendered >= draftAmount);
+  const draftOk = !!draft.method && remaining > 0 && draft.amount > 0 && !needsRef && !khataBlocked && !offlineBlocked && !khataOverOffline && (draft.method.kind !== "cash" || draft.tendered >= draftAmount);
   const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0);
   const payLabel = remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
   // Charges cannot change once money has been taken against the order; the total they feed is already partly settled.
@@ -180,6 +184,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
               {draft.method.kind === "khata" && cart.customer && !changingCustomer ? (() => {
                 const acct = accountSummary(cart.customer, draftAmount, currency);
                 const known = [acct.owes, acct.limitText].filter(Boolean).join(" · ");
+                const overText = acct.over && status === "offline" ? `${(acct.overText ?? "").replace(/ The till will refuse it\.$/, "")} With no internet the till cannot put this on account: take another method, or a smaller amount on khata.` : acct.overText;
                 return (
                   <div className="space-y-1 rounded-lg border p-3 text-sm">
                     <div className="flex items-center justify-between gap-2">
@@ -187,12 +192,12 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
                       {onCustomer ? <button type="button" className="shrink-0 text-sm font-medium text-primary hover:underline" onClick={() => setChangingCustomer(true)}>Change</button> : null}
                     </div>
                     {known || acct.afterText ? <div className="text-fg-secondary">{known}{known && acct.afterText ? " · " : ""}{acct.afterText ? <span className="font-medium text-fg">{acct.afterText}</span> : null}</div> : null}
-                    {acct.overText ? <p className="text-danger">{acct.overText}</p> : null}
+                    {overText ? <p className="text-danger">{overText}</p> : null}
                   </div>
                 );
               })() : null}
               {offlineBlocked ? <p className="text-sm text-danger">{draft.method.name} needs the internet. Use cash or khata while offline.</p> : null}
-              {partial ? <Button variant="secondary" className="w-full" size="lg" onClick={addSplit} disabled={needsRef || khataBlocked || !!offlineBlocked || draft.amount <= 0}>Add {formatMoney(draftAmount, currency)} and split the rest</Button> : null}
+              {partial ? <Button variant="secondary" className="w-full" size="lg" onClick={addSplit} disabled={needsRef || khataBlocked || !!offlineBlocked || khataOverOffline || draft.amount <= 0}>Add {formatMoney(draftAmount, currency)} and split the rest</Button> : null}
             </div>
           ) : null}
           {!chargesLocked ? (
