@@ -237,7 +237,8 @@ module Sync
         end
         order = Order.includes(items: :modifiers).find(id)
         builder = Orders::Builder.new(order, actor: actor, device: @device, branch: @branch)
-        attrs = payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, :is_staff_meal, :staff_meal_reason, *CHARGE_KEYS).to_h.symbolize_keys
+        # address_id as the online PATCH takes it: the builder keeps it only when it is the order's customer's (L3).
+        attrs = payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :address_id, :notes, :delivery_charge_minor, :is_staff_meal, :staff_meal_reason, *CHARGE_KEYS).to_h.symbolize_keys
         # The staff-meal flag changed offline: on needs orders.staff_meal (the actor's own or the PIN on the record), off charges normally.
         if attrs.key?(:is_staff_meal)
           attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal])
