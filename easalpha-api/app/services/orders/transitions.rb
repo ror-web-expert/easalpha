@@ -141,6 +141,7 @@ module Orders
     def close!(order, actor:, device: nil, allow_unpaid: false)
       paid = order.payment_status == "paid" || order.total_minor.zero?
       raise Api::Errors::Conflict.new("order.unpaid", "Order must be paid before closing") unless paid || (allow_unpaid && !order.reopened_since_payment?)
+      refuse_overpaid!(order)
       was_completed = order.completed?
       order.closed_at = Time.current
       order.completed_by_membership_id = actor&.id
@@ -151,6 +152,16 @@ module Orders
       order.dining_table&.release! if order.table_id
       Realtime.order_changed(order)
       order
+    end
+
+    # More was taken than the order now costs (a reopened order whose total fell): completed like this, the difference
+    # would stay in the takings with nothing recorded against it. It is refunded first; the open order takes that refund.
+    def refuse_overpaid!(order)
+      excess = order.paid_minor - order.total_minor
+      return unless excess.positive?
+      rs = ->(minor) { "Rs #{Customers::Notify.rupees(minor)}" }
+      raise Api::Errors::Conflict.new("order.overpaid", "#{order.label} was paid #{rs.(order.paid_minor)} against a total of #{rs.(order.total_minor)}. Refund #{rs.(excess)} before completing it.",
+                                      details: { refund_minor: excess, paid_minor: order.paid_minor, total_minor: order.total_minor })
     end
 
     # SPEC reopen: a completed order comes back for editing. It stays open (served, a delivery too: its ride is over,

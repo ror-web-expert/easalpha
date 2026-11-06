@@ -16,6 +16,7 @@ import { useList } from "@/components/admin/crud";
 import { OrderStory } from "@/components/admin/order-story";
 import { isSpecOpen, orderCode, paymentMethods, reopenLine, sourceLabel, specPaymentVariant, specStatusVariant } from "@/components/admin/order-helpers";
 import { billRows } from "@/lib/bill";
+import { refundOffer } from "@/lib/refunds";
 
 type Tab = "details" | "cost" | "payments";
 
@@ -69,7 +70,8 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
 
   const isOpen = o && ["draft", "held", "placed", "preparing", "ready", "served", "dispatched"].includes(o.status);
   const sent = o && !["draft", "held"].includes(o.status);
-  const canRefund = o && o.paid_minor > 0 && ["paid", "closed", "refunded"].includes(o.status);
+  // A settled order's payment, or an open order's excess (the server completes it only once that is back).
+  const refundable = o ? refundOffer(o) : null;
   const canReopen = o && o.spec_status === "completed" && can("REOPEN_ORDER", "orders.refund");
   const canComplete = o && isSpecOpen(o.spec_status) && sent && can("COMPLETE_ORDER", "orders.create");
   const header = o ? reopenLine(o.reopen_count, o.edit_count) : null;
@@ -95,7 +97,7 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
         {canReopen ? <Button variant="secondary" onClick={() => setReopenOpen(true)}>Reopen</Button> : null}
         {canComplete ? <Button onClick={() => completeM.mutate()} loading={completeM.isPending}>Complete</Button> : null}
         {isOpen ? <Button variant="destructive" onClick={() => setVoidOpen(true)}>Void order</Button> : null}
-        {canRefund ? <Button variant="secondary" onClick={() => { setAmount(o.paid_minor); setRefundOpen(true); }}>Refund</Button> : null}
+        {refundable ? <Button variant="secondary" onClick={() => { setAmount(refundable.amount_minor); setRefundOpen(true); }}>{refundable.excess ? "Refund overpaid" : "Refund"}</Button> : null}
         <Button variant="secondary" onClick={onClose}>Close</Button>
       </>) : undefined}
     >
