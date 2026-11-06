@@ -6,12 +6,15 @@ module Shifts
   module Safe
     module_function
 
+    # The branch's own safe, else one made on Payment Accounts for no branch in particular, else a new one.
     def account_for(branch)
-      PaymentAccount.active.find_by(kind: "safe", branch_id: branch.id) || Branch.transaction do
+      existing(branch) || Branch.transaction do
         branch.lock!
-        PaymentAccount.active.find_by(kind: "safe", branch_id: branch.id) || create_for!(branch)
+        existing(branch) || create_for!(branch)
       end
     end
+
+    def existing(branch) = PaymentAccount.active.where(kind: "safe").order(Arel.sql("branch_id IS NULL"), :created_at).find_by(branch_id: [ branch.id, nil ])
 
     # Drops booked straight to 1050 before the safe was an account come into it, so they can be banked as well.
     def create_for!(branch)

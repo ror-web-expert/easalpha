@@ -206,6 +206,15 @@ RSpec.describe "Cash drawer, shifts and the books", type: :request do
       books_balanced!
     end
 
+    it "uses a safe made by hand on Payment Accounts instead of opening a second one" do
+      api_post "/api/v1/payment_accounts", { name: "Office safe", kind: "safe" }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      s = open_shift!(as: at_till(cashier), float: 0)
+      cash_sale!(as: at_till(cashier))
+      move!(s, as: at_till(cashier), kind: "drop", amount_minor: 9_000, reason: "Drop")
+      expect(within(biz) { PaymentAccount.where(kind: "safe").pluck(:name, :current_balance_minor) }).to eq([ [ "Office safe", 9_000 ] ])
+    end
+
     it "opens the safe with the drops booked to Cash in Safe before it was an account" do
       within(biz) do
         Finance::Journal.post!(business_day: today, description: "Drop before the safe account", branch_id: Branch.first.id,
