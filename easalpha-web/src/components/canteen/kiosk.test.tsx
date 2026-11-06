@@ -20,7 +20,8 @@ const h = vi.hoisted(() => {
   const attention = new Map<string, unknown>();
   const orders = new Map<string, unknown>();
   const kv = new Map<string, unknown>();
-  return { queue, attention, orders, kv, online: false, api: vi.fn(), db: { queue: table(queue), attention: table(attention), orders: table(orders) } };
+  // A transaction runs its function (the sync queue reads and writes a row in one, lib/sync.ts).
+  return { queue, attention, orders, kv, online: false, api: vi.fn(), db: { queue: table(queue), attention: table(attention), orders: table(orders), transaction: (_mode: string, _tables: unknown, fn: () => Promise<unknown>) => fn() } };
 });
 vi.mock("@/lib/db", () => ({ db: h.db, kvGet: async (k: string) => h.kv.get(k), kvSet: async (k: string, v: unknown) => void h.kv.set(k, v) }));
 vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), api: (...a: unknown[]) => h.api(...a) }));

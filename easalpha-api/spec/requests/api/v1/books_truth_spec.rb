@@ -51,7 +51,9 @@ RSpec.describe "Books tell the truth", type: :request do
       api_patch "/api/v1/settings", { values: { "modules.canteen" => true } }, headers: headers
       expect(response).to have_http_status(:ok), response.body
       within(biz) do
-        lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
+        # The whole business day: the window opens at the day end (02:01), so a meal at any hour falls on today (a window
+        # opening before 02:01 belongs to the previous business day since the canteen night-session fix).
+        lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "02:01", ends_at: "02:00")
         Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: today, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
       end
     end
@@ -323,7 +325,9 @@ RSpec.describe "Books tell the truth", type: :request do
       # 3. A subsidised canteen meal: the Rs 522 burger at a Rs 200 worker price.
       month = today.beginning_of_month
       worker = within(biz) do
-        lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
+        # The whole business day: the window opens at the day end (02:01), so a meal at any hour falls on today (a window
+        # opening before 02:01 belongs to the previous business day since the canteen night-session fix).
+        lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "02:01", ends_at: "02:00")
         Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: today, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
         e = Employee.create!(name: "Akbar Ali", base_salary_minor: 3_000_000, pay_frequency: "monthly", joined_on: Date.new(2026, 1, 1), shares_tips: true)
         (month..month.end_of_month).each { |d| Attendance.create!(employee_id: e.id, business_day: d, status: "present", source: "manual") }

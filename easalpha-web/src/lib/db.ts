@@ -85,8 +85,11 @@ export interface QueueItem {
   sending_at?: number;
   /** The payload as changed (patchQueued) while a push carrying the row was out: applied once that push answers. */
   patched_payload?: Record<string, unknown>;
-  /** Who was signed in when that change was made. */
-  patched_by?: string;
+  /** Who was signed in when that change was made, and their sync key: the records it becomes are theirs. */
+  patched_by?: string; patched_key_id?: string; patched_key?: string;
+  /** The sync key of the session that made the record, which signs it at every push (lib/sync-sign.ts). None on a
+   *  record queued before the signatures, or by a session without a key. */
+  sync_key_id?: string; sync_key?: string;
 }
 
 export interface AttentionItem {
@@ -95,6 +98,8 @@ export interface AttentionItem {
   blocked_by?: string;
   /** What a manager must approve for it (the server's details.permissions, after what the last Try again approved), with labels. */
   permissions?: string[]; permission_labels?: Record<string, string>;
+  /** The maker's sync key, kept so Try again is signed by them, never by whoever is signed in then. */
+  sync_key_id?: string; sync_key?: string;
 }
 
 export interface KV { key: string; value: unknown }

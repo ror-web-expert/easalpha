@@ -2,6 +2,7 @@ module Auth
   class SessionIssuer
     # Builds the response body for any successful login: tokens plus the context the client needs. `refresh_token` is a
     # raw token already issued (POST /auth/refresh hands back the rotation's successor); otherwise a new one is issued.
+    # A POS session also gets the key its till signs queued records with (Sync::Signature): the same on every refresh.
     def self.issue(user:, membership:, app:, device: nil, branch: nil, request: nil, refresh_token: nil)
       business = membership.business
       branch ||= device&.branch || business.main_branch
@@ -21,7 +22,7 @@ module Auth
         permissions: membership.permission_codes,
         modules: Tenancy::Context.with(business) { BusinessModules.all(business) },
         businesses: Membership.all_for_user(user.id).map { |m| { id: m.business.id, name: m.business.name, slug: m.business.slug, role: m.role.name, membership_id: m.id } }
-      }
+      }.merge(app.to_s == "pos" ? Sync::Signature.fields_for(refresh) : {})
     end
   end
 end

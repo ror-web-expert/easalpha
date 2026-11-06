@@ -320,6 +320,18 @@ describe("processQueue: changes made while a push is out (final round, web-till#
     expect(h.queue.size).toBe(0);
   });
 
+  it("keeps the change's maker and their sync key on the records it becomes, whoever is signed in when the push answers", async () => {
+    h.queue.set("o-1", queuedOrder());
+    useDeviceStore.setState({ session: { membership: { id: "m-2" }, sync_key: "secret-2", sync_key_id: "k-2" } as unknown as Session });
+    h.api.mockImplementationOnce(async () => {
+      await payDuringPush();
+      useDeviceStore.setState({ session: { membership: { id: "m-3" }, sync_key: "secret-3", sync_key_id: "k-3" } as unknown as Session }); // another cashier signs in
+      return accepted("o-1");
+    });
+    await processQueue();
+    expect(queued().map((i) => [i.type, i.membership_id, i.sync_key_id, i.sync_key])).toEqual([["order_update", "m-2", "k-2", "secret-2"], ["payment", "m-2", "k-2", "secret-2"]]);
+  });
+
   it("puts the change into the record when the push fails, so the next push carries it", async () => {
     h.queue.set("o-1", queuedOrder());
     // A server error, not a network one: those mark the till offline for 30 s and the next tests would not push.
@@ -350,7 +362,7 @@ describe("processQueue: changes made while a push is out (final round, web-till#
     });
     await processQueue();
     const left = queued();
-    expect(left.find((i) => i.type === "void")?.payload).toEqual({ order_id: "o-1", reason: "Wrong table" });
+    expect(left.find((i) => i.type === "void")?.payload).toMatchObject({ order_id: "o-1", reason: "Wrong table", client_created_at: expect.any(String) });
     const update = left.find((i) => i.type === "order_update")!;
     expect(update).toMatchObject({ id: "o-9", payload: { complete: true, lines: lines(1) } });
     expect(update.payload.client_seq).not.toBe(1);

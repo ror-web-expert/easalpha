@@ -242,3 +242,12 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
 | `.github/workflows/desktop.yml` | installers on changes to `easalpha-desktop/` and on `v*` tags, uploaded to the Download page |
 | `.github/workflows/ci.yml` | tests on every push and pull request |
 | `scripts/github-setup.sh` | one-time GitHub repo, secrets, variables, deploy key, first push |
+
+### After the 7 Nov 2026 deploy: order repair
+
+Orders part-refunded before 7 Nov 2026 still read "Partial" with a balance due (the old refund rule lowered what was paid). Run once, dry run first:
+
+```
+docker compose exec easalpha-api bin/rails orders:repair_part_refunds            # shows what it would change
+docker compose exec -e DRY_RUN=0 easalpha-api bin/rails orders:repair_part_refunds
+```

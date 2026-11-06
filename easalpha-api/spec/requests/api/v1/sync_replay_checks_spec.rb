@@ -181,6 +181,16 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
       expect(within(biz) { Order.where(id: [ paid, open, again ]).pluck(:payment_status).uniq }).to eq([ "paid" ])
     end
 
+    it "refuses money from one who takes no orders outright, as online, PIN or not" do
+      rider = add_member!(biz, "rider", pin: "6666")
+      id = SecureRandom.uuid
+      push([ order(id) ])
+      pay = { type: "payment", id: SecureRandom.uuid, membership_id: rider.id, payload: cash.merge(order_id: id) }
+      push([ pay.merge(approver_pin: "9999", approval_codes: [ "payments.take" ]) ], headers: as(rider))
+      expect(results.first).to include(status: "rejected", code: "permission.denied")
+      expect(within(biz) { Payment.where(order_id: id).count }).to eq(0)
+    end
+
     it "takes the cashier's own payments with no PIN" do
       id = SecureRandom.uuid
       push([ order(id, payments: [ cash.merge(id: SecureRandom.uuid) ]) ])

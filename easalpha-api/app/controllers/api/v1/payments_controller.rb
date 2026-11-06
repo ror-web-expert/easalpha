@@ -4,11 +4,17 @@ module Api
       before_action :authenticate!
       before_action :read_only_guard!
 
-      # POST /orders/:order_id/payments  payments: [...], tip_minor
+      # POST /orders/:order_id/payments  payments: [...], tip_minor, approver_pin?, approval_codes?
       def create
-        require_permission!("payments.take")
+        # A till user who takes orders but not payments (a waiter) pays with a manager's PIN for payments.take, as the
+        # till's dialog names it (final round, item 13); without one the answer is approval.required naming it.
+        require_permission!("payments.take", "orders.create")
+        approver = require_approval!("payments.take")
         order = Order.includes(items: :modifiers).find(params[:id])
         result = Payments::Processor.new(order, actor: current_membership, device: current_device, shift: current_shift).call(payments: payments_param, tip_minor: params[:tip_minor].to_i)
+        if approver != current_membership && result.payments.any?(&:previously_new_record?)
+          audit!("approve", record: order, approved_by: approver.user, after: { payments_take: true, payment_ids: result.payments.map(&:id) })
+        end
         render json: { order: OrderSerializers.full(result.order), payments: result.payments.map { |p| PaymentSerializers.payment(p) }, change_minor: result.change_minor,
                        receipt: result.order.payment_status == "paid" ? Receipts::Builder.build(result.order) : nil }, status: :created
       end

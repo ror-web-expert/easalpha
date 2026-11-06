@@ -10,6 +10,8 @@ import { useDeviceStore } from "@/store/device";
 import { useCustomerStore } from "@/store/customers";
 import { uuid } from "@/lib/utils";
 import { OPEN_STATUSES, type SyncChanges, type SyncPushResponse, type SyncRecordType } from "@/lib/types";
+import { sessionSyncKey, signRecord, type SyncKey } from "@/lib/sync-sign";
+import { forgetStashes } from "@/lib/session-stash";
 
 let running = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -67,11 +69,43 @@ export async function refreshCounts() {
   } catch {}
 }
 
+// ---- Signed records (lib/sync-sign.ts) ----
+/** The key a new record keeps: the signed-in session's, when it is the member the record names; never anyone else's. */
+function makerKey(membershipId: string | undefined): SyncKey | null {
+  const s = useDeviceStore.getState().session;
+  return membershipId && s?.membership?.id === membershipId ? sessionSyncKey(s) : null;
+}
+const keyFields = (k: SyncKey | null) => (k ? { sync_key_id: k.id, sync_key: k.key } : {});
+const keyOf = (i: { sync_key_id?: string; sync_key?: string } | undefined): SyncKey | null => (i?.sync_key_id && i.sync_key ? { id: i.sync_key_id, key: i.sync_key } : null);
+
+/**
+ * Queues a record made now by the signed-in session, with that session's sync key. It carries the till's time
+ * (client_created_at): the server judges a signature by it, so a void, refund, cash movement, shift close or order
+ * update (which have no time of their own) gets the moment it was queued.
+ */
 export async function enqueue(rec: { type: SyncRecordType; id: string; membership_id?: string; payload: Record<string, unknown> }) {
-  const item: QueueItem = { id: rec.id, type: rec.type, membership_id: rec.membership_id, payload: rec.payload, created_at: new Date().toISOString(), attempts: 0, next_at: 0, last_error: null, status: "pending" };
+  const payload = rec.payload.client_created_at ? rec.payload : { ...rec.payload, client_created_at: new Date().toISOString() };
+  await putQueued({ ...rec, payload }, makerKey(rec.membership_id));
+}
+
+async function putQueued(rec: { type: SyncRecordType; id: string; membership_id?: string; payload: Record<string, unknown> }, key: SyncKey | null) {
+  const item: QueueItem = { id: rec.id, type: rec.type, membership_id: rec.membership_id, payload: rec.payload, created_at: new Date().toISOString(), attempts: 0, next_at: 0, last_error: null, status: "pending", ...keyFields(key) };
   await db.queue.put(item);
   await refreshCounts();
   schedule(500);
+}
+
+/** A row as the push sends it: signed with its maker's key, over the payload as it is now (edits made while it waited
+ *  included); with no key, in the form tills sent before the signatures, which the server judges by the old rule. */
+export async function pushRecord(i: Pick<QueueItem, "type" | "id" | "membership_id" | "payload" | "sync_key_id" | "sync_key">): Promise<Record<string, unknown>> {
+  const rec = { type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload };
+  const key = keyOf(i);
+  if (!key) return rec;
+  try {
+    return { ...(await signRecord(rec, key)) };
+  } catch {
+    return rec; // no WebCrypto here (a plain-http page): the server decides on the unsigned record
+  }
 }
 
 /**
@@ -90,7 +124,9 @@ export async function patchQueued(id: string, patch: (p: Record<string, unknown>
     if (!item || (type && item.type !== type)) return "none";
     if (item.status === "sending") {
       if (item.type !== "order" && item.type !== "order_update") return "none";
-      await db.queue.put({ ...item, patched_payload: patch(item.patched_payload ?? item.payload), patched_by: useDeviceStore.getState().session?.membership?.id ?? item.patched_by });
+      const by = useDeviceStore.getState().session?.membership?.id;
+      const key = by ? makerKey(by) : null;
+      await db.queue.put({ ...item, patched_payload: patch(item.patched_payload ?? item.payload), ...(by ? { patched_by: by, patched_key_id: key?.id, patched_key: key?.key } : {}) });
       return "kept";
     }
     await db.queue.put({ ...item, payload: patch(item.payload) });
@@ -146,6 +182,8 @@ function pendingAgain(row: QueueItem, change: Partial<QueueItem> = {}): QueueIte
   const next: QueueItem = { ...row, ...change, payload: row.patched_payload ?? row.payload, status: "pending", sending_at: undefined };
   delete next.patched_payload;
   delete next.patched_by;
+  delete next.patched_key_id;
+  delete next.patched_key;
   return next;
 }
 
@@ -227,7 +265,7 @@ async function blockDependent(item: QueueItem, parentId: string, parentMessage: 
   await db.queue.delete(item.id);
   await db.attention.put({
     id: item.id, type: item.type, code: "blocked", message: `Waits on an order the server rejected${parentMessage ? `: ${parentMessage}` : ""}`,
-    payload: { ...item.payload, __membership_id: item.membership_id }, blocked_by: parentId, created_at: new Date().toISOString(),
+    payload: { ...item.payload, __membership_id: item.membership_id }, blocked_by: parentId, created_at: new Date().toISOString(), ...keyFields(keyOf(item)),
   });
 }
 
@@ -255,7 +293,7 @@ export async function processQueue(): Promise<void> {
     for (const i of items) { const a = approvals.get(i.id); if (a) approved.set(i.id, { codes: a.codes, labels: a.labels }); }
     let res: SyncPushResponse;
     try {
-      const records = items.map((i) => ({ type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload, ...approvalFields(approvals.get(i.id)) }));
+      const records = await Promise.all(items.map(async (i) => ({ ...(await pushRecord(i)), ...approvalFields(approvals.get(i.id)) })));
       res = await api<SyncPushResponse>("/sync/push", { method: "POST", auth: "pos", timeoutMs: 60000, body: { records } });
     } catch (e) {
       const err = e instanceof ApiError ? e : null;
@@ -292,7 +330,7 @@ export async function processQueue(): Promise<void> {
         const ask = APPROVAL_REFUSALS.includes(r.code ?? "") ? mergeAsk(approved.get(r.id) ?? { codes: [], labels: {} }, approvalAsk(r)) : null;
         // __membership_id keeps the cashier who made the record, so Try again is attributed to them, not to whoever is signed in then.
         // A change made while it was out goes with it, so Try again sends the order as the till has it.
-        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(row?.patched_payload ?? item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}),
+        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(row?.patched_payload ?? item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}), ...keyFields(keyOf(item)),
           ...(ask?.codes.length ? { permissions: ask.codes, permission_labels: ask.labels } : {}) });
         await markRejected(r.type as SyncRecordType, r.id, item, r.message ?? "Rejected");
       }
@@ -351,35 +389,39 @@ const updateFields = (p: Record<string, unknown>) => Object.fromEntries(UPDATE_F
  * records of their own now that the push was accepted: the server holds what the push carried, and an order record
  * sent again only takes the payments it is missing. Lines and fields go as an order update (the server finds the lines
  * by the till's ids), placed if it was sent to the kitchen meanwhile and complete if a staff meal was; each payment
- * goes as a payment, the tip on the first; a void as a void. They are the signed-in cashier's, who made the change.
+ * goes as a payment, the tip on the first; a void as a void. They are the change's maker's (who was signed in when it
+ * was made), signed with that session's key, as every record is its maker's.
  */
 async function sendChangesMadeDuringPush(row: QueueItem) {
   const sent = row.payload;
   const now = row.patched_payload ?? sent;
-  const membership_id = useDeviceStore.getState().session?.membership?.id ?? row.patched_by ?? row.membership_id;
+  const membership_id = row.patched_by ?? row.membership_id;
+  const key = row.patched_key_id && row.patched_key ? { id: row.patched_key_id, key: row.patched_key } : makerKey(membership_id);
+  const queue = (type: SyncRecordType, id: string, payload: Record<string, unknown>) =>
+    putQueued({ type, id, membership_id, payload: payload.client_created_at ? payload : { ...payload, client_created_at: new Date().toISOString() } }, key);
   if (row.type === "order_update") {
-    await enqueue({ type: "order_update", id: row.id, membership_id, payload: { ...now, client_seq: Date.now() } });
+    await queue("order_update", row.id, { ...now, client_seq: Date.now() });
     return;
   }
   if (row.type !== "order") return;
   if (now.voided && !sent.voided) {
-    await enqueue({ type: "void", id: uuid(), membership_id, payload: { order_id: row.id, reason: typeof now.void_reason === "string" && now.void_reason ? now.void_reason : "voided on till" } });
+    await queue("void", uuid(), { order_id: row.id, reason: typeof now.void_reason === "string" && now.void_reason ? now.void_reason : "voided on till" });
     return;
   }
   const placed = now.status === "placed" && sent.status !== "placed";
   const complete = !!now.complete && !sent.complete;
   if (placed || complete || JSON.stringify(updateFields(now)) !== JSON.stringify(updateFields(sent))) {
-    await enqueue({ type: "order_update", id: row.id, membership_id, payload: {
+    await queue("order_update", row.id, {
       ...updateFields(now), is_staff_meal: !!now.is_staff_meal, staff_meal_reason: now.is_staff_meal ? now.staff_meal_reason ?? null : null, client_seq: Date.now(),
       ...(placed ? { status: "placed" } : {}), ...(complete ? { complete: true } : {}),
-    } });
+    });
   }
   const payments = (p: Record<string, unknown>) => (Array.isArray(p.payments) ? p.payments : []) as Record<string, unknown>[];
   const sentIds = new Set(payments(sent).map((p) => p.id));
   const tip = Math.max(0, Number(now.tip_minor ?? 0) - Number(sent.tip_minor ?? 0));
   const added = payments(now).filter((p): p is Record<string, unknown> & { id: string } => typeof p.id === "string" && !sentIds.has(p.id));
   for (const [i, p] of added.entries()) {
-    await enqueue({ type: "payment", id: p.id, membership_id, payload: { order_id: row.id, method_code: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor, reference: p.reference, client_created_at: p.client_created_at, tip_minor: i === 0 ? tip : 0 } });
+    await queue("payment", p.id, { order_id: row.id, method_code: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor, reference: p.reference, client_created_at: p.client_created_at, tip_minor: i === 0 ? tip : 0 });
   }
 }
 
@@ -452,6 +494,8 @@ export async function pullChanges() {
     if (!cs.catalog) { await cs.refresh(); return; }
     const changes = await api<SyncChanges>("/sync/changes", { auth: "pos", query: { since: cs.cursor ?? undefined } });
     await cs.applyChanges(changes);
+    // A member deactivated since can no longer unlock this till offline with the copy of their session (K5).
+    forgetStashes((changes.staff ?? []).filter((m): m is { id: string; status: string } => !!m && typeof m === "object" && "status" in m && (m as { status?: unknown }).status !== "active").map((m) => m.id));
   } catch {}
 }
 
@@ -512,11 +556,12 @@ export function startSync(opts: { pull?: boolean } = {}) {
   };
 }
 
+// Back to the queue as it was made: its maker, its time and its maker's key (or none), whoever is signed in now.
 async function requeue(a: AttentionItem) {
   await db.attention.delete(a.id);
   const { __membership_id, ...payload } = a.payload;
   await unmarkRejected(a.type as SyncRecordType, a.id, payload);
-  await enqueue({ type: a.type as SyncRecordType, id: a.id, membership_id: __membership_id as string | undefined, payload });
+  await putQueued({ type: a.type as SyncRecordType, id: a.id, membership_id: __membership_id as string | undefined, payload }, keyOf(a));
 }
 
 /**
@@ -527,6 +572,7 @@ async function requeue(a: AttentionItem) {
  * follow it in the same push.
  */
 export async function retryAttention(id: string, approverPin?: string, codes?: string[]) {
+  void flushDismissals();
   const a = await db.attention.get(id);
   if (!a) return;
   if (approverPin) approvals.set(id, { pin: approverPin, codes: codes ?? a.permissions ?? [], labels: a.permission_labels ?? {} });
@@ -535,11 +581,56 @@ export async function retryAttention(id: string, approverPin?: string, codes?: s
   await refreshCounts();
 }
 
-/** Drops the record from the list (and anything held back by it). The local order row stays, marked rejected. */
+/**
+ * Drops the record from the list (and anything held back by it). The local order row stays, marked rejected. What the
+ * server refused is resolved there too (K7), so the admin's Needs attention does not keep it open.
+ */
 export async function dismissAttention(id: string) {
-  await db.attention.delete(id);
-  for (const child of ((await db.attention.toArray()) as AttentionItem[]).filter((x) => x.blocked_by === id)) await db.attention.delete(child.id);
+  const dropped = [await db.attention.get(id), ...((await db.attention.toArray()) as AttentionItem[]).filter((x) => x.blocked_by === id)].filter((x): x is AttentionItem => !!x);
+  for (const a of dropped) await db.attention.delete(a.id);
   await refreshCounts();
+  // A record held back on the till ("blocked") never reached the server: nothing to resolve for it.
+  void flushDismissals(dropped.filter((a) => a.code !== "blocked").map((a) => a.id));
+}
+
+// ---- Dismissals the server has not heard of yet ----
+const DISMISSED_KEY = "easalpha.sync-dismissed";
+
+function pendingDismissals(): string[] {
+  try {
+    const ids = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as unknown;
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// Each change reads and writes the list at once, so a flush running alongside a new dismissal never drops it.
+function changePendingDismissals(change: (ids: string[]) => string[]) {
+  try {
+    const ids = [...new Set(change(pendingDismissals()))];
+    if (ids.length) localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
+    else localStorage.removeItem(DISMISSED_KEY);
+  } catch {}
+}
+
+/**
+ * POST /sync/rejections/:record_id/resolve for each record the till dismissed (and any still waiting from before).
+ * Without a connection they wait in this browser for the next dismissal, Try again or Attention page visit; one the
+ * server refuses (not allowed, nothing open) is dropped.
+ */
+export async function flushDismissals(ids: string[] = []): Promise<void> {
+  if (ids.length) changePendingDismissals((pending) => [...pending, ...ids]);
+  const todo = pendingDismissals();
+  if (!todo.length || !isOnline()) return;
+  for (const id of todo) {
+    try {
+      await api(`/sync/rejections/${id}/resolve`, { method: "POST", auth: "pos", body: { resolution: "dismissed" }, timeoutMs: 8000 });
+    } catch (e) {
+      if (e instanceof ApiError && e.isNetwork) { noteNetworkFailure(); return; }
+    }
+    changePendingDismissals((pending) => pending.filter((x) => x !== id));
+  }
 }
 
 /** A record whose dismissal loses money the server never recorded: a payment, refund, void, or an order paid offline. */

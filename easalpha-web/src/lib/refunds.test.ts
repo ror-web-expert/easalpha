@@ -14,9 +14,18 @@ describe("refundOffer", () => {
     expect(refundOffer({ status: "served", paid_minor: 9280, total_minor: 0 })).toEqual({ amount_minor: 9280, excess: true });
   });
 
-  it("offers nothing on an open order paid in part or exactly, or on one with nothing paid", () => {
-    expect(refundOffer({ status: "placed", paid_minor: 10000, total_minor: 52200 })).toBeNull();
+  it("offers an open order paid in part that part, so it can go back and the order be voided", () => {
+    expect(refundOffer({ status: "placed", paid_minor: 10000, total_minor: 52200, receipt_number: null })).toEqual({ amount_minor: 10000, excess: false });
+    expect(refundOffer({ status: "placed", paid_minor: 10000, total_minor: 52200 })).toEqual({ amount_minor: 10000, excess: false });
+  });
+
+  it("offers a reopened order nothing back while it is open and paid in part: it is completed first", () => {
+    expect(refundOffer({ status: "served", paid_minor: 52200, total_minor: 61480, receipt_number: "261106-B1-4" })).toBeNull();
+  });
+
+  it("offers nothing on an open order paid exactly, or on one with nothing paid", () => {
     expect(refundOffer({ status: "served", paid_minor: 52200, total_minor: 52200 })).toBeNull();
+    expect(refundOffer({ status: "placed", paid_minor: 0, total_minor: 52200 })).toBeNull();
     expect(refundOffer({ status: "refunded", paid_minor: 0, total_minor: 52200 })).toBeNull();
     expect(refundOffer({ status: "voided", paid_minor: 0, total_minor: 0 })).toBeNull();
   });

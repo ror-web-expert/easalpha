@@ -3,6 +3,7 @@ import { useAuthStore } from "@/store/auth";
 import { useDeviceStore } from "@/store/device";
 import type { Session } from "@/lib/types";
 import { attachApprovalCodes } from "@/lib/approval-codes";
+import { forgetStashes, restashSession } from "@/lib/session-stash";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1").replace(/\/$/, "");
 // Accepts http(s) or ws(s); the socket always opens on ws(s) so the value can be written either way.
@@ -125,8 +126,15 @@ function refreshSession(kind: SessionArea): Promise<boolean> {
       const token = sessionStore(kind).getState().session?.refresh_token;
       if (!token) return false;
       const res = await fetch(`${API_URL}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: token }) });
-      if (!res.ok) return false;
-      applySession(kind, (await res.json()) as Session);
+      if (!res.ok) {
+        // The server says this till session is over: its copy for the offline unlock goes with it (K5).
+        if (kind === "pos" && res.status === 401) forgetStashes([sessionStore(kind).getState().session?.membership?.id]);
+        return false;
+      }
+      const next = (await res.json()) as Session;
+      applySession(kind, next);
+      // The offline unlock's copy of this session takes the new tokens (K5).
+      if (kind === "pos") void restashSession(next, useDeviceStore.getState().device?.id).catch(() => {});
       return true;
     } catch {
       return false;
