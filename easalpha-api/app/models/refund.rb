@@ -1,5 +1,6 @@
 class Refund < ApplicationRecord
   include Tenanted
+  include MethodKind
   belongs_to :order
   belongs_to :payment_method
   belongs_to :payment_account, optional: true

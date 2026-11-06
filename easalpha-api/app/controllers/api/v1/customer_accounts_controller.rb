@@ -139,7 +139,7 @@ module Api
       # later still shows on that month's bill). Customers who never used an account are skipped, which keeps the
       # screen fast for a restaurant with thousands of walk-in customers on file.
       def with_account_activity(scope, _from, to)
-        active_ids = Payment.where(method_code: "khata", status: "captured", business_day: ..to).select(:customer_id)
+        active_ids = Payment.by_method_kind("khata").where(status: "captured", business_day: ..to).select(:customer_id)
         paid_ids = CustomerPayment.where(business_day: ..to).select(:customer_id)
         adj_ids = CustomerAdjustment.where(effective_on: ..to).select(:customer_id)
         scope.where("customers.balance_minor <> 0").or(scope.where(id: active_ids)).or(scope.where(id: paid_ids)).or(scope.where(id: adj_ids))

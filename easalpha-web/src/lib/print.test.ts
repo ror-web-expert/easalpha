@@ -57,6 +57,14 @@ describe("receiptLines", () => {
     expect(t).toContain("You saved Rs 110");
     expect(lines).toContainEqual({ text: "Thank you", align: "center", bold: true });
   });
+  it("prints what was tendered and the change for any cash-kind method, and none for a card", () => {
+    // Only a cash-kind method carries a tendered amount (the server and the offline till both set it by kind).
+    const cod = texts(receiptLines({ ...receipt, payments: [{ method: "cod", amount_minor: 117700, tendered_minor: 120000, change_minor: 2300, reference: null }] }));
+    expect(cod.find((x) => x.startsWith("  Cash tendered"))).toMatch(/Rs 1,200$/);
+    expect(cod.find((x) => x.startsWith("  Change"))).toMatch(/Rs 23$/);
+    const card = texts(receiptLines({ ...receipt, payments: [{ method: "card", amount_minor: 117700, tendered_minor: null, change_minor: 0, reference: "4242" }] }));
+    expect(card.some((x) => x.startsWith("  Cash tendered") || x.startsWith("  Change"))).toBe(false);
+  });
   it("prints the receipt number as a barcode unless the setting turns it off, and never on a bill", () => {
     expect(receiptLines(receipt)).toContainEqual({ barcode: "R-0007" });
     expect(receiptLines(receipt, { settings: { "pos.receipt.barcode": false } })).not.toContainEqual({ barcode: "R-0007" });

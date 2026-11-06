@@ -45,12 +45,12 @@ class Shift < ApplicationRecord
     rows
   end
 
-  # Shifts from before every cashier had a drawer account: the old sum of their rows.
+  # Shifts from before every cashier had a drawer account: the old sum of their rows, every cash-kind method counted.
   def legacy_expected_cash
-    cash_in = Payment.where(shift_id: id, status: "captured", method_code: "cash").sum(:amount_minor)
-    cash_refunds = Refund.joins(:payment_method).where(shift_id: id, payment_methods: { kind: "cash" }).sum(:amount_minor)
-    khata_cash = CustomerPayment.joins(:payment_method).where(shift_id: id, direction: "received", payment_methods: { kind: "cash" }).sum(:amount_minor)
-    khata_paid = CustomerPayment.joins(:payment_method).where(shift_id: id, direction: "paid", payment_methods: { kind: "cash" }).sum(:amount_minor)
+    cash_in = Payment.by_method_kind("cash").where(shift_id: id, status: "captured").sum(:amount_minor)
+    cash_refunds = Refund.by_method_kind("cash").where(shift_id: id).sum(:amount_minor)
+    khata_cash = CustomerPayment.by_method_kind("cash").where(shift_id: id, direction: "received").sum(:amount_minor)
+    khata_paid = CustomerPayment.by_method_kind("cash").where(shift_id: id, direction: "paid").sum(:amount_minor)
     opening_cash_minor + cash_in - cash_refunds + khata_cash - khata_paid + cash_movements.sum(:amount_minor)
   end
 end

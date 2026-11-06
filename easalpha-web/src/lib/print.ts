@@ -198,7 +198,8 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   // Payments
   for (const p of r.payments ?? []) {
     lines.push(...row(titleCase(p.method), m(p.amount_minor), width));
-    if (p.method === "cash" && p.tendered_minor) lines.push(...row("  Cash tendered", m(p.tendered_minor), width), ...row("  Change", m(p.change_minor ?? 0), width, true));
+    // Only a cash-kind method carries a tendered amount, whatever its code (Cash, cash on delivery).
+    if (p.tendered_minor) lines.push(...row("  Cash tendered", m(p.tendered_minor), width), ...row("  Change", m(p.change_minor ?? 0), width, true));
     if (p.reference) lines.push(text(`  Ref ${p.reference}`));
   }
   if (t?.due_minor) lines.push(...row("BALANCE DUE", m(t.due_minor), width, true));

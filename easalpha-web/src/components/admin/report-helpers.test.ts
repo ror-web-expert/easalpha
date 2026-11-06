@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildCalendarGrid, columnsFor, flattenRow, flattenRows, hourLabel, marginTone, methodTotalsText, monthLabel, pctOf, shareWidth, shiftMonth,
+  buildCalendarGrid, columnsFor, flattenRow, flattenRows, hourLabel, marginTone, methodTotalsText, monthLabel, pctOf, revenueLines, shareWidth, shiftMonth,
   suggestionLabel, suggestionTone, urgencyLabel, urgencyTone, weekColumn,
 } from "./report-helpers";
+
+describe("revenueLines", () => {
+  it("runs from gross sales to net sales with tips and rounding, the lines above Net sales adding up to it", () => {
+    // Finance::ProfitLoss for a day with a Rs 50 tip, a Rs 100 refund and Rs 2.80 of cash rounding.
+    const lines = revenueLines({ revenue_minor: 99120, gross_sales_minor: 90000, discounts_minor: 0, service_charge_minor: 0, delivery_charge_minor: 0, tips_minor: 5000,
+      rounding_minor: -280, refunds_minor: 10000, net_sales_minor: 84720, tax_collected_minor: 14400 });
+    expect(lines.map((l) => l.label)).toEqual(["Gross sales", "Discounts", "Service charge", "Delivery charge", "Tips", "Rounding", "Refunds", "Net sales"]);
+    const net = lines.at(-1)!;
+    expect(net).toMatchObject({ minor: 84720, strong: true });
+    expect(lines.slice(0, -1).reduce((s, l) => s + l.minor, 0)).toBe(net.minor);
+    // An answer from before tips and rounding were reported shows them as nothing.
+    expect(revenueLines({ gross_sales_minor: 100, discounts_minor: 0, service_charge_minor: 0, delivery_charge_minor: 0, refunds_minor: 0, net_sales_minor: 100, tax_collected_minor: 0 })
+      .filter((l) => l.label === "Tips" || l.label === "Rounding").map((l) => l.minor)).toEqual([0, 0]);
+  });
+});
 
 describe("shareWidth", () => {
   it("clamps to the bar and keeps a sliver for small shares", () => {

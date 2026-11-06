@@ -15,7 +15,7 @@ module Customers
       business = order.business
       return [] unless BusinessModules.on?(business, "customer_accounts") && truthy?(business.setting("khata.notify_each_sale"))
       customer = order.customer or return []
-      amount = Payment.where(order_id: order.id, method_code: "khata", status: "captured").sum(:amount_minor)
+      amount = Payment.by_method_kind("khata").where(order_id: order.id, status: "captured").sum(:amount_minor)
       return [] unless amount.positive?
       vars = Whatsapp::Account.variables_for(customer, order: order).merge(order_total: rupees(amount))
       deliver(customer, "account_receipt", vars)

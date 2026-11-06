@@ -1,7 +1,7 @@
 // Pure helpers for the Reports screens (SPEC "Report catalogue"): share bars, the Sales Calendar grid, AI badge
 // labels and tones, and flattening nested rows for CSV and PDF export. No React here so Vitest can cover them.
 import type { BadgeVariant } from "@/components/ui";
-import type { AiPricingSuggestion, SalesCalendarDay, StockUrgency } from "@/lib/types";
+import type { AiPricingSuggestion, ProfitLoss, SalesCalendarDay, StockUrgency } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 
 /** Width of a share bar as a percentage string. Clamped to 0..100; anything above zero shows at least a sliver. */
@@ -90,6 +90,23 @@ export function urgencyTone(u: StockUrgency | string | null | undefined): BadgeV
     case "ok": return "success";
     default: return "neutral";
   }
+}
+
+/**
+ * The profit and loss revenue block, gross sales down to net sales, each amount signed as it adds up (discounts and
+ * refunds negative): the lines above Net sales sum to it, tips and rounding included.
+ */
+export function revenueLines(r: ProfitLoss["revenue"]): { label: string; minor: number; indent?: boolean; strong?: boolean }[] {
+  return [
+    { label: "Gross sales", minor: r.gross_sales_minor },
+    { label: "Discounts", minor: -r.discounts_minor, indent: true },
+    { label: "Service charge", minor: r.service_charge_minor, indent: true },
+    { label: "Delivery charge", minor: r.delivery_charge_minor, indent: true },
+    { label: "Tips", minor: r.tips_minor ?? 0, indent: true },
+    { label: "Rounding", minor: r.rounding_minor ?? 0, indent: true },
+    { label: "Refunds", minor: -r.refunds_minor, indent: true },
+    { label: "Net sales", minor: r.net_sales_minor, strong: true },
+  ];
 }
 
 /** Margin badge: healthy above 50, thin between 20 and 50, loss or near loss below 20. */

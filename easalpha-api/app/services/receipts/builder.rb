@@ -22,7 +22,7 @@ module Receipts
                   tax_lines: tax_lines(order), delivery_charge_minor: order.delivery_charge_minor, rounding_minor: order.rounding_minor, tip_minor: order.tip_minor, total_minor: order.total_minor, paid_minor: order.paid_minor, due_minor: order.due_minor },
         payments: order.payments.where(status: "captured").includes(received_by: :user).map { |p| { id: p.id, method: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor, change_minor: p.change_minor, reference: p.reference, received_at: p.received_at, received_by: p.received_by&.user&.name } },
         refunds: order.refunds.map { |r| { method: r.payment_method.code, amount_minor: r.amount_minor, reason: r.reason } },
-        khata: order.customer && Payment.where(order_id: order.id, method_code: "khata").exists? ? { balance_minor: order.customer.balance_minor } : nil,
+        khata: order.customer && Payment.by_method_kind("khata").where(order_id: order.id).exists? ? { balance_minor: order.customer.balance_minor } : nil,
         tax_invoice: (inv = TaxInvoice.find_by(order_id: order.id)) ? { number: inv.invoice_number, qr: inv.qr_payload, status: inv.status, authority: inv.authority } : { number: nil, qr: nil, status: Tax::Invoicer.registered?(branch) ? "pending" : "not_registered" },
         feedback_whatsapp: business.phone
       }

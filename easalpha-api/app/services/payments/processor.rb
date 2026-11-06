@@ -81,7 +81,7 @@ module Payments
 
     # A sale put on a customer account is messaged to the customer on WhatsApp (setting khata.notify_each_sale).
     def notify_khata!(created)
-      return unless created.any? { |p| p.method_code == "khata" && p.previously_new_record? }
+      return unless created.any? { |p| p.previously_new_record? && p.payment_method.khata? }
       Customers::Notify.sale!(@order.reload)
     rescue StandardError => e
       Rails.logger.error("[khata] sale message failed for #{@order.id}: #{e.message}")
@@ -102,10 +102,10 @@ module Payments
     private
 
     # Cash rounding (Rs 5 or Rs 10) on the first cash payment, on top of the whole-rupee total Pricing already rounded;
-    # kept in cash_rounding_minor so every later recalculation keeps it.
+    # kept in cash_rounding_minor so every later recalculation keeps it. Any cash-kind method rounds, as on the till.
     def apply_rounding!(lines)
       step = @business.setting("cash_rounding").to_i * 100
-      return unless step.positive? && lines.any? { |l| l[:method_code].to_s == "cash" } && @order.paid_minor.zero?
+      return unless step.positive? && @order.paid_minor.zero? && PaymentMethod.where(kind: "cash", code: lines.map { |l| l[:method_code].to_s }).exists?
       @order.cash_rounding_minor = 0
       Orders::Pricing.recalculate!(@order)
       @order.cash_rounding_minor = Orders::Rounding.round(@order.total_minor, step) - @order.total_minor
