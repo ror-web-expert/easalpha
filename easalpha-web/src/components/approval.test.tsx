@@ -134,8 +134,9 @@ describe("useApproval with named permissions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Void" }));
     await screen.findByText("Void an order before payment");
     tap("1234");
-    await screen.findByText("Wrong PIN or not allowed. Try again.");
+    // Real timers on the wrong-PIN path, as in the first test: under a full parallel run the default second is not enough.
+    await screen.findByText("Wrong PIN or not allowed. Try again.", {}, { timeout: 10000 });
     tap(MANAGER);
-    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"));
-  });
+    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"), { timeout: 10000 });
+  }, 30000);
 });
