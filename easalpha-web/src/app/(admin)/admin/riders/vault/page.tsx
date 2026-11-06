@@ -166,12 +166,13 @@ function SettleDialog({ open, rider, onClose, onSettled }: { open: boolean; ride
   };
   const diff = handed - expected;
   return (
-    <Dialog open={open} onClose={onClose} title={`Settle ${rider.name}`} description="Cash collected on delivered orders plus the float held, minus nothing spent, is what the rider hands in. Cash collected goes to the drawer; a shortfall posts an adjustment and raises an alert." size="md"
+    <Dialog open={open} onClose={onClose} title={`Settle ${rider.name}`} description="The cash collected on delivered orders not yet paid at the till, plus the float held, is what the rider hands in. Settling pays those orders in cash into the drawer; orders already paid at the till were handed in then and are not counted again. A shortfall posts an adjustment and raises an alert." size="md"
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={busy} disabled={!p || (p.deliveries_count === 0 && p.float_held_minor === 0)} onClick={settle}><HandCoins className="h-4 w-4" /> Settle {formatMoney(handed)}</Button></>}>
       {preview.isLoading || !p ? <Loading /> : (
         <div className="space-y-3">
           <Stat label="Unsettled deliveries" value={p.deliveries_count} />
-          <Stat label="Cash collected" value={formatMoney(p.cash_collected_minor)} />
+          {p.paid_at_till_minor ? <Stat label="Already paid at the till" value={formatMoney(p.paid_at_till_minor)} className="text-fg-muted" /> : null}
+          <Stat label={p.paid_at_till_minor ? "Cash still with the rider" : "Cash collected"} value={formatMoney(p.cash_collected_minor)} />
           <Stat label="Float held" value={formatMoney(p.float_held_minor)} className={keepFloat ? "line-through opacity-60" : ""} />
           <Stat label="Expected" value={formatMoney(expected)} className="border-t pt-2 font-semibold" />
           <Switch checked={keepFloat} onChange={setKeepFloat} label="Rider keeps the float for the next shift" />

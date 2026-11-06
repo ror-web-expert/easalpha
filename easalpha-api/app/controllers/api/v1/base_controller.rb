@@ -117,16 +117,19 @@ module Api
       def current_business = @business
       def current_branch = @branch
       def current_device = @device
-      def current_shift = @membership && Shift.open.find_by(cashier_membership_id: @membership.id)
+      # The shift whose drawer cash moved at this till lands in (Shift.for_till): the one open on the till, so a manager
+      # or a second cashier signed in there moves that drawer's money, not their own shift's (QA T4, B1).
+      def current_shift = @membership && Shift.for_till(device: @device, membership: @membership, branch: @branch)
 
       # SPEC business day: "today" is the branch's business day (06:01 to 02:01 by default), never the UTC calendar date.
       def today = current_branch ? current_branch.business_day_for(Time.current) : Date.current
       alias business_today today # for controllers whose own action is named today
 
-      # from..to from the query, defaulting to the current month (shared by the money and report controllers).
+      # from..to from the query, defaulting to the current month (shared by the money and report controllers). The
+      # alias, not today: in a controller whose action is named today (canteen) that ran the action and answered 500.
       def range
-        from = params[:from].present? ? Date.parse(params[:from]) : today.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : today
+        from = params[:from].present? ? Date.parse(params[:from]) : business_today.beginning_of_month
+        to = params[:to].present? ? Date.parse(params[:to]) : business_today
         from..to
       rescue Date::Error
         raise Api::Errors::BadRequest.new("report.range", "Dates must be YYYY-MM-DD")

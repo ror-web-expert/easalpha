@@ -27,7 +27,7 @@ RSpec.describe "Finance double entry", type: :request do
     it "ships seeded and numbered with system rows protected, lets users extend it, and refuses a header on a voucher" do
       get "/api/v1/finance/accounts", headers: headers
       codes = json[:data].map { |a| a[:code] }
-      expect(codes).to include("1000", "1010", "1020", "1030", "1100", "1200", "1300", "1500", "1590", "2000", "2010", "3010", "4000", "5000")
+      expect(codes).to include("1000", "1010", "1020", "1030", "1100", "1200", "1300", "1500", "1590", "2000", "2010", "3010", "4000", "5000", "5170")
       cash = json[:data].find { |a| a[:code] == "1010" }
       expect(cash).to include(is_system: true, kind: "asset", normal_side: "debit")
       api_patch "/api/v1/finance/accounts/#{cash[:id]}", { code: "9999" }, headers: headers
@@ -35,9 +35,9 @@ RSpec.describe "Finance double entry", type: :request do
       expect(json[:code]).to eq("1010")
       delete "/api/v1/finance/accounts/#{cash[:id]}", headers: headers
       expect(response).to have_http_status(:conflict)
-      api_post "/api/v1/finance/accounts", { code: "5170", name: "Staff meals", kind: "expense", parent_id: json[:id] }, headers: headers
+      api_post "/api/v1/finance/accounts", { code: "5175", name: "Staff uniforms", kind: "expense", parent_id: json[:id] }, headers: headers
       expect(response).to have_http_status(:created)
-      expect(json).to include(code: "5170", is_system: false, normal_side: "debit")
+      expect(json).to include(code: "5175", is_system: false, normal_side: "debit")
       api_post "/api/v1/finance/journal", { description: "bad", lines: [ { code: "1000", debit_minor: 100 }, { code: "4000", credit_minor: 100 } ] }, headers: headers
       expect(response).to have_http_status(:bad_request)
       expect(json[:error][:code]).to eq("journal.header")

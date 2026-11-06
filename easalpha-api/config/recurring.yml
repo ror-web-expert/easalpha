@@ -54,12 +54,16 @@ production:
   canteen_plans_roll:
     class: CanteenPlansRollJob
     queue: default
-    schedule: every day at 04:00 Asia/Karachi
+    schedule: every 15 minutes
 development:
   stock_safety_net:
     class: StockSafetyNetJob
     queue: default
     schedule: every 10 minutes
+  canteen_plans_roll: # so canteen.plans.auto_copy can be tried on the local stack too (QA F11)
+    class: CanteenPlansRollJob
+    queue: default
+    schedule: every 15 minutes
   tax_queue_sweep:
     class: TaxQueueSweepJob
     queue: tax

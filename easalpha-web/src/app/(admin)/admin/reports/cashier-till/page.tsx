@@ -10,6 +10,7 @@ import { exportTablePdf } from "@/lib/pdf";
 import { useCan } from "@/store/auth";
 import { Cards, DateRangePicker, FilterBar, PageHeader, type DateRange } from "@/components/admin/page";
 import { RIDER_PERMS, dayEndNeedsForce, methodChips, tillNeedsSettlement, tillShiftsText } from "@/components/admin/riders-helpers";
+import { settlementShiftLine, settlementShifts } from "@/components/admin/shift-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, ErrorState, Field, Input, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 
@@ -90,7 +91,7 @@ export default function CashierTillPage() {
             <THead><tr><TH>Business day</TH><TH right>Shifts</TH><TH right>Amount cleared</TH><TH>Note</TH><TH>Recorded</TH></tr></THead>
             <TBody>
               {r?.settlements.length ? r.settlements.map((s) => (
-                <TR key={s.id}><TD className="font-medium">{formatDate(s.business_day)}</TD><TD right>{s.shifts_count}</TD><TD right>{formatMoney(s.amount_minor)}</TD><TD className="text-fg-secondary">{s.note ?? "-"}{(s.detail as { forced?: boolean } | null)?.forced ? <Badge variant="warning" className="ml-2">forced</Badge> : null}</TD><TD className="text-fg-secondary">{formatDateTime(s.created_at)}</TD></TR>
+                <TR key={s.id}><TD className="font-medium">{formatDate(s.business_day)}{settlementShifts(s.detail).map((d) => <div key={d.shift_id} className="text-xs font-normal text-fg-muted">{settlementShiftLine(d)}</div>)}</TD><TD right>{s.shifts_count}</TD><TD right>{formatMoney(s.amount_minor)}</TD><TD className="text-fg-secondary">{s.note ?? "-"}{(s.detail as { forced?: boolean } | null)?.forced ? <Badge variant="warning" className="ml-2">forced</Badge> : null}</TD><TD className="text-fg-secondary">{formatDateTime(s.created_at)}</TD></TR>
               )) : <EmptyRow colSpan={5}>No Day-End Settlement in this period. Build the settlement record first; the report is meaningless without it.</EmptyRow>}
             </TBody>
           </Table>

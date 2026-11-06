@@ -44,9 +44,15 @@ module Finance
     COUNTER = { "order_payment" => :sale, "refund" => :sale, "expense" => :expense, "supplier_payment" => "2010", "customer_payment" => "1100", "customer_refund" => "1100",
                 "deposit" => :movement, "withdrawal" => :movement, "opening" => "3010", "adjustment" => :adjustment, "rider_float" => "1030" }.freeze
 
-    # A drawer movement by its kind: a drop goes to the safe and cash in comes from it, a payout or cash out is a
-    # petty expense, a rider float is petty cash. Deposits and withdrawals on a company account stay the owner's.
-    MOVEMENT_COUNTER = { "drop" => "1050", "cash_in" => "1050", "cash_out" => "5190", "payout" => "5190", "float_issue" => "1030", "float_return" => "1030" }.freeze
+    # A drawer movement by its kind. A drop and cash in move money between the drawer and the branch's safe account,
+    # and a payout is an Expense with its own category: Shifts::Safe and Shifts::Manager post those, never this map.
+    # A cash out is money taken out for the owner (QA B7: it was booked as Other Expenses with no expense behind it);
+    # a payout here is one recorded before 7 Nov 2026; a rider float is petty cash. Deposits and withdrawals on a
+    # company account stay the owner's.
+    MOVEMENT_COUNTER = { "cash_out" => "3020", "payout" => "5190", "float_issue" => "1030", "float_return" => "1030" }.freeze
+
+    # What a count finds over or short at a till, or at a rider's settlement.
+    OVER_SHORT = "5195".freeze
 
     # One payment-account entry becomes one balanced journal: the account's ledger mirror against its counterpart.
     def from_account_entry!(entry)
@@ -62,7 +68,7 @@ module Finance
       end
       counter = case counter
       when :expense then expense_account_for(entry)
-      when :adjustment then entry.amount_minor.positive? ? "4100" : "5190"
+      when :adjustment then entry.ref_table == "rider_settlements" ? OVER_SHORT : (entry.amount_minor.positive? ? "4100" : "5190")
       when :movement then movement_account_for(entry)
       else counter
       end
@@ -105,10 +111,15 @@ module Finance
       out
     end
 
-    # The sale split already in the journal for an order's payments and refunds (credits positive), by part.
+    # The sale split already in the journal for an order's payments and refunds (credits positive), by part. A cash,
+    # card or wallet sale paid before the split (fix round 2, 6 Nov 2026) was journaled against its account entry with
+    # the whole amount in Sales; those vouchers count too, so a refund sees what was really posted (ledger#8).
     def sale_posted(order)
-      entries = JournalEntry.where("(ref_table = 'payments' AND ref_id IN (?)) OR (ref_table = 'refunds' AND ref_id IN (?))",
-                                   Payment.where(order_id: order.id).select(:id), Refund.where(order_id: order.id).select(:id))
+      payments = Payment.where(order_id: order.id).select(:id)
+      refunds = Refund.where(order_id: order.id).select(:id)
+      legacy = AccountEntry.where(ref_table: "payments", ref_id: payments).or(AccountEntry.where(ref_table: "refunds", ref_id: refunds)).select(:id)
+      entries = JournalEntry.where(reversed_by_id: nil)
+                            .where("(ref_table = 'payments' AND ref_id IN (:p)) OR (ref_table = 'refunds' AND ref_id IN (:r)) OR (ref_table = 'account_entries' AND ref_id IN (:a))", p: payments, r: refunds, a: legacy)
       rows = JournalLine.joins(:gl_account).where(journal_entry_id: entries.select(:id), gl_accounts: { code: SALE_ACCOUNTS.values })
                         .group("gl_accounts.code").pluck(Arel.sql("gl_accounts.code"), Arel.sql("SUM(credit_minor) - SUM(debit_minor)")).to_h
       SALE_ACCOUNTS.transform_values { |code| rows[code].to_i }
@@ -120,16 +131,28 @@ module Finance
     # corrected by its next payment. Once per record: a repeat posts nothing.
     def sale_split!(record, money_account:, amount_minor:, business_day:, description:, branch_id:)
       return if amount_minor.zero? || JournalEntry.exists?(ref_table: record.class.table_name, ref_id: record.id)
-      order = record.order
+      deltas = sale_deltas(record.order, amount_minor)
+      lines = deltas.filter_map { |k, d| d.zero? ? nil : (d.positive? ? { account: SALE_ACCOUNTS[k], credit_minor: d } : { account: SALE_ACCOUNTS[k], debit_minor: -d }) }
+      lines << (amount_minor.positive? ? { account: money_account, debit_minor: amount_minor } : { account: money_account, credit_minor: -amount_minor })
+      post!(business_day: business_day, lines: lines, description: description, ref: record, branch_id: branch_id)
+    end
+
+    # What one payment or refund moves on each sale account (credits positive).
+    def sale_deltas(order, amount_minor)
       parts = sale_parts(order) || { sales: amount_minor.abs }
       net = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor) - Refund.where(order_id: order.id).sum(:amount_minor)
       posted = sale_posted(order)
       deltas = allocate(net, parts).to_h { |k, v| [ k, v - posted[k] ] }
-      # Out of step (a refund posted before the split existed, say): this record takes its own proportional share.
-      deltas = allocate(amount_minor.abs, parts).transform_values { |v| amount_minor.negative? ? -v : v } unless deltas.values.sum == amount_minor
-      lines = deltas.filter_map { |k, d| d.zero? ? nil : (d.positive? ? { account: SALE_ACCOUNTS[k], credit_minor: d } : { account: SALE_ACCOUNTS[k], debit_minor: -d }) }
-      lines << (amount_minor.positive? ? { account: money_account, debit_minor: amount_minor } : { account: money_account, credit_minor: -amount_minor })
-      post!(business_day: business_day, lines: lines, description: description, ref: record, branch_id: branch_id)
+      return deltas if deltas.values.sum == amount_minor && (amount_minor.positive? || deltas.values.none?(&:positive?))
+      # A refund only takes back, and never more than an account holds for the order: one of a sale journaled whole to
+      # Sales (before the split) comes out of Sales, instead of pushing Tax, Tips Payable and Rounding below zero or
+      # moving old revenue into tax on the refund's day.
+      if amount_minor.negative?
+        held = posted.select { |_, v| v.positive? }
+        return allocate(-amount_minor, held).transform_values(&:-@) if held.values.sum >= -amount_minor
+      end
+      # Out of step otherwise (money with no voucher behind it): this record takes its own proportional share.
+      allocate(amount_minor.abs, parts).transform_values { |v| amount_minor.negative? ? -v : v }
     end
 
     def transfer!(from:, to:, amount_minor:, business_day:, actor: nil, note: nil, ref: nil)
@@ -147,6 +170,58 @@ module Finance
       sale_split!(refund, money_account: "1100", amount_minor: -refund.amount_minor, business_day: refund.business_day, description: "Refund #{refund.order.label} on account: #{refund.reason}", branch_id: refund.branch_id)
     end
 
+    # Internal methods move no money, so they post to what they stand for instead of a bank (QA B4): the company's
+    # share of a canteen meal is the cost of feeding its staff, and the payroll's salary deduction is salary paid by
+    # clearing what the worker owes for meals, so the salary expense carries it (gross pay, not only the cash).
+    INTERNAL_ACCOUNTS = { "canteen_subsidy" => "5170", "canteen_payroll" => "5110" }.freeze
+
+    def internal_account(method) = INTERNAL_ACCOUNTS.fetch(method.code, "5190")
+
+    # A subsidised meal is a sale at its menu price: revenue and output tax are the order's own figures, as on the
+    # receipt and any tax invoice sent to the authority (Tax::Invoicer reports the order's tax). The worker's share is
+    # owed by the worker (1100, cleared by the payroll deduction); the company's share is a Staff Meals expense, so
+    # profit falls by exactly what the subsidy costs, the tax on the company's share included.
+    def internal_sale!(payment)
+      sale_split!(payment, money_account: internal_account(payment.payment_method), amount_minor: payment.amount_minor, business_day: payment.business_day,
+                           description: "Order #{payment.order.label} #{payment.payment_method.name}", branch_id: payment.branch_id)
+    end
+
+    def internal_refund!(refund)
+      sale_split!(refund, money_account: internal_account(refund.payment_method), amount_minor: -refund.amount_minor, business_day: refund.business_day,
+                          description: "Refund #{refund.order.label} #{refund.payment_method.name}: #{refund.reason}", branch_id: refund.branch_id)
+    end
+
+    # A receipt on a customer account by an internal method: the payroll's canteen deduction clears the worker's
+    # receivable against the salary expense.
+    def internal_receipt!(cp)
+      return if JournalEntry.exists?(ref_table: "customer_payments", ref_id: cp.id)
+      account = internal_account(cp.payment_method)
+      amount = cp.amount_minor
+      lines = cp.direction == "received" ? [ { account: account, debit_minor: amount }, { account: "1100", credit_minor: amount } ] : [ { account: "1100", debit_minor: amount }, { account: account, credit_minor: amount } ]
+      post!(business_day: cp.business_day, lines: lines, ref: cp, branch_id: cp.branch_id,
+            description: "#{cp.payment_method.name} #{cp.customer.name}#{cp.reference.present? ? ": #{cp.reference}" : ''}")
+    end
+
+    # A payslip's tip share is Tips Payable being paid, not a new salary expense: the salary expense recorded for the
+    # payslip carried it, so it moves out of Salaries into 2400 (QA B11). Never below what Tips Payable holds: tips from
+    # sales journaled before the split went to Sales, so paying those out stays a salary expense.
+    def tips_paid!(payslip, amount_minor:, business_day:, branch_id:)
+      held = JournalLine.joins(:gl_account).where(gl_accounts: { code: "2400" }).sum("credit_minor - debit_minor")
+      amount = [ amount_minor.to_i, held ].min
+      return if amount <= 0 || JournalEntry.exists?(ref_table: "payslips", ref_id: payslip.id)
+      post!(business_day: business_day, lines: [ { account: "2400", debit_minor: amount }, { account: "5110", credit_minor: amount } ], ref: payslip, branch_id: branch_id,
+            description: "Tips paid with #{payslip.payroll_run.label}: #{payslip.employee.name}")
+    end
+
+    # A supplier taken on with a balance carried over from before: payables against the owner's capital, as a
+    # customer's opening balance is (QA B10). Negative: the supplier owes us.
+    def supplier_opening!(supplier, business_day:, branch_id:)
+      amount = supplier.opening_balance_minor.to_i
+      return if amount.zero? || JournalEntry.exists?(ref_table: "suppliers", ref_id: supplier.id)
+      lines = amount.positive? ? [ { account: "3010", debit_minor: amount }, { account: "2010", credit_minor: amount } ] : [ { account: "2010", debit_minor: -amount }, { account: "3010", credit_minor: -amount } ]
+      post!(business_day: business_day, lines: lines, description: "Opening balance #{supplier.name}", ref: supplier, branch_id: branch_id)
+    end
+
     # Goods received from a supplier: inventory against payables.
     def inventory_receipt!(grn)
       return if grn.total_minor.to_i.zero?
@@ -154,10 +229,16 @@ module Finance
             lines: [ { account: "1200", debit_minor: grn.total_minor }, { account: "2010", credit_minor: grn.total_minor } ])
     end
 
+    # The supplier credits the return at its own price while the stock leaves at the average cost it is carried at:
+    # Inventory moves by what the stock ledger took out, so the account and the valuation agree (QA B12), and the gap
+    # is a cost-of-goods gain or loss.
     def inventory_return!(ret)
       return if ret.amount_minor.to_i.zero?
-      post!(business_day: ret.business_day || today, description: "#{ret.label} to #{ret.supplier.name}", ref: ret, branch_id: ret.branch_id,
-            lines: [ { account: "2010", debit_minor: ret.amount_minor }, { account: "1200", credit_minor: ret.amount_minor } ])
+      carried = ret.stock_document_id ? [ -StockLedgerEntry.where(ref_table: "stock_documents", ref_id: ret.stock_document_id).sum(:value_minor), 0 ].max : ret.amount_minor
+      gap = ret.amount_minor - carried
+      lines = [ { account: "2010", debit_minor: ret.amount_minor }, { account: "1200", credit_minor: carried } ]
+      lines << (gap.positive? ? { account: "5000", credit_minor: gap } : { account: "5000", debit_minor: -gap }) unless gap.zero?
+      post!(business_day: ret.business_day || today, description: "#{ret.label} to #{ret.supplier.name}", ref: ret, branch_id: ret.branch_id, lines: lines)
     end
 
     def supplier_adjustment!(adj)

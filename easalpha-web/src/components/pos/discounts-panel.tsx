@@ -1,18 +1,22 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Gift, Tag, Ticket, Trash2 } from "lucide-react";
+import { Gift, Percent, Tag, Ticket, Trash2 } from "lucide-react";
 import type { LoyaltyRedemptionOption, Order } from "@/lib/types";
 import type { Cart } from "@/store/cart";
 import { formatMoney } from "@/lib/money";
-import { errorMessage } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
+import { lineAmount } from "@/lib/pricing";
 import { getCustomerLoyalty, redeemPointsOnOrder, type CustomerLoyalty } from "@/lib/till-extras";
-import { applyCoupon, applyVoucher, discountLabel, discountLocked, discountRows, listRedemptionOptions, optionAvailability, optionGives, redeemOption, removeDiscount, voucherError } from "@/lib/pos-discounts";
-import { Badge, Button, Field, Input } from "@/components/ui";
+import { applyCoupon, applyManualDiscount, applyVoucher, discountLabel, discountLocked, discountRows, listRedemptionOptions, optionAvailability, optionGives, redeemOption, removeDiscount, savedLineId, voucherError } from "@/lib/pos-discounts";
+import { Badge, Button, Field, Input, MoneyInput, Select } from "@/components/ui";
 import { toast } from "@/store/toast";
 import { cn } from "@/lib/utils";
 
-/** Runs a server call against the order (saving the cart first) and replaces the cart with the re-priced order. */
-export type DiscountRunner = (fn: (orderId: string) => Promise<Order>, label: string) => Promise<boolean>;
+/**
+ * Runs a server call against the order (saving the cart first) and replaces the cart with the re-priced order. `fn`
+ * gets the cart as saved (its lines carry the server's ids) and the manager's PIN when the approval dialog gave one.
+ */
+export type DiscountRunner = (fn: (orderId: string, ctx: { saved: Cart; approver_pin?: string }) => Promise<Order>, label: string) => Promise<boolean>;
 
 interface Props {
   cart: Cart; currency?: string; online: boolean; busy: boolean;
@@ -42,7 +46,7 @@ export function DiscountsPanel({ cart, currency, online, busy, locked, totalDisc
   const lines = useMemo(() => cart.discounts ?? [], [cart.discounts]);
   const hasVoucher = lines.some((d) => d.kind === "voucher");
   const hasLoyalty = lines.some((d) => d.kind === "loyalty");
-  const rows = useMemo(() => discountRows(lines, totalDiscountMinor), [lines, totalDiscountMinor]);
+  const rows = useMemo(() => discountRows(lines, totalDiscountMinor, (id) => cart.lines.find((l) => l.id === id)?.name), [lines, totalDiscountMinor, cart.lines]);
   const disabled = !online || locked || busy;
 
   // The customer's balance comes from the server (GET /customers/:id/loyalty); refreshed after each redemption.
@@ -91,6 +95,27 @@ export function DiscountsPanel({ cart, currency, online, busy, locked, totalDisc
     catch (e) { toast.error("Could not redeem", errorMessage(e)); }
   };
 
+  // The cashier's own discount (QA T10): the whole order or one line, a percent or an amount, with a reason. The server
+  // holds the role's limit (10% for a cashier) and asks for a manager's PIN above it; the PIN dialog approves only that.
+  const [manual, setManual] = useState<{ target: string; mode: "percent" | "fixed"; percent: string; amount: number; reason: string }>({ target: "order", mode: "percent", percent: "", amount: 0, reason: "" });
+  const liveLines = cart.lines.filter((l) => l.status !== "cancelled");
+  const manualValue = manual.mode === "percent" ? Number(manual.percent) : manual.amount;
+  const manualOk = !disabled && Number.isFinite(manualValue) && manualValue > 0 && (manual.mode === "fixed" || manualValue <= 100) && !!manual.reason.trim();
+  const applyManual = async () => {
+    if (!manualOk) return;
+    const line = manual.target === "order" ? null : liveLines.find((l) => l.key === manual.target) ?? null;
+    const off = manual.mode === "percent" ? `${manualValue}% off` : `${formatMoney(manual.amount, currency)} off`;
+    const label = `${off} ${line ? line.name : "the order"}`;
+    try {
+      const ok = await onRun((id, ctx) => {
+        const lineId = line ? savedLineId(cart.lines, line.key, ctx.saved) : null;
+        if (line && !lineId) throw new Error(`${line.name} is not on the order the server has. Close the payment screen and try again.`);
+        return applyManualDiscount(id, { kind: manual.mode, value: manualValue, reason: manual.reason, order_item_id: lineId }, ctx.approver_pin);
+      }, `Discount: ${label}`);
+      if (ok) { setManual((m) => ({ ...m, target: "order", percent: "", amount: 0, reason: "" })); toast.success("Discount applied", label); }
+    } catch (e) { if (!(e instanceof ApiError && e.code === "approval.cancelled")) toast.error("Could not apply the discount", errorMessage(e)); }
+  };
+
   const balance = loyalty?.points ?? null;
   const productIds = cart.lines.filter((l) => l.status !== "cancelled" && l.product_id).map((l) => l.product_id as string);
   const ctx = { points: balance, hasCustomer: !!customerId, alreadyRedeemed: hasLoyalty, online, productIds };
@@ -133,6 +158,30 @@ export function DiscountsPanel({ cart, currency, online, busy, locked, totalDisc
             <Button type="submit" variant="secondary" size="lg" className="h-11" disabled={disabled || hasVoucher || !voucher.trim()}><Ticket className="h-4 w-4" /> Apply</Button>
           </form>
         </Field>
+      </div>
+      <div className="space-y-2 border-t pt-2" role="group" aria-label="Discount">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium">Discount</span>
+          <span className="text-xs text-fg-muted">Above your limit a manager&apos;s PIN is asked for.</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={manual.target} onChange={(e) => setManual({ ...manual, target: e.target.value })} className="h-11 min-w-0 flex-1" disabled={disabled} aria-label="Discount on">
+            <option value="order">Whole order</option>
+            {liveLines.map((l) => <option key={l.key} value={l.key}>{l.quantity !== 1 ? `${l.quantity} × ` : ""}{l.name} ({formatMoney(lineAmount(l), currency)})</option>)}
+          </Select>
+          <div role="group" aria-label="Discount as" className="flex overflow-hidden rounded-full border border-border-strong">
+            {(["percent", "fixed"] as const).map((m) => (
+              <button key={m} type="button" aria-pressed={manual.mode === m} disabled={disabled} onClick={() => setManual({ ...manual, mode: m })} className={cn("h-11 px-3 text-sm font-medium disabled:opacity-40", manual.mode === m ? "bg-sidebar-active-bg text-sidebar-active" : "text-fg hover:bg-fg/8", m === "fixed" && "border-l border-border-strong")}>{m === "percent" ? "%" : "Rs"}</button>
+            ))}
+          </div>
+          {manual.mode === "percent"
+            ? <Input type="number" inputMode="decimal" min={0} max={100} step="0.5" value={manual.percent} onChange={(e) => setManual({ ...manual, percent: e.target.value })} className="h-11 w-24 tabular" disabled={disabled} aria-label="Discount percent" />
+            : <MoneyInput value={manual.amount} onChange={(v) => setManual({ ...manual, amount: Math.max(0, v) })} className="h-11 w-32" disabled={disabled} aria-label="Discount amount" />}
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); void applyManual(); }} className="flex gap-1">
+          <Input value={manual.reason} onChange={(e) => setManual({ ...manual, reason: e.target.value })} placeholder="Reason (required)" className="h-11" disabled={disabled} aria-label="Discount reason" />
+          <Button type="submit" variant="secondary" size="lg" className="h-11" disabled={!manualOk}><Percent className="h-4 w-4" /> Apply</Button>
+        </form>
       </div>
       <div className="space-y-2 border-t pt-2">
         <div className="flex items-center justify-between text-sm">

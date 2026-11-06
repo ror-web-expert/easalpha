@@ -48,7 +48,9 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
     within(biz) do
       s = Shift.find(shift[:id])
       expect(s.z_report["sales"]["net_minor"]).to eq(9_280)
-      expect(PaymentAccount.find(s.drawer_account_id).current_balance_minor).to eq(500_000 + 9_280 - 2_000)
+      # The count reaches the books (the 280 short) and the float goes back to the safe: the drawer holds the takings.
+      expect(PaymentAccount.find(s.drawer_account_id).current_balance_minor).to eq(507_000 - 500_000)
+      expect(PaymentAccount.find_by!(kind: "safe").current_balance_minor).to eq(500_000)
       expect(Order.last.shift_id).to eq(s.id)
     end
     api_post "/api/v1/shifts/#{shift[:id]}/approve", {}, headers: auth_headers(cashier)
@@ -59,7 +61,7 @@ RSpec.describe "Shifts, cash drawer and day close", type: :request do
     expect(json[:settlement_status]).to eq("settled")
     within(biz) do
       expect(PaymentAccount.find(shift[:drawer_account_id]).current_balance_minor).to eq(0)
-      expect(PaymentAccount.find_by!(name: "Cash").current_balance_minor).to eq(500_000 + 9_280 - 2_000)
+      expect(PaymentAccount.find_by!(name: "Cash").current_balance_minor).to eq(507_000 - 500_000) # what was counted, less the float
     end
   end
 

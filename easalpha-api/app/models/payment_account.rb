@@ -1,11 +1,12 @@
 class PaymentAccount < ApplicationRecord
   include Tenanted
-  KINDS = %w[cash wallet bank drawer custom].freeze
+  # safe: a branch's safe (Shifts::Safe), where drops go and floats come from; it is banked by a transfer.
+  KINDS = %w[cash wallet bank drawer custom safe].freeze
   has_many :entries, class_name: "AccountEntry"
   validates :name, presence: true
   validates :kind, inclusion: { in: KINDS }
   scope :active, -> { where(active: true, archived_at: nil) }
-  scope :company, -> { where(kind: %w[cash wallet bank custom]) }
+  scope :company, -> { where(kind: %w[cash wallet bank custom safe]) }
 
   def deactivate!
     raise Api::Errors::Conflict.new("account.has_balance", "#{name} still holds #{current_balance_minor} and cannot be disabled") unless current_balance_minor.zero?

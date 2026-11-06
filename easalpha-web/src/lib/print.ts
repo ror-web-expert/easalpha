@@ -11,7 +11,8 @@ import { titleCase } from "@/lib/utils";
 import { settingValue } from "@/lib/pricing";
 import { formatQty } from "@/components/pos/receipt";
 import { billRows } from "./bill";
-import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "./receipt-format";
+import { itemCount, modifierNote, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "./receipt-format";
+import { zCashRows } from "./z-report-rows";
 import { loadSymbol, type CodeSymbol } from "@/components/admin/barcode-labels";
 
 export type PrintLine =
@@ -178,13 +179,16 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   lines.push(...row("QTY  ITEM", "AMOUNT", width, true));
   lines.push({ divider: true });
   const indent = "     ";
+  const note = (t: string) => lines.push(...wrap(t, width - indent.length).map((x) => text(`${indent}${x}`)));
+  // Only the item rows carry an amount, so the AMOUNT column adds up to the Subtotal: a modifier's price is already in
+  // its line, and a line discount is in the bill block below (QA T13: modifiers were counted twice).
   for (const l of r.lines ?? []) {
     lines.push(...row(`${formatQty(l.quantity).padStart(3)}  ${l.name}`, m(l.line_subtotal_minor ?? l.line_total_minor), width));
-    const note = unitPriceNote(l, m);
-    if (note) lines.push(...wrap(note, width - indent.length).map((t) => text(`${indent}${t}`)));
-    for (const mo of l.modifiers ?? []) lines.push(...row(`${indent}+ ${mo.name}`, mo.price_minor ? m(mo.price_minor) : "", width));
-    if (l.discount_minor) lines.push(...row(`${indent}Discount`, `-${m(l.discount_minor)}`, width));
-    if (l.notes) lines.push(...wrap(`"${l.notes}"`, width - indent.length).map((t) => text(`${indent}${t}`)));
+    const each = unitPriceNote(l, m);
+    if (each) note(each);
+    for (const mo of l.modifiers ?? []) note(modifierNote(mo, m));
+    if (l.discount_minor) note(`Discount -${m(l.discount_minor)}`);
+    if (l.notes) note(`"${l.notes}"`);
   }
   lines.push({ divider: true });
   // The bill block (lib/bill.ts): the lines above add up to the Subtotal, these rows add up to TOTAL.
@@ -285,7 +289,9 @@ export function zReportLines(z: ZReport, opts: { currency?: string; settings?: B
   lines.push(...row("Paid", String(z.orders?.paid ?? 0), width), ...row("Voided", `${z.voids?.count ?? 0} / ${m(z.voids?.amount_minor)}`, width), ...row("Refunds", `${z.refunds?.count ?? 0} / ${m(z.refunds?.amount_minor)}`, width),
     ...row("Discounts", `${z.discounts?.count ?? 0} / ${m(z.discounts?.amount_minor)}`, width), ...row("Staff meals", String(z.orders?.staff_meals ?? 0), width), ...row("Still open", String(z.orders?.open ?? 0), width));
   lines.push({ divider: true }, text("CASH DRAWER", { bold: true }));
-  lines.push(...row("Opening", m(z.cash?.opening_minor), width), ...row("Cash sales", m(z.cash?.cash_sales_minor), width), ...row("Cash in", m(z.cash?.cash_in_minor), width), ...row("Cash out", `-${m(z.cash?.cash_out_minor)}`, width), ...row("Expected", m(z.cash?.expected_minor), width));
+  // The same rows as the screen, every kind of money the drawer moved, so the slip adds up to Expected (QA B8).
+  zCashRows(z.cash).forEach((r) => lines.push(...row(r.label, r.minor < 0 ? `-${m(-r.minor)}` : m(r.minor), width)));
+  lines.push(...row("Expected", m(z.cash?.expected_minor), width, true));
   if (z.cash?.counted_minor != null) lines.push(...row("Counted", m(z.cash.counted_minor), width));
   const os = z.cash?.over_short_minor;
   if (os != null) lines.push(...row(os >= 0 ? "Over" : "Short", m(Math.abs(os)), width, true));

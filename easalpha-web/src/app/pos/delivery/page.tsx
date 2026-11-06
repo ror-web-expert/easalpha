@@ -78,7 +78,8 @@ export default function DeliveryPage() {
           <div className="flex-1" />
           <Button variant="secondary" size="lg" onClick={load} loading={loading} disabled={status === "offline"}><RefreshCw className="h-4 w-4" /> Refresh</Button>
         </div>
-        <p className="border-b bg-info-soft/50 px-3 py-1.5 text-xs text-fg-secondary">Delivered never closes the order: the cashier still takes the payment at the till (Pay from the order). Cash the rider brings back is settled on the rider.</p>
+        {/* Cash on delivery is counted once (QA F1): paid here when the rider hands it over, or paid by the rider's settlement. */}
+        <p className="border-b bg-info-soft/50 px-3 py-1.5 text-xs text-fg-secondary">Delivered never closes the order. When the rider hands you an order&apos;s cash, Pay it at the till in cash: that is the hand-in, and the rider&apos;s settlement will not count it again. Orders still unpaid when the rider is settled are paid by the settlement.</p>
         <div className="grid flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 lg:grid-cols-2 2xl:grid-cols-3">
           {rows.map((d) => {
             const nexts = NEXT_STATUSES[d.status] ?? [];
@@ -130,7 +131,7 @@ export default function DeliveryPage() {
         </div>
       </Dialog>
       <ReasonDialog open={!!failing} onClose={() => setFailing(null)} onConfirm={(reason) => { const d = failing!; setFailing(null); apply(d, () => moveDelivery(d.id, "failed", { note: reason }), `${d.order_label} marked failed`); }} title={failing ? `Fail ${failing.order_label}` : "Fail delivery"} description="The order stays open; void or re-dispatch it from Orders." confirmLabel="Mark failed" presets={FAIL_REASONS} />
-      <Dialog open={!!cashFor} onClose={() => setCashFor(null)} title={cashFor?.to ? `Delivered · ${cashFor.d.order_label}` : `Cash collected · ${cashFor?.d.order_label ?? ""}`} description="How much cash did the rider collect from the customer? Zero when it was prepaid. The order is still closed by Pay at the till." size="sm" footer={<><Button variant="secondary" onClick={() => setCashFor(null)}>Cancel</Button><Button onClick={confirmCash}>{cashFor?.to ? "Mark delivered" : "Save"}</Button></>}>
+      <Dialog open={!!cashFor} onClose={() => setCashFor(null)} title={cashFor?.to ? `Delivered · ${cashFor.d.order_label}` : `Cash collected · ${cashFor?.d.order_label ?? ""}`} description="How much cash did the rider collect from the customer? Zero when it was prepaid. Pay the order at the till when the rider hands the cash over, or leave it to the rider's settlement: the cash is counted once either way." size="sm" footer={<><Button variant="secondary" onClick={() => setCashFor(null)}>Cancel</Button><Button onClick={confirmCash}>{cashFor?.to ? "Mark delivered" : "Save"}</Button></>}>
         {cashFor ? <Field label="Cash collected"><MoneyInput value={cashFor.amount} onChange={(v) => setCashFor({ ...cashFor, amount: v })} className="h-14 text-2xl" autoFocus /></Field> : null}
         {cashFor ? <div className="mt-2 flex gap-2">{[0, cashFor.d.order_total_minor].filter((v, i, a) => a.indexOf(v) === i).map((v) => <button key={v} onClick={() => setCashFor({ ...cashFor, amount: v })} className={cn("min-h-11 rounded-lg border px-3 text-sm", cashFor.amount === v ? "border-primary bg-primary-soft" : "bg-card")}>{v ? `Bill ${formatMoney(v, currency)}` : "Prepaid · none"}</button>)}</div> : null}
       </Dialog>

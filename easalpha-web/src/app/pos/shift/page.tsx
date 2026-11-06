@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Wallet, ArrowDownToLine, ArrowUpFromLine, Lock, Printer, Landmark } from "lucide-react";
+import { Wallet, ArrowDownToLine, ArrowUpFromLine, Lock, Printer, Landmark, Vault, HandCoins, Receipt } from "lucide-react";
 import { api } from "@/lib/api";
 import { usePosCan } from "@/store/device";
 import { methodChips, RIDER_PERMS } from "@/components/admin/riders-helpers";
@@ -10,6 +10,7 @@ import { useDeviceStore } from "@/store/device";
 import { useSyncStore } from "@/store/sync";
 import { cashMovement, closeShift, loadCurrentShift, openShift } from "@/lib/pos-actions";
 import { errorMessage } from "@/lib/api";
+import { createExpense, DRAWER_MOVES, drawerMoveExtra, drawerMoveReady, expenseDraftReady, flatCategories, listExpenseCategories, newDrawerMove, newExpenseDraft, type DrawerMove, type DrawerMoveKind, type ExpenseDraft } from "@/lib/till-extras";
 import type { MyTill, ZReport } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/dates";
@@ -19,10 +20,13 @@ import { PosShell } from "@/components/pos/shell";
 import { PushToggle } from "@/components/admin/push-enable";
 import { ZReportView } from "@/components/z-report";
 import { useApproval } from "@/components/approval";
-import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyState, Field, Input, MoneyInput, Stat, Textarea } from "@/components/ui";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyState, Field, Input, MoneyInput, Select, Stat, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 
 const DENOMS = [5000, 1000, 500, 100, 50, 20, 10, 5, 2, 1];
+const MOVE_BUTTONS: { kind: DrawerMoveKind; icon: React.ComponentType<{ className?: string }> }[] = [
+  { kind: "cash_in", icon: ArrowDownToLine }, { kind: "cash_out", icon: ArrowUpFromLine }, { kind: "drop", icon: Vault }, { kind: "payout", icon: HandCoins },
+];
 
 export default function ShiftPage() {
   const shift = useCatalogStore((s) => s.shift);
@@ -32,7 +36,8 @@ export default function ShiftPage() {
   const status = useSyncStore((s) => s.status);
   const { run, dialog } = useApproval();
   const [opening, setOpening] = useState<number | null>(null);
-  const [move, setMove] = useState<{ kind: "cash_in" | "cash_out"; amount: number; reason: string } | null>(null);
+  const [move, setMove] = useState<DrawerMove | null>(null);
+  const [expense, setExpense] = useState<ExpenseDraft | null>(null);
   const [closing, setClosing] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [note, setNote] = useState("");
@@ -40,8 +45,18 @@ export default function ShiftPage() {
   const [busy, setBusy] = useState(false);
   const posCan = usePosCan();
   const canSeeTill = posCan(...RIDER_PERMS.myTill);
+  // Opening, moving cash and closing are for staff the API lets open or close a shift; anyone else (a waiter) sees
+  // the shift read-only instead of an Open shift button that fails (roles QA, 6 Nov 2026).
+  const canShift = posCan("shifts.own", "shifts.any");
+  const canExpense = posCan("expenses.manage", "EXPENSES");
+  // The shift open on this till may be another cashier's: sales and drawer moves go into it, but only its cashier or a
+  // manager closes it.
+  const mine = !!shift && shift.cashier_membership_id === session?.membership?.id;
+  const canClose = canShift && (mine || posCan("shifts.any"));
   // SPEC My Till: the cashier's own till, what it holds and what was collected today. Online only; the till flow below works offline.
   const myTill = useQuery({ queryKey: ["my_till", shift?.id ?? null], enabled: canSeeTill && !!session, refetchInterval: 60_000, queryFn: () => api<MyTill>("/shifts/my_till", { auth: "pos" }) });
+  const categories = useQuery({ queryKey: ["expense_categories"], enabled: !!move || !!expense, staleTime: 5 * 60_000, queryFn: listExpenseCategories });
+  const categoryOptions = flatCategories(categories.data);
   useEffect(() => { loadCurrentShift(); }, []);
   const counted = DENOMS.reduce((s, d) => s + (counts[d] || 0) * d * 100, 0);
 
@@ -53,9 +68,19 @@ export default function ShiftPage() {
   };
   const doMove = async () => {
     if (!shift || !move) return;
+    const copy = DRAWER_MOVES[move.kind];
     setBusy(true);
-    try { const r = await run((pin) => cashMovement(shift, move.kind, move.amount, move.reason, pin), `${titleCase(move.kind)} ${formatMoney(move.amount, currency)}`); toast.success(r.offline ? "Recorded on till" : "Recorded"); setMove(null); }
-    catch (e) { toast.error("Could not record", errorMessage(e)); }
+    try {
+      const r = await run((pin) => cashMovement(shift, move.kind, move.amount, move.reason.trim(), pin, drawerMoveExtra(move)), `${copy.title} ${formatMoney(move.amount, currency)}`);
+      toast.success(r.offline ? `${copy.done} on the till; syncs later` : copy.done); setMove(null);
+    } catch (e) { toast.error("Could not record", errorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  const doExpense = async () => {
+    if (!expense) return;
+    setBusy(true);
+    try { const e = await run((pin) => createExpense(expense, pin), `Expense ${formatMoney(expense.amount_minor, currency)}`); toast.success(`Expense ${e.label} recorded`); setExpense(null); }
+    catch (e) { toast.error("Could not record the expense", errorMessage(e)); }
     finally { setBusy(false); }
   };
   const printZ = async () => {
@@ -79,26 +104,34 @@ export default function ShiftPage() {
       <div className="mx-auto max-w-3xl space-y-4 p-4">
         {canSeeTill && myTill.data ? <MyTillCard t={myTill.data} currency={currency} /> : null}
         {!shift ? (
-          <EmptyState icon={Wallet} title="No open shift" hint={`Open a shift for ${session?.user?.name ?? "you"} to take cash payments.`} action={<Button size="xl" onClick={() => setOpening(0)}>Open shift</Button>} />
+          canShift
+            ? <EmptyState icon={Wallet} title="No open shift" hint={`Open a shift for ${session?.user?.name ?? "you"} to take cash payments.`} action={<Button size="xl" onClick={() => setOpening(0)}>Open shift</Button>} />
+            : <EmptyState icon={Wallet} title="No open shift" hint="A cashier or a manager opens the shift on this till." />
         ) : (
           <>
             <Card>
-              <CardHeader><CardTitle>Open shift</CardTitle><span className="text-sm text-fg-secondary">since {formatDateTime(shift.opened_at)}</span></CardHeader>
+              <CardHeader>
+                <CardTitle>{mine ? "Open shift" : `${shift.cashier_name ?? "Another cashier"}'s shift on this till`}</CardTitle>
+                <span className="text-sm text-fg-secondary">since {formatDateTime(shift.opened_at)}</span>
+              </CardHeader>
               <CardBody>
+                {!mine ? <p className="mb-2 text-sm text-fg-secondary">Cash you take or move on this till goes into this shift. {shift.cashier_name ?? "Its cashier"} or a manager closes it.</p> : null}
                 <Stat label="Business day" value={shift.business_day} />
                 <Stat label="Opening cash" value={formatMoney(shift.opening_cash_minor, currency)} />
                 {shift.movements?.length ? <div className="mt-3 border-t pt-2">{shift.movements.map((m) => <Stat key={m.id} label={`${titleCase(m.kind)}${m.reason ? ` · ${m.reason}` : ""}`} value={formatMoney(m.amount_minor, currency)} tone={m.amount_minor >= 0 ? "success" : "danger"} />)}</div> : null}
                 <p className="mt-3 text-xs text-fg-muted">Expected cash is not shown here: the close is a blind count.</p>
               </CardBody>
             </Card>
-            <div className="grid grid-cols-2 gap-3">
-              <Button size="xl" variant="secondary" onClick={() => setMove({ kind: "cash_in", amount: 0, reason: "" })}><ArrowDownToLine className="h-5 w-5" /> Cash in</Button>
-              <Button size="xl" variant="secondary" onClick={() => setMove({ kind: "cash_out", amount: 0, reason: "" })}><ArrowUpFromLine className="h-5 w-5" /> Cash out</Button>
-              <Button size="xl" variant="destructive" className="col-span-2" onClick={() => setClosing(true)}><Lock className="h-5 w-5" /> Close shift (blind count)</Button>
-            </div>
+            {canShift ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {MOVE_BUTTONS.map(({ kind, icon: Icon }) => <Button key={kind} size="xl" variant="secondary" onClick={() => setMove(newDrawerMove(kind))}><Icon className="h-5 w-5" /> {DRAWER_MOVES[kind].title}</Button>)}
+                {canExpense ? <Button size="xl" variant="secondary" disabled={status === "offline"} title={status === "offline" ? "An expense needs the connection; record a Payout instead" : undefined} onClick={() => setExpense(newExpenseDraft())}><Receipt className="h-5 w-5" /> Expense</Button> : null}
+                {canClose ? <Button size="xl" variant="destructive" className="col-span-2 sm:col-span-3" onClick={() => setClosing(true)}><Lock className="h-5 w-5" /> Close shift (blind count)</Button> : null}
+              </div>
+            ) : null}
           </>
         )}
-        {status === "offline" ? <p className="text-center text-sm text-warning">Offline: shift actions are saved on the till and sent later.</p> : null}
+        {status === "offline" && canShift ? <p className="text-center text-sm text-warning">Offline: shift actions are saved on the till and sent later. An expense needs the connection; a payout works offline.</p> : null}
         {/* Device-level: browser push for this till (new online orders, big voids and the like), independent of the cashier signed in. */}
         <Card>
           <CardBody className="flex flex-wrap items-center justify-between gap-3">
@@ -107,11 +140,34 @@ export default function ShiftPage() {
           </CardBody>
         </Card>
       </div>
-      <Dialog open={opening !== null} onClose={() => setOpening(null)} title="Open shift" description="Count the cash in the drawer before you start." size="sm" footer={<><Button variant="secondary" onClick={() => setOpening(null)}>Cancel</Button><Button loading={busy} onClick={doOpen}>Open</Button></>}>
+      <Dialog open={opening !== null} onClose={() => setOpening(null)} title="Open shift" description="Count the cash in the drawer before you start. The float comes out of the safe." size="sm" footer={<><Button variant="secondary" onClick={() => setOpening(null)}>Cancel</Button><Button loading={busy} onClick={doOpen}>Open</Button></>}>
         <Field label="Opening cash"><MoneyInput value={opening ?? 0} onChange={setOpening} className="h-14 text-2xl" autoFocus /></Field>
       </Dialog>
-      <Dialog open={!!move} onClose={() => setMove(null)} title={move?.kind === "cash_in" ? "Cash in" : "Cash out"} description={move?.kind === "cash_out" ? "Petty cash, supplier payment, drop to safe. A manager PIN may be asked." : "Float added to the drawer."} size="sm" footer={<><Button variant="secondary" onClick={() => setMove(null)}>Cancel</Button><Button loading={busy} disabled={!move?.amount || !move?.reason.trim()} onClick={doMove}>Record</Button></>}>
-        {move ? <div className="space-y-3"><Field label="Amount"><MoneyInput value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} className="h-14 text-2xl" autoFocus /></Field><Field label="Reason"><Input value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} className="h-12" placeholder="Milk, change float, drop…" /></Field></div> : null}
+      <Dialog open={!!move} onClose={() => setMove(null)} title={move ? DRAWER_MOVES[move.kind].title : ""} description={move ? DRAWER_MOVES[move.kind].hint : undefined} size="sm"
+        footer={<><Button variant="secondary" onClick={() => setMove(null)}>Cancel</Button><Button loading={busy} disabled={!move || !drawerMoveReady(move)} onClick={doMove}>Record</Button></>}>
+        {move ? (
+          <div className="space-y-3">
+            <Field label="Amount"><MoneyInput value={move.amount} onChange={(v) => setMove({ ...move, amount: v })} className="h-14 text-2xl" autoFocus /></Field>
+            <Field label="Reason"><Input value={move.reason} onChange={(e) => setMove({ ...move, reason: e.target.value })} className="h-12" placeholder={DRAWER_MOVES[move.kind].placeholder} /></Field>
+            {move.kind === "payout" ? (
+              <>
+                <Field label="Paid to"><Input value={move.paid_to} onChange={(e) => setMove({ ...move, paid_to: e.target.value })} className="h-12" placeholder="Who took the cash" /></Field>
+                <Field label="Category"><Select value={move.category_id} onChange={(e) => setMove({ ...move, category_id: e.target.value })} className="h-12"><option value="">Petty cash</option>{categoryOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></Field>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </Dialog>
+      <Dialog open={!!expense} onClose={() => setExpense(null)} title="Expense" description="A bill paid from the drawer, recorded with its category on the Expenses page." size="sm"
+        footer={<><Button variant="secondary" onClick={() => setExpense(null)}>Cancel</Button><Button loading={busy} disabled={!expense || !expenseDraftReady(expense)} onClick={doExpense}>Record</Button></>}>
+        {expense ? (
+          <div className="space-y-3">
+            <Field label="Category"><Select value={expense.category_id} onChange={(e) => setExpense({ ...expense, category_id: e.target.value })} className="h-12"><option value="">Choose a category</option>{categoryOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></Field>
+            <Field label="Amount"><MoneyInput value={expense.amount_minor} onChange={(v) => setExpense({ ...expense, amount_minor: v })} className="h-14 text-2xl" /></Field>
+            <Field label="Paid to"><Input value={expense.paid_to} onChange={(e) => setExpense({ ...expense, paid_to: e.target.value })} className="h-12" placeholder="Gas shop" /></Field>
+            <Field label="Note"><Input value={expense.note} onChange={(e) => setExpense({ ...expense, note: e.target.value })} className="h-12" /></Field>
+          </div>
+        ) : null}
       </Dialog>
       <Dialog open={closing} onClose={() => setClosing(false)} title="Close shift" description="Count every denomination. The system compares with its own figure after you submit." size="md" footer={<><Button variant="secondary" onClick={() => setClosing(false)}>Cancel</Button><Button variant="destructive" loading={busy} onClick={doClose}>Close with {formatMoney(counted, currency)}</Button></>}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

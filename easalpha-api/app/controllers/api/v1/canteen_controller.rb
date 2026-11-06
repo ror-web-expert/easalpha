@@ -2,21 +2,24 @@ module Api
   module V1
     # Canteen (factory mess): the kiosk and the counter screen work with a paired device (kiosk, till, tablet or token
     # screen) or a staff login; plans, sessions, workers and reports need canteen.manage. Everything needs the module.
+    # A worker's own record (phone, CNIC, meals) is canteen.manage's only: no kiosk or counter screen reads it.
     class CanteenController < BaseController
-      KIOSK_ACTIONS = %w[today sync claim claims serve workers worker lookup].freeze
+      KIOSK_ACTIONS = %w[today sync claim claims serve workers lookup].freeze
       DEVICE_KINDS = %w[kiosk till tablet token_screen].freeze
 
       before_action :require_canteen!
       before_action :read_only_guard!, only: %i[claim serve cancel link_workers enrol_worker create_session update_session destroy_session save_plan copy_plans publish_plan unpublish_plan destroy_plan resolve_refused]
 
       # GET /canteen/today?date=  the kiosk's and the counter's view: the session now, the day's plans, the counts.
-      # A staff session also gets the meals refused at sync (a kiosk keeps its own from the sync results).
+      # The day is the session's (Sessions.service_date): a night session past the business-day end stays on the day
+      # it opened. A staff session also gets the meals refused at sync (a kiosk keeps its own from the sync results).
       def today
-        date = params[:date].present? ? Date.parse(params[:date].to_s) : today_date
+        date = params[:date].present? ? Date.parse(params[:date].to_s) : Canteen::Sessions.service_date(current_branch)
         session = Canteen::Sessions.current(current_branch)
         plans = Canteen::Plans.for_day(current_branch, date)
         claims = MealClaim.live.where(branch_id: current_branch.id, plan_date: date)
-        body = { date: date, now: Time.current, branch: { id: current_branch.id, name: current_branch.name }, session: session && CanteenSerializers.session(session),
+        branch = { id: current_branch.id, name: current_branch.name, time_zone: current_branch.time_zone, day_end: current_branch.day_end_time.strftime("%H:%M") }
+        body = { date: date, business_day: today_date, now: Time.current, branch: branch, session: session && CanteenSerializers.session(session),
                  sessions: MealSession.active.where(branch_id: current_branch.id).order(:sort_order, :starts_at).map { |s| CanteenSerializers.session(s) },
                  plans: plans.map { |p| CanteenSerializers.plan(p) }, counts: { claimed: claims.count, served: claims.where(status: "served").count, workers: Employee.active.count },
                  settings: { manual_lookup: current_business.setting("canteen.manual_lookup") != false, print_token: current_business.setting("canteen.print_token") != false } }
@@ -48,15 +51,17 @@ module Api
         render json: CanteenSerializers.claim(c), status: :created
       end
 
-      # GET /canteen/claims?date=&session_id=&status=&q=  the counter's list and the admin's
+      # GET /canteen/claims?date=&session_id=&status=&q=  the counter's list and the admin's. With no date: the days
+      # still being served (Sessions.open_dates), so a night session's tokens stay at the counter past the day end.
       def claims
-        date = params[:date].present? ? Date.parse(params[:date].to_s) : today_date
-        scope = MealClaim.includes(:meal_session, :employee, meal_plan_item: :product).where(branch_id: current_branch.id, plan_date: date)
+        date = params[:date].present? ? Date.parse(params[:date].to_s) : Canteen::Sessions.service_date(current_branch)
+        dates = params[:date].present? ? [ date ] : Canteen::Sessions.open_dates(current_branch)
+        scope = MealClaim.includes(:meal_session, :employee, meal_plan_item: :product).where(branch_id: current_branch.id, plan_date: dates)
         scope = scope.where(meal_session_id: params[:session_id]) if params[:session_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where("meal_claims.token_label ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q].to_s.strip)) if params[:q].present?
         rows = scope.order(scanned_at: :desc).limit((params[:limit].presence || 500).to_i.clamp(1, 2000))
-        render json: { date: date, data: rows.map { |c| CanteenSerializers.claim(c) } }
+        render json: { date: date, dates: dates, data: rows.map { |c| CanteenSerializers.claim(c) } }
       end
 
       def serve
@@ -70,8 +75,9 @@ module Api
         render json: CanteenSerializers.claim(Canteen::Claims.cancel!(c, by: current_membership, reason: params[:reason].to_s.strip))
       end
 
-      # GET /canteen/workers?q=  the kiosk's manual lookup (when allowed) and the admin's worker list. A paired kiosk
-      # gets a list only while canteen.manual_lookup is on, and a kiosk payload never carries a phone or CNIC.
+      # GET /canteen/workers?q=  the kiosk's manual lookup (when allowed) and the admin's worker list. A paired device
+      # is refused while canteen.manual_lookup is off (its offline list comes from /canteen/sync either way), and only a
+      # staff session with canteen.manage sees a phone or CNIC.
       def workers
         raise Api::Errors::Forbidden.new("canteen.manual_lookup", "Manual lookup is switched off") if current_membership.nil? && !manual_lookup?
         if params[:q].present?
@@ -83,14 +89,16 @@ module Api
         end
       end
 
-      # GET /canteen/lookup?fingerprint_id=|employee_id=  one worker by exact id, so a kiosk can name a finger it has
-      # no list for
+      # GET /canteen/lookup?fingerprint_id=|employee_id=  one worker by exact id, so a kiosk can name a finger enrolled
+      # since its last sync
       def lookup
         e = params[:employee_id].present? ? Employee.active.find_by(id: params[:employee_id]) : Canteen::Workers.find_by_fingerprint(params[:fingerprint_id])
         raise Api::Errors::NotFound.new("canteen.unknown_worker", "No enrolled worker matches") unless e
         render json: CanteenSerializers.kiosk_worker(e)
       end
 
+      # GET /canteen/workers/:id?from=&to=  one worker's meals and record, phone and CNIC included: canteen.manage only
+      # (not a kiosk action; a device or a cashier was handed every worker's phone and CNIC here, 6 Nov 2026 review)
       def worker
         e = Employee.active.includes(:department).find(params[:id])
         from = params[:from].present? ? Date.parse(params[:from]) : today_date.beginning_of_month

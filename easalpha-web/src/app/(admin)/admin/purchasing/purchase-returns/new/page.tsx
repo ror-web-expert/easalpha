@@ -46,7 +46,7 @@ function NewReturn() {
     });
   }, [receipt.data, prefilledFor, supplierId]);
   const total = purchaseLinesTotal(lines);
-  const usableMethods = methods.data?.filter((m) => m.active && m.kind !== "khata") ?? [];
+  const usableMethods = methods.data?.filter((m) => m.active && m.kind !== "khata" && !m.internal) ?? [];
   const problems = useMemo(() => {
     const p: string[] = [];
     if (!supplierId) p.push("Choose a supplier.");

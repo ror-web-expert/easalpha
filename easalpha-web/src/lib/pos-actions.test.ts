@@ -11,7 +11,14 @@ const h = vi.hoisted(() => ({
   rows: new Map<string, unknown>(),
   settings: {} as Record<string, unknown>,
   online: true,
-  queued: [] as { type: string; id: string; payload: Record<string, unknown> }[],
+  /** The sync queue; status "sending" is a record whose push is in flight. */
+  queued: [] as { type: string; id: string; payload: Record<string, unknown>; status?: string }[],
+  /** patchQueued merging into a record in flight too (the queued patch P6 builds) instead of refusing it. */
+  patchWhileSending: false,
+  /** Records the server refused, by id (db.attention). */
+  attention: new Map<string, unknown>(),
+  /** The signed-in cashier's permissions. */
+  permissions: ["orders.staff_meal"] as string[],
   calls: [] as string[],
   handler: null as null | ((path: string, opts: { method?: string; body?: unknown; timeoutMs?: number }) => unknown),
   tiers: [] as unknown[],
@@ -31,7 +38,12 @@ const h = vi.hoisted(() => ({
 const later = () => new Promise((resolve) => setTimeout(resolve, 0));
 vi.mock("@/lib/db", () => ({
   db: {
-    orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o) },
+    orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o), toArray: async () => [...h.rows.values()] },
+    queue: {
+      get: async (id: string) => { const r = h.queued.find((q) => q.id === id); return r ? { ...r, status: r.status ?? "pending" } : undefined; },
+      delete: async (id: string) => { const i = h.queued.findIndex((q) => q.id === id); if (i >= 0) h.queued.splice(i, 1); },
+    },
+    attention: { get: async (id: string) => h.attention.get(id) },
     kv: {
       get: async (key: string) => { await later(); return h.kv.has(key) ? { key, value: h.kv.get(key) } : undefined; },
       put: async (row: { key: string; value: unknown }) => { await later(); h.kv.set(row.key, row.value); },
@@ -54,9 +66,10 @@ vi.mock("@/lib/sync", () => ({
   noteReachable: () => {},
   isQueued: async (id: string) => h.queued.some((r) => r.id === id),
   processQueue: async () => undefined,
+  refreshCounts: async () => undefined,
   patchQueued: async (id: string, patch: (p: Record<string, unknown>) => Record<string, unknown>, type?: string) => {
     const r = h.queued.find((q) => q.id === id);
-    if (!r || (type && r.type !== type)) return false;
+    if (!r || (type && r.type !== type) || (r.status === "sending" && !h.patchWhileSending)) return false;
     r.payload = patch(r.payload);
     return true;
   },
@@ -67,14 +80,14 @@ vi.mock("@/lib/sync", () => ({
   },
 }));
 vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Test Cafe", currency: "PKR", settings: h.settings }, regular_discount_tiers: h.tiers, products: [] }, paymentMethods: h.methods }) } }));
-vi.mock("@/store/device", () => ({ useDeviceStore: { getState: () => ({ device: null, branch: null, session: null, business: null }) } }));
+vi.mock("@/store/device", () => ({ useDeviceStore: { getState: () => ({ device: null, branch: null, session: { permissions: h.permissions }, business: null }) } }));
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return { ...actual, api: async (path: string, opts: { method?: string; body?: unknown } = {}) => h.handler!(path, opts) };
 });
 
 import { ApiError } from "@/lib/api";
-import { localToCart, payOrder, payStep, regularPricing, reopenFields, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
+import { applyServerDiscount, buildLocalReceipt, cartToLocal, completeOrder, findLocalOrder, loadOrderForEdit, localToCart, payOrder, payStep, refundOrder, regularPricing, reopenFields, reopenOrder, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -157,6 +170,9 @@ beforeEach(() => {
   h.rows.clear();
   h.kv.clear();
   h.queued.length = 0;
+  h.patchWhileSending = false;
+  h.attention.clear();
+  h.permissions = ["orders.staff_meal"];
   h.calls.length = 0;
   h.online = true;
   h.reach = "online";
@@ -394,8 +410,7 @@ describe("payOrder before the internet is known to answer", () => {
 });
 
 describe("payOrder saves only what the server lacks", () => {
-  // Review item 12: a dispatched delivery cannot be edited, and the save before every payment made Pay fail on it.
-  it("skips the save when the cart matches the stored order, and for a dispatched delivery", async () => {
+  it("skips the save when the cart matches the stored order, a dispatched delivery included", async () => {
     server = fresh([["Karahi", 100000]]);
     h.rows.set(server.id, serverToLocal(asOrder(server)));
     const r = await payOrder(opened(), [cash(100000)], 0, undefined, { shownDue: 100000 });
@@ -406,6 +421,66 @@ describe("payOrder saves only what the server lacks", () => {
     const d = await payOrder(opened(), [cash(100000)], 0, undefined, { shownDue: 100000 });
     expect(h.calls).toEqual(["pay", "pay"]);
     expect(d.local.status).toBe("paid");
+  });
+
+  // orders-money#1: dispatched deliveries are editable since WP-B, but Pay never saved one, so the account picked on the
+  // payment screen was ignored and the original customer's khata charged.
+  it("saves a dispatched delivery whose customer was changed on the payment screen", async () => {
+    server = fresh([["Karahi", 100000]], { status: "dispatched" });
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    const bodies: Record<string, unknown>[] = [];
+    const serve = h.handler!;
+    h.handler = (path, opts) => { if (opts.method === "PATCH") bodies.push(opts.body as Record<string, unknown>); return serve(path, opts); };
+    await payOrder({ ...opened(), customer: { id: "cust-Y", name: "Office account", phone: null } }, [cash(100000)], 0, undefined, { shownDue: 100000 });
+    expect(h.calls).toEqual(["save", "pay"]);
+    expect(bodies[0]).toMatchObject({ customer_id: "cust-Y" });
+  });
+
+  // orders-money#0, web-till#1: the stored copy matched the cart because the till wrote it with the offline edit, so Pay
+  // skipped the save and the server took the payment against its old total, handing back the Naan as change.
+  it("saves first while an offline edit of the order is still queued, then drops that overtaken update", async () => {
+    server = fresh([["Karahi", 100000]]);
+    const tills: LocalOrder = { ...serverToLocal(asOrder(server)), lines: [...serverToLocal(asOrder(server)).lines, openLine("Naan", 30000)], total_minor: 130000 };
+    h.rows.set(server.id, tills);
+    h.queued.push({ type: "order_update", id: server.id, payload: { lines: [] } });
+    const cart = localToCart(tills);
+    expect(screenDue(cart, ["cash"])).toBe(130000);
+    const r = await payOrder(cart, [cash(130000, 150000)], 0, undefined, { shownDue: 130000 });
+    expect(h.calls).toEqual(["save", "pay"]);
+    expect(server.items.map((i) => i.name)).toEqual(["Karahi", "Naan"]);
+    expect(server.paid_minor).toBe(130000);
+    expect(r.change_minor).toBe(20000);
+    expect(h.queued).toEqual([]); // replayed on the paid order it would be refused and flag it Rejected
+  });
+
+  it("saves first while an offline edit of the order waits in Attention", async () => {
+    server = fresh([["Karahi", 100000]]);
+    const tills: LocalOrder = { ...serverToLocal(asOrder(server)), lines: [...serverToLocal(asOrder(server)).lines, openLine("Naan", 30000)] };
+    h.rows.set(server.id, tills);
+    h.attention.set(server.id, { id: server.id, type: "order_update", code: "approval.required" });
+    await payOrder(localToCart(tills), [cash(130000)], 0, undefined, { shownDue: 130000 });
+    expect(h.calls).toEqual(["save", "pay"]);
+    expect(server.paid_minor).toBe(130000);
+  });
+
+  it("keeps a queued update that carries a completion, or one being pushed right now", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    h.queued.push({ type: "order_update", id: server.id, payload: { lines: [], complete: true } });
+    await saveOrder({ ...opened(), notes: "no onions" });
+    expect(h.queued).toHaveLength(1);
+    h.queued[0] = { type: "order_update", id: server.id, payload: { lines: [] }, status: "sending" };
+    await saveOrder({ ...opened(), notes: "extra raita" });
+    expect(h.queued).toHaveLength(1);
+  });
+
+  it("opens an order with a queued offline edit from the till's copy, not the server's", async () => {
+    server = fresh([["Karahi", 100000]]);
+    const tills: LocalOrder = { ...serverToLocal(asOrder(server)), lines: [...serverToLocal(asOrder(server)).lines, openLine("Naan", 30000)] };
+    h.rows.set(server.id, tills);
+    h.queued.push({ type: "order_update", id: server.id, payload: { lines: [] } });
+    const cart = await loadOrderForEdit(server.id); // a GET would throw here: the stand-in server has no such route
+    expect(cart.lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
   });
 
   it("still saves a changed note, and names the save as the step that failed", async () => {
@@ -420,6 +495,108 @@ describe("payOrder saves only what the server lacks", () => {
     expect(e).toBeInstanceOf(ApiError);
     expect(payStep(e)).toBe("save");
     expect(payStep(new Error("x"))).toBe("payment");
+  });
+});
+
+describe("saveOrder on a queued order whose push is in flight (web-till#3)", () => {
+  // patchQueued refuses a record being pushed; saveOrder ignored that, so the Naan added at Pay never reached the
+  // server, and the Rs 1,500 cash met a Rs 1,000 order: Rs 500 handed back as change.
+  const queuedOrder = () => {
+    server = fresh([["Karahi", 100000]]);
+    const local: LocalOrder = { ...serverToLocal(asOrder(server)), local_only: true, till_serial: "T1-001", label: "T1-001" };
+    h.rows.set(server.id, local);
+    h.queued.push({ type: "order", id: server.id, payload: { lines: [], status: "placed", till_serial: "T1-001" }, status: "sending" });
+    return { ...localToCart(local), lines: [...localToCart(local).lines, openLine("Naan", 50000)] };
+  };
+  const pushEnds = (accepted: boolean, ms = 50) => setTimeout(() => {
+    if (accepted) {
+      h.queued.splice(h.queued.findIndex((q) => q.id === server.id), 1);
+      h.rows.set(server.id, { ...(h.rows.get(server.id) as LocalOrder), local_only: false }); // markSynced
+    } else h.queued.find((q) => q.id === server.id)!.status = "pending";
+  }, ms);
+
+  it("waits for the push, then updates the order the server now has, with the lines the cart added", async () => {
+    const cart = queuedOrder();
+    pushEnds(true);
+    const r = await saveOrder(cart, { place: true });
+    expect(h.calls).toEqual(["save"]); // a PATCH: POST /orders would answer the order unchanged
+    expect(server.items.map((i) => i.name)).toEqual(["Karahi", "Naan"]);
+    expect(r).toMatchObject({ offline: false, cart: { local_only: false } });
+  });
+
+  it("puts the lines on the record when the push failed and the record waits again", async () => {
+    const cart = queuedOrder();
+    pushEnds(false);
+    const r = await saveOrder(cart);
+    expect(r.offline).toBe(true);
+    expect((h.queued[0].payload.lines as { open_item?: { name: string } }[]).map((l) => l.open_item?.name)).toEqual(["Karahi", "Naan"]);
+  });
+
+  it("takes a patch the queue holds for a record in flight at once", async () => {
+    const cart = queuedOrder();
+    h.patchWhileSending = true;
+    const r = await saveOrder(cart);
+    expect(r.offline).toBe(true);
+    expect((h.queued[0].payload.lines as unknown[]).length).toBe(2);
+  });
+
+  it("says so, and keeps nothing as saved, when the push is still out after the wait", async () => {
+    vi.useFakeTimers();
+    try {
+      const cart = queuedOrder();
+      const out = saveOrder(cart).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(9000);
+      expect(await out).toMatchObject({ code: "sync.sending" });
+      expect(h.queued[0].payload.lines).toEqual([]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("updates rather than creates a queued order whose push was accepted before the save began", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, { ...serverToLocal(asOrder(server)), till_serial: "T1-001" }); // accepted: local_only false
+    const cart: Cart = { ...localToCart(serverToLocal(asOrder(server))), local_only: true, lines: [...opened().lines, openLine("Naan", 50000)] };
+    await saveOrder(cart);
+    expect(h.calls).toEqual(["save"]);
+    expect(server.items.map((i) => i.name)).toEqual(["Karahi", "Naan"]);
+  });
+});
+
+describe("an offline staff meal by a cashier without orders.staff_meal (QA K8)", () => {
+  // It asked for no PIN, printed Paid and was refused at sync as approval.required.
+  const draft = (): Cart => ({
+    id: "sm-2", saved: false, local_only: false, status: "draft", order_type: "dine_in", lines: [openLine("Chai", 10000)], customer: null, table_id: null, table_code: null,
+    guest_name: "", covers: null, notes: "", is_staff_meal: true, staff_meal_reason: "Rider", label: null, client_created_at: "2026-11-06T10:00:00Z",
+  });
+
+  it("is refused on the till: nothing queued, nothing marked paid", async () => {
+    h.permissions = ["orders.create", "payments.take"];
+    h.online = false;
+    const e = await payOrder(draft(), [], 0).catch((x: unknown) => x);
+    expect(e).toMatchObject({ code: "staff_meal.offline" });
+    expect(payStep(e)).toBe("complete");
+    expect(h.queued).toEqual([]);
+    expect(h.rows.get("sm-2")).toBeUndefined();
+    await expect(saveOrder(draft(), { place: true })).rejects.toMatchObject({ code: "staff_meal.offline" });
+  });
+
+  it("lets a line be added to a queued staff meal a manager marked: the sync checks the record's creator", async () => {
+    h.permissions = ["orders.create", "payments.take"];
+    h.online = false;
+    h.rows.set("sm-2", { ...cartToLocal(draft(), "placed"), till_serial: "T1-009", label: "T1-009" });
+    h.queued.push({ type: "order", id: "sm-2", payload: { is_staff_meal: true, lines: [] } });
+    const r = await saveOrder({ ...draft(), saved: true, local_only: true, lines: [...draft().lines, openLine("Naan", 5000)] });
+    expect(r.offline).toBe(true);
+    expect((h.queued[0].payload.lines as unknown[]).length).toBe(2);
+  });
+
+  it("still closes offline an order the server already holds as a staff meal (a manager approved it online)", async () => {
+    h.permissions = ["orders.create", "payments.take"];
+    server = fresh([["Chai", 10000]]);
+    h.rows.set(server.id, { ...serverToLocal(asOrder(server)), is_staff_meal: true, staff_meal_reason: "Rider" });
+    h.online = false;
+    const r = await payOrder({ ...opened(), is_staff_meal: true, staff_meal_reason: "Rider" }, [], 0);
+    expect(r.local.status).toBe("paid");
+    expect(h.queued[0]).toMatchObject({ type: "order_update", payload: { complete: true } });
   });
 });
 
@@ -456,6 +633,122 @@ describe("payOrder on a staff meal", () => {
     expect(r.local.status).toBe("paid");
     expect(h.queued.map((q) => q.type)).toEqual(["order_update"]);
     expect(h.queued[0].payload).toMatchObject({ complete: true, is_staff_meal: true });
+  });
+});
+
+describe("payOrder on a reopened order with nothing left to pay (QA T5)", () => {
+  // Reopened, a line taken off: the total fell to what was paid and Pay sat disabled at Rs 0, the order stuck open.
+  const reopenedPaid = (over: Partial<ServerOrder> = {}) => fresh([["Karahi", 80000]], { status: "served", paid_minor: 80000, methods: { cash: 80000 }, reopened_at: "2026-10-13T11:00:00Z", reopen_count: 1, ...over });
+
+  it("saves it and completes it instead of posting an empty payment list, and takes the server's receipt", async () => {
+    server = reopenedPaid();
+    const cart = opened();
+    expect(screenDue(cart, ["cash"])).toBe(0);
+    const r = await payOrder(cart, [], 0, undefined, { shownDue: 0 });
+    expect(h.calls).toEqual(["save", "complete", "receipt"]);
+    expect(r).toMatchObject({ offline: false, change_minor: 0 });
+    expect(r.local.status).toBe("paid");
+    expect(r.receipt).toMatchObject({ receipt_number: "R-7" });
+  });
+
+  it("shows the server's figure instead of completing when the server still has money due", async () => {
+    server = reopenedPaid({ hidden_minor: 5000 });
+    const err = await payOrder(opened(), [], 0, undefined, { shownDue: 0 }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TotalChangedError);
+    expect(err).toMatchObject({ fromMinor: 0, toMinor: 5000 });
+    expect(h.calls).toEqual(["save"]);
+  });
+
+  it("names completion as the failed step when the server wants the excess refunded first", async () => {
+    server = reopenedPaid({ paid_minor: 100000, methods: { cash: 100000 } });
+    const serve = h.handler!;
+    h.handler = (path, opts) => {
+      if (path.endsWith("/complete")) throw new ApiError("order.overpaid", "#7 was paid Rs 1,000 against a total of Rs 800. Refund Rs 200 before completing it.", 409);
+      return serve(path, opts);
+    };
+    const e = await payOrder(opened(), [], 0, undefined, { shownDue: 0 }).catch((x: unknown) => x);
+    expect(e).toMatchObject({ code: "order.overpaid" });
+    expect(payStep(e)).toBe("complete");
+    expect(server.paid_minor).toBe(100000);
+  });
+
+  it("needs the internet: nothing is queued, since the sync queue completes only staff meals", async () => {
+    server = reopenedPaid();
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    h.online = false;
+    const e = await payOrder(opened(), [], 0).catch((x: unknown) => x);
+    expect(e).toMatchObject({ code: "offline" });
+    expect(payStep(e)).toBe("complete");
+    expect(h.queued).toEqual([]);
+  });
+});
+
+describe("the Orders screen's actions", () => {
+  const bodies: Record<string, unknown>[] = [];
+  beforeEach(() => {
+    bodies.length = 0;
+    server = fresh([["Karahi", 100000]], { status: "paid", paid_minor: 100000, methods: { cash: 100000 } });
+    const serve = h.handler!;
+    h.handler = (path, opts) => {
+      if (path.endsWith("/refunds")) { bodies.push(opts.body as Record<string, unknown>); return { order: asOrder(server) }; }
+      if (path.endsWith("/reopen")) { bodies.push((opts.body ?? {}) as Record<string, unknown>); server.status = "served"; server.reopened_at = "2026-10-13T11:00:00Z"; return asOrder(server); }
+      return serve(path, opts);
+    };
+  });
+
+  it("refunds with the id the dialog made, every try (web-till#5)", async () => {
+    await refundOrder("o-1", 50000, "cash", "Cold", undefined, "refund-1");
+    await refundOrder("o-1", 50000, "cash", "Cold", undefined, "refund-1");
+    expect(bodies.map((b) => b.refund_id)).toEqual(["refund-1", "refund-1"]);
+  });
+
+  it("sends a manager's PIN with a reopen (QA T11)", async () => {
+    await reopenOrder("o-1", "4321");
+    expect(bodies[0]).toEqual({ approver_pin: "4321" });
+  });
+
+  it("completes an open order paid in full and takes the server's receipt (QA T5)", async () => {
+    server.status = "served";
+    const r = await completeOrder("o-1");
+    expect(h.calls).toEqual(["complete", "receipt"]);
+    expect(r.local.status).toBe("paid");
+    expect(r.receipt).toMatchObject({ receipt_number: "R-7" });
+  });
+
+  it("finds the till's copy by the till serial an offline receipt carries, from any day (QA T12)", async () => {
+    h.rows.set("a", { ...serverToLocal(asOrder(server)), id: "a", label: "#12", till_serial: "T1-007", business_day: "2026-11-01", created_at: "2026-11-01T10:00:00Z" });
+    h.rows.set("b", { ...serverToLocal(asOrder(server)), id: "b", label: "#13", till_serial: "T1-0070", created_at: "2026-11-02T10:00:00Z" });
+    expect((await findLocalOrder(" t1-007 "))?.id).toBe("a");
+    expect(await findLocalOrder("T1-008")).toBeNull();
+  });
+});
+
+describe("applyServerDiscount (QA T10)", () => {
+  // A discount above the cashier's limit needs the manager's PIN on the discount request itself, and a line discount
+  // needs the line's server id, which a line added since the last save gets only from this save.
+  it("hands the call the cart as saved and the manager's PIN", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    const fn = vi.fn(async () => asOrder(server));
+    await applyServerDiscount({ ...opened(), lines: [...opened().lines, openLine("Naan", 5000)] }, fn, { approver_pin: "4321" });
+    expect(h.calls).toEqual(["save"]);
+    const [id, ctx] = fn.mock.calls[0] as unknown as [string, { saved: Cart; approver_pin?: string }];
+    expect(id).toBe("o-1");
+    expect(ctx.approver_pin).toBe("4321");
+    expect(ctx.saved.lines.map((l) => [l.name, !!l.id])).toEqual([["Karahi", true], ["Naan", true]]);
+  });
+});
+
+describe("payOrder with a manager's PIN (roles QA, 6 Nov 2026)", () => {
+  it("sends the PIN with the payment it approves, not only with the save before it", async () => {
+    server = fresh([["Karahi", 100000]]);
+    const bodies: Record<string, unknown>[] = [];
+    const serve = h.handler!;
+    h.handler = (path, opts) => { if (path.endsWith("/payments")) bodies.push(opts.body as Record<string, unknown>); return serve(path, opts); };
+    await payOrder({ ...opened(), notes: "no onions" }, [cash(100000)], 0, "4321", { shownDue: 100000 });
+    expect(bodies[0]).toMatchObject({ approver_pin: "4321" });
+    await payOrder(opened(), [cash(100000)], 0, undefined, { shownDue: 100000 }).catch(() => undefined);
+    expect(bodies[1] ?? {}).not.toHaveProperty("approver_pin");
   });
 });
 
@@ -522,6 +815,19 @@ describe("an offline khata sale for a regular customer", () => {
     expect(useCustomerStore.getState().byId.get("sadia")).toMatchObject({ balance_minor: 194_500 + 370_300, orders_count: 5 });
   });
 
+  // QA K11: the offline account receipt had no "Account balance" line; the online one does.
+  it("prints what she owes now on the receipt, from her saved balance", async () => {
+    h.online = false;
+    const saved = toCachedCustomer({ id: "sadia", name: "Sadia Akhtar", phone: "+923001807130", khata_no: "32", status: "active", is_walk_in: false, balance_minor: 194_500, credit_limit_minor: null, orders_count: 4, last_order_at: null } as never);
+    useCustomerStore.setState({ list: [saved], byId: new Map([["sadia", saved]]), loaded: true });
+    const due = payableTotals(cart(), { settings: h.settings, cash: false }).total_minor;
+    const r = await payOrder(cart(), [{ method_code: "khata", amount_minor: due }]);
+    expect(r.receipt.khata).toEqual({ balance_minor: 194_500 + due });
+    // A cash sale for the same customer prints no account line.
+    const byCash = await payOrder({ ...cart(), id: "khata-2" }, [{ method_code: "cash", amount_minor: due, tendered_minor: due }]);
+    expect(byCash.receipt.khata).toBeNull();
+  });
+
   it("leaves the discount to the server while online", () => {
     h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
     expect(regularPricing({ ...cart(), customer: { ...cart().customer!, last_order_at: yesterday } }).discounts ?? []).toEqual([]);
@@ -575,6 +881,16 @@ describe("a summary row from GET /orders (review R2)", () => {
     expect(h.rows.get(server.id)).toMatchObject({ lines: cached.lines, status: "paid" });
   });
 
+  it("keeps the server's item count, so the Orders card can say how many items an order has", async () => {
+    server = fresh([["Karahi", 100000], ["Naan", 2500]]);
+    const row: Record<string, unknown> = { ...asOrder(server), item_count: 2 };
+    delete row.items;
+    expect((await storeServerOrder(row as unknown as Order)).item_count).toBe(2);
+    delete row.item_count;
+    expect((await storeServerOrder(row as unknown as Order)).item_count).toBe(2); // an older server: the last count stays
+    expect(serverToLocal(asOrder(server)).item_count).toBe(2); // a whole order counts its live lines
+  });
+
   it("takes the server's lines from a whole order", async () => {
     server = fresh([["Karahi", 100000]]);
     h.rows.set(server.id, serverToLocal(asOrder(server)));
@@ -606,6 +922,21 @@ describe("a delivery's address on the till's copy", () => {
     const guest = serverToLocal({ ...asOrder(server), address_id: null, address_text: "House 9, Lahore" } as Order);
     expect(guest).toMatchObject({ address_id: null, address_text: "House 9, Lahore", zone_name: null });
     expect(localToCart(guest).address_text).toBe("House 9, Lahore");
+  });
+});
+
+describe("the bill preview and the offline receipt (QA T13)", () => {
+  // "Tax 16% on Rs 1,090" for a bill with Rs 100 off: the base before the discount, where the server states the base after.
+  it("state the tax base after the order's discount, as the server's receipt does", () => {
+    const taxed: CartLine = { key: "k", product_id: "p", name: "Karahi", unit_price_minor: 109000, quantity: 1, modifiers: [], tax_rate: 16, tax_inclusive: false };
+    const cart: Cart = {
+      id: "bill-1", saved: false, local_only: false, status: "draft", order_type: "takeaway", lines: [taxed], customer: null, table_id: null, table_code: null, guest_name: "", covers: null,
+      notes: "", is_staff_meal: false, staff_meal_reason: "", label: null, client_created_at: "2026-11-06T10:00:00Z",
+      discount_minor: 10000, discounts: [{ id: "d-1", kind: "voucher", value: 100, amount_minor: 10000, reason: "Voucher EID-1", order_item_id: null }],
+    };
+    const r = buildLocalReceipt(cartToLocal(cart, "draft"));
+    expect(r.totals.tax_lines).toEqual([{ rate: 16, inclusive: false, taxable_minor: 99000, tax_minor: 15840 }]);
+    expect(r.totals.tax_minor).toBe(15840);
   });
 });
 

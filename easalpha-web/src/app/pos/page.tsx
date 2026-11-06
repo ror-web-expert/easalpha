@@ -17,6 +17,7 @@ import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
 import { titleCase } from "@/lib/utils";
 import { customerDetails, rememberRecentCustomer, toCartCustomer } from "@/lib/pos-customers";
+import { approvalWhat } from "@/lib/pos-approval";
 import { useApproval } from "@/components/approval";
 import { PosShell } from "@/components/pos/shell";
 import { ItemGrid } from "@/components/pos/item-grid";
@@ -126,6 +127,19 @@ function SellScreen() {
   }, [allowedTypes, cart.saved, cart.order_type, cart.lines, patch, catalog]);
 
   const newOrder = useCallback(() => { reset(); setReceipt(null); setPayOpen(false); setOrderPin(undefined); seenDue.current = null; }, [reset]);
+  /**
+   * 409 order.closed: the order on the cart was already paid and closed (before a reload, or on another screen), so
+   * nothing can be added to it or taken for it again. The till starts a new order instead of losing the next sale
+   * against the closed one (QA T9). True when it handled the error.
+   */
+  const startOverIfClosed = (e: unknown): boolean => {
+    if (!(e instanceof ApiError && e.code === "order.closed")) return false;
+    toast.info("That order is already closed", `${cart.label && cart.label !== "draft" ? cart.label : "It"} was paid and closed. A new order is started: add the items again.`);
+    newOrder();
+    return true;
+  };
+  // The PIN dialog's title names what needs the manager on this cart (a price override, an open item), not only the action (QA T6).
+  const what = (action: string) => approvalWhat(action, cart.lines, currency);
 
   const addProduct = (p: Product) => {
     const needsSheet = (p.variants?.length ?? 0) > 0 || (p.modifier_group_ids?.length ?? 0) > 0;
@@ -231,19 +245,19 @@ function SellScreen() {
   const hold = async () => {
     if (reopened) return;
     setBusy(true);
-    try { await run((pin) => (pin ? saveOrder(cart, { approver_pin: pin }).then(() => holdOrder(cart)) : holdOrder(cart)), "Hold order"); toast.success("Order held. Recall it from Orders."); reset(); }
-    catch (e) { toast.error("Could not hold", errorMessage(e)); }
+    try { await run((pin) => (pin ? saveOrder(cart, { approver_pin: pin }).then(() => holdOrder(cart)) : holdOrder(cart)), what("Hold order")); toast.success("Order held. Recall it from Orders."); reset(); }
+    catch (e) { if (!startOverIfClosed(e)) toast.error("Could not hold", errorMessage(e)); }
     finally { setBusy(false); }
   };
   /** SPEC reopen flow: saving a reopened order (PIN as required) leads straight to the payment screen. */
   const saveReopened = async (): Promise<Cart | null> => {
     setBusy(true);
     try {
-      const r = await withOrderPin((o) => saveOrder(cart, o), `Save changes to ${cart.label ?? "the reopened order"}`);
+      const r = await withOrderPin((o) => saveOrder(cart, o), what(`Save changes to ${cart.label ?? "the reopened order"}`));
       if (!r) return null;
       loadCart(r.cart);
       return r.cart;
-    } catch (e) { toast.error("Could not save", errorMessage(e)); return null; }
+    } catch (e) { if (!startOverIfClosed(e)) toast.error("Could not save", errorMessage(e)); return null; }
     finally { setBusy(false); }
   };
   const send = async () => {
@@ -255,34 +269,36 @@ function SellScreen() {
     }
     setBusy(true);
     try {
-      const r = await run((pin) => saveOrder(cart, { place: true, approver_pin: pin }), "Send to kitchen");
+      const r = await run((pin) => saveOrder(cart, { place: true, approver_pin: pin }), what("Send to kitchen"));
       toast.success(r.offline ? `Saved on till as ${r.cart.label}; sends when online` : `${r.cart.label} sent to kitchen`);
       if (cart.order_type === "dine_in" && cart.table_id) { refreshTables(); reset(); } else reset();
-    } catch (e) { toast.error("Could not send", errorMessage(e)); }
+    } catch (e) { if (!startOverIfClosed(e)) toast.error("Could not send", errorMessage(e)); }
     finally { setBusy(false); }
   };
   const openPay = async () => {
     if (!cart.lines.length || !ensureCustomer()) return;
     if (reopened) { const c = await saveReopened(); if (!c) return; }
-    else if (cart.customer) {
+    else if (cart.customer && can("payments.take")) {
       // SPEC regular discounts: the server applies the best recency tier for this customer; sync once so the payment
-      // page shows it before money is taken. Offline (or on a failure) the page opens with the local total.
+      // page shows it before money is taken. Offline (or on a failure) the page opens with the local total. Not for a
+      // role that pays with a manager's PIN: nothing is saved before that PIN, and Pay stops once if the total moved.
       setBusy(true);
-      try { const c = await withOrderPin((o) => syncForPayment(cart, o), "Check discounts"); if (c) loadCart(c); }
-      catch (e) { toast.error("Could not check discounts", errorMessage(e)); }
+      try { const c = await withOrderPin((o) => syncForPayment(cart, o), what("Take payment")); if (c) loadCart(c); }
+      catch (e) { if (startOverIfClosed(e)) return; toast.error("Could not check discounts", errorMessage(e)); }
       finally { setBusy(false); }
     }
     setPayOpen(true);
   };
   /** SPEC discounts: a voucher, loyalty points or a redemption option (or removing one), re-priced by the server. Online only. */
-  const runDiscount = async (fn: (orderId: string) => Promise<Order>, label: string): Promise<boolean> => {
+  const runDiscount = async (fn: (orderId: string, ctx: { saved: Cart; approver_pin?: string }) => Promise<Order>, label: string): Promise<boolean> => {
     setBusy(true);
     try {
       const r = await withOrderPin((o) => applyServerDiscount(cart, fn, o), label);
       if (!r) return false;
       loadCart(r);
       return true;
-    } finally { setBusy(false); }
+    } catch (e) { if (startOverIfClosed(e)) return false; throw e; }
+    finally { setBusy(false); }
   };
   /**
    * Staff meal on or off. The cart changes at once; an order that already exists (on the server or in the offline queue)
@@ -291,6 +307,12 @@ function SellScreen() {
    * saved too (as a draft) for the same reason; an empty cart just keeps the flag for the first save.
    */
   const setStaffMeal = async (on: boolean, reason = "") => {
+    // Without orders.staff_meal a manager's PIN approves it, and offline no PIN can be checked: the sync refused such a
+    // staff meal after the till had printed it as paid (QA K8). saveOrder refuses it too; this says so before the cart changes.
+    if (on && syncStatus === "offline" && !can("orders.staff_meal")) {
+      toast.error("A staff meal needs a manager", "With no internet a manager's PIN cannot be checked. Charge this order normally, or mark it as a staff meal when the till is back online.");
+      return;
+    }
     const before = { is_staff_meal: cart.is_staff_meal, staff_meal_reason: cart.staff_meal_reason };
     const next: Cart = { ...cart, is_staff_meal: on, staff_meal_reason: on ? reason : "" };
     patch({ is_staff_meal: on, staff_meal_reason: on ? reason : "" });
@@ -303,6 +325,7 @@ function SellScreen() {
       if (r.cart.is_staff_meal !== on) toast.error("Staff meal not changed", "The server kept the order as it was.");
     } catch (e) {
       patch(before);
+      if (startOverIfClosed(e)) return;
       if (!(e instanceof ApiError && e.code === "approval.cancelled")) toast.error(on ? "Could not mark as staff meal" : "Could not change the staff meal", errorMessage(e));
     } finally { setBusy(false); }
   };
@@ -322,7 +345,7 @@ function SellScreen() {
     try {
       const r = await withOrderPin((o) => saveOrder(next, o), "Update charges");
       if (r) patch({ service_charge_percent: r.cart.service_charge_percent, service_charge_fixed_minor: r.cart.service_charge_fixed_minor, delivery_charge_percent: r.cart.delivery_charge_percent, delivery_charge_minor: r.cart.delivery_charge_minor, label: r.cart.label });
-    } catch (e) { toast.error("Could not update the charge", errorMessage(e)); }
+    } catch (e) { if (!startOverIfClosed(e)) toast.error("Could not update the charge", errorMessage(e)); }
     finally { setBusy(false); }
   };
   /** SPEC Tax: No Tax / linked rate, re-priced by the server. Shown only while online. */
@@ -331,14 +354,20 @@ function SellScreen() {
     try {
       const r = await withOrderPin((o) => applyTaxChoice(cart, choice, o), "Tax choice");
       if (r) loadCart(r);
-    } catch (e) { toast.error("Could not set the tax choice", errorMessage(e)); }
+    } catch (e) { if (!startOverIfClosed(e)) toast.error("Could not set the tax choice", errorMessage(e)); }
     finally { setBusy(false); }
   };
   const pay = async (payments: PaymentInput[], tip: number, shownDue: number) => {
     setBusy(true);
     try {
       const seen = seenDue.current?.id === cart.id ? seenDue.current.due : undefined;
-      const r = await withOrderPin((o) => payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin, shownDue, seenDue: seen }), "Take payment");
+      // A role without payments.take (a waiter) pays with a manager's PIN, asked before anything is saved: the dialog
+      // opened only once the save had created the order, so a cancelled PIN left it unpaid on the server (roles QA,
+      // 6 Nov 2026). The PIN then goes with the save and the payment.
+      const managerPays = payments.length > 0 && !can("payments.take");
+      const r = await withOrderPin((o) => (managerPays && !o.approver_pin
+        ? Promise.reject(new ApiError("approval.required", "A manager's PIN approves taking this payment", 403, { permissions: ["payments.take"], labels: { "payments.take": "Take payment" } }))
+        : payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin, shownDue, seenDue: seen })), what(payments.length ? "Take payment" : "Complete the order"));
       if (!r) return;
       seenDue.current = null;
       setPayOpen(false);
@@ -352,20 +381,27 @@ function SellScreen() {
         return;
       }
       if (cart.table_id) refreshTables();
+      // The paid order leaves the cart now, not when the receipt closes: a reload or an auto-lock with the receipt on
+      // screen brought it back to be sold again (QA T9). The receipt dialog keeps its own copy.
+      newOrder();
       // SPEC "Order confirmation popup": on shows the receipt; off goes straight to a new order (and prints when a printer is reachable).
       if (confirmationPopup(settings)) setReceipt({ receipt: r.receipt, change: r.change_minor, offline: r.offline });
       else {
         if (hasPrinter(settings)) void printReceipt(r.receipt);
         toast.success(`${r.receipt.order.label} paid${r.change_minor ? ` · change ${formatMoney(r.change_minor, currency)}` : ""}`);
-        newOrder();
       }
     } catch (e) {
+      if (startOverIfClosed(e) || (e instanceof ApiError && e.code === "approval.cancelled")) return;
       if (e instanceof TotalChangedError) {
         // Nothing was paid: show the order as the server prices it and leave the payment screen open on the new total.
         seenDue.current = { id: e.cart.id, due: e.toMinor };
         loadCart(e.cart);
         toast.info("Total updated", `The amount due is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
-      } else toast.error(payStep(e) === "save" ? "Could not save the order" : payStep(e) === "complete" ? "Could not complete the staff meal" : "Payment failed", errorMessage(e));
+      } else if (payStep(e) === "complete") {
+        // order.overpaid: the excess goes back through Refund overpaid on Orders, which then offers Complete (QA T5).
+        const overpaid = e instanceof ApiError && e.code === "order.overpaid";
+        toast.error(cart.is_staff_meal ? "Could not complete the staff meal" : "Could not complete the order", `${errorMessage(e)}${overpaid ? " Refund overpaid is on the Orders screen." : ""}`);
+      } else toast.error(payStep(e) === "save" ? "Could not save the order" : "Payment failed", errorMessage(e));
     }
     finally { setBusy(false); }
   };
@@ -374,14 +410,15 @@ function SellScreen() {
     if (!ensureCustomer()) return;
     setBusy(true);
     try {
-      const r = await run((pin) => completeUnpaid(cart, pin), unpaidLabel);
+      const r = await run((pin) => completeUnpaid(cart, pin), what(unpaidLabel));
       toast.success(`${r.order.label} ${cart.saved ? "completed" : "placed"} unpaid`, "Payment is still due; it shows as Unpaid in Orders.");
       if (cart.table_id) refreshTables();
       newOrder();
-    } catch (e) { toast.error(e instanceof ApiError && e.code === "order.unpaid" ? "Payment needed" : "Could not place", errorMessage(e)); }
+    } catch (e) { if (!startOverIfClosed(e)) toast.error(e instanceof ApiError && e.code === "order.unpaid" ? "Payment needed" : "Could not place", errorMessage(e)); }
     finally { setBusy(false); }
   };
 
+  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen || deliveryAddress.open;
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -389,19 +426,19 @@ function SellScreen() {
       if (e.key === "F2") { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
       if (e.key === "F3") { e.preventDefault(); setCustomerOpen(true); }
       // F4, F5 and F8 act like the panel's buttons, which are disabled while a save or payment runs: a second press
-      // during one must not send twice or open a dialog over it.
-      if (e.key === "F4") { e.preventDefault(); if (busy) return; if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
-      if (e.key === "F5") { e.preventDefault(); if (busy || !cart.lines.length) return; send(); }
-      if (e.key === "F8") { e.preventDefault(); if (busy) return; openPay(); }
+      // during one must not send twice or open a dialog over it. Nor do they act behind a dialog or sheet: pressed over
+      // the receipt of an offline sale they held or sent the paid order again, unpaid (web-till#2).
+      if (e.key === "F4") { e.preventDefault(); if (busy || sheetOrDialog) return; if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
+      if (e.key === "F5") { e.preventDefault(); if (busy || sheetOrDialog || !cart.lines.length) return; send(); }
+      if (e.key === "F8") { e.preventDefault(); if (busy || sheetOrDialog) return; openPay(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, newOrder, busy]);
+  }, [cart, newOrder, busy, sheetOrDialog]);
   // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being
   // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
-  // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.
-  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen || deliveryAddress.open;
+  // while any dialog or sheet is open (sheetOrDialog), so a scan never lands behind one or resets a half-built line.
   const scanner = useTillScanner({
     catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned,
     onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`),

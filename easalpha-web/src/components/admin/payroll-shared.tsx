@@ -4,14 +4,14 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { EmployeeFull, PaymentMethod, WageEmployeesResponse } from "@/lib/types";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import type { EmployeeFull, PaymentAccount, PaymentMethod, WageEmployeesResponse } from "@/lib/types";
 import { useList } from "@/components/admin/crud";
 import { Badge, Button, Input, Select } from "@/components/ui";
 import { RequirePermission } from "./no-access";
 import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/utils";
-import { advanceStatusVariant, attendanceStatusLabel, attendanceStatusVariant, leaveStatusVariant, monthKey, runStatusVariant, scanResultLabel, scanResultVariant, shiftMonth } from "./payroll-helpers";
+import { advanceStatusVariant, attendanceStatusLabel, attendanceStatusVariant, leaveStatusVariant, monthKey, overdraftNote, payableMethods, runStatusVariant, scanResultLabel, scanResultVariant, shiftMonth } from "./payroll-helpers";
 
 export const PAYROLL_PERMS = ["payroll.manage", "PAYROLL", "staff.manage"];
 
@@ -72,10 +72,21 @@ export function EmployeeSelect({ value, onChange, allLabel, className, autoSelec
   );
 }
 
-/** Active, non-khata payment methods, cash first. Used to pay a run or an advance. */
+/** The methods a run, an advance or wages can be paid from (payableMethods). */
 export function usePayMethods() {
   const methods = useList<PaymentMethod>("payment_methods", "/payment_methods");
-  return useMemo(() => (methods.data ?? []).filter((m) => m.active && m.kind !== "khata").sort((a, b) => (a.kind === "cash" ? -1 : b.kind === "cash" ? 1 : a.sort_order - b.sort_order)), [methods.data]);
+  return useMemo(() => payableMethods(methods.data ?? []), [methods.data]);
+}
+
+/** Below the "Paid from" select: a warning when the account behind the method would go below zero. Shown only to
+ *  someone who may read the accounts; it never blocks the payment. */
+export function PayFromWarning({ methodCode, amountMinor }: { methodCode: string; amountMinor: number }) {
+  const methods = usePayMethods();
+  const accounts = useQuery({ queryKey: ["payment_accounts"], queryFn: () => api<{ data: PaymentAccount[] }>("/payment_accounts"), select: (r) => r.data, retry: false });
+  const method = methods.find((m) => m.code === methodCode) ?? methods[0];
+  const note = overdraftNote(accounts.data?.find((a) => a.id === method?.payment_account_id), amountMinor);
+  if (!note) return null;
+  return <p role="alert" className="mt-2 flex items-start gap-2 rounded-md bg-warning-soft px-3 py-2 text-sm text-warning-ink"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{note}</p>;
 }
 
 export function MethodSelect({ value, onChange, className }: { value: string; onChange: (code: string) => void; className?: string }) {

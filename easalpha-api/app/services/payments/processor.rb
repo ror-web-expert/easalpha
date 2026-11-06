@@ -14,7 +14,9 @@ module Payments
     # already happened, so a non-cash payment above what the server asks for is taken at the amount due instead of
     # refusing the whole order (a khata sale then puts the server's figure on the account), and one that finds nothing
     # left to pay is skipped. Either is written to the audit log with what the till sent.
-    def call(payments:, tip_minor: 0, offline: false)
+    # internal: the system paying with an internal method (the canteen claim's company share); a user's payment, online
+    # or from the sync queue, never may, since it moves no money (final round, item 14).
+    def call(payments:, tip_minor: 0, offline: false, internal: false)
       lines = Array(payments).map { |p| p.to_h.with_indifferent_access }
       existing = lines.map { |l| l[:id].presence && own_payment(l[:id]) }
       return Result.new(order: @order, payments: existing.compact, change_minor: 0) if lines.any? && existing.all?
@@ -22,6 +24,7 @@ module Payments
       raise Api::Errors::Conflict.new("order.empty", "Nothing to pay") if @order.active_items.empty?
       raise Api::Errors::BadRequest.new("payment.required", "At least one payment is required") if lines.empty?
       created = []
+      fresh = [] # the payments this call records, as opposed to repeats of ones it already has
       change_total = 0
       raise Api::Errors::Conflict.new("day.locked", "#{@order.business_day} is locked") if @order.business_day && DayClose.locked?(@order.branch_id, @order.business_day)
       Order.transaction do
@@ -42,6 +45,7 @@ module Payments
           day = money_day(l)
           raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@order.branch_id, day)
           method = PaymentMethod.active.find_by!(code: l[:method_code].to_s)
+          raise Api::Errors::Unprocessable.new("payment.method_internal", "#{method.name} is the system's own method, never a till's: choose cash, card, a wallet, bank or the account") if method.internal? && !internal
           amount = l[:amount_minor].to_i
           raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount.positive?
           raise Api::Errors::BadRequest.new("payment.reference_required", "#{method.name} needs a reference") if method.needs_reference && l[:reference].blank? && l[:card_terminal_ref].blank?
@@ -67,9 +71,12 @@ module Payments
           payment.save!
           post_to_account!(payment)
           created << payment
+          fresh << payment
         end
-        @order.paid_minor += created.sum(&:amount_minor) - (created.select { |c| c.created_at < 1.second.ago }.sum(&:amount_minor))
-        @order.paid_minor = Payment.where(order_id: @order.id, status: "captured").sum(:amount_minor)
+        # Added to what the order was paid, never reset to the captured total: money given back on an open order is
+        # owed again, and a settled order's part refund is not (Payments::Refunder). Counting the captured total forgot
+        # the refund, so a part payment after one completed the order (review orders-money#3).
+        @order.paid_minor += fresh.sum(&:amount_minor)
         @order.payment_method_summary = Payment.where(order_id: @order.id, status: "captured").group(:method_code).sum(:amount_minor).map { |k, v| "#{k}:#{v}" }.join(",")
         Orders::Pricing.recalculate!(@order)
         @order.save!
@@ -90,7 +97,7 @@ module Payments
     # What happens once an order is paid in full: receipt number, Paid status, customer stats, loyalty points, the tax
     # invoice and the audit row. Also used to complete an order whose payments already cover a corrected total.
     def finalize_paid!
-      @order.receipt_number ||= "#{@order.business_day&.strftime('%y%m%d')}-#{@order.branch.code}-#{@order.serial}"
+      Orders::Transitions.number!(@order)
       first_time = @order.paid_at.nil? # a reopened order paid again keeps its one count in the customer's orders and spend
       Orders::Transitions.mark_paid!(@order, actor: @actor, device: @device)
       update_customer_stats! if first_time
@@ -152,15 +159,17 @@ module Payments
       p
     end
 
-    # The business day the money moved: the shift's, else the day of the sale on the till (an offline payment) or now.
+    # The business day the money moved: when the till took it (an offline payment, its clock kept within the client
+    # time window) or now. Never the shift's opening day, which misdated a sale on a shift past the cutoff and refused
+    # every payment on a shift opened on a day locked since (review ledger#2); the shift still chooses the drawer.
     def money_day(line)
-      return @shift.business_day if @shift
-      at = line[:client_created_at].present? ? (Time.iso8601(line[:client_created_at].to_s) rescue nil) : nil
+      at = line[:client_created_at].present? ? (Orders::ClientTime.clamp(line[:client_created_at], table_name: "payments", record_id: line[:id].presence) rescue nil) : nil
       @order.branch.business_day_for(at || Time.current)
     end
 
     def post_to_account!(payment)
       return Finance::Journal.khata_sale!(payment) if payment.payment_method.khata?
+      return Finance::Journal.internal_sale!(payment) if payment.payment_method.internal? # no money account: the journal only
       account = payment.payment_method.cash? && @shift&.drawer_account ? @shift.drawer_account : payment.payment_account
       return unless account
       payment.update_column(:payment_account_id, account.id)

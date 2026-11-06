@@ -107,8 +107,13 @@ RSpec.describe "Ledger review: money paths", type: :request do
       expect(response).to have_http_status(:created), response.body
       api_post "/api/v1/shifts/#{shift[:id]}/cash_movements", { kind: "payout", amount_minor: 2_000, reason: "Ice" }, headers: headers
       expect(response).to have_http_status(:created), response.body
-      expect(balance("1050")).to eq(50_000)
+      # The drop lands in the branch's safe account (under 1050), the payout is an expense under Petty cash (5190).
+      safe = within(biz) { PaymentAccount.find_by!(kind: "safe") }
+      expect(safe.current_balance_minor).to eq(50_000)
+      expect(within(biz) { GlAccount.find_by!(payment_account_id: safe.id).parent.code }).to eq("1050")
+      expect(within(biz) { Finance::Statements.balances(as_of: today)[GlAccount.find_by!(payment_account_id: safe.id).id] }).to eq(50_000)
       expect(balance("5190")).to eq(2_000)
+      expect(within(biz) { Expense.sole }).to have_attributes(amount_minor: 2_000, note: "Ice", source: "till", shift_id: shift[:id])
       expect(balance("3020")).to eq(0)
       drawer = within(biz) { GlAccount.find_by!(payment_account_id: shift[:drawer_account_id]) }
       expect(within(biz) { Finance::Statements.balances(as_of: today)[drawer.id] }).to eq(48_000)
@@ -274,15 +279,17 @@ RSpec.describe "Ledger review: money paths", type: :request do
   end
 
   describe "refund status (review item 13 and an open order)" do
-    it "refuses to refund a part payment on an order that is still open" do
+    # Final round (ledger#0): refused, the part payment could not go back at all, and the order could be neither
+    # voided nor completed. It goes back now and the order, still open, owes it again.
+    it "gives a part payment back on an order that is still open, which then owes it again" do
       api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
       o = json
       api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "easypaisa", amount_minor: 30_000, reference: "EP1" } ] }, headers: headers
       expect(json[:order][:payment_status]).to eq("partial")
       api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: 10_000, method_code: "easypaisa", reason: "Changed mind" }, headers: headers
-      expect(response).to have_http_status(:conflict)
-      expect(json[:error][:code]).to eq("refund.order_open")
-      within(biz) { expect(Refund.count).to eq(0) }
+      expect(response).to have_http_status(:created), response.body
+      expect(json[:order]).to include(status: "placed", payment_status: "partial", paid_minor: 20_000, due_minor: 32_200)
+      expect(balance("4000") + balance("2100")).to eq(20_000) # the sale side holds what the order still holds
     end
 
     it "leaves a reopened order paid once the excess is refunded, so it completes and takes no more money" do

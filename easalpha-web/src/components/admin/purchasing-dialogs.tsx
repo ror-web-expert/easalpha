@@ -17,10 +17,11 @@ import { Button, Dialog, Field, Input, MoneyInput, Select } from "@/components/u
 /** Query keys that change when a supplier balance moves. */
 export const SUPPLIER_MONEY_KEYS = ["supplier", "supplier_ledger", "supplier_payments", "supplier_payments_all", "suppliers", "suppliers_all", "purchasing_summary", "purchasing_aging", "supplier_insights", "supplier_ranking", "supplier_adjustments", "purchase_orders", "purchase_order", "purchase_orders_summary", "finance"];
 
-/** Active payment methods a supplier can be paid with; the customer account ("khata") is not one. */
+/** Active payment methods a supplier can be paid with; the customer account ("khata") is not one, nor are the
+ *  canteen's internal methods, which move no money (the API refuses them). */
 export function useUsableMethods() {
   const methods = usePaymentMethods();
-  return useMemo(() => methods.data?.filter((m) => m.active && m.kind !== "khata") ?? [], [methods.data]);
+  return useMemo(() => methods.data?.filter((m) => m.active && m.kind !== "khata" && !m.internal) ?? [], [methods.data]);
 }
 function useDefaultMethod(open: boolean, code: string, setCode: (c: string) => void) {
   const usable = useUsableMethods();

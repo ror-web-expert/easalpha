@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction, useList, useSave } from "@/components/admin/crud";
-import { AdvanceBadge, EmployeeSelect, MethodSelect, PayrollGuard } from "@/components/admin/payroll-shared";
+import { AdvanceBadge, EmployeeSelect, MethodSelect, PayFromWarning, PayrollGuard } from "@/components/admin/payroll-shared";
 import { noAccessFor } from "@/components/admin/no-access";
 import { Button, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
@@ -90,6 +90,7 @@ function Advances() {
       <Dialog open={!!payFor} onClose={() => setPayFor(null)} title={payFor ? `Pay ${payFor.label}` : ""} description={payFor ? `${formatMoney(payFor.amount_minor)} to ${payFor.employee_name}. Recorded as a Salaries / Advance expense on the chosen account.` : undefined} size="sm"
         footer={<><Button variant="secondary" onClick={() => setPayFor(null)}>Cancel</Button><Button loading={pay.isPending} onClick={() => payFor && pay.mutate({ id: payFor.id, method_code: method }, { onSuccess: () => setPayFor(null) })}>Pay</Button></>}>
         <Field label="Paid from"><MethodSelect value={method} onChange={setMethod} /></Field>
+        {payFor ? <PayFromWarning methodCode={method} amountMinor={payFor.amount_minor} /> : null}
       </Dialog>
     </>
   );

@@ -10,6 +10,13 @@ import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Confirm
 import { cn } from "@/lib/utils";
 import { permissionSections } from "@/components/admin/permission-sections";
 
+// A discount limit is a percent; a cash.in_out limit is the rupees one drop, payout or cash out may move without a
+// manager's PIN (the API's Shifts::Manager.movement_needs_approval?).
+const LIMITS: Record<string, { placeholder: string; label: string }> = {
+  "discounts.apply": { placeholder: "limit %", label: "Discount limit in percent" },
+  "cash.in_out": { placeholder: "limit Rs", label: "Cash out limit in rupees" },
+};
+
 export default function RolesPage() {
   const roles = useList<Role>("roles", "/roles");
   const registry = useQuery({ queryKey: ["permissions", "registry"], queryFn: () => api<PermissionRegistry>("/roles/permissions") });
@@ -34,7 +41,7 @@ export default function RolesPage() {
   // Review 4.6: sections by module in the registry's order (the old grouping split codes on "." and gave every
   // VIEW_DAILY_SALES-style code a section of its own, headed by the raw code), a search, and no codes on screen.
   const sections = useMemo(() => permissionSections(registry.data, query), [registry.data, query]);
-  const limitable = (code: string) => code === "discounts.apply";
+  const limitable = (code: string) => code in LIMITS;
   const readOnly = role?.system_key === "owner";
   // The owner holds every permission on the server whatever its stored list says, so every box shows ticked; a
   // restriction limits a role instead of granting something, and the owner has none.
@@ -89,7 +96,7 @@ export default function RolesPage() {
                           {sec.items.map((p) => (
                             <div key={p.code} className="flex items-start justify-between gap-2 rounded px-1 py-1 hover:bg-muted/60">
                               <Checkbox label={<span><span className="font-medium">{p.label}</span>{p.description && p.description !== p.label ? <span className="block text-xs text-fg-secondary">{p.description}</span> : null}{p.restriction ? <Badge variant="warning" className="ml-1">Restriction</Badge> : null}</span>} checked={isOn(p)} disabled={readOnly} onChange={(e) => setMap({ ...map, [p.code]: { on: e.target.checked, limit: map[p.code]?.limit ?? "" } })} />
-                              {limitable(p.code) && map[p.code]?.on ? <Input type="number" className="h-8 w-24 text-xs" placeholder="limit %" value={map[p.code].limit} onChange={(e) => setMap({ ...map, [p.code]: { on: true, limit: e.target.value } })} aria-label="Discount limit in percent" /> : null}
+                              {limitable(p.code) && map[p.code]?.on ? <Input type="number" className="h-8 w-24 text-xs" placeholder={LIMITS[p.code].placeholder} value={map[p.code].limit} onChange={(e) => setMap({ ...map, [p.code]: { on: true, limit: e.target.value } })} aria-label={LIMITS[p.code].label} /> : null}
                             </div>
                           ))}
                         </div>
