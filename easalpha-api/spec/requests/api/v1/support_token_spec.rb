@@ -102,4 +102,19 @@ RSpec.describe "Support access tokens", type: :request do
     api_post "/api/v1/customers", { name: "Added by the owner", phone: "+923451112256" }, headers: auth_headers(owner)
     expect(AuditLog.where(business_id: biz.id, table_name: "customers").order(:occurred_at).last).to have_attributes(user_id: owner.user_id, super_admin_id: nil)
   end
+
+  # L2, 7 Nov 2026: the insights grouped by user alone, so support's rows (no user) were counted as "System".
+  it "names the support person in the audit insights, apart from what nobody signed in did" do
+    2.times { |i| api_post "/api/v1/customers", { name: "Added by support #{i}", phone: "+92345111226#{i}" }, headers: support }
+    expect(response).to have_http_status(:created)
+    within(biz) { AuditLog.record(action: "export", table_name: "orders", business: biz, actor: { user_id: nil, super_admin_id: nil }) } # a job's row
+    get "/api/v1/audit_logs/insights?table_name=customers", headers: auth_headers(owner)
+    expect(json[:by_actor].first).to eq(user_id: nil, super_admin_id: admin.id, name: "EasAlpha support (Hina from EasAlpha)", count: 2)
+    expect(json[:by_actor].pluck(:name)).not_to include("System")
+    get "/api/v1/audit_logs/insights", headers: auth_headers(owner)
+    actors = json[:by_actor].index_by { |a| a[:name] }
+    expect(actors["EasAlpha support (Hina from EasAlpha)"]).to include(super_admin_id: admin.id)
+    expect(actors["System"]).to include(user_id: nil, super_admin_id: nil)
+    expect(actors["System"][:count]).to eq(AuditLog.where(business_id: biz.id, user_id: nil, super_admin_id: nil).count)
+  end
 end

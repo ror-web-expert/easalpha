@@ -111,6 +111,10 @@ module Api
       # Customer accounts and payroll are modules the owner switches on (BusinessModules).
       def require_module!(name) = BusinessModules.require!(current_business, name)
 
+      # Pay (salaries, wage rates and salary components) is for payroll.manage or the SPEC code PAYROLL, which implies
+      # it; staff.manage alone keeps the HR side of an employee (leftovers of 7 Nov 2026, L2).
+      def payroll_access? = !!(current_membership&.can?("payroll.manage") || current_membership&.can?("PAYROLL"))
+
       def require_app!(app)
         raise Api::Errors::Forbidden.new("app.denied", "You don't have access to this app") unless @membership&.can?("app.#{app}")
       end

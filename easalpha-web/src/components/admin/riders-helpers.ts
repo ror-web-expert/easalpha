@@ -2,7 +2,34 @@
 // SPEC Riders: permanent riders carry contact details, vehicle, a per-delivery charge and assigned-versus-completed
 // counts; temporary riders are throwaway records with a lifetime (one order, N orders, the rest of today or N hours),
 // each with its own permissions. SPEC Cashier Till: orders taken and money collected do not reconcile.
-import type { CashierTillRow, DeliveryStatus, Rider, RiderLifetimeKind } from "@/lib/types";
+import type { CashierTillRow, DeliveryStatus, Rider, RiderLifetimeKind, StaffInvitation } from "@/lib/types";
+import type { Outcome } from "./staff-helpers";
+
+// ---- Rider logins (L2, 7 Nov 2026) ----
+/** POST /riders: the rider, plus invited and the invitation when the phone is on an EasAlpha login that never confirmed
+ *  it (the app login waits for them), or linked_existing_user when a login was linked (true) or made (false). */
+export type RiderAddResult = Rider & { invited?: boolean; invitation?: StaffInvitation; linked_existing_user?: boolean };
+
+/** What the owner is told after adding a rider. An add that became an invitation looked like nothing happened: the row
+ *  said login "none" and no page listed the invitation. `listed`: the page shows Waiting to join (staff.manage). */
+export function riderAddOutcome(r: RiderAddResult, listed: boolean): Outcome {
+  if (r.invited && r.invitation) {
+    return {
+      tone: "info", title: `${r.name} added; the app login waits for them`,
+      body: `That number is on an EasAlpha login that has not confirmed it, so nothing is linked yet. We sent WhatsApp to ${r.invitation.phone ?? r.phone ?? "their phone"}; ${r.name} gets the rider app once they confirm it with a code.${listed ? " Until then they are under Waiting to join." : ""}`,
+    };
+  }
+  if (r.linked_existing_user) return { tone: "info", title: "Rider added on their EasAlpha login", body: "This phone is already their login, so no new one was made. They sign in to the rider app with the PIN set here." };
+  return { tone: "success", title: "Rider saved" };
+}
+
+/** The pending invitations the Riders page lists: one POST /riders made (rider_id), or one to the Rider role from Staff. */
+export const isRiderInvitation = (i: Pick<StaffInvitation, "rider_id" | "role" | "staff_type">) => !!i.rider_id || i.role.system_key === "rider" || i.staff_type === "rider";
+
+/** The API's 403 rider.none: a login on the Rider role with no rider profile linked to it. The rider app said "loading"
+ *  for ever; it says this instead. */
+export const NO_RIDER_PROFILE = "Your login has no rider profile yet. Ask the owner to add you under Riders.";
+export const isNoRiderProfile = (error: unknown) => (error as { code?: unknown } | null | undefined)?.code === "rider.none";
 
 export const TEMPORARY_RIDER_SENTENCE = "Temporary riders are throwaway records with a lifetime - one order, N orders, the rest of today, or N hours - each with its own permissions.";
 

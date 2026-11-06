@@ -2,15 +2,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Plus, KeyRound, UserX, UserCheck, ShieldCheck, Copy, Send, X } from "lucide-react";
+import { Plus, KeyRound, UserX, UserCheck, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Branch, CashierRole, Membership, Role, StaffInvitation, StaffType } from "@/lib/types";
-import { formatDate, formatDateTime } from "@/lib/dates";
+import { formatDateTime } from "@/lib/dates";
 import { FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction, useList } from "@/components/admin/crud";
 import { toast } from "@/store/toast";
 import { useCan } from "@/store/auth";
-import { addOutcome, invitationContact, type AddResult } from "./staff-helpers";
+import { addOutcome, type AddResult } from "./staff-helpers";
+import { WaitingInvitations } from "./staff-invitations";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 // SPEC "Staff populations": Admin Staff, Cashiers and Order Takers are separate screens over the same membership
@@ -52,17 +53,11 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
   const [pinFor, setPinFor] = useState<Membership | null>(null);
   const [pin, setPin] = useState("");
   const [deact, setDeact] = useState<Membership | null>(null);
-  const create = useAction<CreateBody, AddResult>(["staff", "staff_invitations"], (body) => api<AddResult>("/staff", { method: "POST", body }));
-  const resendM = useAction<string>(["staff_invitations"], (id) => api(`/staff/invitations/${id}/resend`, { method: "POST" }), "Invitation sent again");
-  const cancelM = useAction<string>(["staff_invitations"], (id) => api(`/staff/invitations/${id}`, { method: "DELETE" }), "Invitation cancelled");
-  const copyLink = async (i: StaffInvitation) => {
-    try { await navigator.clipboard.writeText(i.url); toast.success("Link copied", "It opens nothing without the code we send to their phone or email."); }
-    catch { toast.info("Copy this link", i.url); }
-  };
+  const create = useAction<CreateBody, AddResult>(["staff", "staff_invitations", "riders"], (body) => api<AddResult>("/staff", { method: "POST", body }));
   const setPinM = useAction<{ id: string; pin: string }>(["staff"], ({ id, pin }) => api(`/staff/${id}/set_pin`, { method: "POST", body: { pin } }), "PIN updated");
   const deactM = useAction<string>(["staff"], (id) => api(`/staff/${id}/deactivate`, { method: "POST" }), "Deactivated");
   const reactM = useAction<string>(["staff"], (id) => api(`/staff/${id}/reactivate`, { method: "POST" }), "Reactivated");
-  const roleM = useAction<{ id: string; role_id: string }>(["staff"], ({ id, role_id }) => api(`/staff/${id}`, { method: "PATCH", body: { role_id } }), "Role changed");
+  const roleM = useAction<{ id: string; role_id: string }>(["staff", "riders"], ({ id, role_id }) => api(`/staff/${id}`, { method: "PATCH", body: { role_id } }), "Role changed"); // the Rider role brings a rider profile
   const cashierRoleM = useAction<{ id: string; cashier_role: CashierRole }>(["staff"], ({ id, cashier_role }) => api(`/staff/${id}`, { method: "PATCH", body: { cashier_role } }), "Cashier role changed");
   const openAdd = () => {
     const def = roles.data?.find((r) => r.system_key === DEFAULT_ROLE_KEY[staffType]) ?? roles.data?.find((r) => r.system_key !== "owner");
@@ -141,31 +136,7 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
           </TBody>
         </Table>
       )}
-      {canManage && waiting.length ? (
-        <section className="mt-6" aria-label="Waiting to join">
-          <h2 className="mb-1 text-base font-medium">Waiting to join</h2>
-          <p className="mb-3 text-sm text-fg-secondary">Added by a phone or email that is on an EasAlpha login which never confirmed it. They join when they confirm it with the code we send; until then they have no access.</p>
-          <Table>
-            <THead><tr><TH>Name</TH><TH>Phone or email</TH><TH>Role</TH><TH>PIN</TH><TH>Open until</TH><TH right>Actions</TH></tr></THead>
-            <TBody>
-              {waiting.map((i) => (
-                <TR key={i.id}>
-                  <TD className="font-medium">{i.name}</TD>
-                  <TD className="text-fg-secondary">{invitationContact(i)}</TD>
-                  <TD>{i.role.name}</TD>
-                  <TD>{i.has_pin ? <Badge variant="success">set</Badge> : <Badge variant="warning">no PIN</Badge>}</TD>
-                  <TD className="text-fg-secondary">{formatDate(i.expires_at)}</TD>
-                  <TD right>
-                    <Button variant="ghost" size="sm" onClick={() => copyLink(i)}><Copy className="h-4 w-4" /> Copy link</Button>
-                    <Button variant="ghost" size="sm" loading={resendM.isPending} onClick={() => resendM.mutate(i.id)}><Send className="h-4 w-4" /> Resend</Button>
-                    <Button variant="ghost" size="icon-sm" title="Cancel invitation" aria-label={`Cancel the invitation for ${i.name}`} onClick={() => cancelM.mutate(i.id)}><X className="h-4 w-4 text-danger" /></Button>
-                  </TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        </section>
-      ) : null}
+      {canManage ? <WaitingInvitations invitations={waiting} description="Added by a phone or email that is on an EasAlpha login which never confirmed it. They join when they confirm it with the code we send; until then they have no access." /> : null}
       <Dialog open={!!form} onClose={() => setForm(null)} title={`Add ${SINGULAR[staffType]}`} description="A phone sends a WhatsApp invite; email plus password lets them open the admin."
         footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={create.isPending} disabled={!form?.name || !form?.role_id || (!form?.phone && !form?.email)} onClick={submit}>Add</Button></>}>
         {form ? (

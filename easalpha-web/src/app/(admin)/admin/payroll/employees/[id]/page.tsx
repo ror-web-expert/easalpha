@@ -1,5 +1,6 @@
 "use client";
 // One employee: Profile, Attendance (this month's ledger), Payslips (across runs) and Rules (per-employee override).
+// Pay and Payslips are for the payroll permission; staff.manage alone sees the profile, attendance and rules (L2).
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -9,15 +10,16 @@ import { api } from "@/lib/api";
 import type { EmployeeFull, PayrollLedger } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
+import { useCan } from "@/store/auth";
 import { PageHeader } from "@/components/admin/page";
 import { MonthPicker, PayrollGuard, RunBadge, useBusinessHours } from "@/components/admin/payroll-shared";
 import { noAccessFor } from "@/components/admin/no-access";
-import { EmployeeDialog, type EmployeeForm, employeeToForm, FingerprintBadge } from "@/components/admin/payroll-employees";
+import { EmployeeDialog, type EmployeeForm, employeeToForm, FingerprintBadge, PAY_PERMS } from "@/components/admin/payroll-employees";
 import { EmployeeRulesForm } from "@/components/admin/payroll-rules-form";
 import { AttendanceLedgerView } from "@/components/admin/payroll-attendance";
 import { PayslipDetailPanel } from "@/components/admin/payroll-run";
 import { monthKey, monthLabel } from "@/components/admin/payroll-helpers";
-import { payTypeLabel, rateLabel } from "@/components/admin/wages-helpers";
+import { isWageStaff, payTypeLabel, rateLabel } from "@/components/admin/wages-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, KeyValue, Loading, Table, Tabs, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 type Tab = "profile" | "attendance" | "payslips" | "rules";
@@ -34,8 +36,11 @@ function EmployeeDetail() {
   const [form, setForm] = useState<EmployeeForm | null>(null);
   const [slip, setSlip] = useState<string | null>(null);
   const hours = useBusinessHours();
-  const ledger = useQuery({ queryKey: ["payroll_ledger", id], queryFn: () => api<PayrollLedger>("/payroll/ledger", { query: { employee_id: id } }), enabled: tab === "payslips" });
+  const can = useCan();
+  const pay = can(...PAY_PERMS);
+  const ledger = useQuery({ queryKey: ["payroll_ledger", id], queryFn: () => api<PayrollLedger>("/payroll/ledger", { query: { employee_id: id } }), enabled: tab === "payslips" && pay });
   const e = q.data;
+  const hasStatement = !!e && (pay || (can("wages.pay") && isWageStaff(e.pay_frequency)));
   const selected = ledger.data?.data.find((p) => p.id === slip) ?? null;
   const denied = noAccessFor(q.error);
   if (denied) return denied;
@@ -44,8 +49,8 @@ function EmployeeDetail() {
       <Link href="/admin/payroll/employees" className="mb-3 inline-flex items-center gap-1 text-sm text-primary"><ArrowLeft className="h-4 w-4" /> Employees</Link>
       {q.isLoading || !e ? <Loading /> : (
         <>
-          <PageHeader icon={Contact} title={e.name} description={[e.designation, e.department, `${rateLabel(e.base_salary_minor, e.pay_frequency)} · ${payTypeLabel(e.pay_frequency)}`].filter(Boolean).join(" · ")} actions={<><FingerprintBadge employee={e} /><Link href={`/admin/payroll/statement?employee_id=${e.id}`}><Button variant="secondary"><FileText className="h-4 w-4" /> Statement</Button></Link><Button variant="secondary" onClick={() => setForm(employeeToForm(e))}><Pencil className="h-4 w-4" /> Edit</Button></>} />
-          <Tabs value={tab} onChange={setTab} items={[{ value: "profile", label: "Profile" }, { value: "attendance", label: "Attendance" }, { value: "payslips", label: "Payslips" }, { value: "rules", label: "Rules" }]} className="mb-4" />
+          <PageHeader icon={Contact} title={e.name} description={[e.designation, e.department, pay ? `${rateLabel(e.base_salary_minor, e.pay_frequency)} · ${payTypeLabel(e.pay_frequency)}` : payTypeLabel(e.pay_frequency)].filter(Boolean).join(" · ")} actions={<><FingerprintBadge employee={e} />{hasStatement ? <Link href={`/admin/payroll/statement?employee_id=${e.id}`}><Button variant="secondary"><FileText className="h-4 w-4" /> Statement</Button></Link> : null}<Button variant="secondary" onClick={() => setForm(employeeToForm(e))}><Pencil className="h-4 w-4" /> Edit</Button></>} />
+          <Tabs value={tab} onChange={setTab} items={[{ value: "profile", label: "Profile" }, { value: "attendance", label: "Attendance" }, ...(pay ? [{ value: "payslips" as const, label: "Payslips" }] : []), { value: "rules", label: "Rules" }]} className="mb-4" />
           {tab === "profile" ? (
             <div className="grid gap-4 lg:grid-cols-2">
               <Card><CardHeader><CardTitle>Profile</CardTitle>{e.left_on ? <Badge variant="danger">Left {formatDate(e.left_on)}</Badge> : <Badge variant="success">Active</Badge>}</CardHeader>
@@ -55,16 +60,25 @@ function EmployeeDetail() {
                   { label: "Shares tips", value: e.shares_tips ? "Yes" : "No" }, { label: "Staff login", value: e.membership_id ? "Linked" : "Not linked" },
                 ]} />{e.notes ? <p className="mt-3 text-sm text-fg-secondary">{e.notes}</p> : null}</CardBody>
               </Card>
-              <Card><CardHeader><CardTitle>Pay</CardTitle><span className="text-sm tabular">{rateLabel(e.base_salary_minor, e.pay_frequency)}</span></CardHeader>
-                <CardBody>
-                  {e.components?.length ? <KeyValue items={e.components.map((c) => ({ label: `${c.name} (${c.kind})`, value: c.percent != null ? `${c.percent}% of base` : formatMoney(c.amount_minor) }))} /> : <p className="text-sm text-fg-muted">No salary components.</p>}
-                  <div className="mt-4 rounded-xl bg-muted p-3 text-sm"><div className="text-xs text-fg-secondary">Fingerprint</div><div className="mt-1 flex items-center gap-2"><FingerprintBadge employee={e} /><Link href="/admin/payroll/fingerprint?tab=enrolled" className="text-primary">Manage in Enrolled</Link></div></div>
-                </CardBody>
-              </Card>
+              {pay ? (
+                <Card><CardHeader><CardTitle>Pay</CardTitle><span className="text-sm tabular">{rateLabel(e.base_salary_minor, e.pay_frequency)}</span></CardHeader>
+                  <CardBody>
+                    {e.components?.length ? <KeyValue items={e.components.map((c) => ({ label: `${c.name} (${c.kind})`, value: c.percent != null ? `${c.percent}% of base` : formatMoney(c.amount_minor) }))} /> : <p className="text-sm text-fg-muted">No salary components.</p>}
+                    <div className="mt-4 rounded-xl bg-muted p-3 text-sm"><div className="text-xs text-fg-secondary">Fingerprint</div><div className="mt-1 flex items-center gap-2"><FingerprintBadge employee={e} /><Link href="/admin/payroll/fingerprint?tab=enrolled" className="text-primary">Manage in Enrolled</Link></div></div>
+                  </CardBody>
+                </Card>
+              ) : (
+                <Card><CardHeader><CardTitle>Fingerprint</CardTitle><FingerprintBadge employee={e} /></CardHeader>
+                  <CardBody className="space-y-3 text-sm">
+                    <Link href="/admin/payroll/fingerprint?tab=enrolled" className="text-primary">Manage in Enrolled</Link>
+                    <p className="text-fg-muted">The salary or wage and the salary components show to the payroll permission only.</p>
+                  </CardBody>
+                </Card>
+              )}
             </div>
           ) : null}
           {tab === "attendance" ? <AttendanceLedgerView employeeId={e.id} month={month} picker={<MonthPicker value={month} onChange={setMonth} />} /> : null}
-          {tab === "payslips" ? (ledger.isLoading ? <Loading /> : (
+          {tab === "payslips" && pay ? (ledger.isLoading ? <Loading /> : (
             <Table>
               <THead><tr><TH>Month</TH><TH>Run</TH><TH right>Base</TH><TH right>Earnings</TH><TH right>Deductions</TH><TH right>Absence</TH><TH right>Fines</TH><TH right>Advances</TH><TH right>Net</TH></tr></THead>
               <TBody>

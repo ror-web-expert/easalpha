@@ -1,4 +1,5 @@
-import type { BillingPlan } from "@/lib/types";
+import type { BillingInvoice, BillingPlan } from "@/lib/types";
+import { formatMoney } from "@/lib/money";
 
 export type BillingCurrency = "PKR" | "USD";
 
@@ -41,4 +42,15 @@ export function planEstimate(plan: Pick<BillingPlan, "limits" | "price_pkr_minor
   const base = currency === "USD" ? plan.price_usd_minor ?? 0 : plan.price_pkr_minor;
   const monthly = base + extra * EXTRA_TILL_MINOR[currency];
   return cycle === "yearly" ? monthly * 10 : monthly;
+}
+
+/** What invoices come to, each in its own currency: "Rs 4,999", or "Rs 4,999 + $39.00" when a business has invoices in
+ *  both (it moved abroad). The Plan page summed every open invoice as rupees, so $39 read Rs 39 (L2, 7 Nov 2026). */
+export function invoicesTotalLabel(invoices: Pick<BillingInvoice, "amount_minor" | "currency">[]): string {
+  const totals = new Map<string, number>();
+  for (const i of invoices) {
+    const currency = i.currency || "PKR";
+    totals.set(currency, (totals.get(currency) ?? 0) + i.amount_minor);
+  }
+  return [...totals].map(([currency, minor]) => formatMoney(minor, currency)).join(" + ");
 }

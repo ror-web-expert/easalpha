@@ -129,7 +129,8 @@ export interface AuditLog {
 export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string>; /** "Order items" for order_items (S13) */ entity_labels?: Record<string, string> }
 export interface AuditInsights {
   total: number; by_action: Record<string, number>; by_entity: Record<string, number>;
-  by_actor: { user_id: ID | null; name: string; count: number }[]; by_day: Record<string, number>;
+  /** A support person's row has super_admin_id and no user_id, and is named "EasAlpha support (name)". */
+  by_actor: { user_id: ID | null; super_admin_id?: ID | null; name: string; count: number }[]; by_day: Record<string, number>;
 }
 
 export interface ChecklistItem { id: ID; key: string; title: string; done: boolean; done_at: string | null; plan_feature_off: boolean; sort_order: number }
@@ -840,7 +841,9 @@ export interface SalaryComponent { id: ID; name: string; kind: SalaryComponentKi
 export interface EmployeeComponent { id?: ID; salary_component_id: ID; name?: string; kind?: SalaryComponentKind; amount_minor: number | null; percent: number | null }
 export interface Employee {
   id: ID; branch_id: ID | null; membership_id: ID | null; department_id: ID | null; department: string | null; name: string; phone: string | null; cnic: string | null; designation: string | null;
-  base_salary_minor: number; pay_frequency: string; joined_on: string | null; left_on: string | null; fingerprint_enrolled: boolean; shares_tips: boolean; notes: string | null; archived_at: string | null; components: EmployeeComponent[];
+  pay_frequency: string; joined_on: string | null; left_on: string | null; fingerprint_enrolled: boolean; shares_tips: boolean; notes: string | null; archived_at: string | null;
+  /** The pay figures: sent only to payroll.manage or PAYROLL, never to staff.manage alone (L2, 7 Nov 2026). */
+  base_salary_minor?: number; components?: EmployeeComponent[];
   /** Messages to this employee on WhatsApp (advance, wage, salary paid). */
   whatsapp_notify?: boolean;
 }

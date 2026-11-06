@@ -49,14 +49,14 @@ module Api
         fid = params.require(:fingerprint_id).to_s
         raise Api::Errors::Conflict.new("attendance.fingerprint_taken", "That fingerprint is enrolled for another employee") if Employee.active.where(fingerprint_id: fid).where.not(id: e.id).exists?
         e.update!(fingerprint_id: fid, fingerprint_enrolled: true, fingerprint_enrolled_at: Time.current, fingerprint_revoked_at: nil)
-        render json: PayrollSerializers.employee(e)
+        render json: PayrollSerializers.employee(e, pay: payroll_access?) # staff.manage enrols too, and sees no pay
       end
 
       def revoke
         require_permission!("payroll.manage", "PAYROLL", "staff.manage")
         e = Employee.active.find(params.require(:employee_id))
         e.update!(fingerprint_enrolled: false, fingerprint_revoked_at: Time.current, fingerprint_id: nil)
-        render json: PayrollSerializers.employee(e)
+        render json: PayrollSerializers.employee(e, pay: payroll_access?)
       end
 
       # GET /attendance/ledger?employee_id=&month=YYYY-MM  SPEC Ledger: the month view per employee

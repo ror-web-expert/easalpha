@@ -114,7 +114,9 @@ module Settings
 
       [ "security.expense_report_pin", "security_cash", "Expense & Report PIN", "pin", nil, "PIN asked before expenses and reports open on the POS", true ],
       [ "security.cashier_pin_required", "security_cash", "Cashier PIN", "boolean", true, "Cashier actions need the cashier's own PIN" ],
-      [ "security.cashier_drawer", "security_cash", "Cashier Drawer", "boolean", true, "Payments land in each cashier's own till account instead of the admin accounts" ],
+      # No security.cashier_drawer switch: no code read it, and cash always lands in the drawer of the till's open shift,
+      # which expected cash, the blind count, the float and the settlement are built on (L2, 7 Nov 2026). A value a
+      # business stored is ignored, as every key outside the registry is.
 
       # EasAlpha extras that already lived in businesses.settings, kept under their old keys.
       [ "cash_rounding", "charges_tax", "Service Charge", "integer", 0, "Round cash to Rs 5 or Rs 10" ],

@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { linesText } from "@/lib/kitchen-bump";
 import { formatAgo, formatTime } from "@/lib/dates";
 import { DELIVERY_LABELS, deliveryStatusVariant } from "@/components/admin/delivery";
-import { groupDeliveries, isCashOrder, riderNextSteps, type RiderStep } from "@/components/admin/riders-helpers";
+import { groupDeliveries, isCashOrder, isNoRiderProfile, NO_RIDER_PROFILE, riderNextSteps, type RiderStep } from "@/components/admin/riders-helpers";
 import { deliveryAddressLine, deliveryPhone } from "@/lib/delivery-address";
 import { riderApi } from "@/components/rider/api";
 import { flushOutbox, newOutboxId, useOutbox } from "@/components/rider/outbox";
@@ -123,6 +123,9 @@ export default function RiderHomePage() {
   }, [deliveries.data, showAll]);
 
   const rider = deliveries.data?.rider;
+  // 403 rider.none: this login has no rider profile (a member put on the Rider role before 7 Nov 2026, or a profile the
+  // owner deactivated). Every list fails the same way, so the app says so instead of "loading" for ever.
+  const noProfile = !deliveries.data && (isNoRiderProfile(deliveries.error) || isNoRiderProfile(float.error));
   const perms = rider?.permissions ?? [];
   const temp = !!rider?.temporary;
   const canFail = !temp || perms.includes("mark_failed");
@@ -156,7 +159,7 @@ export default function RiderHomePage() {
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-cta text-cta-fg"><Bike className="h-5 w-5" /></span>
             <div className="min-w-0">
               <div className="truncate font-medium">{rider?.name ?? session?.user?.name ?? "Rider"}</div>
-              <div className="truncate text-xs text-white/70">{openCount} open · {lastSync ? `updated ${formatAgo(lastSync)}` : "loading"}</div>
+              <div className="truncate text-xs text-white/70">{noProfile ? "No rider profile" : <>{openCount} open · {lastSync ? `updated ${formatAgo(lastSync)}` : "loading"}</>}</div>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -183,6 +186,9 @@ export default function RiderHomePage() {
         ) : geo === "denied" ? (
           <p className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-ink">Location is off for this app. Turn it on in the phone&apos;s settings, Apps, Chrome, Permissions, Location, so the shop sees where deliveries are made.</p>
         ) : null}
+        {noProfile ? (
+          <EmptyState icon={Bike} title="No rider profile yet" hint={NO_RIDER_PROFILE} action={<Button variant="secondary" className="h-11" onClick={refresh}>Check again</Button>} />
+        ) : <>
         <Card className="bg-primary-soft">
           <CardBody className="flex items-center justify-between gap-3">
             <div>
@@ -211,6 +217,7 @@ export default function RiderHomePage() {
           </section>
         ))}
         {deliveries.isError && deliveries.data ? <p className="text-center text-xs text-fg-muted">Showing the list from {lastSync ? formatTime(lastSync.toISOString()) : "earlier"}. It refreshes when the connection is back.</p> : null}
+        </>}
       </div>
 
       <Dialog open={!!pending} onClose={() => setPending(null)} size="sm" title={pending ? `${pending.step.label}: ${pending.d.order_label}` : ""}

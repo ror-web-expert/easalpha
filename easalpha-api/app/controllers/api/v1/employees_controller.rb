@@ -1,22 +1,29 @@
 module Api
   module V1
-    # Employees, departments, salary components, attendance rules, leave and holidays.
+    # Employees, departments, salary components, attendance rules, leave and holidays. staff.manage runs the HR side;
+    # pay (the salary or wage, the pay type, tips sharing and the salary components) needs payroll.manage or PAYROLL.
     class EmployeesController < BaseController
+      # What only payroll may set on an employee: each changes what they are paid.
+      PAY_PARAMS = %w[base_salary_minor pay_frequency shares_tips components].freeze
+
       before_action :authenticate!
-      before_action -> { require_permission!("payroll.manage", "staff.manage") }
+      before_action -> { require_permission!("payroll.manage", "PAYROLL", "staff.manage") }
+      before_action -> { require_permission!("payroll.manage", "PAYROLL") }, only: %i[components create_component destroy_component]
       before_action -> { require_module!("payroll") }
       before_action :read_only_guard!, except: %i[index show departments components rules leaves holidays]
+      before_action :pay_guard!, only: %i[create update]
 
       def index
         scope = Employee.active.includes(:department, employee_salary_components: :salary_component).order(:name)
         scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
         scope = scope.where("name ILIKE :q OR cnic ILIKE :q OR designation ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
-        render json: { data: scope.map { |e| PayrollSerializers.employee(e) } }
+        render json: { data: scope.map { |e| PayrollSerializers.employee(e, pay: payroll_access?) } }
       end
 
-      def show = render(json: PayrollSerializers.employee(Employee.includes(:department, employee_salary_components: :salary_component).find(params[:id])))
+      def show = render(json: PayrollSerializers.employee(Employee.includes(:department, employee_salary_components: :salary_component).find(params[:id]), pay: payroll_access?))
 
       # POST /employees { name, phone, cnic, designation, department_id, branch_id, membership_id, base_salary_minor, joined_on, shares_tips, components: [{salary_component_id, amount_minor, percent}] }
+      # Without payroll the pay keys are refused, and a new employee starts on a monthly salary of 0 for payroll to set.
       def create
         e = Employee.transaction do
           emp = Employee.create!(employee_params)
@@ -24,7 +31,7 @@ module Api
           emp
         end
         audit!("create", record: e, after: { name: e.name, base_salary_minor: e.base_salary_minor })
-        render json: PayrollSerializers.employee(e.reload), status: :created
+        render json: PayrollSerializers.employee(e.reload, pay: payroll_access?), status: :created
       end
 
       def update
@@ -35,7 +42,7 @@ module Api
           set_components!(e, params[:components]) if params.key?(:components)
         end
         audit!("update", record: e, before: before, after: { base_salary_minor: e.base_salary_minor })
-        render json: PayrollSerializers.employee(e.reload)
+        render json: PayrollSerializers.employee(e.reload, pay: payroll_access?)
       end
 
       def destroy
@@ -98,6 +105,12 @@ module Api
       end
 
       private
+
+      def pay_guard!
+        sent = PAY_PARAMS.select { |k| params.key?(k) }
+        return if sent.empty? || payroll_access?
+        raise Api::Errors::Forbidden.new("permission.denied", "Missing permission: payroll.manage or PAYROLL, to set #{sent.join(', ')}")
+      end
 
       def employee_params = params.permit(:name, :phone, :cnic, :designation, :department_id, :branch_id, :membership_id, :base_salary_minor, :pay_frequency, :joined_on, :left_on, :fingerprint_enrolled, :shares_tips, :notes, :whatsapp_notify)
 

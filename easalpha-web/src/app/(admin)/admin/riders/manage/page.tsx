@@ -1,16 +1,20 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bike, Plus, Pencil, Trash2, Timer, Wallet } from "lucide-react";
-import type { Rider, RiderLifetimeKind } from "@/lib/types";
+import { api, errorMessage } from "@/lib/api";
+import type { Rider, RiderLifetimeKind, StaffInvitation } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
-import { formatAgo } from "@/lib/dates";
+import { formatAgo, formatDate } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { useCan } from "@/store/auth";
+import { toast } from "@/store/toast";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
-import { useRemove, useSave } from "@/components/admin/crud";
+import { useList, useRemove, useSave } from "@/components/admin/crud";
 import { riderStatusVariant, useRiders } from "@/components/admin/delivery";
-import { LIFETIME_KINDS, RIDER_PERMS, TEMPORARY_RIDER_PERMISSIONS, TEMPORARY_RIDER_SENTENCE, assignedVsCompleted, lifetimeLabel, lifetimeNeedsValue, lifetimeRemaining, riderActionPerms, riderExpired } from "@/components/admin/riders-helpers";
+import { WaitingInvitations } from "@/components/admin/staff-invitations";
+import { LIFETIME_KINDS, RIDER_PERMS, TEMPORARY_RIDER_PERMISSIONS, TEMPORARY_RIDER_SENTENCE, assignedVsCompleted, isRiderInvitation, lifetimeLabel, lifetimeNeedsValue, lifetimeRemaining, riderActionPerms, riderAddOutcome, riderExpired, type RiderAddResult } from "@/components/admin/riders-helpers";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, SummaryCard, Switch, Table, TBody, TD, TH, THead, TR, Tabs } from "@/components/ui";
 
 type Tab = "permanent" | "temporary";
@@ -18,6 +22,7 @@ interface Form { id?: string; name: string; phone: string; vehicle: string; vehi
 const blank: Form = { name: "", phone: "+92", vehicle: "bike", vehicle_no: "", address: "", charge_per_delivery_minor: 0, create_login: true, pin: "" };
 interface TempForm { id?: string; name: string; phone: string; lifetime_kind: RiderLifetimeKind; lifetime_value: number; permissions: string[]; status?: string }
 const blankTemp: TempForm = { name: "", phone: "", lifetime_kind: "one_order", lifetime_value: 2, permissions: ["collect_cash"] };
+const WAITING = "Added with a phone that is on an EasAlpha login which never confirmed it. They get the rider app when they confirm it with the code we send; until then the rider has no login.";
 
 export default function RidersPage() {
   const can = useCan();
@@ -26,6 +31,24 @@ export default function RidersPage() {
   const riders = useRiders({ status: status || undefined, temporary: tab === "temporary" ? "true" : "false" });
   const save = useSave<Record<string, unknown>>(["riders"], (f) => (f.id ? `/riders/${f.id}` : "/riders"), { onSuccess: () => { setForm(null); setTemp(null); }, success: "Rider saved" });
   const remove = useRemove(["riders"], (id) => `/riders/${id}`, "Rider removed");
+  // Invitations are staff.manage's list, as on the staff screens: a rider whose phone is on a login that never
+  // confirmed it waits there, and their row says "invited" instead of a bare "none" (L2, 7 Nov 2026).
+  const canStaff = can("staff.manage");
+  const invitations = useList<StaffInvitation>("staff_invitations", "/staff/invitations", {}, canStaff);
+  const waiting = (invitations.data ?? []).filter(isRiderInvitation);
+  const invitedRider = (r: Rider) => waiting.find((i) => i.rider_id === r.id);
+  const qc = useQueryClient();
+  // A new permanent rider: the answer says whether the login was made, linked or waits as an invitation.
+  const add = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api<RiderAddResult>("/riders", { method: "POST", body }),
+    onSuccess: (r) => {
+      ["riders", "staff_invitations"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      setForm(null);
+      const o = riderAddOutcome(r, canStaff);
+      if (o.tone === "info") toast.info(o.title, o.body); else toast.success(o.title, o.body);
+    },
+    onError: (e) => toast.error("Could not save", errorMessage(e)),
+  });
   const [form, setForm] = useState<Form | null>(null);
   const [temp, setTemp] = useState<TempForm | null>(null);
   const [del, setDel] = useState<Rider | null>(null);
@@ -33,9 +56,9 @@ export default function RidersPage() {
   const submit = () => {
     if (!form) return;
     const body: Record<string, unknown> = { id: form.id, name: form.name, phone: form.phone || null, vehicle: form.vehicle || null, vehicle_no: form.vehicle_no || null, address: form.address || null, charge_per_delivery_minor: form.charge_per_delivery_minor };
-    if (form.id) body.status = form.status;
-    else if (form.create_login) { body.create_login = true; body.pin = form.pin; }
-    save.mutate(body);
+    if (form.id) { body.status = form.status; save.mutate(body); return; }
+    if (form.create_login) { body.create_login = true; body.pin = form.pin; }
+    add.mutate(body);
   };
   const submitTemp = () => {
     if (!temp) return;
@@ -79,7 +102,7 @@ export default function RidersPage() {
                   <TD><Badge variant={riderStatusVariant(r.status)}>{titleCase(r.status)}</Badge>{r.open_deliveries ? <span className="ml-2 text-xs text-fg-muted">{r.open_deliveries} open</span> : null}</TD>
                   <TD right className="tabular" title="Assigned / completed">{assignedVsCompleted(r)}</TD>
                   <TD right className={r.float_minor ? "font-medium" : "text-fg-muted"}>{formatMoney(r.float_minor)}</TD>
-                  <TD>{r.membership_id ? <Badge variant="success">app</Badge> : <Badge>none</Badge>}</TD>
+                  <TD>{r.membership_id ? <Badge variant="success">app</Badge> : invitedRider(r) ? <Badge variant="info" title={`Waiting for ${r.name} to confirm the phone, until ${formatDate(invitedRider(r)!.expires_at)}`}>invited</Badge> : <Badge>none</Badge>}</TD>
                   <TD right>
                     {can(...perms.edit) ? <Button variant="ghost" size="icon-sm" onClick={() => setForm({ id: r.id, name: r.name, phone: r.phone ?? "", vehicle: r.vehicle ?? "", vehicle_no: r.vehicle_no ?? "", address: r.address ?? "", charge_per_delivery_minor: r.charge_per_delivery_minor, create_login: false, pin: "", status: r.status })} aria-label="Edit"><Pencil className="h-4 w-4" /></Button> : null}
                     {can(...perms.delete) ? <Button variant="ghost" size="icon-sm" onClick={() => setDel(r)} aria-label="Deactivate"><Trash2 className="h-4 w-4 text-danger" /></Button> : null}
@@ -115,9 +138,10 @@ export default function RidersPage() {
           </TBody>
         </Table>
       )}
+      {tab === "permanent" && canStaff ? <WaitingInvitations invitations={waiting} description={WAITING} /> : null}
 
       <Dialog open={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit rider" : "Add rider"}
-        footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!form?.name.trim() || !pinOk} onClick={submit}>Save</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending || add.isPending} disabled={!form?.name.trim() || !pinOk} onClick={submit}>Save</Button></>}>
         {form ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>

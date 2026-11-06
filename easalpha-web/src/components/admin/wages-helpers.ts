@@ -27,9 +27,9 @@ export const rateLabel = (rateMinor: number | null | undefined, f: string | null
 export const isWageStaff = (f: string | null | undefined) => f === "daily" || f === "weekly";
 
 /** Employees screen summary: monthly salaries add up per month; wage staff are counted, not summed (different periods). */
-export function payrollMix(rows: { base_salary_minor: number; pay_frequency: string }[]) {
+export function payrollMix(rows: { base_salary_minor?: number; pay_frequency: string }[]) {
   const monthly = rows.filter((r) => !isWageStaff(r.pay_frequency));
-  return { monthly_count: monthly.length, monthly_minor: monthly.reduce((s, r) => s + r.base_salary_minor, 0), wage_count: rows.length - monthly.length };
+  return { monthly_count: monthly.length, monthly_minor: monthly.reduce((s, r) => s + (r.base_salary_minor ?? 0), 0), wage_count: rows.length - monthly.length };
 }
 
 // ---- Days ----

@@ -52,8 +52,9 @@ module Api
           if m.can?("app.admin")
             render json: Auth::SessionIssuer.issue(user: user, membership: m, app: "admin", request: request).merge(joined: true), status: :created
           else
+            where = m.can?("app.rider") && !m.can?("app.pos") ? "the rider app" : "the till" # a rider has no till
             render json: { joined: true, business: { id: m.business_id, name: m.business.name }, role: m.role.name, has_pin: m.pin_digest.present?,
-                           message: "You joined #{m.business.name} as #{m.role.name}. Sign in on the till with the PIN the owner gives you." }, status: :created
+                           message: "You joined #{m.business.name} as #{m.role.name}. Sign in on #{where} with the PIN the owner gives you." }, status: :created
           end
         end
       end
