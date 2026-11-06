@@ -4,12 +4,11 @@ module Api
     class KitchenController < BaseController
       before_action :require_kitchen!
 
-      # GET /kitchen/orders?station_id=&from=  active orders with their items for this station, from today's business
-      # day (or the given day) on; a pre-order keeps its place until it is due whatever day it was taken
+      # GET /kitchen/orders?station_id=&from=  active orders with their items for this station, from the previous
+      # business day (or the given day) on; a pre-order keeps its place until it is due whatever day it was taken
       def orders
-        from = params[:from].present? ? Date.parse(params[:from].to_s) : current_branch.business_day_for(Time.current)
-        scope = Order.includes(:dining_table, items: :modifiers).where(branch_id: current_branch.id).in_kitchen.due_in_kitchen
-                     .where("orders.business_day >= :from OR orders.scheduled_for IS NOT NULL", from: from).order(:placed_at)
+        from = params[:from].present? ? Date.parse(params[:from].to_s) : nil
+        scope = in_kitchen(from).includes(:dining_table, :customer, items: :modifiers).order(:placed_at)
         orders = scope.map do |o|
           items = o.items.reject(&:cancelled?)
           items = items.select { |i| i.station_id == params[:station_id] || (i.deal_components.any? { |c| c["station_id"] == params[:station_id] }) } if params[:station_id].present?
@@ -65,28 +64,39 @@ module Api
       end
 
       # GET /kitchen/ready  orders ready for pickup, for the token screen
-      # GET /kitchen/queue  customer queue display: orders being prepared and orders ready to collect
+      # GET /kitchen/queue  customer queue display: orders being prepared and orders ready to collect. Both show what
+      # the kitchen display shows (a pre-order only once it is due, nothing older than yesterday's business day), and
+      # nothing about the customer but the name the order was taken under.
       def queue
-        base = Order.where(branch_id: current_branch.id)
         row = ->(o) { { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type, guest_name: o.guest_name, status: o.status, placed_at: o.placed_at, ready_at: o.ready_at } }
-        render json: { preparing: base.where(status: %w[placed preparing]).order(:placed_at).limit(50).map(&row), ready: base.where(status: "ready").order(:ready_at).limit(50).map(&row), at: Time.current }
+        render json: { preparing: in_kitchen.where(status: %w[placed preparing]).order(:placed_at).limit(50).map(&row), ready: in_kitchen.where(status: "ready").order(:ready_at).limit(50).map(&row), at: Time.current }
       end
 
       def ready
-        orders = Order.where(branch_id: current_branch.id, status: "ready").order(:ready_at)
+        orders = in_kitchen.where(status: "ready").order(:ready_at)
         render json: { data: orders.map { |o| { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type, ready_at: o.ready_at } } }
       end
 
       private
 
-      # A device token alone opens the kitchen only for a device paired as a kitchen screen (and the ready list for a
-      # token screen). A till or tablet token names nobody, so on those the display needs the cashier signed in, with
-      # the kitchen permission (review of 6 Nov 2026, A8); the web sends the POS session when there is one.
+      # The kitchen's orders at this branch: in a kitchen state, from `from` on, by default the previous business day,
+      # so an order still being cooked when the day ends (02:01 by default) stays on the screens instead of dropping
+      # off mid-cook (final round, contracts#6), while one left unbumped days ago does not come back.
+      def in_kitchen(from = nil)
+        from ||= current_branch.business_day_for(Time.current) - 1
+        Order.where(branch_id: current_branch.id).in_kitchen.due_in_kitchen.where("orders.business_day >= :from OR orders.scheduled_for IS NOT NULL", from: from)
+      end
+
+      # A device token alone opens the kitchen only for a device paired as a kitchen screen. A till or tablet token
+      # names nobody, so on those the display needs the cashier signed in, with the kitchen permission (review of
+      # 6 Nov 2026, A8); the web sends the POS session when there is one. Screens that face the customers read what
+      # is being prepared and what is ready (no customer details) and never bump: a token screen, and a queue or token
+      # screen opened in a second window of a till or tablet whose cashier is not signed in there (final round,
+      # deploy#8: they stopped loading whenever the till locked).
       def require_kitchen!
         if current_device&.paired? && current_membership.nil?
           return if current_device.kind == "kitchen"
-          # A token or queue screen faces the customers: it reads what is ready and never bumps.
-          return if current_device.kind == "token_screen" && action_name.in?(%w[ready queue])
+          return if current_device.kind.in?(%w[token_screen till tablet]) && action_name.in?(%w[ready queue])
           raise Api::Errors::Forbidden.new("permission.denied", "This screen can only read the ready list") if current_device.kind == "token_screen"
           raise Api::Errors::Forbidden.new("session.required", "Sign in on the till to open the kitchen display") if current_device.kind.in?(%w[till tablet])
         end
