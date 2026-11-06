@@ -38,11 +38,19 @@ module Api
         render_page(rows, cursor) { |r| { id: r.id, device_id: r.device_id, record_type: r.record_type, record_id: r.record_id, code: r.code, message: r.message, payload: r.payload, resolved_at: r.resolved_at, resolution: r.resolution, created_at: r.created_at } }
       end
 
+      # POST /sync/rejections/:id/resolve. The admin's Needs attention resolves one row by its id. A till's Dismiss names
+      # the record it dropped (the id it holds for it): that record's open refusals from this till are resolved (K7).
       def resolve
         authenticate!
-        r = SyncRejection.where(branch_id: current_branch.id).find(params[:id])
-        r.update!(resolved_at: Time.current, resolved_by_membership_id: current_membership.id, resolution: params[:resolution].presence || "dismissed")
-        audit!("update", record: r, after: { resolved: true, resolution: r.resolution })
+        rows = if till_dismissal?
+          SyncRejection.open.where(branch_id: current_branch.id, device_id: current_device.id).where("sync_rejections.record_id::text = :id OR sync_rejections.id::text = :id", id: params[:id].to_s).to_a
+        else
+          [ SyncRejection.where(branch_id: current_branch.id).find(params[:id]) ]
+        end
+        rows.each do |r|
+          r.update!(resolved_at: Time.current, resolved_by_membership_id: current_membership.id, resolution: params[:resolution].presence || "dismissed")
+          audit!("update", record: r, after: { resolved: true, resolution: r.resolution })
+        end
         head :no_content
       end
 
@@ -66,6 +74,9 @@ module Api
         when "push"
           raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") unless till
           raise Api::Errors::Forbidden.new("session.required", "Sign in on the till to sync") unless current_membership || kiosk_claims_only?
+        when "resolve"
+          # The till's Attention page (OFFLINE_ORDERS) dismisses what this till sent; the admin needs a manager's permission.
+          require_permission!("settings.manage", "devices.manage", "reports.view_all", "reports.view_branch") unless till_dismissal?
         when "changes", "customers"
           return if till
           raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") if current_device&.paired? # a kitchen screen or rider phone
@@ -83,6 +94,12 @@ module Api
           raw = raw.to_unsafe_h.values if raw.respond_to?(:to_unsafe_h)
           Array(raw).map { |r| r.respond_to?(:to_unsafe_h) ? r.to_unsafe_h : r.to_h }
         end
+      end
+
+      # The same people the till's Attention page shows the list to (OFFLINE_ORDERS or settings.manage, as the session
+      # carries them), and only for what this till sent.
+      def till_dismissal?
+        current_device&.paired? && current_device.kind.in?(TILL_KINDS) && current_membership&.active? && (%w[OFFLINE_ORDERS settings.manage] & current_membership.permission_codes).any?
       end
 
       def kiosk_claims_only?

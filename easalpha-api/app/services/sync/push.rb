@@ -1,15 +1,18 @@
 module Sync
   # Applies a till's offline queue in order. Every record carries the UUID the device made; repeats are duplicates, never double writes.
-  # records: [{ type, id, membership_id?, approver_pin?, approval_codes?, payload }]
-  # The pushing session (actor) is the cashier signed in on the till; a record may name another member who signed in
-  # on this till before (A2). approver_pin is a manager PIN typed on the till for that record (A3): it is checked here
-  # and never stored. approval_codes are the permissions the till's dialog showed with it (R6): the PIN grants those.
+  # records: [{ signed, signed_by, sig, approver_pin?, approval_codes? }], signed being the JSON of { type, id, membership_id?,
+  # payload } (Sync::Signature); a till build from before the signatures sends { type, id, membership_id?, approver_pin?,
+  # approval_codes?, payload }. The pushing session (actor) is the cashier signed in on the till; a record may name
+  # another member when that member's sign-in on this till signed it (actor_for). approver_pin is a manager PIN typed on
+  # the till for that record (A3): it is checked here and never stored. approval_codes are the permissions the till's
+  # dialog showed with it (R6): the PIN grants those.
   class Push
     TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement meal_claim customer_payment].freeze
     CHARGE_KEYS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent].freeze
     # A refresh token this old says that person signed in on this till at some point; older than this and the till
     # itself would have lost the session long ago.
     SIGNED_IN_WITHIN = 60.days
+    UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
     def initialize(device:, branch:, actor:)
       @device, @branch, @actor = device, branch, actor
@@ -29,6 +32,7 @@ module Sync
       # The PIN leaves the record first: a rejection keeps the payload, the audit log keeps what was approved, neither keeps the PIN.
       pin = record.delete(:approver_pin).to_s
       codes = record.key?(:approval_codes) ? Array(record.delete(:approval_codes)).map(&:to_s) & Permission.codes : nil
+      record = open_signed(record)
       type, id, payload = record[:type].to_s, record[:id].to_s, (record[:payload] || {}).to_h.with_indifferent_access
       payload.delete(:approver_pin)
       payload.delete(:approval_codes)
@@ -42,6 +46,7 @@ module Sync
       end
       @approvals = approvals_for(pin, actor, codes)
       status = send("apply_#{type}", id, payload, actor)
+      resolve_rejections(type, id)
       { id: id, type: type, status: status }
     rescue Api::Errors::ApiError => e
       reject(record, batch, e.code, e.message, e.details)
@@ -57,17 +62,57 @@ module Sync
       payload[key].presence || raise(Api::Errors::BadRequest.new("sync.payload", "#{key} is required"))
     end
 
-    # Who made the record. The signed-in cashier by default; another member only if they signed in on this very till
-    # (a refresh token for that membership and device), and were active when the record was made.
+    # A signed record (Sync::Signature) is read from the bytes it signed: its type, id, membership_id and payload never
+    # come from beside them. The signature itself is checked by actor_for, and only when the record names another member.
+    def open_signed(record)
+      @signed = nil
+      return record unless record.key?(:signed)
+      body = record[:signed]
+      data = body.is_a?(String) ? JSON.parse(body) : nil
+      raise Api::Errors::BadRequest.new("sync.signed", "signed must be the record as JSON") unless data.is_a?(Hash)
+      @signed = { by: record[:signed_by].to_s, sig: record[:sig].to_s, body: body }
+      data.slice("type", "id", "membership_id", "payload").merge("signed_by" => @signed[:by]).with_indifferent_access
+    rescue JSON::ParserError
+      raise Api::Errors::BadRequest.new("sync.signed", "signed must be the record as JSON")
+    end
+
+    # Who made the record. The pushing session's own member when it names them or nobody, signed or not. Another member
+    # only through their signature: made with the key their PIN sign-in on this till was given, from a session still
+    # running at the record's time (its clamped client_created_at, or now when it carries none). So a member
+    # deactivated or signed out since keeps what they did before, and nothing dated after (sync-auth#0, #4).
     def actor_for(record)
-      return @actor if record[:membership_id].blank? || record[:membership_id] == @actor&.id
-      m = Membership.includes(:role, :user).find_by(id: record[:membership_id])
+      named = record[:membership_id].presence
+      return @actor if named.nil? || named == @actor&.id
+      @signed ? signed_actor(record, named) : unsigned_actor(record, named)
+    end
+
+    # The signing token must be that member's, from a sign-in on this till, and the member of this business and branch.
+    def signed_actor(record, named)
+      rt = @signed[:by].match?(UUID) ? RefreshToken.find_by(id: @signed[:by]) : nil
+      m = rt && Membership.includes(:role, :user).find_by(id: named) # tenant-scoped: another business's member is not found
+      unless m && Sync::Signature.matches?(rt.id, @signed[:body], @signed[:sig]) && rt.membership_id == m.id && rt.device_id == @device.id && rt.app == "pos" && m.branch_allowed?(@branch.id)
+        raise Api::Errors::Forbidden.new("actor.signature", "The record's signature is not from the staff member it names, on this till")
+      end
+      made = Sync::Signature.made_at(record[:payload]) || Time.current
+      return m if Sync::Signature.session_running_at?(rt.id, made)
+      raise Api::Errors::Forbidden.new("actor.session_ended", "#{m.user&.name || 'That staff member'} was no longer signed in on this till when this record was made")
+    end
+
+    # A record from a till build before the signatures. Until Signature::SUNSET it is taken under the old rule (that
+    # member signed in on this till within 60 days, and was active when it was made, by its clamped time) and logged;
+    # after it, only the member who made it can send it, signed in themselves.
+    def unsigned_actor(record, named)
+      if Time.current >= Sync::Signature::SUNSET
+        raise Api::Errors::Forbidden.new("actor.unsigned", "Only the staff member who made this record can send it now: ask them to sign in on this till, then Try again")
+      end
+      m = Membership.includes(:role, :user).find_by(id: named)
       return nil unless m && m.branch_allowed?(@branch.id) && signed_in_here?(m)
-      return m if m.active?
-      made_at = record.dig(:payload, :client_created_at).presence
-      m if m.deactivated_at && made_at && Time.iso8601(made_at.to_s) < m.deactivated_at
-    rescue ArgumentError
-      nil
+      unless m.active?
+        made = Sync::Signature.made_at(record[:payload])
+        return nil unless m.deactivated_at && made && made < m.deactivated_at
+      end
+      Rails.logger.warn("[sync.unsigned] #{record[:type]} #{record[:id]} names membership #{m.id}, pushed by #{@actor&.id || 'no session'} from device #{@device.id} (business #{@device.business_id})")
+      m
     end
 
     def signed_in_here?(membership)
@@ -95,10 +140,22 @@ module Sync
       @approvals[permission] || raise(Api::Errors.approval_required([ permission ], "A manager with #{permission} must approve this"))
     end
 
+    # One open refusal per till and record (K7): refused again (each Try again), the open row is brought up to date.
+    # The signature is not kept; the record is, as the till sent it.
     def reject(record, batch, code, message, details = nil)
-      SyncRejection.create!(branch_id: @branch.id, device_id: @device.id, sync_batch_id: batch.id, record_type: record[:type].to_s, record_id: (record[:id].to_s.presence || SecureRandom.uuid),
-                            code: code, message: message, payload: record.to_h)
+      key = { device_id: @device.id, record_type: record[:type].to_s, record_id: record[:id].to_s.match?(UUID) ? record[:id].to_s : SecureRandom.uuid }
+      attrs = { branch_id: @branch.id, sync_batch_id: batch.id, code: code, message: message, payload: record.to_h.except("sig") }
+      begin
+        SyncRejection.open.find_or_initialize_by(key).update!(attrs)
+      rescue ActiveRecord::RecordNotUnique # the same record refused by a push running alongside this one
+        SyncRejection.open.find_by!(key).update!(attrs)
+      end
       { id: record[:id], type: record[:type], status: "rejected", code: code, message: message, details: details }.compact
+    end
+
+    # A record that went through (accepted, or already here) settles its earlier refusals, from any push (K7).
+    def resolve_rejections(type, id)
+      SyncRejection.open.where(record_type: type, record_id: id).update_all(resolved_at: Time.current, resolution: "accepted", resolved_by_membership_id: @actor&.id, updated_at: Time.current)
     end
 
     def complete?(payload) = ActiveModel::Type::Boolean.new.cast(payload[:complete]) || payload[:status].to_s == "completed"

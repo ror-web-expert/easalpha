@@ -9,9 +9,10 @@ class RefreshToken < ApplicationRecord
   belongs_to :device, optional: true
   scope :valid, -> { where(revoked_at: nil).where("expires_at > ?", Time.current) }
 
-  def self.issue!(user:, membership: nil, device: nil, app: "admin", ttl: 30.days, user_agent: nil, ip: nil, raw: nil)
+  # session_root_id: the first token of the sign-in this one continues (set by rotate!); a sign-in's own token has none.
+  def self.issue!(user:, membership: nil, device: nil, app: "admin", ttl: 30.days, user_agent: nil, ip: nil, raw: nil, session_root_id: nil)
     raw ||= SecureRandom.urlsafe_base64(48)
-    create!(user: user, membership: membership, device: device, app: app, token_digest: digest(raw), expires_at: ttl.from_now, user_agent: user_agent, ip: ip)
+    create!(user: user, membership: membership, device: device, app: app, token_digest: digest(raw), expires_at: ttl.from_now, user_agent: user_agent, ip: ip, session_root_id: session_root_id)
     raw
   end
 
@@ -36,7 +37,7 @@ class RefreshToken < ApplicationRecord
       elsif rt.revoked_at.nil? && rt.expires_at > Time.current
         check&.call(rt)
         rt.revoke!
-        issue!(user: rt.user, membership: rt.membership, device: rt.device, app: rt.app, user_agent: user_agent, ip: ip, raw: successor)
+        issue!(user: rt.user, membership: rt.membership, device: rt.device, app: rt.app, user_agent: user_agent, ip: ip, raw: successor, session_root_id: rt.root_id)
         [ rt, successor ]
       elsif rt.revoked_at && rt.revoked_at > REPLAY_WINDOW.ago && valid.exists?(token_digest: digest(successor))
         check&.call(rt)
@@ -46,4 +47,10 @@ class RefreshToken < ApplicationRecord
   end
 
   def revoke! = update!(revoked_at: Time.current)
+
+  # The sign-in this token belongs to, through every rotation: its sync key is derived from this id (Sync::Signature).
+  def root_id = session_root_id || id
+
+  # Every token of the sign-in that began with root_id: the first one and each successor.
+  def self.session_of(root_id) = where(id: root_id).or(where(session_root_id: root_id))
 end
