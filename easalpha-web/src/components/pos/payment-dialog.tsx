@@ -56,7 +56,9 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const currency = catalog?.business.currency;
   const [tip, setTip] = useState(0);
   const [splits, setSplits] = useState<Split[]>([]);
-  const [draft, setDraft] = useState<{ method: PaymentMethod | null; amount: number; tendered: number; reference: string }>({ method: null, amount: 0, tendered: 0, reference: "" });
+  // amount and tendered are null until the cashier types them: the amount then follows what is due and the tender
+  // follows the amount, so a lower total, a split or a part payment never shows change nobody handed over (QA T1, K2).
+  const [draft, setDraft] = useState<{ method: PaymentMethod | null; amount: number | null; tendered: number | null; reference: string }>({ method: null, amount: null, tendered: null, reference: "" });
   // Khata only while the owner has customer accounts switched on (Settings, Modules); the API refuses it otherwise.
   const khataOn = moduleOn(useCatalogStore((s) => s.catalog?.business.settings), "customer_accounts");
   const active = useMemo(() => methods.filter((m) => m.active && (m.kind !== "khata" || khataOn)).sort((a, b) => a.sort_order - b.sort_order), [methods, khataOn]);
@@ -72,7 +74,13 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const due = Math.max(0, total - paidBefore);
   const paid = splits.reduce((s, x) => s + x.amount_minor, 0);
   const remaining = Math.max(0, due - paid);
-  const change = splits.reduce((s, x) => s + (x.method.kind === "cash" ? Math.max(0, x.tendered_minor - x.amount_minor) : 0), 0) + (draft.method?.kind === "cash" ? Math.max(0, draft.tendered - Math.min(draft.amount, remaining)) : 0);
+  const amountShown = draft.amount ?? remaining;
+  const draftAmount = Math.min(amountShown, remaining);
+  const isCash = draft.method?.kind === "cash";
+  const tenderedShown = draft.tendered ?? draftAmount;
+  // What the customer handed over for this part: what was typed, never less than the part; nothing typed is the part itself.
+  const tenderFor = (amt: number) => (draft.tendered == null ? amt : Math.max(draft.tendered, amt));
+  const change = splits.reduce((s, x) => s + (x.method.kind === "cash" ? Math.max(0, x.tendered_minor - x.amount_minor) : 0), 0) + (isCash ? Math.max(0, tenderedShown - draftAmount) : 0);
   // Read only when the dialog opens, so edits to the cart while it is open do not reset the splits.
   const latest = useRef({ settings, cart, status });
   latest.current = { settings, cart, status };
@@ -88,9 +96,11 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
     const code = defaultPaymentMethod(s, c);
     const usable = (m: PaymentMethod) => st !== "offline" || m.works_offline;
     const pre = (code ? active.find((m) => m.code === code && usable(m)) : undefined) ?? active.find((m) => m.kind === "cash" && usable(m)) ?? active.find(usable) ?? null;
-    setDraft({ method: pre, amount: 0, tendered: 0, reference: "" });
+    // Nothing typed yet: opened again on the same order, the amount and tender show what is due (they were blank, QA T13).
+    setDraft({ method: pre, amount: null, tendered: null, reference: "" });
   }, [open, active]);
-  useEffect(() => { setDraft((d) => ({ ...d, amount: remaining, tendered: d.method?.kind === "cash" ? Math.max(d.tendered, remaining) : 0 })); }, [remaining, draft.method?.kind]);
+  // A new amount due (a split taken, a coupon, a tip, the server's figure) puts the amount back on it; a typed tender stays.
+  useEffect(() => { setDraft((d) => (d.amount === null ? d : { ...d, amount: null })); }, [remaining]);
   // A customer that came with a saved order (a table, a resumed or reopened order) has no account figures on the cart;
   // fetch them once Khata is picked, so the account line can say what they owe and their limit.
   const accountId = draft.method?.kind === "khata" && cart.customer && cart.customer.balance_minor === undefined ? cart.customer.id : null;
@@ -105,40 +115,46 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
     return () => { live = false; };
   }, [open, accountId, online]);
 
-  const pick = (m: PaymentMethod) => setDraft({ method: m, amount: remaining, tendered: m.kind === "cash" ? remaining : 0, reference: "" });
+  const pick = (m: PaymentMethod) => setDraft({ method: m, amount: null, tendered: null, reference: "" });
   const offlineBlocked = status === "offline" && draft.method && !draft.method.works_offline;
   const khataBlocked = draft.method?.kind === "khata" && !cart.customer;
   const needsRef = !!draft.method?.needs_reference && !draft.reference.trim();
-  const draftAmount = Math.min(draft.amount, remaining);
   // Offline the server cannot refuse a sale over the credit limit, and the replay rejects it with the order already
   // created and the sale lost (review item 4): the till refuses it here, from the saved balance and limit. Online the
   // server decides, with the live balance.
   const khataOverOffline = status === "offline" && draft.method?.kind === "khata" && !!cart.customer && accountSummary(cart.customer, draftAmount).over;
-  const partial = remaining > 0 && draft.amount > 0 && draft.amount < remaining;
+  const partial = remaining > 0 && amountShown > 0 && amountShown < remaining;
   const addSplit = () => {
     if (!draft.method) return;
-    const amt = Math.min(draft.amount, remaining);
+    const amt = draftAmount;
     if (amt <= 0) return;
-    setSplits([...splits, { method: draft.method, amount_minor: amt, tendered_minor: draft.method.kind === "cash" ? Math.max(draft.tendered, amt) : 0, reference: draft.reference }]);
+    setSplits([...splits, { method: draft.method, amount_minor: amt, tendered_minor: isCash ? tenderFor(amt) : 0, reference: draft.reference }]);
+    // The tender typed for this part went with it; the next part starts from its own amount.
+    setDraft((d) => ({ ...d, tendered: null }));
   };
   const toInputs = (list: Split[]): PaymentInput[] => list.map((s) => ({ method_code: s.method.code, amount_minor: s.amount_minor, tendered_minor: s.method.kind === "cash" ? s.tendered_minor : undefined, reference: s.reference || undefined }));
   const payAll = async () => {
     let list = splits;
-    if (remaining > 0 && draft.method && draft.amount > 0) list = [...splits, { method: draft.method, amount_minor: draftAmount, tendered_minor: draft.method.kind === "cash" ? Math.max(draft.tendered, draftAmount) : 0, reference: draft.reference }];
+    if (remaining > 0 && draft.method && amountShown > 0) list = [...splits, { method: draft.method, amount_minor: draftAmount, tendered_minor: isCash ? tenderFor(draftAmount) : 0, reference: draft.reference }];
     const sum = list.reduce((s, x) => s + x.amount_minor, 0);
-    if (sum <= 0 && !(cart.is_staff_meal && total === 0)) return;
+    // No payments with nothing due: the page completes the order instead (a staff meal, or one already paid in full).
+    if (sum <= 0 && !(cart.is_staff_meal && total === 0) && !settled) return;
     await onPay(toInputs(list), tip, due);
   };
   // The exact amount first, then what a customer can hand over in notes (Rs 50, 100, 500, 1,000, 5,000).
   const quick = cashSuggestions(remaining, currency ?? "PKR");
-  const draftOk = !!draft.method && remaining > 0 && draft.amount > 0 && !needsRef && !khataBlocked && !offlineBlocked && !khataOverOffline && (draft.method.kind !== "cash" || draft.tendered >= draftAmount);
-  const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0);
-  const payLabel = remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
+  const draftOk = !!draft.method && remaining > 0 && amountShown > 0 && !needsRef && !khataBlocked && !offlineBlocked && !khataOverOffline && (!isCash || tenderedShown >= draftAmount);
+  // A reopened order whose new total is covered by what was paid has nothing left to take: Complete closes it (QA T5,
+  // Pay sat disabled at Rs 0). What was paid above the total goes back first, through Refund overpaid on Orders.
+  const settled = !cart.is_staff_meal && paidBefore > 0 && due === 0 && !splits.length;
+  const overpaidMinor = settled ? Math.max(0, paidBefore - total) : 0;
+  const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0) || settled;
+  const payLabel = settled ? "Complete order" : remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
   // Charges cannot change once money has been taken against the order; the total they feed is already partly settled.
   const chargesLocked = !onCharges || paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
   // SPEC discounts: the same lock, and the lines by kind for the totals block.
   const discountsLocked = paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
-  const discountLines = discountRows(cart.discounts, base.discount_minor);
+  const discountLines = discountRows(cart.discounts, base.discount_minor, (id) => cart.lines.find((l) => l.id === id)?.name);
 
   return (
     // Reviews 3.1 and 3.2: a fixed height that always fits the screen (1024 x 768 included). Only the method column
@@ -164,10 +180,10 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
           {draft.method ? (
             <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center justify-between"><span className="font-semibold">{draft.method.name}</span><span className="text-sm text-fg-secondary">{titleCase(draft.method.kind)}</span></div>
-              <Field label="Amount" hint={partial ? `Part payment: ${formatMoney(remaining - draftAmount, currency)} stays due and the order stays open as Pending.` : undefined}><MoneyInput value={draft.amount} onChange={(v) => setDraft({ ...draft, amount: v })} className="h-12 text-lg" /></Field>
+              <Field label="Amount" hint={partial ? `Part payment: ${formatMoney(remaining - draftAmount, currency)} stays due and the order stays open as Pending.` : undefined}><MoneyInput value={amountShown} onChange={(v) => setDraft({ ...draft, amount: v })} className="h-12 text-lg" /></Field>
               {draft.method.kind === "cash" ? (
                 <>
-                  <Field label="Tendered"><MoneyInput value={draft.tendered} onChange={(v) => setDraft({ ...draft, tendered: v })} className="h-12 text-lg" /></Field>
+                  <Field label="Tendered"><MoneyInput value={tenderedShown} onChange={(v) => setDraft({ ...draft, tendered: v })} className="h-12 text-lg" /></Field>
                   <div className="flex flex-wrap gap-2">{quick.map((v) => <button key={v} onClick={() => setDraft({ ...draft, tendered: v })} className="min-h-11 rounded-lg border bg-card px-3 text-sm font-medium hover:bg-muted">{formatMoney(v, currency)}</button>)}</div>
                 </>
               ) : null}
@@ -197,7 +213,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
                 );
               })() : null}
               {offlineBlocked ? <p className="text-sm text-danger">{draft.method.name} needs the internet. Use cash or khata while offline.</p> : null}
-              {partial ? <Button variant="secondary" className="w-full" size="lg" onClick={addSplit} disabled={needsRef || khataBlocked || !!offlineBlocked || khataOverOffline || draft.amount <= 0}>Add {formatMoney(draftAmount, currency)} and split the rest</Button> : null}
+              {partial ? <Button variant="secondary" className="w-full" size="lg" onClick={addSplit} disabled={needsRef || khataBlocked || !!offlineBlocked || khataOverOffline || amountShown <= 0}>Add {formatMoney(draftAmount, currency)} and split the rest</Button> : null}
             </div>
           ) : null}
           {!chargesLocked ? (
@@ -216,6 +232,11 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
         <div className="flex min-h-0 flex-col rounded-lg bg-muted p-4">
           <div className="text-sm text-fg-secondary">{paidBefore ? "Amount due" : "Total due"}</div>
           <div className="text-4xl font-bold tabular">{formatMoney(due, currency)}</div>
+          {settled ? (
+            <p className={cn("mt-2 text-sm", overpaidMinor ? "text-warning-ink" : "text-fg-secondary")}>
+              {overpaidMinor ? `${formatMoney(overpaidMinor, currency)} was paid above the new total. Refund it first (Orders, Refund overpaid), then complete the order.` : "Paid in full. Complete the order to close it."}
+            </p>
+          ) : null}
           {change > 0 ? <div className="mt-3 rounded-md bg-success-soft p-3 text-success-ink"><div className="text-sm font-medium">Change</div><div className="text-4xl font-bold tabular">{formatMoney(change, currency)}</div></div> : null}
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <ul className="mb-2 hidden space-y-1.5 border-b pb-2 text-sm md:block" aria-label="Items">
