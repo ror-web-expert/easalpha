@@ -5,6 +5,8 @@ module Stock
 
     def enabled? = InventorySetting.current.deduct_stock_on_sale
 
+    # `packaging: false` (a re-deduct after an edit) leaves the order-level packaging rules alone, since the order was
+    # already charged for them; a line's own consumables always go with the line, at its current quantity.
     def deduct!(order, items: nil, actor: nil, packaging: true)
       return record!(order, "skipped", detail: { reason: "deduct_stock_on_sale is off" }) unless enabled?
       if items
@@ -20,7 +22,7 @@ module Stock
       StockLedgerEntry.transaction do
         items.each do |item|
           # SPEC Order Inventory: consumables set per order type and variant on the product, charged with the sale.
-          if item.product_id && packaging
+          if item.product_id
             OrderTypeConsumable.for_line(product_id: item.product_id, variant_id: item.variant_id, order_type: order.order_type).each do |c|
               next if already.include?([ item.id, c.stock_item_id, section_default.id, "packaging" ])
               r = Ledger.apply!(section: section_default, item: c.stock_item, kind: "packaging", quantity: -(c.base_quantity * item.quantity), actor: actor, ref: order, ref_line_id: item.id,
@@ -50,15 +52,18 @@ module Stock
             entries << r.entry
           end
         end
-        if entries.any?
-          order.update_columns(stock_deducted_at: Time.current)
-          Finance::Journal.stock_entries!(entries, ref: order, description: "Cost of goods #{order.label}", business_day: order.business_day)
-        end
+        Finance::Journal.stock_entries!(entries, ref: order, description: "Cost of goods #{order.label}", business_day: order.business_day) if entries.any?
       end
+      # The stamp means "checked", not "moved": an order whose products have no recipe is done too, so the safety net
+      # stops picking it up. Only a failure (below) and deduction being off leave the stamp empty.
+      order.update_columns(stock_deducted_at: Time.current)
       status = missing.empty? ? "ok" : (entries.empty? ? "missing" : "partial")
       record!(order, status, entries: entries, detail: { missing: missing, entries: entries.size })
     rescue StandardError => e
       Rails.logger.error("[stock] deduction failed for order #{order.id}: #{e.class} #{e.message}")
+      # A failed re-deduct of an edited order must not keep the stamp from its first deduction: the safety net retries
+      # and deduct! skips whatever already moved.
+      order.update_columns(stock_deducted_at: nil) if order.stock_deducted_at
       record!(order, "error", detail: { error: e.message })
     end
 
@@ -138,7 +143,11 @@ module Stock
       recipe && (recipe.unit_cost_minor * item.quantity).round
     end
 
+    # One audit row per outcome: a sweep that finds the same thing again (no recipe, the same error) returns the
+    # row it already wrote instead of adding one every ten minutes.
     def record!(order, status, entries: [], detail: {})
+      last = DeductionAudit.where(order_id: order.id).order(checked_at: :desc).first
+      return last if last && entries.empty? && last.status == status && last.ledger_entry_ids.empty? && last.detail == detail.as_json
       DeductionAudit.create!(order: order, status: status, ledger_entry_ids: entries.map(&:id), detail: detail, checked_at: Time.current)
     end
   end

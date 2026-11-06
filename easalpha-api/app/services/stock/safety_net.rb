@@ -6,10 +6,10 @@ module Stock
     LOOKBACK = 14.days
     module_function
 
-    # Completed orders of this business with no stock movement yet.
+    # Completed orders of this business not yet checked. An order with some movement already (a re-deduct after an
+    # edit that failed half way) is a candidate too: deduct! skips every row that exists, so a retry never doubles.
     def candidates
       Order.where(status: %w[paid closed]).where(stock_deducted_at: nil).where("orders.business_day >= ?", (Date.current - LOOKBACK))
-           .where.not(id: StockLedgerEntry.where(ref_table: "orders", kind: %w[sale packaging]).select(:ref_id))
     end
 
     def sweep!(trigger: "job", by: nil)

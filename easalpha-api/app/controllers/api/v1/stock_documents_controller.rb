@@ -9,7 +9,11 @@ module Api
       # GET /stock_documents?kind=&status=&from=&to=&section_id=
       def index
         require_permission!("stock.view", "stock.actions", "stock.waste", "stock.count")
-        scope = StockDocument.includes(:lines).where(branch_id: current_branch.id).order(created_at: :desc)
+        # A document belongs to the branch that wrote it, but a transfer is also listed at the branch it is going to,
+        # so the receiving side sees what is in transit and can receive it.
+        mine = StockDocument.where(branch_id: current_branch.id)
+        addressed = StockDocument.where(to_section_id: StockSection.where(branch_id: current_branch.id).select(:id))
+        scope = StockDocument.includes(:lines).merge(mine.or(addressed)).order(created_at: :desc)
         scope = scope.where(kind: params[:kind]) if params[:kind].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.where(business_day: Date.parse(params[:from])..) if params[:from].present?
@@ -76,9 +80,10 @@ module Api
 
       def cancel
         doc = StockDocument.find(params[:id])
-        approver = doc.posted? ? require_approval!("stock.actions") : current_membership
+        # Stock has moved for a posted document and for a transfer in transit: both need a manager to undo.
+        approver = doc.posted? || doc.in_transit? ? require_approval!("stock.actions") : current_membership
         Stock::Posting.cancel!(doc, actor: current_membership, reason: params[:reason])
-        audit!("stock_cancel", record: doc, approved_by: approver&.user) if doc.posted? || true
+        audit!("stock_cancel", record: doc, approved_by: approver&.user)
         render json: StockSerializers.document(doc.reload, full: true)
       end
 

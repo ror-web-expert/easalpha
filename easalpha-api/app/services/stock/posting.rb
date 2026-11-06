@@ -59,8 +59,11 @@ module Stock
             Ledger.apply!(section: doc.from_section, item: item, kind: "adjustment", quantity: qty, actor: actor, ref: doc, business_day: day, reason: doc.reason, unit_cost: qty.positive? ? line.base_unit_cost : nil,
                           allow_negative: allow_negative || qty.positive?)
           when "count"
-            level = StockLevel.find_by(stock_section_id: doc.from_section_id, stock_item_id: item.id)
-            expected = level&.quantity || 0
+            # The level row is locked so a sale cannot land between reading "expected" and writing the difference. A
+            # count posted for an earlier day compares against the level as it stood at the end of that day, read from
+            # the ledger (the level row only holds today's figure); the difference still lands on the level now.
+            level = StockLevel.lock.find_or_create_by!(stock_section_id: doc.from_section_id, stock_item_id: item.id)
+            expected = day < today ? StockLedgerEntry.where(stock_section_id: level.stock_section_id, stock_item_id: item.id).where("business_day <= ?", day).sum(:quantity) : level.quantity
             line.update_columns(expected_qty: expected)
             delta = qty - expected
             Ledger.apply!(section: doc.from_section, item: item, kind: "count", quantity: delta, actor: actor, ref: doc, business_day: day, reason: "stock count", allow_negative: true) unless delta.zero?
@@ -115,13 +118,15 @@ module Stock
       doc
     end
 
-    # Cancelling a posted document inserts reversing ledger rows; a draft is simply marked cancelled.
+    # Cancelling a posted document inserts reversing ledger rows; a draft is simply marked cancelled. A transfer in
+    # transit has already left its source (dispatch! wrote the transfer_out rows), so those come back too.
     def cancel!(doc, actor:, reason: nil)
       raise Api::Errors::Conflict.new("stock.document_status", "Document is already voided") if doc.voided?
       settings = InventorySetting.current
-      raise Api::Errors::Conflict.new("stock.day_locked", "Stock is locked up to #{settings.day_lock_date}") if doc.posted? && settings.locked?(doc.business_day)
+      moved = doc.posted? || doc.in_transit?
+      raise Api::Errors::Conflict.new("stock.day_locked", "Stock is locked up to #{settings.day_lock_date}") if moved && settings.locked?(doc.business_day)
       StockDocument.transaction do
-        if doc.posted?
+        if moved
           StockLedgerEntry.where(ref_table: "stock_documents", ref_id: doc.id, reversed_by_entry_id: nil, reverses_entry_id: nil).order(:created_at).each { |e| Ledger.reverse!(e, actor: actor, reason: reason || "voided #{doc.label}") }
         end
         doc.update!(status: "voided", cancelled_at: Time.current) # SPEC: Voided
