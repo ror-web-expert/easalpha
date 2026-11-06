@@ -15,19 +15,23 @@ module Finance
       { business_day: day, rows: rows, by_kind: by_kind, by_account: by_account, in_minor: entries.where("amount_minor > 0").sum(:amount_minor), out_minor: entries.where("amount_minor < 0").sum(:amount_minor) }
     end
 
-    # Paid orders versus what the account ledger recorded for the day, by payment method and in total.
+    # Paid orders versus what the account ledger recorded for the day, by payment method and in total. Sales and
+    # refunds on account (any khata-kind method) move no money account, so neither is expected in the ledger.
     def reconciliation(branch:, day:)
       payments = Payment.where(branch_id: branch.id, business_day: day, status: "captured")
       by_method = payments.group(:method_code).sum(:amount_minor)
       posted = AccountEntry.where(branch_id: branch.id, business_day: day, kind: "order_payment").sum(:amount_minor)
-      refunds = Refund.where(branch_id: branch.id, business_day: day).sum(:amount_minor)
+      refunds = Refund.where(branch_id: branch.id, business_day: day)
+      khata_refunds = refunds.by_method_kind("khata").sum(:amount_minor)
+      refunds = refunds.sum(:amount_minor)
       posted_refunds = -AccountEntry.where(branch_id: branch.id, business_day: day, kind: "refund").sum(:amount_minor)
-      khata = by_method["khata"] || 0
+      khata = payments.by_method_kind("khata").sum(:amount_minor)
       expected = payments.sum(:amount_minor) - khata
+      expected_refunds = refunds - khata_refunds
       paid_orders = Order.where(branch_id: branch.id, business_day: day, status: %w[paid closed refunded])
       { business_day: day, paid_orders: paid_orders.count, sales_minor: paid_orders.sum(:total_minor), payments_minor: payments.sum(:amount_minor), by_method: by_method, khata_minor: khata,
-        expected_posted_minor: expected, posted_minor: posted, difference_minor: posted - expected, refunds_minor: refunds, posted_refunds_minor: posted_refunds, refund_difference_minor: posted_refunds - refunds,
-        balanced: (posted - expected).zero? && (posted_refunds - refunds).zero? }
+        expected_posted_minor: expected, posted_minor: posted, difference_minor: posted - expected, refunds_minor: refunds, khata_refunds_minor: khata_refunds, posted_refunds_minor: posted_refunds,
+        refund_difference_minor: posted_refunds - expected_refunds, balanced: (posted - expected).zero? && (posted_refunds - expected_refunds).zero? }
     end
 
     # Integrity: every paid order fully paid, every captured payment posted once, no unreversed negative drawer, ledger rows never edited.

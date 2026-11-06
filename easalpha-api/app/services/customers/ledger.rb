@@ -94,9 +94,10 @@ module Customers
     end
 
     # The rows behind each kind of entry, for some customers (nil: all). The entries and the SQL sums share them, so
-    # both count the same rows. A refund belongs to the customer on its order.
-    def khata_payments(ids) = only(Payment.where(method_code: "khata", status: "captured"), :customer_id, ids)
-    def khata_refunds(ids) = only(Refund.joins(:payment_method, :order).where(payment_methods: { kind: "khata" }), "orders.customer_id", ids)
+    # both count the same rows. A refund belongs to the customer on its order. Charges and refunds go by the method's
+    # kind, as the till and Payments::Processor do: a second khata method's sales are on the account too.
+    def khata_payments(ids) = only(Payment.by_method_kind("khata").where(status: "captured"), :customer_id, ids)
+    def khata_refunds(ids) = only(Refund.by_method_kind("khata").joins(:order), "orders.customer_id", ids)
     def account_payments(ids) = only(CustomerPayment.all, :customer_id, ids)
     def account_adjustments(ids) = only(CustomerAdjustment.all, :customer_id, ids)
     def only(scope, column, ids) = ids ? scope.where(column => ids) : scope

@@ -22,7 +22,7 @@ module Shifts
         voids: { count: Void.joins(:order).where(orders: { shift_id: shift.id }).count, amount_minor: Void.joins(:order).where(orders: { shift_id: shift.id }).sum(:amount_minor) },
         discounts: { count: DiscountApplied.joins(:order).where(orders: { shift_id: shift.id }).count, amount_minor: paid_orders.sum(:discount_minor) },
         cash: cash.merge(expected_minor: shift.closed_at ? shift.expected_cash_minor : cash[:expected_minor], counted_minor: shift.counted_cash_minor, over_short_minor: shift.over_short_minor),
-        khata: { collected_minor: CustomerPayment.where(shift_id: shift.id, direction: "received").sum(:amount_minor), on_account_minor: payments.where(method_code: "khata").sum(:amount_minor) },
+        khata: { collected_minor: CustomerPayment.where(shift_id: shift.id, direction: "received").sum(:amount_minor), on_account_minor: payments.by_method_kind("khata").sum(:amount_minor) },
         movements: shift.cash_movements.order(:occurred_at).map { |m| { kind: m.kind, amount_minor: m.amount_minor, reason: m.reason, at: m.occurred_at } }
       }
     end

@@ -24,7 +24,7 @@ module Reports
                   share_percent: sales.zero? ? 0 : (unpaid_amount(unpaid) * 100.0 / sales).round(1) },
         complimentary: { count: complimentary.count, amount_minor: complimentary.sum(:subtotal_minor), share_percent: sales.zero? ? 0 : (complimentary.sum(:subtotal_minor) * 100.0 / sales).round(1) },
         account_receipts: { count: account_receipts.count, amount_minor: account_receipts.sum(:amount_minor), by_method: account_receipts.joins(:payment_method).group("payment_methods.code").sum(:amount_minor) },
-        on_account_minor: payments.where(method_code: "khata").sum(:amount_minor) }
+        on_account_minor: payments.by_method_kind("khata").sum(:amount_minor) }
     end
 
     def unpaid_amount(scope) = scope.sum("total_minor - paid_minor").to_i

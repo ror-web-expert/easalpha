@@ -61,7 +61,7 @@ module Orders
     # the rounded right total, so the corrected total is rounded the same way rather than keeping the old rounding.
     def reround!(order)
       step = order.business.setting("cash_rounding").to_i * 100
-      return unless step.positive? && order.payments.any? { |p| p.status == "captured" && p.method_code == "cash" }
+      return unless step.positive? && order.payments.any? { |p| p.status == "captured" && p.payment_method.cash? }
       order.cash_rounding_minor = 0
       Pricing.recalculate!(order)
       order.cash_rounding_minor = Rounding.round(order.total_minor, step) - order.total_minor

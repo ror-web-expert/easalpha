@@ -1,5 +1,6 @@
 class CustomerPayment < ApplicationRecord
   include Tenanted
+  include MethodKind
   belongs_to :customer
   belongs_to :payment_method, optional: true
   belongs_to :payment_account, optional: true

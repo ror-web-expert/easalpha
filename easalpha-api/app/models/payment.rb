@@ -1,5 +1,6 @@
 class Payment < ApplicationRecord
   include Tenanted
+  include MethodKind
   belongs_to :order
   belongs_to :received_by, class_name: "Membership", foreign_key: :received_by_membership_id, optional: true
   belongs_to :payment_method
