@@ -39,11 +39,13 @@ module Api
       end
 
       # POST /sync/rejections/:id/resolve. The admin's Needs attention resolves one row by its id. A till's Dismiss names
-      # the record it dropped (the id it holds for it): that record's open refusals from this till are resolved (K7).
+      # the record it dropped (the id it holds for it): that record's open refusals from this till are resolved (K7), all
+      # of them for whoever sees the whole Attention list there, a member's own records for anyone else (QA K8).
       def resolve
         authenticate!
         rows = if till_dismissal?
-          SyncRejection.open.where(branch_id: current_branch.id, device_id: current_device.id).where("sync_rejections.record_id::text = :id OR sync_rejections.id::text = :id", id: params[:id].to_s).to_a
+          SyncRejection.open.where(branch_id: current_branch.id, device_id: current_device.id).where("sync_rejections.record_id::text = :id OR sync_rejections.id::text = :id", id: params[:id].to_s)
+                       .select { |r| sees_whole_attention_list? || r.payload["membership_id"] == current_membership.id }
         else
           [ SyncRejection.where(branch_id: current_branch.id).find(params[:id]) ]
         end
@@ -75,7 +77,7 @@ module Api
           raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") unless till
           raise Api::Errors::Forbidden.new("session.required", "Sign in on the till to sync") unless current_membership || kiosk_claims_only?
         when "resolve"
-          # The till's Attention page (OFFLINE_ORDERS) dismisses what this till sent; the admin needs a manager's permission.
+          # The till's Attention page dismisses what this till sent; the admin needs a manager's permission.
           require_permission!("settings.manage", "devices.manage", "reports.view_all", "reports.view_branch") unless till_dismissal?
         when "changes", "customers"
           return if till
@@ -96,11 +98,13 @@ module Api
         end
       end
 
-      # The same people the till's Attention page shows the list to (OFFLINE_ORDERS or settings.manage, as the session
-      # carries them), and only for what this till sent.
+      # A Dismiss on a till, by the member signed in on it: only what this till sent is resolved.
       def till_dismissal?
-        current_device&.paired? && current_device.kind.in?(TILL_KINDS) && current_membership&.active? && (%w[OFFLINE_ORDERS settings.manage] & current_membership.permission_codes).any?
+        current_device&.paired? && current_device.kind.in?(TILL_KINDS) && current_membership&.active?
       end
+
+      # As the till's Attention page decides it: OFFLINE_ORDERS or settings.manage, as the session carries them.
+      def sees_whole_attention_list? = (%w[OFFLINE_ORDERS settings.manage] & current_membership.permission_codes).any?
 
       def kiosk_claims_only?
         current_device.kind == "kiosk" && push_records.all? { |r| r.with_indifferent_access[:type].to_s == "meal_claim" }

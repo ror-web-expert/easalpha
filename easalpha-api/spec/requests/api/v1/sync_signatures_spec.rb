@@ -188,6 +188,15 @@ RSpec.describe "Sync push: signed records", type: :request do
       end
     end
 
+    it "never touches a kiosk's meal claim, which names nobody and has no session to sign with: its device pushes it after the sunset too" do
+      kiosk = within(biz) { Device.create!(branch: Branch.first, name: "Kiosk", kind: "kiosk", paired_at: Time.current, code: "K1") }
+      travel_to(Sync::Signature::SUNSET + 1.day) do
+        push([ { type: "meal_claim", id: SecureRandom.uuid, payload: { fingerprint_id: "FP-404", client_created_at: Time.current.iso8601 } } ], headers: device_headers(kiosk))
+        expect(response).to have_http_status(:ok), response.body
+        expect(result).to include(status: "rejected", code: "canteen.unknown_worker") # judged by the canteen, not as actor.unsigned
+      end
+    end
+
     it "is refused as actor.unsigned from the sunset on, while the cashier's own unsigned records still go through" do
       travel_to(Sync::Signature::SUNSET + 1.day) do
         within(biz) { RefreshToken.issue!(user: manager.user, membership: manager, device: device, app: "pos") }
@@ -228,19 +237,27 @@ RSpec.describe "Sync push: signed records", type: :request do
       expect(json[:data].map { |r| r[:resolution] }).to eq([ "accepted" ])
     end
 
-    it "is resolved by the till's Dismiss, by the record's id, for this till's refusals only and with the Attention page's permission" do
+    # The till's Attention page lists every record for OFFLINE_ORDERS (or settings.manage), and to anyone else the
+    # records they made (QA K8): the server resolves the same.
+    it "is resolved by the till's Dismiss, by the record's id: this till's only, anyone's for the whole list's permission, one's own otherwise" do
       void = waiter_void
-      push([ void ], headers: as_waiter)
+      second = waiter_void
+      push([ void, second ], headers: as_waiter)
       other = within(biz) { SyncRejection.create!(branch_id: Branch.first.id, device_id: till2.id, record_type: "void", record_id: void[:id], code: "x", message: "elsewhere") }
-      api_post "/api/v1/sync/rejections/#{void[:id]}/resolve", { resolution: "dismissed" }, headers: pos # a cashier cannot open Attention
-      expect(response).to have_http_status(:forbidden)
-      api_post "/api/v1/sync/rejections/#{void[:id]}/resolve", { resolution: "dismissed" }, headers: auth_headers(manager, app: "pos", device: device)
+      dismiss = ->(record, member) { api_post "/api/v1/sync/rejections/#{record[:id]}/resolve", { resolution: "dismissed" }, headers: auth_headers(member, app: "pos", device: device) }
+      api_post "/api/v1/sync/rejections/#{void[:id]}/resolve", { resolution: "dismissed" }, headers: device_headers(device)
+      expect(response).to have_http_status(:unauthorized) # a locked till names nobody
+      dismiss.call(void, cashier) # not hers, and she sees only her own
+      expect(response).to have_http_status(:no_content)
+      expect(within(biz) { SyncRejection.open.where(device_id: device.id).count }).to eq(2)
+      dismiss.call(void, waiter) # his own
+      dismiss.call(second, manager) # anyone's
       expect(response).to have_http_status(:no_content)
       within(biz) do
-        expect(SyncRejection.find_by!(device_id: device.id)).to have_attributes(resolution: "dismissed", resolved_by_membership_id: manager.id)
+        expect(SyncRejection.where(device_id: device.id).pluck(:resolution, :resolved_by_membership_id)).to contain_exactly([ "dismissed", waiter.id ], [ "dismissed", manager.id ])
         expect(other.reload.resolved_at).to be_nil
       end
-      api_post "/api/v1/sync/rejections/#{void[:id]}/resolve", { resolution: "dismissed" }, headers: auth_headers(manager, app: "pos", device: device)
+      dismiss.call(void, manager)
       expect(response).to have_http_status(:no_content) # nothing left open: the till may send it again
     end
 
