@@ -62,6 +62,11 @@ export function readRecentCustomers(storage: Pick<Storage, "getItem"> | null = t
   } catch { return []; }
 }
 
+/** Forgets the list (unpair, clear till data), so the next pairing or business starts with no one's customers. */
+export function clearRecentCustomers(storage: Pick<Storage, "removeItem"> | null = typeof localStorage === "undefined" ? null : localStorage) {
+  try { storage?.removeItem(RECENT_KEY); } catch {}
+}
+
 /** Puts the customer at the top of the recent list (dropping an older entry for the same person) and returns the new list. */
 export function rememberRecentCustomer(c: Customer | RecentCustomer, storage: Pick<Storage, "getItem" | "setItem"> | null = typeof localStorage === "undefined" ? null : localStorage): RecentCustomer[] {
   const entry: RecentCustomer = { id: c.id, name: c.name, phone: c.phone ?? null, khata_no: c.khata_no ?? null, room: c.room ?? null, member_no: c.member_no ?? null, balance_minor: c.balance_minor ?? 0, orders_count: c.orders_count ?? 0, last_order_at: c.last_order_at ?? null, status: c.status ?? "active" };

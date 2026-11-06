@@ -130,6 +130,21 @@ export function row(left: string, right: string, width: number, bold = false): P
 const text = (t: string, extra: Partial<Extract<PrintLine, { text: string }>> = {}): PrintLine => ({ text: t, ...extra });
 const center = (t: string, extra: Partial<Extract<PrintLine, { text: string }>> = {}): PrintLine => ({ text: t, align: "center", ...extra });
 
+/** The store block at the top of every printout: name, legal name, branch, address, phones, email, registrations and the header. */
+function storeBlock(r: Pick<Receipt, "business" | "branch"> & { header?: string | null }, width: number, secondaryPhone: string | null): PrintLine[] {
+  const lines: PrintLine[] = [];
+  const centred = (t: string | null | undefined, extra: Partial<Extract<PrintLine, { text: string }>> = {}) => { if (t) lines.push(...wrap(t, width).map((x) => center(x, extra))); };
+  lines.push(center(r.business?.name ?? "", { bold: true, size: 2 }));
+  if (r.business?.legal_name && r.business.legal_name !== r.business.name) centred(r.business.legal_name);
+  if (r.branch?.name) centred(r.branch.name);
+  if (r.branch?.address) centred(`${r.branch.address}${r.branch.city ? `, ${r.branch.city}` : ""}`);
+  centred(phoneLine(r.branch?.phone ?? r.business?.phone ?? null, secondaryPhone));
+  if (r.business?.email) centred(r.business.email);
+  for (const reg of registrationLines(r.branch?.tax_registration)) centred(reg);
+  centred(r.header);
+  return lines;
+}
+
 // ---- Receipt ----
 /**
  * The receipt as receipt printers lay it out the world over (and as the on-screen ReceiptView shows it): store block,
@@ -144,17 +159,7 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   const lines: PrintLine[] = [];
   const centred = (t: string | null | undefined, extra: Partial<Extract<PrintLine, { text: string }>> = {}) => { if (t) lines.push(...wrap(t, width).map((x) => center(x, extra))); };
   if (r.duplicate) lines.push(center("DUPLICATE", { bold: true }));
-  // Store block
-  lines.push(center(r.business?.name ?? "", { bold: true, size: 2 }));
-  if (r.business?.legal_name && r.business.legal_name !== r.business.name) centred(r.business.legal_name);
-  if (r.branch?.name) centred(r.branch.name);
-  if (r.branch?.address) centred(`${r.branch.address}${r.branch.city ? `, ${r.branch.city}` : ""}`);
-  const primary = r.branch?.phone ?? r.business?.phone ?? null;
-  centred(phoneLine(primary, rs.secondaryPhone));
-  if (r.business?.email) centred(r.business.email);
-  for (const reg of registrationLines(r.branch?.tax_registration)) centred(reg);
-  centred(r.header);
-  lines.push({ divider: true });
+  lines.push(...storeBlock(r, width, rs.secondaryPhone), { divider: true });
   lines.push(center(receiptTitle(r), { bold: true }));
   lines.push({ divider: true });
   // The order facts: label left, value right
@@ -213,6 +218,49 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   if (r.feedback_whatsapp) centred(`WhatsApp ${r.feedback_whatsapp}`);
   lines.push(center("Powered by EasAlpha"));
   lines.push({ feed: 3 }, { cut: true });
+  return lines;
+}
+
+// ---- Account payment receipt ----
+/** Money received against a customer's account at the till (lib/customer-payments.ts builds it from the result and the stores). */
+export interface AccountPaymentReceipt {
+  business: Receipt["business"]; branch: Receipt["branch"]; header?: string | null;
+  /** The server's payment number; null for a payment queued offline. */
+  number: string | null;
+  customer: { name: string; khata_no: string | null };
+  amount_minor: number; method: string; reference: string | null;
+  /** The account before and after, as the till knows them; null when it has no balance for this customer. */
+  previous_balance_minor: number | null; new_balance_minor: number | null;
+  received_at: string; cashier: string | null;
+  /** Queued on the till: the receipt says so, since the account on the server has not moved yet. */
+  offline?: boolean;
+}
+
+/**
+ * The receipt for money received against an account (review, debit side, item 3): the store block, ACCOUNT PAYMENT,
+ * who and when, the amount double-size, method and reference, the balance before and after, a thank you.
+ */
+export function paymentReceiptLines(p: AccountPaymentReceipt, opts: { settings?: BusinessSettings | null; width?: number } = {}): PrintLine[] {
+  const rs = receiptSettings(opts.settings);
+  const width = opts.width ?? paperWidth(rs.paper);
+  const c = p.business?.currency ?? "PKR";
+  const m = (v: number | null | undefined) => formatMoney(v, c);
+  const balance = (v: number) => (v < 0 ? `${m(-v)} in credit` : m(v));
+  const lines: PrintLine[] = [...storeBlock(p, width, rs.secondaryPhone), { divider: true }, center("ACCOUNT PAYMENT", { bold: true }), { divider: true }];
+  if (p.number) lines.push(...row("Receipt", p.number, width, true));
+  lines.push(...row("Date", formatDateTime(p.received_at), width));
+  if (p.cashier) lines.push(...row("Cashier", p.cashier, width));
+  lines.push(...row("Customer", p.customer.name, width));
+  if (p.customer.khata_no) lines.push(...row("Khata no.", p.customer.khata_no, width));
+  lines.push({ divider: true });
+  lines.push(...row("RECEIVED", m(p.amount_minor), Math.floor(width / 2), true).map((x) => ({ ...x, size: 2 as const })));
+  lines.push(...row("Method", p.method, width));
+  if (p.reference) lines.push(...row("Reference", p.reference, width));
+  lines.push({ divider: true });
+  if (p.previous_balance_minor !== null) lines.push(...row("Balance before", balance(p.previous_balance_minor), width));
+  if (p.new_balance_minor !== null) lines.push(...row("Balance now", balance(p.new_balance_minor), width, true));
+  if (p.offline) lines.push(...wrap("Recorded on the till; it reaches the account when the till is back online.", width).map((t) => center(t)));
+  lines.push({ divider: true }, center("Thank you", { bold: true }), center("Powered by EasAlpha"), { feed: 3 }, { cut: true });
   return lines;
 }
 

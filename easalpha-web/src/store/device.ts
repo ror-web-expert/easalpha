@@ -2,6 +2,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { Branch, Business, Device, Session } from "@/lib/types";
+import { useCartStore } from "@/store/cart";
+import { clearRecentCustomers } from "@/lib/pos-customers";
 
 interface DeviceState {
   deviceToken: string | null;
@@ -33,11 +35,21 @@ export const useDeviceStore = create<DeviceState>()(
       lockMinutes: 5,
       hydrated: false,
       pair: ({ device_token, device, business, branch }) => set({ deviceToken: device_token, device, business, branch, session: null }),
-      unpair: () => set({ deviceToken: null, device: null, business: null, branch: null, session: null }),
-      setSession: (session) => set({ session, lastActivityAt: Date.now() }),
+      unpair: () => {
+        // The next pairing may be another business: the cart and the recent-customers list go with the token.
+        useCartStore.getState().clear();
+        clearRecentCustomers();
+        set({ deviceToken: null, device: null, business: null, branch: null, session: null });
+      },
+      setSession: (session) => {
+        const member = session?.membership?.id;
+        if (member) useCartStore.getState().signIn(member);
+        set({ session, lastActivityAt: Date.now() });
+      },
       setTokens: (access_token, refresh_token) =>
         set((s) => (s.session ? { session: { ...s.session, access_token, refresh_token } } : {})),
       touch: () => set({ lastActivityAt: Date.now() }),
+      // A lock keeps the cart: the same cashier unlocks and carries on (signIn drops it for anyone else).
       lock: () => set({ session: null }),
     }),
     {

@@ -2,7 +2,7 @@
 // Till actions. Each one saves locally first and talks to the server when it can; otherwise it queues a sync record.
 import { api, ApiError } from "@/lib/api";
 import { db, kvGet, kvSet, type LocalOrder, type LocalPayment } from "@/lib/db";
-import { enqueue, isOnline, isQueued, patchQueued, processQueue } from "@/lib/sync";
+import { enqueue, isOnline, isQueued, noteNetworkFailure, patchQueued, probeHealth, processQueue, reachabilityUnknown } from "@/lib/sync";
 import { lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
 import { payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
 import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
@@ -18,7 +18,18 @@ import { saleTime, withRegularDiscount } from "@/lib/pos-regular";
 import type { HeaderPills, Order, OrderInput, PaymentInput, PaymentResult, Receipt, Shift, ZReport, CashMovement } from "@/lib/types";
 import { OPEN_STATUSES } from "@/lib/types";
 
-const isNetwork = (e: unknown) => e instanceof ApiError && e.isNetwork;
+/** A network error (no answer, a timeout). Noting it keeps isOnline() false for 30 s, so the next action goes offline at once instead of waiting again. */
+const isNetwork = (e: unknown) => { const net = e instanceof ApiError && e.isNetwork; if (net) noteNetworkFailure(); return net; };
+
+/** How long a payment waits on the queue push, then on the pre-payment save, before it goes the offline way (review item 15). */
+const QUEUE_WAIT_MS = 8000;
+const SAVE_TIMEOUT_MS = 8000;
+const withTimeout = <T>(p: Promise<T>, ms: number) => Promise.race([p, new Promise<undefined>((resolve) => setTimeout(resolve, ms))]);
+
+/** Which step of payOrder failed, for the message on the till: a save or a completion that fails is not a failed payment. */
+export type PayStep = "save" | "complete" | "payment";
+const failedAt = (e: unknown, step: PayStep) => { if (e && typeof e === "object") (e as { step?: PayStep }).step = step; return e; };
+export const payStep = (e: unknown): PayStep => (e && typeof e === "object" ? (e as { step?: PayStep }).step ?? "payment" : "payment");
 
 function ctx() {
   const d = useDeviceStore.getState();
@@ -112,11 +123,19 @@ function orderLevelPool(o: LocalOrder): number {
   return Math.max(0, o.discount_minor - onLines);
 }
 
-/** True when the cart has lines, an order type or a customer that the stored copy of the order does not have yet. */
+/**
+ * True when the cart holds something the stored copy of the order does not have yet: lines, type, customer, table,
+ * notes, guest, covers, the staff-meal flag, the address or a charge. When nothing changed a payment needs no save first.
+ */
 function unsavedChanges(cart: Cart, stored: LocalOrder | undefined): boolean {
   if (!stored) return true;
   const lines = (ls: CartLine[]) => JSON.stringify(ls.filter((l) => l.status !== "cancelled").map(toLineInput));
-  return lines(cart.lines) !== lines(stored.lines) || cart.order_type !== stored.order_type || (cart.customer?.id ?? null) !== (stored.customer_id ?? null);
+  const differs = (a: unknown, b: unknown) => (a ?? null) !== (b ?? null);
+  return lines(cart.lines) !== lines(stored.lines) || cart.order_type !== stored.order_type || differs(cart.customer?.id, stored.customer_id)
+    || differs(cart.table_id, stored.table_id) || differs(cart.notes || null, stored.notes) || differs(cart.guest_name || null, stored.guest_name) || differs(cart.covers, stored.covers)
+    || !!cart.is_staff_meal !== !!stored.is_staff_meal || differs(cart.address_id, stored.address_id)
+    || differs(cart.service_charge_percent, stored.service_charge_percent) || differs(cart.service_charge_fixed_minor, stored.service_charge_fixed_minor)
+    || differs(cart.delivery_charge_percent, stored.delivery_charge_percent) || (cart.delivery_charge_minor ?? 0) !== (stored.delivery_charge_minor ?? 0);
 }
 
 export function localToCart(o: LocalOrder): Cart {
@@ -177,7 +196,7 @@ export function reopenFields(o: Order): Pick<Cart, "reopened" | "reopen_count" |
  * Save the current cart: create or update on the server when online, else keep it local and queue it.
  * `pin` is the user's own order-update PIN (SPEC REQUIRE_PIN_FOR_ORDER_UPDATE) for a reopened order; `approver_pin` is a manager's.
  */
-export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pin?: string; pin?: string } = {}): Promise<{ cart: Cart; local: LocalOrder; offline: boolean }> {
+export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pin?: string; pin?: string; timeoutMs?: number } = {}): Promise<{ cart: Cart; local: LocalOrder; offline: boolean }> {
   const place = !!opts.place;
   const { membershipId } = ctx();
   // Already queued locally and not yet accepted: just update the queued record.
@@ -195,10 +214,10 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
         const input = orderInput(cart, place, opts.approver_pin);
         // The staff-meal flag travels on updates too, as an explicit boolean so switching it off reaches the server
         // (a saved staff meal used to spring back to Rs 0 after every save: first client report, 30 Oct 2026).
-        order = await api<Order>(`/orders/${cart.id}`, { method: "PATCH", auth: "pos", body: { ...input, place: undefined, id: undefined, ...staffMealFields(cart), pin: opts.pin } });
-        if (place && ["draft", "held"].includes(order.status)) order = await api<Order>(`/orders/${cart.id}/place`, { method: "POST", auth: "pos" });
+        order = await api<Order>(`/orders/${cart.id}`, { method: "PATCH", auth: "pos", body: { ...input, place: undefined, id: undefined, ...staffMealFields(cart), pin: opts.pin }, timeoutMs: opts.timeoutMs });
+        if (place && ["draft", "held"].includes(order.status)) order = await api<Order>(`/orders/${cart.id}/place`, { method: "POST", auth: "pos", timeoutMs: opts.timeoutMs });
       } else {
-        order = await api<Order>("/orders", { method: "POST", auth: "pos", body: orderInput(cart, place, opts.approver_pin) });
+        order = await api<Order>("/orders", { method: "POST", auth: "pos", body: orderInput(cart, place, opts.approver_pin), timeoutMs: opts.timeoutMs });
       }
       const local = await storeServerOrder(order);
       return { cart: { ...localToCart(local), lines: local.lines.filter((l) => l.status !== "cancelled"), ...reopenFields(order) }, local, offline: false };
@@ -248,20 +267,37 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   let pays = payments.map((p) => ({ ...p, id: p.id ?? uuid() }));
   let current = cart;
   let synced = false;
-  if (isOnline()) {
-    if (current.local_only) { await processQueue(); const o = await db.orders.get(current.id); if (o && !o.local_only) current = { ...current, local_only: false }; }
+  // A staff meal has nothing to pay: the order is completed instead (the server refuses an empty payment list).
+  const staffMeal = !!cart.is_staff_meal && !pays.length;
+  // Wi-Fi up but nothing recent from the server: one 3 s probe decides, rather than a 60 s push and a 20 s save.
+  if (isOnline() && (!reachabilityUnknown() || (await probeHealth()))) {
+    if (current.local_only) { await withTimeout(processQueue(), QUEUE_WAIT_MS); const o = await db.orders.get(current.id); if (o && !o.local_only) current = { ...current, local_only: false }; }
     if (!current.local_only) {
       try {
-        // Always sync the cart to the server first so the payment applies to the latest lines.
         const shownDue = opts.shownDue ?? Math.max(0, payableTotals(regularPricing(cart), { settings, tip_minor, cash }).total_minor - (cart.paid_minor ?? 0));
-        const saved = await saveOrder(current, { approver_pin, pin: opts.pin });
-        current = saved.cart;
-        synced = true; // saved on the server, or stored and queued when it could not be reached
-        if (saved.offline) throw new ApiError("network", "Offline", 0);
-        // The server prices the order again on this save (a regular customer's discount, a price change). Never take
+        const stored = await db.orders.get(current.id);
+        // The cart is synced to the server first so the payment applies to the latest lines, unless the server already
+        // has everything the cart holds, or the delivery is dispatched (the server refuses edits then). A staff meal
+        // always saves, placed, so /complete finds a placed order; a reopened order always saves (its PIN flow).
+        const skipSave = !staffMeal && !current.reopened && (current.status === "dispatched" || (current.saved && !unsavedChanges(current, stored)));
+        let serverCopy = stored;
+        if (!skipSave) {
+          const saved = await saveOrder(current, { approver_pin, pin: opts.pin, timeoutMs: SAVE_TIMEOUT_MS, place: staffMeal || undefined }).catch((e) => { throw failedAt(e, "save"); });
+          current = saved.cart;
+          synced = true; // saved on the server, or stored and queued when it could not be reached
+          if (saved.offline) throw new ApiError("network", "Offline", 0);
+          serverCopy = saved.local;
+        }
+        if (staffMeal) {
+          const order = await api<Order>(`/orders/${current.id}/complete`, { method: "POST", auth: "pos" }).catch((e) => { throw failedAt(e, "complete"); });
+          const local = await storeServerOrder(order);
+          const receipt = await api<Receipt>(`/orders/${current.id}/receipt`, { auth: "pos" }).catch(() => buildLocalReceipt(local));
+          return { receipt, change_minor: 0, offline: false, local, cart: { ...localToCart(local), ...reopenFields(order), customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name } };
+        }
+        // The server prices the order again on a save (a regular customer's discount, a price change). Never take
         // money against an amount the cashier did not see: a gap under Rs 1 is paisa rounding and moves the payment;
         // a bigger gap stops here once with the server's figure, and the next press pays that figure.
-        const serverDue = serverDueForPayment(saved.local, { settings, tip_minor, cash });
+        const serverDue = serverDueForPayment(serverCopy ?? cartToLocal(current, current.status), { settings, tip_minor, cash });
         const toSend = reconcilePayments(pays, shownDue, serverDue, opts.seenDue);
         if (!toSend) throw new TotalChangedError({ ...current, customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name }, shownDue, serverDue);
         pays = toSend;
@@ -279,7 +315,8 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   // Offline: order must be local (queued) or already on the server. Lines added since it was last stored (a table
   // order opened offline, say) are stored and queued first, so the payment covers them, as the online path does.
   const stored = await db.orders.get(current.id);
-  const saved = synced || (current.saved && !unsavedChanges(current, stored)) ? { cart: current } : await saveOrder(current, { place: !current.saved });
+  // A staff meal always saves here, so a queued order (or update) exists to carry `complete` to the server.
+  const saved = !staffMeal && (synced || (current.saved && !unsavedChanges(current, stored))) ? { cart: current } : await saveOrder(current, { place: !current.saved || staffMeal });
   current = saved.cart;
   const prev = (await db.orders.get(current.id)) ?? cartToLocal(current, "placed");
   // Priced as the server will when the queue reaches it, with the order-level discount once: the lines carry the
@@ -302,10 +339,13 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   const status = paid >= totals.total_minor ? "paid" : prev.status === "draft" || prev.status === "held" ? "placed" : prev.status;
   const local = await saveLocal({ ...prev, ...totals, cash_rounding_minor: totals.cash_rounding_minor ?? 0, paid_minor: paid, payments: [...prev.payments, ...newPayments], status, payment_status: paid >= totals.total_minor ? "paid" : paid > 0 ? "partial" : "unpaid", receipt_number: prev.receipt_number ?? (paid >= totals.total_minor ? `${prev.till_serial ?? prev.label}` : null) });
   // Payments ride along only with an order still queued as new; a queued order_update (same id) does not carry them.
-  const merged = await patchQueued(current.id, (p) => ({ ...p, status: "placed", payments: [...((p.payments as unknown[]) ?? []), ...newPayments.map((np) => ({ id: np.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at }))], tip_minor: ((p.tip_minor as number) ?? 0) + tip_minor }), "order");
+  const merged = await patchQueued(current.id, (p) => ({ ...p, status: "placed", payments: [...((p.payments as unknown[]) ?? []), ...newPayments.map((np) => ({ id: np.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at }))], tip_minor: ((p.tip_minor as number) ?? 0) + tip_minor, ...(staffMeal ? { complete: true } : {}) }), "order");
   if (!merged) {
-    for (const np of newPayments) {
-      await enqueue({ type: "payment", id: np.id, membership_id: membershipId ?? undefined, payload: { order_id: current.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at, tip_minor } });
+    // The server has the order: a queued update carries `complete` for a staff meal, and each payment goes as its own
+    // record. The tip rides on the first one only: Payments::Processor adds it per record (two splits doubled it).
+    if (staffMeal) await patchQueued(current.id, (p) => ({ ...p, complete: true }), "order_update");
+    for (const [i, np] of newPayments.entries()) {
+      await enqueue({ type: "payment", id: np.id, membership_id: membershipId ?? undefined, payload: { order_id: current.id, method_code: np.method_code, amount_minor: np.amount_minor, tendered_minor: np.tendered_minor, reference: np.reference, client_created_at: np.client_created_at, tip_minor: i === 0 ? tip_minor : 0 } });
     }
   }
   if (local.customer_id) await noteOfflineSale(local.customer_id, newPayments, local.payment_status === "paid", now);

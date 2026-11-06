@@ -76,6 +76,11 @@ export function afterOfflineSale(c: CachedCustomer, sale: { khata_minor: number;
   return { ...c, balance_minor: (c.balance_minor ?? 0) + Math.max(0, sale.khata_minor), ...(sale.paid ? { last_order_at: sale.at, orders_count: (c.orders_count ?? 0) + 1 } : {}) };
 }
 
+/** Money received against the account at this till: what it takes off the balance, as the server will (a positive balance is what they owe). */
+export function afterPayment(c: CachedCustomer, amount_minor: number): CachedCustomer {
+  return { ...c, balance_minor: (c.balance_minor ?? 0) - Math.max(0, amount_minor) };
+}
+
 /** Download again after this long, so balances and recency changed on other tills catch up even without /sync/changes. */
 export const CUSTOMERS_REFRESH_MS = 6 * 60 * 60_000;
 

@@ -9,13 +9,14 @@ import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
 import type { BarcodeMatch } from "@/lib/barcode";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError, regularPricing } from "@/lib/pos-actions";
+import { holdOrder, payOrder, payStep, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError, regularPricing } from "@/lib/pos-actions";
 import { useSyncStore } from "@/store/sync";
 import { useCustomerStore } from "@/store/customers";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
 import { titleCase } from "@/lib/utils";
+import { customerDetails, rememberRecentCustomer, toCartCustomer } from "@/lib/pos-customers";
 import { useApproval } from "@/components/approval";
 import { PosShell } from "@/components/pos/shell";
 import { ItemGrid } from "@/components/pos/item-grid";
@@ -345,7 +346,7 @@ function SellScreen() {
         seenDue.current = { id: e.cart.id, due: e.toMinor };
         loadCart(e.cart);
         toast.info("Total updated", `The amount due is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
-      } else toast.error("Payment failed", errorMessage(e));
+      } else toast.error(payStep(e) === "save" ? "Could not save the order" : payStep(e) === "complete" ? "Could not complete the staff meal" : "Payment failed", errorMessage(e));
     }
     finally { setBusy(false); }
   };
@@ -368,19 +369,26 @@ function SellScreen() {
       if (e.key === "F1") { e.preventDefault(); newOrder(); }
       if (e.key === "F2") { e.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); }
       if (e.key === "F3") { e.preventDefault(); setCustomerOpen(true); }
-      if (e.key === "F4") { e.preventDefault(); if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
-      if (e.key === "F5") { e.preventDefault(); if (cart.lines.length) send(); }
-      if (e.key === "F8") { e.preventDefault(); openPay(); }
+      // F4, F5 and F8 act like the panel's buttons, which are disabled while a save or payment runs: a second press
+      // during one must not send twice or open a dialog over it.
+      if (e.key === "F4") { e.preventDefault(); if (busy) return; if (cart.lines.length) hold(); else router.push("/pos/orders?held=1"); }
+      if (e.key === "F5") { e.preventDefault(); if (busy || !cart.lines.length) return; send(); }
+      if (e.key === "F8") { e.preventDefault(); if (busy) return; openPay(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, newOrder]);
+  }, [cart, newOrder, busy]);
   // Barcode scanning (pos.barcode_scanning.*): scanner, camera and unknown-code dialogs. Paused while money is being
   // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
   // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.
   const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen;
-  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned, onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`) });
+  const scanner = useTillScanner({
+    catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned,
+    onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`),
+    // A student's ID card: the account goes on the order, as picking them in the Customer dialog would.
+    onCustomer: (c) => { patch({ customer: toCartCustomer(c) }); rememberRecentCustomer(c); toast.success(`${c.name} on the order`, customerDetails(c) || undefined); },
+  });
 
   if (!catalog) {
     return (

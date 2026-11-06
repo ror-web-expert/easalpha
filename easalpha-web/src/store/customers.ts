@@ -4,7 +4,7 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import { db, kvGet, kvSet } from "@/lib/db";
-import { afterOfflineSale, customersStale, mergeCustomers, toCachedCustomer, type CachedCustomer } from "@/lib/offline-customers";
+import { afterOfflineSale, afterPayment, customersStale, mergeCustomers, toCachedCustomer, type CachedCustomer } from "@/lib/offline-customers";
 import type { Customer } from "@/lib/types";
 
 interface CustomersState {
@@ -22,6 +22,8 @@ interface CustomersState {
   apply: (changed: readonly Customer[] | undefined, removedIds?: readonly string[]) => Promise<void>;
   /** A sale finished offline for this customer: its khata and last order, until the server's own figures arrive. */
   noteSale: (id: string, sale: { khata_minor: number; paid: boolean; at: string }) => Promise<void>;
+  /** Money received against the account at this till while offline, until the server's own figure arrives. */
+  notePayment: (id: string, amount_minor: number) => Promise<void>;
   clear: () => Promise<void>;
 }
 
@@ -83,6 +85,14 @@ export const useCustomerStore = create<CustomersState>((set, get) => ({
     const c = get().byId.get(id);
     if (!c) return;
     const next = afterOfflineSale(c, sale);
+    const list = get().list.map((x) => (x.id === id ? next : x));
+    set({ list, byId: index(list) });
+    try { await db.customers.put(next); } catch {}
+  },
+  notePayment: async (id, amount_minor) => {
+    const c = get().byId.get(id);
+    if (!c) return;
+    const next = afterPayment(c, amount_minor);
     const list = get().list.map((x) => (x.id === id ? next : x));
     set({ list, byId: index(list) });
     try { await db.customers.put(next); } catch {}

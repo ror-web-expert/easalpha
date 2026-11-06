@@ -46,11 +46,12 @@ vi.mock("@/components/pos/receipt-dialog", () => ({ ReceiptDialog: () => null })
 vi.mock("@/components/approval", () => ({ useApproval: () => ({ run: (fn: (pin?: string) => Promise<unknown>) => fn(), dialog: null, open: h.approvalOpen }) }));
 vi.mock("@/lib/pos-actions", () => ({
   holdOrder: () => h.hold(), payOrder: vi.fn(), saveOrder: vi.fn(), loadOrderForEdit: vi.fn(), completeUnpaid: vi.fn(), applyTaxChoice: vi.fn(),
-  applyServerDiscount: vi.fn(), syncForPayment: vi.fn(), TotalChangedError: class extends Error {}, regularPricing: (c: unknown) => c,
+  applyServerDiscount: vi.fn(), syncForPayment: vi.fn(), TotalChangedError: class extends Error {}, regularPricing: (c: unknown) => c, payStep: () => "payment",
 }));
 
 import PosPage from "./page";
 import { useCartStore } from "@/store/cart";
+import { saveOrder } from "@/lib/pos-actions";
 
 const paused = () => h.paused[h.paused.length - 1];
 
@@ -96,5 +97,22 @@ describe("the sell screen pauses the barcode scanner", () => {
     await act(async () => finish());
     expect(paused()).toBe(false);
     expect(useCartStore.getState().cart.lines).toEqual([]);
+  });
+});
+
+describe("F4 and F5 while a save runs", () => {
+  // Review: F4 and F5 bypassed busy, so a double F5 sent twice and showed a false error.
+  it("do nothing, like the disabled buttons, so a second press never holds or sends twice", async () => {
+    render(<PosPage />);
+    fireEvent.click(screen.getByText("Add tea"));
+    let finish = () => {};
+    let holds = 0;
+    h.hold = () => { holds++; return new Promise((resolve) => { finish = () => resolve({}); }); };
+    fireEvent.keyDown(window, { key: "F4" });
+    fireEvent.keyDown(window, { key: "F4" });
+    fireEvent.keyDown(window, { key: "F5" });
+    expect(holds).toBe(1);
+    expect(saveOrder).not.toHaveBeenCalled();
+    await act(async () => finish());
   });
 });

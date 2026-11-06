@@ -10,7 +10,9 @@ import { useOnline } from "@/lib/hooks";
 import { formatMoney } from "@/lib/money";
 import { priceFor } from "@/lib/pricing";
 import { isOnline } from "@/lib/sync";
-import type { BarcodeRow, Catalog, Product, ProductBarcode } from "@/lib/types";
+import type { BarcodeRow, Catalog, Customer, Product, ProductBarcode } from "@/lib/types";
+import { toCachedCustomer, type CachedCustomer } from "@/lib/offline-customers";
+import { useCustomerStore } from "@/store/customers";
 import {
   FORMAT_LABELS, barcodeFormat, createScanDetector, findBarcode, isPrintableKey, parseScaleLabel, scannerConfig, type BarcodeMatch, type ScanResult, type ScaleConfig, type ScannerConfig,
 } from "@/lib/barcode";
@@ -179,12 +181,43 @@ function useHasCamera(want: boolean) {
 
 type Finder = (code: string, products?: Product[]) => BarcodeMatch | null;
 
+export type ScanTarget = { kind: "product"; match: BarcodeMatch } | { kind: "receipt"; code: string } | { kind: "customer"; customer: CachedCustomer } | null;
+
+/** The customer whose member (roll / ID) number is exactly the code, case aside; never the walk-in customer. */
+export function findByMemberNo(list: readonly CachedCustomer[], code: string): CachedCustomer | null {
+  const want = code.trim().toLowerCase();
+  if (!want) return null;
+  return list.find((c) => !c.is_walk_in && (c.member_no ?? "").trim().toLowerCase() === want) ?? null;
+}
+
+/**
+ * What a scanned code is, checked in this order: the product catalog first (so a product code shaped like a receipt
+ * number still sells), then a receipt number (yymmdd-BRANCH-serial) when the screen opens receipts, then a customer's
+ * member number (a student's ID card) when the screen attaches customers. Null when none of the three claims it.
+ */
+export function classifyScan(code: string, find: { product: (code: string) => BarcodeMatch | null; receipt?: boolean; customers?: readonly CachedCustomer[] }): ScanTarget {
+  const trimmed = code.trim();
+  const match = find.product(code);
+  if (match) return { kind: "product", match };
+  if (find.receipt && isReceiptNumber(trimmed)) return { kind: "receipt", code: trimmed };
+  const customer = find.customers ? findByMemberNo(find.customers, trimmed) : null;
+  return customer ? { kind: "customer", customer } : null;
+}
+
+/** GET /customers?q=<code>, keeping only an exact member-number match (the search also matches names and phones); the row joins the till's saved list. */
+async function lookupMemberOnline(code: string): Promise<CachedCustomer | null> {
+  const r = await api<{ data: Customer[] }>("/customers", { query: { q: code.trim(), limit: 20 }, auth: "pos", timeoutMs: 6000 });
+  const found = findByMemberNo(r.data.map(toCachedCustomer), code);
+  if (found) await useCustomerStore.getState().apply(r.data.filter((c) => c.id === found.id));
+  return found;
+}
+
 /**
  * Everything the sell screen needs for scanning. onMatch adds the item (return false when it refused, e.g. the
  * product is switched off). Returns the typed-code lookup for the item search, the camera button (only when the
  * camera setting is on and the device has a camera), and the dialogs to render.
  */
-export function useTillScanner({ catalog, orderType, paused, onMatch, onReceipt }: { catalog: Catalog | null; orderType: string; paused?: boolean; onMatch: (m: BarcodeMatch) => boolean | void; /** A scanned receipt barcode (yymmdd-BRANCH-serial): open that order rather than look for a product. */ onReceipt?: (code: string) => void }) {
+export function useTillScanner({ catalog, orderType, paused, onMatch, onReceipt, onCustomer }: { catalog: Catalog | null; orderType: string; paused?: boolean; onMatch: (m: BarcodeMatch) => boolean | void; /** A scanned receipt barcode (yymmdd-BRANCH-serial): open that order rather than look for a product. */ onReceipt?: (code: string) => void; /** A scanned member number (a student's ID card): put that customer on the order. */ onCustomer?: (c: CachedCustomer) => void }) {
   const settings = catalog?.business.settings;
   const branchId = catalog?.branch?.id;
   const config = useMemo(() => scannerConfig(settings), [settings]);
@@ -195,6 +228,8 @@ export function useTillScanner({ catalog, orderType, paused, onMatch, onReceipt 
   useEffect(() => { onMatchRef.current = onMatch; });
   const onReceiptRef = useRef(onReceipt);
   useEffect(() => { onReceiptRef.current = onReceipt; });
+  const onCustomerRef = useRef(onCustomer);
+  useEffect(() => { onCustomerRef.current = onCustomer; });
 
   // Reads the store at call time, so a product saved a moment ago is found.
   const find = useCallback<Finder>((code, products) => findBarcode(products ?? useCatalogStore.getState().catalog?.products ?? [], code, {
@@ -207,12 +242,19 @@ export function useTillScanner({ catalog, orderType, paused, onMatch, onReceipt 
   }, [config.beep]);
 
   const resolve = useCallback(async (code: string): Promise<BarcodeMatch | null> => {
-    if (onReceiptRef.current && isReceiptNumber(code)) { if (config.beep) playScanTone("ok"); onReceiptRef.current(code.trim()); return null; }
-    let m = find(code);
+    const target = classifyScan(code, { product: find, receipt: !!onReceiptRef.current, customers: onCustomerRef.current ? useCustomerStore.getState().list : undefined });
+    if (target?.kind === "receipt") { if (config.beep) playScanTone("ok"); onReceiptRef.current?.(target.code); return null; }
+    if (target?.kind === "customer") { if (config.beep) playScanTone("ok"); onCustomerRef.current?.(target.customer); return null; }
+    let m = target?.kind === "product" ? target.match : null;
     if (!m && isOnline()) {
       try {
         const p = await lookupOnline(code, config.scale);
         if (p) { await saveProductLocally(p); m = find(code); }
+        else if (onCustomerRef.current) {
+          // Not a product the server knows either: a member number the till has not saved yet (a new student).
+          const c = await lookupMemberOnline(code);
+          if (c) { if (config.beep) playScanTone("ok"); onCustomerRef.current(c); return null; }
+        }
       } catch {
         // Offline or slow: same as not found.
       }

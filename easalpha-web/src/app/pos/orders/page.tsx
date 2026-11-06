@@ -67,7 +67,8 @@ function OrdersScreen() {
     if (!isOnline()) { toast.error("Not on this till", `${code} is not in today's orders and the till is offline.`); return; }
     try {
       const page = await api<{ data: Order[] }>("/orders", { auth: "pos", query: { q: code.trim() } });
-      const found = page.data.find((o) => (o.receipt_number ?? "").toLowerCase() === wanted) ?? page.data[0];
+      // Only the exact receipt number: GET /orders?q= also matches customers and labels, and a scan must never open someone else's order.
+      const found = page.data.find((o) => (o.receipt_number ?? "").toLowerCase() === wanted);
       if (!found) { toast.error("No such receipt", `No order has the receipt number ${code}.`); return; }
       setTab("all");
       setSel(await storeServerOrder(found));
@@ -80,11 +81,13 @@ function OrdersScreen() {
     void openByReceipt(code);
   } });
   const linked = params.get("receipt");
-  useEffect(() => { if (linked) { void openByReceipt(linked); router.replace("/pos/orders"); } }, [linked, openByReceipt, router]);
+  // ?receipt= comes from a scan on the sell screen; anything not shaped like a receipt number is ignored, not searched.
+  useEffect(() => { if (linked) { if (isReceiptNumber(linked)) void openByReceipt(linked); router.replace("/pos/orders"); } }, [linked, openByReceipt, router]);
 
   const filtered = rows.filter((o) => (tab === "open" ? OPEN.includes(o.status) : tab === "paid" ? ["paid", "closed", "refunded"].includes(o.status) : true)).filter((o) => !q || o.label.toLowerCase().includes(q.toLowerCase()) || (o.till_serial ?? "").toLowerCase().includes(q.toLowerCase()) || (o.customer_name ?? "").toLowerCase().includes(q.toLowerCase()) || (o.table_code ?? "").toLowerCase().includes(q.toLowerCase()));
   const openTotal = rows.filter((o) => OPEN.includes(o.status)).reduce((s, o) => s + o.total_minor, 0);
-  const paidTotal = rows.filter((o) => ["paid", "closed"].includes(o.status)).reduce((s, o) => s + o.total_minor, 0);
+  // A paid order the server rejected (day locked, product archived) is not money the business has: it stays listed, flagged, but not counted.
+  const paidTotal = rows.filter((o) => ["paid", "closed"].includes(o.status) && o.sync_status !== "rejected").reduce((s, o) => s + o.total_minor, 0);
 
   const doVoid = async (reason: string) => {
     if (!sel) return;
@@ -150,7 +153,7 @@ function OrdersScreen() {
                   <span className="text-2xl font-bold">{o.label}</span>
                   <Badge variant={orderStatusVariant(o.status)}>{titleCase(o.status)}</Badge>
                 </div>
-                <div className="mt-1 flex flex-wrap gap-1 text-xs"><Badge variant={orderTypeVariant(o.order_type)}>{titleCase(o.order_type)}</Badge><Badge variant={paymentStatusVariant(o.payment_status)}>{titleCase(o.payment_status)}</Badge>{o.local_only ? <Badge variant="warning">not synced</Badge> : null}{o.table_code ? <Badge>Table {o.table_code}</Badge> : null}</div>
+                <div className="mt-1 flex flex-wrap gap-1 text-xs"><Badge variant={orderTypeVariant(o.order_type)}>{titleCase(o.order_type)}</Badge><Badge variant={paymentStatusVariant(o.payment_status)}>{titleCase(o.payment_status)}</Badge>{o.sync_status === "rejected" ? <Badge variant="danger" title={o.sync_error ?? undefined}>{`Rejected: ${o.sync_error ?? "the server refused it"}`}</Badge> : o.local_only ? <Badge variant="warning">not synced</Badge> : null}{o.table_code ? <Badge>Table {o.table_code}</Badge> : null}</div>
                 <div className="mt-1 truncate text-sm text-fg-secondary">{o.customer_name ?? o.guest_name ?? "Walk-in"} · {o.lines.filter((l) => l.status !== "cancelled").length || "?"} items · {formatTime(o.created_at)}</div>
                 <div className="mt-auto pt-1 text-right text-lg font-semibold tabular">{formatMoney(o.total_minor, currency)}</div>
               </div>
@@ -159,7 +162,7 @@ function OrdersScreen() {
           {!filtered.length ? <div className="col-span-full py-16 text-center text-fg-muted">{tab === "open" ? "No open orders" : "Nothing here"}</div> : null}
         </div>
       </div>
-      <Dialog open={!!sel && !voidOpen && !refund} onClose={() => setSel(null)} title={sel ? `Order ${sel.label}` : ""} description={sel ? `${titleCase(sel.status)} · ${titleCase(sel.order_type)} · ${formatTime(sel.created_at)}${sel.void_reason ? ` · ${sel.void_reason}` : ""}` : undefined} size="md"
+      <Dialog open={!!sel && !voidOpen && !refund} onClose={() => setSel(null)} title={sel ? `Order ${sel.label}` : ""} description={sel ? `${titleCase(sel.status)} · ${titleCase(sel.order_type)} · ${formatTime(sel.created_at)}${sel.void_reason ? ` · ${sel.void_reason}` : ""}${sel.sync_status === "rejected" ? ` · Rejected by the server: ${sel.sync_error ?? "no reason given"}. See Attention.` : ""}` : undefined} size="md"
         footer={sel ? <>
           {OPEN.includes(sel.status) ? <Button variant="destructive" onClick={() => setVoidOpen(true)}><Ban className="h-4 w-4" /> Void</Button> : null}
           {["paid", "closed"].includes(sel.status) && can("orders.refund", "shifts.any") ? <Button variant="secondary" onClick={() => setRefund({ amount: sel.paid_minor, method: methods.find((m) => m.kind === "cash")?.code ?? "cash", reason: "" })}><RotateCcw className="h-4 w-4" /> Refund</Button> : null}

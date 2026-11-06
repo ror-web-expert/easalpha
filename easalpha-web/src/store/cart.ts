@@ -69,7 +69,16 @@ const fresh = (orderType: OrderType = "dine_in"): Cart => ({
 interface CartState {
   cart: Cart;
   defaultType: OrderType;
+  /** The membership whose cart this is. Persisted with it, so the next sign-in knows whether to keep it. */
+  owner: string | null;
   reset: (orderType?: OrderType) => void;
+  /**
+   * PIN sign-in: the same cashier (back from a lock) carries on with the cart; anyone else starts from an empty one, so
+   * nobody pays the previous cashier's order, with their customer or staff-meal flag, under their own name. True when reset.
+   */
+  signIn: (membershipId: string) => boolean;
+  /** Unpair or clear till data: nothing of the last order survives for the next pairing. */
+  clear: () => void;
   load: (c: Cart) => void;
   patch: (p: Partial<Cart>) => void;
   addLine: (line: Omit<CartLine, "key">) => void;
@@ -85,7 +94,16 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       cart: fresh(),
       defaultType: "dine_in",
+      owner: null,
       reset: (orderType) => set({ cart: fresh(orderType ?? get().defaultType) }),
+      signIn: (membershipId) => {
+        // Hydration is deferred (skipHydration); read the stored owner before deciding, in case a sign-in comes first.
+        if (!useCartStore.persist.hasHydrated()) void useCartStore.persist.rehydrate();
+        if (get().owner === membershipId) return false;
+        set({ cart: fresh(get().defaultType), owner: membershipId });
+        return true;
+      },
+      clear: () => set({ cart: fresh(get().defaultType), owner: null }),
       load: (cart) => set({ cart }),
       patch: (p) => set({ cart: { ...get().cart, ...p } }),
       addLine: (line) => {

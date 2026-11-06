@@ -13,8 +13,13 @@ const h = vi.hoisted(() => ({
   online: true,
   queued: [] as { type: string; id: string; payload: Record<string, unknown> }[],
   calls: [] as string[],
-  handler: null as null | ((path: string, opts: { method?: string; body?: unknown }) => unknown),
+  handler: null as null | ((path: string, opts: { method?: string; body?: unknown; timeoutMs?: number }) => unknown),
   tiers: [] as unknown[],
+  /** What the last push or heartbeat said (sync.ts reachability): "unknown" makes payOrder probe /health first. */
+  reach: "online" as "online" | "unknown",
+  health: true,
+  /** The timeout each save asked the API for. */
+  timeouts: [] as (number | undefined)[],
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -25,6 +30,10 @@ vi.mock("@/lib/db", () => ({
 // The queue keeps one record per id, as db.queue does; patchQueued only merges into a record of the given type.
 vi.mock("@/lib/sync", () => ({
   isOnline: () => h.online,
+  reachabilityUnknown: () => h.reach === "unknown",
+  probeHealth: async () => { h.calls.push("probe"); return h.health; },
+  noteNetworkFailure: () => {},
+  noteReachable: () => {},
   isQueued: async (id: string) => h.queued.some((r) => r.id === id),
   processQueue: async () => undefined,
   patchQueued: async (id: string, patch: (p: Record<string, unknown>) => Record<string, unknown>, type?: string) => {
@@ -47,7 +56,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { localToCart, payOrder, regularPricing, reopenFields, saveOrder, serverToLocal, TotalChangedError } from "./pos-actions";
+import { localToCart, payOrder, payStep, regularPricing, reopenFields, saveOrder, serverToLocal, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -128,12 +137,19 @@ beforeEach(() => {
   h.queued.length = 0;
   h.calls.length = 0;
   h.online = true;
+  h.reach = "online";
+  h.health = true;
+  h.timeouts.length = 0;
   for (const k of Object.keys(h.settings)) delete h.settings[k];
   h.tiers = [];
   h.handler = (path, opts) => {
     const [, id, action] = /^\/orders\/([^/]+)(?:\/(\w+))?$/.exec(path) ?? [];
+    if (id === server.id && opts.method === "POST" && action === "place") { h.calls.push("place"); server.status = "placed"; return asOrder(server); }
+    if (id === server.id && opts.method === "POST" && action === "complete") { h.calls.push("complete"); server.status = "paid"; return asOrder(server); }
+    if (id === server.id && !opts.method && action === "receipt") { h.calls.push("receipt"); return { receipt_number: "R-7", order: { label: "#7" } } as unknown as Receipt; }
     if (id === server.id && opts.method === "PATCH" && !action) {
       h.calls.push("save");
+      h.timeouts.push(opts.timeoutMs);
       const lines = (opts.body as { lines: { id?: string; quantity: number; open_item?: { name: string; price_minor: number } }[] }).lines;
       server.items = lines.map((l) => ({ id: l.id ?? `item-${++seq}`, name: l.open_item!.name, unit_price_minor: l.open_item!.price_minor, quantity: l.quantity }));
       return asOrder(server);
@@ -182,6 +198,7 @@ describe("payOrder with Rs 10 cash rounding", () => {
     const r = await payOrder(opened(), [cash(126000)], 0, undefined, { shownDue: screenDue(opened(), ["cash"]) });
     expect(r.local).toMatchObject({ status: "paid", total_minor: 126000 });
     server = fresh([["Karahi", 125600]]);
+    h.rows.clear(); // a new order under the same id: nothing stored for it yet
     const byCard = await payOrder(opened(), [card(125600)], 0, undefined, { shownDue: screenDue(opened(), ["card"]) });
     expect(byCard.local).toMatchObject({ status: "paid", total_minor: 125600, rounding_minor: 0 });
   });
@@ -303,6 +320,109 @@ describe("payOrder offline on an order the server already has", () => {
     h.online = false;
     const r = await payOrder(cart, [cash(90000)], 0);
     expect(r.local).toMatchObject({ total_minor: 90000, paid_minor: 90000, status: "paid" });
+  });
+});
+
+describe("payOrder before the internet is known to answer", () => {
+  // Review item 15: Wi-Fi up, internet down, navigator.onLine true: Pay waited on a 60 s push and then a 20 s save.
+  it("probes /health once when nothing recent says the server answers, and goes offline at once when it does not", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    h.reach = "unknown";
+    h.health = false;
+    const r = await payOrder(opened(), [cash(100000)], 0);
+    expect(h.calls).toEqual(["probe"]);
+    expect(r.offline).toBe(true);
+    expect(r.local.status).toBe("paid");
+    expect(h.queued.map((q) => q.type)).toEqual(["payment"]);
+  });
+
+  it("carries on online when the probe answers, and gives the pre-payment save 8 s rather than the usual 20", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.reach = "unknown";
+    const cart = { ...opened(), lines: [...opened().lines, openLine("Naan", 20000)] };
+    const r = await payOrder(cart, [cash(120000)], 0, undefined, { shownDue: screenDue(cart, ["cash"]) });
+    expect(h.calls).toEqual(["probe", "save", "pay"]);
+    expect(h.timeouts).toEqual([8000]);
+    expect(r.offline).toBe(false);
+  });
+});
+
+describe("payOrder saves only what the server lacks", () => {
+  // Review item 12: a dispatched delivery cannot be edited, and the save before every payment made Pay fail on it.
+  it("skips the save when the cart matches the stored order, and for a dispatched delivery", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    const r = await payOrder(opened(), [cash(100000)], 0, undefined, { shownDue: 100000 });
+    expect(h.calls).toEqual(["pay"]);
+    expect(r.local.status).toBe("paid");
+    server = fresh([["Karahi", 100000]], { status: "dispatched" });
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    const d = await payOrder(opened(), [cash(100000)], 0, undefined, { shownDue: 100000 });
+    expect(h.calls).toEqual(["pay", "pay"]);
+    expect(d.local.status).toBe("paid");
+  });
+
+  it("still saves a changed note, and names the save as the step that failed", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    await payOrder({ ...opened(), notes: "no onions" }, [cash(100000)], 0, undefined, { shownDue: 100000 });
+    expect(h.calls).toEqual(["save", "pay"]);
+    const serve = h.handler!;
+    h.handler = (path, opts) => { if (opts.method === "PATCH") throw new ApiError("day.locked", "The day is closed", 409); return serve(path, opts); };
+    server = fresh([["Karahi", 100000]]);
+    const e = await payOrder({ ...opened(), notes: "no onions" }, [cash(100000)], 0).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ApiError);
+    expect(payStep(e)).toBe("save");
+    expect(payStep(new Error("x"))).toBe("payment");
+  });
+});
+
+describe("payOrder on a staff meal", () => {
+  // Review item 5: Pay on a staff meal posted { payments: [] }, which the server refuses; the first client hit it on 30 Oct.
+  const draft = (): Cart => ({
+    id: "sm-1", saved: false, local_only: false, status: "draft", order_type: "dine_in", lines: [openLine("Chai", 10000)], customer: null, table_id: null, table_code: null,
+    guest_name: "", covers: null, notes: "", is_staff_meal: true, staff_meal_reason: "Ali, lunch", label: null, client_created_at: "2026-11-06T10:00:00Z",
+  });
+
+  it("online: saves the order placed, completes it instead of paying, and takes the server's receipt", async () => {
+    server = fresh([["Chai", 10000]], { status: "draft" });
+    const r = await payOrder({ ...opened(), is_staff_meal: true, staff_meal_reason: "Ali, lunch" }, [], 0, undefined, { shownDue: 0 });
+    expect(h.calls).toEqual(["save", "place", "complete", "receipt"]);
+    expect(r).toMatchObject({ offline: false, change_minor: 0 });
+    expect(r.local.status).toBe("paid");
+    expect(r.receipt).toMatchObject({ receipt_number: "R-7" });
+  });
+
+  it("offline: marks the local copy paid and queues the order with complete: true", async () => {
+    h.online = false;
+    const r = await payOrder(draft(), [], 0);
+    expect(r.offline).toBe(true);
+    expect(r.local).toMatchObject({ status: "paid", payment_status: "paid", total_minor: 0, paid_minor: 0, is_staff_meal: true });
+    expect(h.queued.map((q) => q.type)).toEqual(["order"]);
+    expect(h.queued[0].payload).toMatchObject({ complete: true, status: "placed", is_staff_meal: true });
+  });
+
+  it("offline on an order the server already has: the queued update carries complete: true", async () => {
+    server = fresh([["Chai", 10000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    h.online = false;
+    const r = await payOrder({ ...opened(), is_staff_meal: true, staff_meal_reason: "Ali" }, [], 0);
+    expect(r.local.status).toBe("paid");
+    expect(h.queued.map((q) => q.type)).toEqual(["order_update"]);
+    expect(h.queued[0].payload).toMatchObject({ complete: true, is_staff_meal: true });
+  });
+});
+
+describe("payOrder offline with a tip over two payments", () => {
+  // Review item 14: each queued payment carried the whole tip and Payments::Processor added it per record (Rs 50 became Rs 100).
+  it("puts the tip on the first queued payment only", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    h.online = false;
+    const r = await payOrder(opened(), [cash(65000), card(40000)], 5000);
+    expect(r.local).toMatchObject({ status: "paid", tip_minor: 5000, total_minor: 105000, paid_minor: 105000 });
+    expect(h.queued.filter((q) => q.type === "payment").map((q) => q.payload.tip_minor)).toEqual([5000, 0]);
   });
 });
 

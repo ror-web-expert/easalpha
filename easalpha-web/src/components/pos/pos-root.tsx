@@ -7,6 +7,7 @@ import { useCatalogStore } from "@/store/catalog";
 import { useCustomerStore } from "@/store/customers";
 import { startSync, pullChanges } from "@/lib/sync";
 import { loadCurrentShift, pruneOldOrders } from "@/lib/pos-actions";
+import { settingValue } from "@/lib/pricing";
 import { Loading } from "@/components/ui";
 
 /** Client side of the till: service worker, route guards, sync, the inactivity lock and the touch-screen rules. */
@@ -17,6 +18,9 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
   const deviceToken = useDeviceStore((s) => s.deviceToken);
   const session = useDeviceStore((s) => s.session);
   const lockMinutes = useDeviceStore((s) => s.lockMinutes);
+  const settings = useCatalogStore((s) => s.catalog?.business.settings);
+  // Settings, Point of Sale: pos.lock_minutes, 0 for never; the device store's 5 stands in until a catalog is downloaded.
+  const lockAfter = Number(settingValue(settings, "pos.lock_minutes", lockMinutes));
   const lock = useDeviceStore((s) => s.lock);
   const touch = useDeviceStore((s) => s.touch);
   const catalogLoaded = useCatalogStore((s) => s.loaded);
@@ -57,15 +61,15 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
 
   // Inactivity lock
   useEffect(() => {
-    if (!session) return;
+    if (!session || !(lockAfter > 0)) return;
     const bump = () => { lastActivity.current = Date.now(); };
     const events = ["pointerdown", "keydown", "touchstart"];
     events.forEach((e) => window.addEventListener(e, bump));
     const t = setInterval(() => {
-      if (Date.now() - lastActivity.current > lockMinutes * 60_000) { lock(); router.replace("/pos/pin"); }
+      if (Date.now() - lastActivity.current > lockAfter * 60_000) { lock(); router.replace("/pos/pin"); }
     }, 10_000);
     return () => { events.forEach((e) => window.removeEventListener(e, bump)); clearInterval(t); };
-  }, [session, lockMinutes, lock, router, touch]);
+  }, [session, lockAfter, lock, router, touch]);
 
   // The root is exactly the visible screen (dvh leaves out the browser's address bar) and scrolls itself only when a
   // page is taller, such as the PIN pad on a short landscape tablet; the page behind never moves.

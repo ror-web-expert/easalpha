@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { db, kvGet, kvSet } from "@/lib/db";
 import type { Catalog, DiningTable, PaymentMethod, Shift, SyncChanges } from "@/lib/types";
 import { useCustomerStore } from "@/store/customers";
+import { useCartStore } from "@/store/cart";
+import { clearRecentCustomers } from "@/lib/pos-customers";
 
 interface CatalogState {
   catalog: Catalog | null;
@@ -87,5 +89,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 
 /** Everything this browser holds for a till, including the sync queue: a new pairing starts clean (confirmDiscardUnsynced first). */
 export async function clearTillData() {
+  useCartStore.getState().clear();
+  clearRecentCustomers();
   await Promise.all([db.kv.clear(), db.orders.clear(), db.queue.clear(), db.attention.clear(), useCustomerStore.getState().clear()]);
 }

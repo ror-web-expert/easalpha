@@ -117,6 +117,12 @@ function Board() {
           ? <Button variant="ghost" size="icon" className="text-white/85 hover:bg-white/10" onClick={() => setDeviceSound(!deviceSound)} aria-label="Sound" title={deviceSound ? "Mute new-order sound on this screen" : "Unmute new-order sound on this screen"}>{deviceSound ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}</Button>
           : <Button variant="ghost" size="icon" className="text-white/85" disabled aria-label="Sound off" title="New-order sound is off in Settings, Point of Sale, KDS Alerts"><VolumeX className="h-5 w-5" /></Button>}
       </header>
+      {orders.isError && orders.data ? (
+        // The cards stay (a cook still needs them) but nobody should take them for live: the time they are from is shown.
+        <div className="flex items-center gap-2 border-b border-white/10 bg-danger-soft px-3 py-2 text-sm font-medium text-danger-ink" role="status">
+          <WifiOff className="h-4 w-4 shrink-0" /> Connection lost, showing orders from {formatTime(new Date(orders.dataUpdatedAt).toISOString())}. {errorMessage(orders.error)}
+        </div>
+      ) : null}
       {changed.length ? (
         <div className="flex gap-2 overflow-x-auto border-b border-white/10 bg-warning-soft px-3 py-2 text-warning-ink">
           {changed.map((t) => <div key={t.id} className={cn("shrink-0 rounded-md border px-3 py-1 text-sm", t.kind === "cancelled" ? "border-danger bg-danger-soft" : "border-warning")}><b className="uppercase">{t.kind}</b> #{t.serial ?? "?"}{t.table_code ? ` · ${t.table_code}` : ""}: {(t.lines ?? []).map((l) => `${(l as { quantity?: string }).quantity ?? ""} ${(l as { name?: string }).name ?? ""}`).join(", ")} <span className="text-fg-muted">{formatTime(t.created_at)}</span></div>)}

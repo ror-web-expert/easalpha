@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BROWSER_PRINT_HINT, hasPrinter, paperWidth, printDocument, printJob, printServer, receiptLines, row, textRows, withBarcodeBars, zReportLines, type PrintLine, printServerHeaders } from "./print";
+import { BROWSER_PRINT_HINT, hasPrinter, paperWidth, paymentReceiptLines, printDocument, printJob, printServer, receiptLines, row, textRows, withBarcodeBars, zReportLines, type PrintLine, printServerHeaders } from "./print";
 import type { Receipt, ZReport } from "./types";
 
 const receipt: Receipt = {
@@ -254,5 +254,42 @@ describe("printJob dispatch", () => {
     expect(html).toContain("@page { size: 80mm auto; margin: 0; }");
     frame!.contentWindow!.dispatchEvent(new Event("afterprint"));
     expect(document.body.contains(frame!)).toBe(false);
+  });
+});
+
+describe("paymentReceiptLines", () => {
+  // Review, debit side, item 3: a student paying Rs 5,000 on account left with nothing in hand.
+  const payment = {
+    business: receipt.business, branch: receipt.branch, number: "CP-000012", customer: { name: "Sadia Akhtar", khata_no: "32" },
+    amount_minor: 500000, method: "Cash", reference: "slip 88", previous_balance_minor: 1200000, new_balance_minor: 700000,
+    received_at: "2026-11-06T10:00:00Z", cashier: "Ali",
+  };
+  it("prints the store block, ACCOUNT PAYMENT, who and when, the amount, the balance before and after, and a thank you", () => {
+    const lines = paymentReceiptLines(payment);
+    const t = texts(lines);
+    expect(lines[0]).toEqual({ text: "Karachi Grill", align: "center", bold: true, size: 2 });
+    expect(t).toContain("NTN 1234567-8");
+    expect(lines).toContainEqual({ text: "ACCOUNT PAYMENT", align: "center", bold: true });
+    expect(t.find((x) => x.startsWith("Receipt"))).toMatch(/CP-000012$/);
+    expect(t.find((x) => x.startsWith("Cashier"))).toMatch(/Ali$/);
+    expect(t.find((x) => x.startsWith("Customer"))).toMatch(/Sadia Akhtar$/);
+    expect(t.find((x) => x.startsWith("Khata no."))).toMatch(/32$/);
+    const amount = lines.find((l) => "text" in l && l.text.startsWith("RECEIVED")) as Extract<PrintLine, { text: string }>;
+    expect(amount).toMatchObject({ bold: true, size: 2 });
+    expect(amount.text).toMatch(/Rs 5,000$/);
+    expect(t.find((x) => x.startsWith("Method"))).toMatch(/Cash$/);
+    expect(t.find((x) => x.startsWith("Reference"))).toMatch(/slip 88$/);
+    expect(t.find((x) => x.startsWith("Balance before"))).toMatch(/Rs 12,000$/);
+    expect(lines.find((l) => "text" in l && l.text.startsWith("Balance now"))).toMatchObject({ bold: true, text: expect.stringMatching(/Rs 7,000$/) });
+    expect(lines).toContainEqual({ text: "Thank you", align: "center", bold: true });
+    expect(lines.at(-1)).toEqual({ cut: true });
+  });
+  it("says when it was kept on the till, shows a credit as such, and leaves out what it does not know", () => {
+    const t = texts(paymentReceiptLines({ ...payment, number: null, reference: null, previous_balance_minor: 300000, new_balance_minor: -200000, offline: true }));
+    expect(t.some((x) => x.startsWith("Receipt"))).toBe(false);
+    expect(t.some((x) => x.startsWith("Reference"))).toBe(false);
+    expect(t.find((x) => x.startsWith("Balance now"))).toMatch(/Rs 2,000 in credit$/);
+    expect(t.join(" ")).toContain("Recorded on the till");
+    expect(texts(paymentReceiptLines({ ...payment, previous_balance_minor: null, new_balance_minor: null })).some((x) => x.startsWith("Balance"))).toBe(false);
   });
 });

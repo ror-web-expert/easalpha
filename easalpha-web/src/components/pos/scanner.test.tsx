@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { scannerConfig, type ScannerConfig } from "@/lib/barcode";
-import { CameraScanDialog, useBarcodeScanner } from "./scanner";
+import { scannerConfig, type BarcodeMatch, type ScannerConfig } from "@/lib/barcode";
+import type { Customer } from "@/lib/types";
+import { toCachedCustomer } from "@/lib/offline-customers";
+import { CameraScanDialog, classifyScan, useBarcodeScanner } from "./scanner";
 
 const zxing = vi.hoisted(() => ({ decodeFromStream: vi.fn() }));
 vi.mock("@zxing/browser", () => ({ BrowserMultiFormatReader: class { decodeFromStream = zxing.decodeFromStream; } }));
@@ -179,5 +181,30 @@ describe("CameraScanDialog", () => {
     await waitFor(() => expect(onCode).toHaveBeenCalledWith(CODE));
     expect(onClose).toHaveBeenCalled();
     expect(zxing.decodeFromStream).not.toHaveBeenCalled();
+  });
+});
+
+describe("classifyScan", () => {
+  // Review: a product Code 128 shaped like a receipt number could never be sold (the receipt check ran first), and a
+  // student's ID card could not pick the account (debit side, item 8).
+  const sadia = toCachedCustomer({ id: "s1", name: "Sadia Akhtar", member_no: "R-12", phone: null, khata_no: "32", status: "active", is_walk_in: false, balance_minor: 0, credit_limit_minor: null, orders_count: 0, last_order_at: null } as unknown as Customer);
+  const match = { product: { id: "p1", name: "Biscuits" }, variant: null, quantity: 1 } as unknown as BarcodeMatch;
+  const options = { receipt: true, customers: [sadia] };
+
+  it("sells a product first, even one whose code looks like a receipt number", () => {
+    expect(classifyScan("261106-MAIN-42", { product: () => match, ...options })).toEqual({ kind: "product", match });
+  });
+
+  it("then opens a receipt number, then a member number matched exactly, case aside", () => {
+    expect(classifyScan("261106-MAIN-42", { product: () => null, ...options })).toEqual({ kind: "receipt", code: "261106-MAIN-42" });
+    expect(classifyScan(" r-12 ", { product: () => null, ...options })).toEqual({ kind: "customer", customer: sadia });
+    expect(classifyScan("R-1", { product: () => null, ...options })).toBeNull();
+    expect(classifyScan("R-123", { product: () => null, ...options })).toBeNull();
+  });
+
+  it("only looks for what the screen handles, and never picks the walk-in customer", () => {
+    expect(classifyScan("261106-MAIN-42", { product: () => null, receipt: false, customers: [] })).toBeNull();
+    expect(classifyScan("R-12", { product: () => null, receipt: true })).toBeNull();
+    expect(classifyScan("R-12", { product: () => null, customers: [{ ...sadia, is_walk_in: true }] })).toBeNull();
   });
 });
