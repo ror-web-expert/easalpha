@@ -177,10 +177,10 @@ RSpec.describe "A new owner setting up a business", type: :request do
         times = CSV.parse(response.body, headers: true).map { |r| r["occurred_at"] }
         expect(times).to all(match(/\A\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\z/))
         expect(times).to include(start_with("2026-11-06 21:41"))
+        get "/api/v1/audit_logs/entities", headers: headers # inside the travel: the access token was issued at 16:41
+        expect(json[:entity_labels]).to include(orders: "Orders")
+        expect(json[:entity_labels].values).not_to include("order_items")
       end
-      get "/api/v1/audit_logs/entities", headers: headers
-      expect(json[:entity_labels]).to include(orders: "Orders")
-      expect(json[:entity_labels].values).not_to include("order_items")
     end
   end
 
