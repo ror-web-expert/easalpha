@@ -50,12 +50,13 @@ module Finance
       [ "5160", "Transport and Fuel", "expense", false, "5100" ],
       [ "5170", "Staff Meals", "expense", false, "5100" ], # the company's share of subsidised canteen meals
       [ "5190", "Other Expenses", "expense", false, "5100" ],
+      [ "5195", "Cash Over and Short", "expense", false, "5100" ],
       [ "5200", "Waste and Spoilage", "expense", false, nil ],
       [ "5300", "Rider Commissions", "expense", false, nil ],
       [ "5900", "Depreciation Expense", "expense", false, nil ]
     ].freeze
 
-    PAYMENT_PARENTS = { "cash" => "1010", "drawer" => "1010", "bank" => "1020", "wallet" => "1040", "custom" => "1020" }.freeze
+    PAYMENT_PARENTS = { "cash" => "1010", "drawer" => "1010", "bank" => "1020", "wallet" => "1040", "custom" => "1020", "safe" => "1050" }.freeze
     EXPENSE_PARENTS = { "Salaries" => "5110", "Rent" => "5120", "Utilities" => "5130", "Marketing" => "5140", "Kitchen" => "5150", "Transport" => "5160", "Petty cash" => "5190" }.freeze
 
     def seed!

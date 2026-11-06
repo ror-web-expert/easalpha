@@ -363,6 +363,15 @@ export interface Shift {
   settlement_status: string; opened_at: string; closed_at: string | null; opening_cash_minor: number; counted_cash_minor: number | null;
   approved_by_membership_id: ID | null; close_note: string | null; movements: CashMovement[]; expected_cash_minor?: number; over_short_minor?: number | null;
   cashier?: string | null; net_sales_minor?: number | null;
+  /** Whose shift it is: on a till the shift open there may be another cashier's (GET /shifts/current). */
+  cashier_name?: string | null;
+}
+/** The drawer rows of a shift (Shift#cash_breakdown): outgoing rows are positive amounts of money out. Rows added by
+ *  later builds are optional, as a Z report stored before them does not carry them. */
+export interface ZReportCash {
+  opening_minor: number; cash_sales_minor: number; cash_in_minor: number; cash_out_minor: number; expected_minor: number; counted_minor: number | null; over_short_minor: number | null;
+  cash_refunds_minor?: number; khata_collected_minor?: number; khata_paid_out_minor?: number; drops_minor?: number; payouts_minor?: number; expenses_minor?: number;
+  supplier_payments_minor?: number; supplier_refunds_minor?: number; rider_float_minor?: number; other_minor?: number;
 }
 export interface ZReport {
   shift_id: ID; business_day: string; opened_at: string; closed_at: string; cashier: string | null;
@@ -370,15 +379,24 @@ export interface ZReport {
   sales: { gross_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; tips_minor: number; net_minor: number };
   by_payment_method: Record<string, number>; by_order_type: Record<string, number>;
   refunds: { count: number; amount_minor: number }; voids: { count: number; amount_minor: number }; discounts: { count: number; amount_minor: number };
-  cash: { opening_minor: number; cash_sales_minor: number; cash_in_minor: number; cash_out_minor: number; expected_minor: number; counted_minor: number | null; over_short_minor: number | null };
+  cash: ZReportCash;
   khata: { collected_minor: number; on_account_minor: number };
   movements: { kind: string; amount_minor: number; reason: string | null; at: string }[];
+}
+export interface DayCloseShift {
+  id: ID; cashier_membership_id: ID; over_short_minor: number | null; status: string;
+  cashier?: string | null; settlement_status?: string; expected_minor?: number | null; counted_minor?: number | null;
 }
 export interface DayCloseStatus {
   business_day: string; locked: boolean; locked_at: string | null; reopened_at: string | null;
   shifts: { total: number; open: number; unsettled: number }; open_orders: number; drafts: number; ready: boolean;
   summary: { orders: number; paid: number; voided: number; net_sales_minor: number; discount_minor: number; tax_minor: number; by_payment_method: Record<string, number>; refunds_minor: number;
-    shifts: { id: ID; cashier_membership_id: ID; over_short_minor: number | null; status: string }[] } | null;
+    shifts: DayCloseShift[] } | null;
+}
+/** One shift in a Day-End Settlement's detail: its count, the float it gave back to the safe and what was cleared. */
+export interface DayEndShiftDetail {
+  shift_id: ID; cashier_membership_id: ID; cashier?: string | null; business_day: string; amount_minor: number;
+  expected_minor?: number | null; counted_minor?: number | null; over_short_minor?: number | null; float_to_safe_minor?: number;
 }
 
 // ---- Customers ----
@@ -684,7 +702,9 @@ export interface RiderSettlement {
   id: ID; number: number; label: string; rider_id: ID; rider_name: string; shift_id: ID | null; deliveries_count: number; cash_collected_minor: number; float_held_minor: number; spent_minor: number;
   expected_minor: number; handed_in_minor: number; difference_minor: number; note: string | null; settled_by_membership_id: ID | null; settled_at: string;
 }
-export interface SettlementPreview { rider: Rider; deliveries_count: number; cash_collected_minor: number; float_held_minor: number; expected_minor: number; deliveries: Delivery[] }
+/** cash_collected_minor is the cash on delivery the rider still owes (orders not paid yet); paid_at_till_minor what of
+ *  all the cash collected (collected_total_minor) the till already took as those orders' payments. */
+export interface SettlementPreview { rider: Rider; deliveries_count: number; cash_collected_minor: number; float_held_minor: number; expected_minor: number; deliveries: Delivery[]; collected_total_minor?: number; paid_at_till_minor?: number }
 export interface QrOrder extends OrderSummary { qr_status: "pending" | "accepted" | "rejected"; address_text?: string | null }
 export interface TableRequest { id: ID; table_id: ID; table_code: string; kind: "call_waiter" | "ask_bill"; guest_name: string | null; note: string | null; requested_at: string; handled_at: string | null; handled_by_membership_id: ID | null }
 export interface QrSettings { enabled: boolean; cashier_accept: boolean; call_waiter: boolean; ask_bill: boolean; running_bill: boolean; guest_name: boolean; welcome: string | null }

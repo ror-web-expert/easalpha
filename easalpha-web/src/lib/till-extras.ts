@@ -75,6 +75,26 @@ export const listTillExpensesToday = (day: string) => api<Page<Expense>>("/expen
 export interface ExpenseDraft { client_id: string; category_id: string; amount_minor: number; paid_to: string; note: string; method_code?: string }
 export const newExpenseDraft = (): ExpenseDraft => ({ client_id: uuid(), category_id: "", amount_minor: 0, paid_to: "", note: "", method_code: "cash" });
 export const createExpense = (d: ExpenseDraft, approver_pin?: string) => api<Expense>("/expenses", { method: "POST", auth: "pos", body: { client_id: d.client_id, category_id: d.category_id, amount_minor: d.amount_minor, paid_to: d.paid_to || undefined, note: d.note || undefined, method_code: d.method_code || undefined, approver_pin } });
+/** An expense from the till needs a category and an amount; the client id keeps a second press from recording it twice. */
+export const expenseDraftReady = (d: ExpenseDraft) => !!d.category_id && d.amount_minor > 0;
+/** Categories as one list for a picker: each top-level category, then its subcategories as "Parent / Child". */
+export function flatCategories(categories: ExpenseCategory[] | null | undefined): { id: string; label: string }[] {
+  return (categories ?? []).flatMap((c) => [{ id: c.id, label: c.name }, ...(c.children ?? []).filter((x) => !x.archived_at).map((x) => ({ id: x.id, label: `${c.name} / ${x.name}` }))]);
+}
+
+// ---- Drawer moves (QA B7): cash in, cash out, a drop to the safe, a payout ----
+export type DrawerMoveKind = "cash_in" | "cash_out" | "drop" | "payout";
+export interface DrawerMove { kind: DrawerMoveKind; amount: number; reason: string; paid_to: string; category_id: string }
+export const DRAWER_MOVES: Record<DrawerMoveKind, { title: string; hint: string; placeholder: string; done: string }> = {
+  cash_in: { title: "Cash in", hint: "Change put into the drawer. It comes out of the safe while the safe holds it; anything more is the owner's money.", placeholder: "Change for the evening", done: "Cash in recorded" },
+  cash_out: { title: "Cash out", hint: "Cash taken out for the owner. Use Drop for the safe, and Payout or Expense for anything paid for. Above your limit a manager's PIN is asked.", placeholder: "Owner took cash", done: "Cash out recorded" },
+  drop: { title: "Drop to safe", hint: "Cash moved from the drawer into the safe. Above your limit a manager's PIN is asked.", placeholder: "Too much cash in the drawer", done: "Drop recorded" },
+  payout: { title: "Payout", hint: "Cash paid out of the drawer to someone. It is recorded as an expense, Petty cash unless you pick a category. Above your limit a manager's PIN is asked.", placeholder: "Ice for the drinks", done: "Payout recorded" },
+};
+export const newDrawerMove = (kind: DrawerMoveKind): DrawerMove => ({ kind, amount: 0, reason: "", paid_to: "", category_id: "" });
+export const drawerMoveReady = (m: DrawerMove) => m.amount > 0 && !!m.reason.trim();
+/** What the move sends beyond kind, amount and reason: a payout's category and payee. */
+export const drawerMoveExtra = (m: DrawerMove): { category_id?: string; paid_to?: string } => (m.kind === "payout" ? { category_id: m.category_id || undefined, paid_to: m.paid_to.trim() || undefined } : {});
 
 // ---- Reservations ----
 export const listReservationsOn = (date: string) => api<Page<Reservation>>("/reservations", { auth: "pos", query: { date, limit: 100 } }).then((p) => p.data);

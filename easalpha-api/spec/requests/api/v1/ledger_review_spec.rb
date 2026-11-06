@@ -107,8 +107,13 @@ RSpec.describe "Ledger review: money paths", type: :request do
       expect(response).to have_http_status(:created), response.body
       api_post "/api/v1/shifts/#{shift[:id]}/cash_movements", { kind: "payout", amount_minor: 2_000, reason: "Ice" }, headers: headers
       expect(response).to have_http_status(:created), response.body
-      expect(balance("1050")).to eq(50_000)
+      # The drop lands in the branch's safe account (under 1050), the payout is an expense under Petty cash (5190).
+      safe = within(biz) { PaymentAccount.find_by!(kind: "safe") }
+      expect(safe.current_balance_minor).to eq(50_000)
+      expect(within(biz) { GlAccount.find_by!(payment_account_id: safe.id).parent.code }).to eq("1050")
+      expect(within(biz) { Finance::Statements.balances(as_of: today)[GlAccount.find_by!(payment_account_id: safe.id).id] }).to eq(50_000)
       expect(balance("5190")).to eq(2_000)
+      expect(within(biz) { Expense.sole }).to have_attributes(amount_minor: 2_000, note: "Ice", source: "till", shift_id: shift[:id])
       expect(balance("3020")).to eq(0)
       drawer = within(biz) { GlAccount.find_by!(payment_account_id: shift[:drawer_account_id]) }
       expect(within(biz) { Finance::Statements.balances(as_of: today)[drawer.id] }).to eq(48_000)

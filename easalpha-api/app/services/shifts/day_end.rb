@@ -6,15 +6,19 @@ module Shifts
     def settle!(branch:, day:, by:, note: nil, force: false)
       open = Shift.where(branch_id: branch.id, business_day: ..day, status: "open")
       raise Api::Errors::Conflict.new("day_end.open_shifts", "#{open.count} till(s) are still open; close them first or force") if open.exists? && !force
-      pending = Shift.where(branch_id: branch.id, business_day: ..day, status: "closed", settlement_status: "pending").order(:closed_at).to_a
+      # A force-closed shift is settled like any other closed one; Day close counts it as unsettled until then.
+      pending = Shift.where(branch_id: branch.id, business_day: ..day, status: %w[closed force_closed], settlement_status: "pending").order(:closed_at).to_a
+      names = Membership.unscoped.where(id: pending.map(&:cashier_membership_id)).includes(:user).to_h { |m| [ m.id, m.user&.name ] }
       detail = []
       amount = 0
       DayEndSettlement.transaction do
         pending.each do |s|
-          held = s.drawer_account&.current_balance_minor.to_i
-          Shifts::Manager.settle!(s, by: by)
-          amount += held
-          detail << { shift_id: s.id, cashier_membership_id: s.cashier_membership_id, business_day: s.business_day, amount_minor: held }
+          # Each shift's own count, not whatever its cashier's drawer holds when its turn comes (QA B6: the first of two
+          # shifts got both shifts' money and the second none).
+          r = Shifts::Manager.settle_shift!(s, by: by)
+          amount += r[:moved_minor]
+          detail << { shift_id: s.id, cashier_membership_id: s.cashier_membership_id, cashier: names[s.cashier_membership_id], business_day: s.business_day,
+                      expected_minor: s.expected_cash_minor, counted_minor: s.counted_cash_minor, over_short_minor: s.over_short_minor, float_to_safe_minor: r[:float_minor], amount_minor: r[:moved_minor] }
         end
         rec = DayEndSettlement.create!(branch: branch, business_day: day, settled_by_membership_id: by&.id, shifts_count: pending.size, amount_minor: amount, detail: { shifts: detail, forced: force }, note: note)
         AuditLog.record(action: "day_end_settlement", record: rec, after: { business_day: day, shifts: pending.size, amount_minor: amount })
