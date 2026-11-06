@@ -49,7 +49,7 @@ class MenuImport
   private
 
   def parse_csv
-    CSV.parse(@data.to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each_with_index do |row, i|
+    SafeCsv.parse(@data.to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each_with_index do |row, i|
       add_row(line: i + 2, category: row["category"], name: row["name"] || row["product"], name_ur: row["name_ur"], price: row["price"], sku: row["sku"], description: row["description"], image: row["image"])
     end
   rescue CSV::MalformedCSVError => e

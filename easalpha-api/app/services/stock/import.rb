@@ -16,7 +16,7 @@ module Stock
 
     def parse
       units = Unit.active.pluck(:code).to_set
-      CSV.parse(@data.to_s, headers: true, header_converters: ->(h) { h = h.to_s.strip.downcase; ALIASES[h] || h.tr(" ", "_") }).each_with_index do |r, i|
+      SafeCsv.parse(@data.to_s, headers: true, header_converters: ->(h) { h = h.to_s.strip.downcase; ALIASES[h] || h.tr(" ", "_") }).each_with_index do |r, i|
         row = Row.new(line: i + 2, name: r["name"].to_s.strip, sku: r["sku"].presence, category: r["category"].presence, unit: r["unit"].to_s.strip.downcase.presence || "pcs",
                       purchase_unit: r["purchase_unit"].to_s.strip.downcase.presence, minimum: r["minimum"], reorder: r["reorder"], opening_qty: r["opening_qty"], cost: r["cost"], section: r["section"].presence)
         row.error = "name is required" if row.name.blank?

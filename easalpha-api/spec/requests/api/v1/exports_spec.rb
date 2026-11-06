@@ -27,4 +27,13 @@ RSpec.describe "Exports", type: :request do
     get "/api/v1/exports/orders.csv", headers: auth_headers(cashier)
     expect(response).to have_http_status(:forbidden)
   end
+
+  it "writes a customer whose name looks like a formula as text, so a spreadsheet never runs it (review R12)" do
+    api_post "/api/v1/customers", { name: "=HYPERLINK(\"http://evil.test\",\"Click\")", phone: "+923001112233" }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    get "/api/v1/exports/customers.csv", headers: headers
+    row = CSV.parse(response.body, headers: true).find { |r| r["name"].to_s.include?("HYPERLINK") }
+    expect(row["name"]).to eq("'=HYPERLINK(\"http://evil.test\",\"Click\")")
+    expect(row["phone"]).to eq("'+923001112233")
+  end
 end

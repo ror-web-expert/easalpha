@@ -112,7 +112,7 @@ module Api
       # POST /suppliers/import { csv }  columns: name, contact, phone, email, address, terms, opening_balance
       def import
         created = updated = 0
-        CSV.parse(params.require(:csv).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each do |r|
+        SafeCsv.parse(params.require(:csv).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each do |r|
           name = r["name"].to_s.strip
           next if name.blank?
           attrs = { contact_name: r["contact"] || r["contact_name"], phone: r["phone"], email: r["email"], address: r["address"], payment_terms_days: r["terms"].to_i }

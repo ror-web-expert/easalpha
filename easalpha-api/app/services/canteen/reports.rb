@@ -59,7 +59,7 @@ module Canteen
     end
 
     def csv(rows, columns)
-      CSV.generate do |csv|
+      SafeCsv.generate do |csv|
         csv << columns.map { |c| c[:label] }
         rows.each { |r| csv << columns.map { |c| c[:value].call(r) } }
       end

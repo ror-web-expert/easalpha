@@ -28,7 +28,7 @@ module Api
       end
 
       def csv(headers)
-        CSV.generate { |csv| csv << headers; yield csv }
+        SafeCsv.generate { |csv| csv << headers; yield csv }
       end
 
       def csv_menu

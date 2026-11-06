@@ -16,7 +16,7 @@ module Api
 
       # GET /expenses/export  the same filters as CSV (SPEC: exports to PDF and CSV; the PDF is built in the browser)
       def export
-        csv = CSV.generate do |out|
+        csv = SafeCsv.generate do |out|
           out << %w[number spent_on category amount method source paid_to note voided]
           filtered.find_each { |e| out << [ e.label, e.spent_on, e.category.full_name, e.amount_minor / 100.0, e.payment_method&.code, e.source, e.paid_to, e.note, e.voided? ? "yes" : "" ] }
         end

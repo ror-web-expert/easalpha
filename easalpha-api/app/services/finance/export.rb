@@ -13,7 +13,7 @@ module Finance
     def journal_csv(branch:, from:, to:, format: "quickbooks")
       entries = AccountEntry.where(branch_id: branch.id, business_day: from..to).includes(:payment_account).order(:business_day, :occurred_at)
       headers = format == "xero" ? %w[*Date *Description *AccountCode *Debit *Credit Reference] : %w[Date RefNumber Account Debit Credit Memo]
-      CSV.generate do |csv|
+      SafeCsv.generate do |csv|
         csv << headers
         entries.each do |e|
           cash_account = "#{e.payment_account.kind.capitalize}: #{e.payment_account.name}"

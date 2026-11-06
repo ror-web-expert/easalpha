@@ -148,7 +148,7 @@ module Api
       def import
         created = updated = openings = 0
         errors = []
-        rows = CSV.parse(params.require(:data).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" /", "__") })
+        rows = SafeCsv.parse(params.require(:data).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" /", "__") })
         wants_opening = rows.headers.include?("opening_balance") && rows.any? { |r| r["opening_balance"].to_s.strip.present? }
         if wants_opening
           BusinessModules.require!(current_business, "customer_accounts")
