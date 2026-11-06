@@ -21,6 +21,9 @@ module Reports
     # Each part of the sold orders' totals as Finance::Journal.sale_parts splits one; an order with nothing to pay has none.
     PART_SQL = { sales: "total_minor - tax_minor - service_charge_minor - delivery_charge_minor - tip_minor - rounding_minor", tax: "tax_minor", service_charge: "service_charge_minor",
                  delivery_charge: "delivery_charge_minor", tip: "tip_minor", rounding: "rounding_minor" }.transform_values { |c| "SUM(CASE WHEN orders.total_minor > 0 THEN #{c} ELSE 0 END)" }.freeze
+    # The same summed over no rows is NULL; totals reads them never NULL. Built here from the fixed fragments above, so
+    # the query takes whole strings (Brakeman read the interpolation at the call as user SQL).
+    PART_TOTAL_SQL = PART_SQL.transform_values { |s| "COALESCE(#{s}, 0)" }.freeze
 
     RefundLine = Struct.new(:refund, :order, :business_day, :revenue_minor, :parts, keyword_init: true)
 
@@ -70,7 +73,7 @@ module Reports
       def totals
         @totals ||= begin
           count, total, subtotal, discount, *parts = orders.pick(Arel.sql("COUNT(*)"), Arel.sql("COALESCE(SUM(total_minor), 0)"), Arel.sql("COALESCE(SUM(subtotal_minor), 0)"),
-                                                                   Arel.sql("COALESCE(SUM(discount_minor), 0)"), *PART_SQL.values.map { |s| Arel.sql("COALESCE(#{s}, 0)") })
+                                                                   Arel.sql("COALESCE(SUM(discount_minor), 0)"), *PART_TOTAL_SQL.values.map { |s| Arel.sql(s) })
           sold = PARTS.zip(parts.map(&:to_i)).to_h
           back = PARTS.index_with { |k| refunds.sum { |l| l.parts[k] } }
           net = PARTS.index_with { |k| sold[k] - back[k] }
