@@ -145,6 +145,50 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
     end
   end
 
+  describe "money taken by a role without payments.take (item 13)" do
+    let(:cash) { { method_code: "cash", amount_minor: 9_280, tendered_minor: 10_000 } }
+
+    it "refuses a waiter's paid order, payment or Try again until a manager's PIN comes with it, and logs the manager" do
+      as_waiter = as(waiter)
+      paid = SecureRandom.uuid
+      rec = order(paid, by: waiter, payments: [ cash.merge(id: SecureRandom.uuid) ])
+      push([ rec ], headers: as_waiter)
+      expect(results.first).to include(status: "rejected", code: "approval.required", details: include(permissions: [ "payments.take" ]))
+      expect(within(biz) { Order.exists?(id: paid) }).to be false
+      push([ rec.merge(approver_pin: "9999", approval_codes: [ "payments.take" ]) ], headers: as_waiter)
+      expect(results.first[:status]).to eq("accepted"), response.body
+      within(biz) do
+        expect(Order.find(paid).payment_status).to eq("paid")
+        expect(AuditLog.where(action: "approve", record_id: paid).sole).to have_attributes(approved_by_user_id: manager.user_id)
+      end
+
+      open = SecureRandom.uuid
+      push([ order(open, by: waiter) ], headers: as_waiter)
+      pay = { type: "payment", id: SecureRandom.uuid, membership_id: waiter.id, payload: cash.merge(order_id: open) }
+      push([ pay ], headers: as_waiter)
+      expect(results.first).to include(status: "rejected", code: "approval.required")
+      push([ pay.merge(approver_pin: "9999", approval_codes: [ "payments.take" ]) ], headers: as_waiter)
+      expect(results.first[:status]).to eq("accepted"), response.body
+
+      # The order is on the server; sent again with its payment (Try again), the payment still needs the manager.
+      again = SecureRandom.uuid
+      push([ order(again, by: waiter) ], headers: as_waiter)
+      retry_rec = order(again, by: waiter, payments: [ cash.merge(id: SecureRandom.uuid) ])
+      push([ retry_rec ], headers: as_waiter)
+      expect(results.first).to include(status: "rejected", code: "approval.required")
+      push([ retry_rec.merge(approver_pin: "9999", approval_codes: [ "payments.take" ]) ], headers: as_waiter)
+      expect(results.first[:status]).to eq("accepted"), response.body
+      expect(within(biz) { Order.where(id: [ paid, open, again ]).pluck(:payment_status).uniq }).to eq([ "paid" ])
+    end
+
+    it "takes the cashier's own payments with no PIN" do
+      id = SecureRandom.uuid
+      push([ order(id, payments: [ cash.merge(id: SecureRandom.uuid) ]) ])
+      expect(results.first[:status]).to eq("accepted"), response.body
+      expect(within(biz) { AuditLog.where(action: "approve", record_id: id).count }).to eq(0)
+    end
+  end
+
   describe "an old till's split tips (deploy#6)" do
     it "takes the tip once when every split of an offline payment carries it" do
       id = SecureRandom.uuid

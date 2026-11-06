@@ -29,12 +29,13 @@ RSpec.describe "Request throttles", type: :request do
       expect(key("login/email", req("/api/v1/auth/login", body: "{not json"))).to be_nil
     end
 
-    it "lets a JSON login through to the controller after reading it" do
-      owner = signup_business(email: "kept@example.com", password: "password123")
-      expect(owner).to be_present
-      env = { "CONTENT_TYPE" => "application/json" }
-      post "/api/v1/auth/login", params: { email: "kept@example.com", password: "password123" }.to_json, headers: env
-      expect(response).to have_http_status(:ok), response.body
+    it "leaves the request to the controller: a JSON login the throttle has read still signs in" do
+      signup_business(email: "kept@example.com", password: "password123")
+      env = Rack::MockRequest.env_for("/api/v1/auth/login", method: "POST", input: { email: "kept@example.com", password: "password123" }.to_json,
+                                      "CONTENT_TYPE" => "application/json", "HTTP_ACCEPT" => "application/json", "REMOTE_ADDR" => "203.0.113.9")
+      expect(key("login/email", Rack::Attack::Request.new(env))).to eq("kept@example.com")
+      status, _headers, body = Rails.application.call(env)
+      expect(status).to eq(200), body.each.to_a.join
     end
   end
 

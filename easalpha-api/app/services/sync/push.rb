@@ -118,17 +118,21 @@ module Sync
       attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
       attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id if attrs[:is_staff_meal]
       attrs[:client_created_at] = Orders::ClientTime.clamp(attrs[:client_created_at], record_id: id) if attrs.key?(:client_created_at)
-      # Read before anything is written: a payment time the server cannot read refuses the record, not half of it.
+      # Read before anything is written: a payment time the server cannot read refuses the record, not half of it, and
+      # so does money taken by someone who may not take it.
       payments = clamped_payments(payload[:payments])
+      voided = payload[:voided].present? || payload[:status].to_s == "voided"
+      payment_approver = payments.any? && !voided ? approver_for("payments.take", actor) : nil
       day = @branch.business_day_for(attrs[:client_created_at] || Time.current)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
       builder = Orders::Builder.create!(attrs, lines: Array(payload[:lines]).map(&:to_h), actor: actor, device: @device, branch: @branch, approvals: @approvals)
       order = builder.order
       Orders::Transitions.place!(order, actor: actor, device: @device) if complete?(payload) || payload[:status].to_s != "draft" && payload[:status].present?
-      if payload[:voided].present? || payload[:status].to_s == "voided"
+      if voided
         Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for("orders.void", actor), device: @device)
       elsif payments.any?
         Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payments, tip_minor: payload[:tip_minor].to_i, offline: true)
+        audit_payment_approval(payment_approver, order, payments)
       end
       complete!(order, actor) if complete?(payload)
       "accepted"
@@ -142,8 +146,10 @@ module Sync
       missing = Array(payload[:payments]).map { |p| p.to_h.with_indifferent_access }.reject { |p| p[:id].present? && Payment.exists?(id: p[:id]) }
       changed = false
       if missing.any?
+        approver = approver_for("payments.take", actor)
         tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
         Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: clamped_payments(missing), tip_minor: tip, offline: true)
+        audit_payment_approval(approver, order, missing)
         changed = true
       end
       if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
@@ -205,8 +211,21 @@ module Sync
     def apply_payment(id, payload, actor)
       return "duplicate" if Payment.exists?(id: id)
       order = Order.includes(items: :modifiers).find(need(payload, :order_id))
+      approver = approver_for("payments.take", actor)
       Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: clamped_payments([ payload.merge(id: id) ]), tip_minor: replayed_tip(order, payload, id), offline: true)
+      audit_payment_approval(approver, order, [ payload.merge(id: id) ])
       "accepted"
+    end
+
+    # Money taken offline needs payments.take on the member who took it, as POST /orders/:id/payments does, or a
+    # manager's PIN on the record (approver_pin with approval_codes): without either it is refused as
+    # approval.required, and Try again asks the manager. A waiter's queued payment went through (final round, P4,
+    # whose till now refuses it offline up front). The manager who approved is written to the audit log.
+    def audit_payment_approval(approver, order, payments)
+      return unless approver
+      lines = payments.map { |p| p.to_h.with_indifferent_access }
+      AuditLog.record(action: "approve", record: order, approved_by: approver.user,
+                      after: { permission: "payments.take", payment_ids: lines.filter_map { |p| p[:id].presence }, amount_minor: lines.sum { |p| p[:amount_minor].to_i } })
     end
 
     # The till's time on a payment dates it when there is no shift (Payments::Processor#money_day), so it is kept in
