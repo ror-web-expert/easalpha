@@ -110,7 +110,7 @@ module Api
       end
 
       def deliveries
-        scope = Delivery.where(rider_id: params[:id]).includes(:rider, :zone, order: :customer).order(created_at: :desc)
+        scope = Delivery.where(rider_id: params[:id]).includes(:rider, :zone, :address, order: :customer).order(created_at: :desc)
         scope = scope.where(status: params[:status]) if params[:status].present?
         rows, cursor = paginate(scope)
         render_page(rows, cursor) { |d| DeliverySerializers.delivery(d) }

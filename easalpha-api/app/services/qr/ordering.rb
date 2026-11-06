@@ -18,12 +18,13 @@ module Qr
       # SPEC: a hidden menu or category keeps its products off the customer-facing site while staff can still sell them.
       menus = Menu.active.where(show_online: true).order(:sort_order).select { |m| m.available_at?(Time.current, zone: business.time_zone) }
       categories = Category.active.where(menu_id: menus.map(&:id), show_online: true).order(:sort_order)
-      products = Product.live.where(category_id: categories.map(&:id)).includes(:variants, :product_prices, :product_modifier_groups, :tax_rate).order(:sort_order)
+      products = Product.live.where(category_id: categories.map(&:id)).includes(:variants, :product_prices, :product_modifier_groups, :tax_rate, :barcodes).order(:sort_order)
       base.merge(ordering: true,
                  categories: categories.map { |c| MenuSerializers.category(c) },
                  products: products.map { |p| MenuSerializers.product(p, full: true).merge(price_minor: p.price_for(order_type: "dine_in", branch_id: branch.id)) },
                  modifier_groups: ModifierGroup.active.includes(:modifiers).map { |g| MenuSerializers.modifier_group(g) },
-                 deals: Deal.active.includes(:deal_items).select { |d| d.available_at?(Time.current) }.map { |d| MenuSerializers.deal(d) },
+                 # available_at? reads the business's time zone: preloaded, or each deal loads the business again.
+                 deals: Deal.active.includes(:deal_items, :business).select { |d| d.available_at?(Time.current) }.map { |d| MenuSerializers.deal(d) },
                  running_bill: cfg["running_bill"] ? bill(table) : nil)
     end
 
