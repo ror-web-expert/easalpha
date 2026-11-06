@@ -209,7 +209,9 @@ if (riderButtons) {
   await rp.getByRole("button", { name: "Pair" }).click().catch(() => {});
   await rp.waitForTimeout(2000);
   for (const d of "4323") await rp.getByRole("button", { name: d, exact: true }).first().click().catch(() => {});
-  await rp.waitForTimeout(2500); await shot(rp, "rider");
+  // A PIN sign-in checks every staff PIN on the server, which takes a few seconds: wait for the app, not a fixed pause.
+  await rp.waitForURL((u) => !/\/rider\/(pin|pair)/.test(u.pathname), { timeout: 30000 }).catch(() => {});
+  await rp.waitForTimeout(1500); await shot(rp, "rider");
   const rtext = await rp.evaluate(() => document.body.innerText);
   step("rider app signed in", /Deliver|No deliveries|Today|Online/i.test(rtext || ""), (rtext || "").slice(0, 80).replace(/\s+/g, " "));
 } else step("rider app loads", false, rp.url());
