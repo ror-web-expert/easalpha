@@ -96,12 +96,13 @@ module Api
                        movements: entries.map { |e| StockSerializers.ledger_entry(e) } }
       end
 
-      # POST /stock/deduction_health/:order_id/retry  SPEC Retry: run the deduction again; the unique index keeps it single
+      # POST /stock/deduction_health/:order_id/retry  SPEC Retry: run the deduction again. Lines already in step stay as
+      # they are; a line that found no recipe when it was checked is tried again, now that one may exist.
       def retry_deduction
         require_permission!("stock.actions", "settings.manage")
         order = Order.find(params[:order_id])
         raise Api::Errors::Conflict.new("order.not_completed", "Only a completed order deducts stock") unless order.completed?
-        audit = Stock::Deduction.deduct!(order, actor: current_membership)
+        audit = Stock::Deduction.deduct!(order, actor: current_membership, fill_missing: true)
         audit!("update", record: order, after: { retry_deduction: audit.status })
         deduction_health_order
       end

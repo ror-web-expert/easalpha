@@ -61,13 +61,67 @@ RSpec.describe Finance::ProfitLoss, type: :request do
       expect(pl[:revenue][:revenue_minor]).to eq(sales[:revenue_minor])
       expect(pl[:orders]).to eq(sales[:orders])
       r = pl[:revenue]
-      expect(r).to include(revenue_minor: 99_400, tax_collected_minor: 14_400, net_sales_minor: 85_000, gross_sales_minor: 90_000, discounts_minor: 0,
-                           service_charge_minor: 0, delivery_charge_minor: 0, tips_minor: 5_000, rounding_minor: 0, refunds_minor: 10_000)
-      expect(r[:gross_sales_minor] - r[:discounts_minor] + r[:service_charge_minor] + r[:delivery_charge_minor] + r[:tips_minor] + r[:rounding_minor] - r[:refunds_minor]).to eq(r[:net_sales_minor])
+      # Three burgers sold (Rs 450 and Rs 72 tax each); refunds take back their shares as the journal splits them: Rs
+      # 86.21 of sales and Rs 13.79 of tax from the Rs 100, everything from the full one. The tip is the staff's.
+      expect(r).to include(revenue_minor: 99_400, tax_collected_minor: 13_021, net_sales_minor: 81_379, gross_sales_minor: 135_000, discounts_minor: 0,
+                           service_charge_minor: 0, delivery_charge_minor: 0, tips_minor: 5_000, rounding_minor: 0, refunds_minor: 53_621)
+      expect(r[:gross_sales_minor] - r[:discounts_minor] + r[:service_charge_minor] + r[:delivery_charge_minor] + r[:rounding_minor] - r[:refunds_minor]).to eq(r[:net_sales_minor])
+      expect(r[:net_sales_minor] + r[:tax_collected_minor] + r[:tips_minor]).to eq(r[:revenue_minor])
       # Three buns went out with a sale (the paid, the part-refunded and the staff meal); the refunded one came back.
-      expect(pl).to include(cost_of_goods_minor: 6_000, gross_profit_minor: 79_000)
-      expect(Reports::Stock.valuation_cogs(branch: branch, from: day, to: day)).to include(revenue_minor: 85_000, cogs_minor: 6_000)
-      expect(Reports::Branches.compare(from: day, to: day)[:rows].first).to include(revenue_minor: 99_400, cost_of_goods_minor: 6_000, gross_profit_minor: 79_000)
+      expect(pl).to include(cost_of_goods_minor: 6_000, gross_profit_minor: 75_379, net_profit_minor: 75_379)
+      expect(Reports::Stock.valuation_cogs(branch: branch, from: day, to: day)).to include(revenue_minor: 81_379, cogs_minor: 6_000)
+      expect(Reports::Branches.compare(from: day, to: day)[:rows].first).to include(revenue_minor: 99_400, cost_of_goods_minor: 6_000, gross_profit_minor: 75_379)
+      expect(Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor]).to eq(pl[:net_profit_minor])
+    end
+  end
+
+  # B14 with the books package (P2): a subsidised canteen meal books the company's share to 5170 Staff Meals, and the
+  # payroll clears the worker's share into 5110 Salaries and moves the tips it pays out of Salaries into Tips Payable.
+  # Those live only in the journal; the profit and loss lists them and still comes to the balance sheet's earnings.
+  it "keeps to the books through a subsidised canteen meal and a payroll that clears it and pays out tips" do
+    api_patch "/api/v1/settings", { values: { "modules.canteen" => true } }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+    kiosk, worker = within(biz) do
+      lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
+      # The plan of the day the session opened on (Canteen::Sessions.day_for): before the 02:01 cutoff, the day before.
+      Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: Canteen::Sessions.day_for(branch, lunch, Time.current), items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
+      [ Device.create!(branch: branch, name: "Kiosk 1", kind: "kiosk", paired_at: Time.current, code: "Q1"),
+        Employee.create!(name: "Akbar Ali", base_salary_minor: 3_000_000, pay_frequency: "monthly", joined_on: Date.new(2026, 1, 1), fingerprint_id: "FP-001", fingerprint_enrolled: true, shares_tips: true) ]
+    end
+    api_post "/api/v1/canteen/claims", { fingerprint_id: "FP-001" }, headers: device_headers(kiosk)
+    expect(response).to have_http_status(:created), response.body # Rs 522: Rs 200 the worker's, Rs 322 the company's
+    pay!(burger!, tip: 5_000)
+    month = day.beginning_of_month
+    within(biz) { (month..month.end_of_month).each { |d| Attendance.create!(employee_id: worker.id, business_day: d, status: "present", source: "manual") } }
+    api_post "/api/v1/payroll/runs", { month: month.strftime("%Y-%m") }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    expect(json[:payslips].sole).to include(deductions_minor: 20_000, tips_minor: 5_000, net_minor: 2_985_000)
+    api_post "/api/v1/payroll/runs/#{json[:id]}/pay", { method_code: "bank" }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+
+    within(biz) do
+      # A day either side: the salary expense is dated by the calendar, the books by the business day.
+      pl = Finance::ProfitLoss.run(branch: branch, from: day - 1, to: day + 1)
+      expect(pl[:revenue]).to include(revenue_minor: 109_400, net_sales_minor: 90_000, tax_collected_minor: 14_400, tips_minor: 5_000)
+      expect(pl[:operating][:expenses_minor]).to eq(2_985_000)
+      expect(pl[:operating][:other].map { |o| o.values_at(:code, :amount_minor) }).to contain_exactly([ "5170", 32_200 ], [ "5110", 20_000 - 5_000 ])
+      expect(pl[:net_profit_minor]).to eq(90_000 - 4_000 - 2_985_000 - 32_200 - 15_000)
+      expect(pl[:net_profit_minor]).to eq(pl[:books][:net_minor])
+      expect(pl[:net_profit_minor]).to eq(Finance::Statements.balance_sheet(as_of: day + 1)[:current_earnings_minor])
+    end
+  end
+
+  # reports#6: a tax-inclusive price holds its tax, so the sale is what is left of it, as the journal books it.
+  it "takes an inclusive tax out of the sale, as the journal does" do
+    within(biz) { m[:chai].update!(tax_rate: TaxRate.create!(name: "PRA 16% incl", rate: 16, inclusive: true), base_price_minor: 11_600) }
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    pay!(json)
+    within(biz) do
+      pl = Finance::ProfitLoss.run(branch: branch, from: day, to: day)
+      expect(pl[:revenue]).to include(revenue_minor: 11_600, gross_sales_minor: 10_000, net_sales_minor: 10_000, tax_collected_minor: 1_600)
+      expect(pl[:operating][:other]).to be_empty
+      expect(pl[:net_profit_minor]).to eq(Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor])
     end
   end
 end

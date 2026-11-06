@@ -11,6 +11,7 @@ module Stock
       settings = InventorySetting.current
       day = branch.business_day_for(Time.current)
       raise Api::Errors::Conflict.new("stock.day_locked", "Stock is locked up to #{settings.day_lock_date}") if settings.locked?(day)
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
       batches = quantity / recipe.yield_qty
       source = recipe.source_section || section
       StockDocument.transaction do

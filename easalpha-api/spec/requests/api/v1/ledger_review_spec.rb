@@ -172,7 +172,7 @@ RSpec.describe "Ledger review: money paths", type: :request do
       end
       get "/api/v1/day_close?business_day=#{today}", headers: headers
       expect(json[:summary][:refunds_minor]).to eq(2_000)
-      expect(json[:summary][:net_sales_minor]).to eq(0) # the sale counts on its own day
+      expect(json[:summary][:net_sales_minor]).to eq(-2_000) # the sale counts on its own day, the refund on its own (Reports::Revenue)
       get "/api/v1/day_close?business_day=#{sold_on}", headers: headers
       expect(json[:summary]).to include(net_sales_minor: 9_280, refunds_minor: 0)
     end

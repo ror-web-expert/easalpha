@@ -21,9 +21,10 @@ module Reports
         tax_queue: Tax::Invoicer.queue_summary(branch_id: branch.id).slice(:queued, :failed),
         needs_attention: SyncRejection.open.where(branch_id: branch.id).count,
         khata_outstanding_minor: Customer.active.where("balance_minor > 0").sum(:balance_minor),
-        stock: { negative_items: StockLevel.where("quantity < 0").distinct.count(:stock_item_id),
+        # The branch's own stock: its sections only.
+        stock: { negative_items: Stock.branch_levels(branch).where("stock_levels.quantity < 0").distinct.count(:stock_item_id),
                  below_minimum_items: StockItem.active.where("minimum_qty > 0").select { |i| i.below_minimum? }.size,
-                 value_minor: Stock.value_of(StockLevel.all) },
+                 value_minor: Stock.value_of(Stock.branch_levels(branch)) },
         top_items: Sales.new(branch: branch, from: day - 6, to: day).items(limit: 5),
         recent_orders: Order.where(branch_id: branch.id).order(created_at: :desc).limit(8).map { |o| OrderSerializers.summary(o) },
         trend_7_days: Sales.new(branch: branch, from: day - 6, to: day).by_day,
@@ -47,8 +48,8 @@ module Reports
       open = orders.open
       sales = Sales.new(branch: branch, from: from, to: to)
       status_counts = orders.group(:status).count
-      # Revenue by the one rule (Reports::Revenue): paid and closed totals minus their refunds; a refunded order is zero.
-      revenue = Revenue.sum(orders)
+      # Revenue by the one rule (Reports::Revenue): sales on their day, refunds on theirs.
+      revenue = sales.revenue.revenue_minor
       {
         period: period, from: from, to: to,
         cards: {

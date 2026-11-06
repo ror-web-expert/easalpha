@@ -6,9 +6,10 @@ module Reports
     # Grand Report: every payment method with count and share, Unpaid and Complimentary as a share of sales, plus
     # payments received against customer accounts.
     def grand(branch:, from:, to:)
-      paid = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded])
+      # Sales by the one revenue rule (Reports::Revenue), the overview's figure on the same page.
+      sold = Revenue.period(branch: branch, from: from, to: to).totals
       payments = Payment.where(branch_id: branch.id, business_day: from..to, status: "captured")
-      sales = paid.sum(:total_minor)
+      sales = sold[:revenue_minor]
       collected = payments.sum(:amount_minor)
       # Shares are of the money collected in the period, so they always add up to 100 even when a paid order was later
       # reopened or refunded (its payments stay on the books while the order leaves the paid set).
@@ -19,7 +20,7 @@ module Reports
       unpaid_direct = Order.where(branch_id: branch.id, business_day: from..to, unpaid_direct: true)
       complimentary = Order.where(branch_id: branch.id, business_day: from..to, is_staff_meal: true)
       account_receipts = CustomerPayment.where(branch_id: branch.id, business_day: from..to, direction: "received")
-      { from: from, to: to, sales_minor: sales, orders: paid.count, methods: methods, methods_total_minor: collected, collected_minor: collected,
+      { from: from, to: to, sales_minor: sales, orders: sold[:orders], methods: methods, methods_total_minor: collected, collected_minor: collected,
         unpaid: { count: unpaid.count + unpaid_direct.where.not(id: unpaid.select(:id)).count, amount_minor: unpaid_amount(unpaid) + unpaid_amount(unpaid_direct.where.not(id: unpaid.select(:id))),
                   share_percent: sales.zero? ? 0 : (unpaid_amount(unpaid) * 100.0 / sales).round(1) },
         complimentary: { count: complimentary.count, amount_minor: complimentary.sum(:subtotal_minor), share_percent: sales.zero? ? 0 : (complimentary.sum(:subtotal_minor) * 100.0 / sales).round(1) },
@@ -29,25 +30,27 @@ module Reports
 
     def unpaid_amount(scope) = scope.sum("total_minor - paid_minor").to_i
 
-    # Sales: the detail table, one row per order.
+    # Sales: the detail table, one row per order sold in the period (refunded since included: each was a sale on its
+    # day). The totals follow the one revenue rule and are summed on the orders alone (with the lines joined in, every
+    # order's figures counted once per line), less the refunds made in the period.
     def sales_detail(branch:, from:, to:, cursor: nil, limit: nil, order_type: nil, source: nil)
-      scope = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded]).includes(:customer, :items).order(placed_at: :desc, created_at: :desc)
-      scope = scope.where(order_type: order_type) if order_type.present?
-      scope = scope.where(source: source) if source.present?
+      period = Revenue.period(branch: branch, from: from, to: to, **{ order_type: order_type.presence, source: source.presence }.compact)
+      scope = period.orders.includes(:customer, :items).order(placed_at: :desc, created_at: :desc)
       rows, next_cursor = Paginator.call(scope, cursor: cursor, limit: limit || 100, order_column: :created_at)
+      t = period.totals
       names = Membership.unscoped.includes(:user).where(id: rows.map { |o| [ o.taken_by_membership_id, o.completed_by_membership_id ] }.flatten.compact.uniq).index_by(&:id)
       { data: rows.map { |o| { id: o.id, label: o.label, business_day: o.business_day, placed_at: o.placed_at, order_type: o.order_type, source: o.source, status: o.spec_status, payment_status: o.spec_payment_status,
                                  customer: o.customer&.name, taken_by: names[o.taken_by_membership_id]&.user&.name, completed_by: names[o.completed_by_membership_id]&.user&.name, items: o.items.count { |i| !i.cancelled? },
                                  subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, tax_minor: o.tax_minor, service_charge_minor: o.service_charge_minor, delivery_charge_minor: o.delivery_charge_minor,
                                  total_minor: o.total_minor, payment_method_summary: o.payment_method_summary } },
-        next_cursor: next_cursor, totals: { orders: scope.count, revenue_minor: scope.sum(:total_minor), discount_minor: scope.sum(:discount_minor), tax_minor: scope.sum(:tax_minor) } }
+        next_cursor: next_cursor,
+        totals: { orders: t[:orders], gross_minor: t[:gross_minor], refunds_minor: t[:refunds_minor], revenue_minor: t[:revenue_minor], discount_minor: t[:discount_minor], tax_minor: t[:tax_minor] } }
     end
 
-    # Sales Calendar: day by day for a month, in a grid the screen can draw.
+    # Sales Calendar: day by day for a month, in a grid the screen can draw; a refund on the day it was made.
     def calendar(branch:, month:)
       from, to = month.beginning_of_month, month.end_of_month
-      paid = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed refunded])
-      by_day = paid.group(:business_day).pluck(Arel.sql("business_day, count(*), sum(total_minor)")).to_h { |d, c, t| [ d, { orders: c, revenue_minor: t.to_i } ] }
+      by_day = Revenue.period(branch: branch, from: from, to: to).grouped(:business_day)
       days = (from..to).map { |d| { date: d, wday: d.wday, orders: by_day.dig(d, :orders) || 0, revenue_minor: by_day.dig(d, :revenue_minor) || 0 } }
       best = days.max_by { |d| d[:revenue_minor] }
       { month: from, days: days, totals: { orders: days.sum { |d| d[:orders] }, revenue_minor: days.sum { |d| d[:revenue_minor] }, average_day_minor: days.count { |d| d[:orders].positive? }.then { |n| n.zero? ? 0 : days.sum { |d| d[:revenue_minor] } / n },

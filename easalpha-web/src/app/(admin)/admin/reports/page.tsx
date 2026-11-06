@@ -35,7 +35,7 @@ export default function BusinessOverviewPage() {
         name: "business-overview",
         columns: [{ header: "Day", key: "day" }, { header: "Orders", key: "orders", align: "right" }, { header: "Discounts", key: "discount", align: "right" }, { header: "Tax", key: "tax", align: "right" }, { header: "Revenue", key: "revenue", align: "right" }],
         rows: days.map((r) => ({ day: formatDate(r.business_day), orders: r.orders, discount: formatMoney(r.discount_minor), tax: formatMoney(r.tax_minor), revenue: formatMoney(r.revenue_minor) })),
-        footer: ov ? [`Revenue ${formatMoney(ov.revenue_minor)}  |  ${ov.orders} paid orders  |  Average order ${formatMoney(ov.average_order_minor)}  |  Discounts ${formatMoney(ov.discount_minor)}  |  Voided ${ov.voided} (${formatMoney(ov.voided_minor)})`] : undefined,
+        footer: ov ? [`Revenue ${formatMoney(ov.revenue_minor)}  |  ${ov.orders} orders sold  |  Average order ${formatMoney(ov.average_order_minor)}  |  Discounts ${formatMoney(ov.discount_minor)}  |  Voided ${ov.voided} (${formatMoney(ov.voided_minor)})`] : undefined,
       }}>
       {ov ? (
         <>

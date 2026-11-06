@@ -39,15 +39,17 @@ module Shifts
       close
     end
 
+    # Sales, discounts and tax by the one revenue rule (Reports::Revenue), as the sales report and the profit and loss
+    # show the day; refunds_minor is all the money given back that day.
     def summarise(branch, day)
       orders = Order.where(branch_id: branch.id, business_day: day)
-      paid = orders.where(status: %w[paid closed refunded])
+      sold = Reports::Revenue.period(branch: branch, from: day, to: day).totals
       payments = Payment.where(branch_id: branch.id, business_day: day, status: "captured")
       shifts = Shift.where(branch_id: branch.id, business_day: day).order(:opened_at).to_a
       names = Membership.unscoped.where(id: shifts.map(&:cashier_membership_id)).includes(:user).to_h { |m| [ m.id, m.user&.name ] }
       {
-        orders: orders.count, paid: paid.count, voided: orders.where(status: "voided").count,
-        net_sales_minor: paid.sum(:total_minor), discount_minor: paid.sum(:discount_minor), tax_minor: paid.sum(:tax_minor),
+        orders: orders.count, paid: sold[:orders], voided: orders.where(status: "voided").count,
+        net_sales_minor: sold[:revenue_minor], discount_minor: sold[:discount_minor], tax_minor: sold[:tax_minor],
         by_payment_method: payments.group(:method_code).sum(:amount_minor), refunds_minor: Refund.where(branch_id: branch.id, business_day: day).sum(:amount_minor),
         # Who counted what against what was expected, so the day's page shows each drawer and not only its over or short.
         shifts: shifts.map do |s|

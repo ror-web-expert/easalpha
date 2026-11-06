@@ -801,15 +801,25 @@ export interface FinanceReconciliation {
 }
 export interface FinanceIssue { kind: string; detail: string; order_id?: ID; label?: string; business_day?: string; payment_id?: ID; account_id?: ID; entry_id?: ID }
 export interface FinanceIntegrity { from: string; to: string; ok: boolean; issues: FinanceIssue[]; checked_at: string }
+/** One account's entries in the books that the lines above it do not explain, as a cost (negative = extra income). */
+export interface ProfitLossOther { code: string; name: string; kind: "income" | "expense"; amount_minor: number }
 export interface ProfitLoss {
   from: string; to: string; orders: number;
-  /** revenue_minor is the sales report's revenue (Reports::Revenue); net sales is it less the tax collected, and the
-   *  lines from gross sales to refunds add up to net sales. Tips, rounding and revenue are absent before 6 Nov 2026. */
-  revenue: { revenue_minor?: number; gross_sales_minor: number; discounts_minor: number; service_charge_minor: number; delivery_charge_minor: number; tips_minor?: number; rounding_minor?: number;
+  /** revenue_minor is the sales report's revenue (Reports::Revenue): net sales plus the tax collected and the tips,
+   *  neither of which is income. The lines from gross sales to refunds add up to net sales (sales, service charge,
+   *  delivery charge and rounding net of refunds, what the journal books as income). */
+  revenue: { revenue_minor: number; gross_sales_minor: number; discounts_minor: number; service_charge_minor: number; delivery_charge_minor: number; tips_minor: number; rounding_minor: number;
     refunds_minor: number; net_sales_minor: number; tax_collected_minor: number };
   cost_of_goods_minor: number; gross_profit_minor: number; gross_margin_percent: number | null;
-  operating: { expenses_minor: number; expenses_by_category: { category: string; count: number; amount_minor: number }[]; overheads_minor: number; overheads: (Overhead & { allocated_minor: number })[]; commissions_minor: number; aggregator_commission_minor: number; waste_minor: number; total_minor: number };
+  /** other: what else the journal holds on an income or expense account for the period (drawer payouts and cash outs,
+   *  depreciation, adjustments, revaluation, manual vouchers, timing), so net profit is the books' figure. */
+  operating: { expenses_minor: number; expenses_by_category: { category: string; count: number; amount_minor: number }[]; waste_minor: number; stock_differences_minor: number;
+    other_minor: number; other: ProfitLossOther[]; total_minor: number };
+  /** The journal's figure: the balance sheet's current earnings for the same days. */
   net_profit_minor: number; net_margin_percent: number | null;
+  books: { income_minor: number; expenses_minor: number; net_minor: number };
+  /** Costs the books do not hold: allocated overheads, commissions due by rule (booked with the salaries), the platform's commission. */
+  not_booked: { overheads_minor: number; overheads: (Overhead & { allocated_minor: number })[]; commissions_minor: number; aggregator_commission_minor: number; total_minor: number; net_after_minor: number };
 }
 export interface BranchCompareRow {
   branch: Branch; orders: number; revenue_minor: number; average_order_minor: number; discounts_minor: number; voided: number; voided_minor: number; expenses_minor: number; cost_of_goods_minor: number; gross_profit_minor: number;
@@ -1110,7 +1120,8 @@ export interface SalesDetailRow {
   taken_by: string | null; completed_by: string | null; items: number; subtotal_minor: number; discount_minor: number; tax_minor: number; service_charge_minor: number;
   delivery_charge_minor: number; total_minor: number; payment_method_summary: string | null;
 }
-export interface SalesDetailPage extends Page<SalesDetailRow> { from: string; to: string; totals: { orders: number; revenue_minor: number; discount_minor: number; tax_minor: number } }
+/** totals follow the one revenue rule: gross is the rows' totals, refunds those made in the period (Reports::Revenue). */
+export interface SalesDetailPage extends Page<SalesDetailRow> { from: string; to: string; totals: { orders: number; gross_minor: number; refunds_minor: number; revenue_minor: number; discount_minor: number; tax_minor: number } }
 export interface SalesCalendarDay { date: string; wday: number; orders: number; revenue_minor: number }
 export interface SalesCalendar { month: string; days: SalesCalendarDay[]; totals: { orders: number; revenue_minor: number; average_day_minor: number; best_day: string | null } }
 export interface OperationsReport {

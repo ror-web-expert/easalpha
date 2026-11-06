@@ -8,14 +8,18 @@ module Balances
       { stock_levels: stock_levels!, payment_accounts: payment_accounts!, customers: customers!, suppliers: suppliers! }
     end
 
-    # stock_levels = sum of ledger quantities per section and item; value from the latest after-state cost.
+    # stock_levels = sum of ledger quantities per section and item; the value is that quantity times the item's one
+    # average cost, as Stock::Ledger keeps it and every valuation reads it (the rows' own values were taken at the
+    # average of their moment, so their sum drifts from it).
     def stock_levels!
-      sums = StockLedgerEntry.group(:stock_section_id, :stock_item_id).pluck(:stock_section_id, :stock_item_id, Arel.sql("SUM(quantity)"), Arel.sql("SUM(value_minor)"))
+      sums = StockLedgerEntry.group(:stock_section_id, :stock_item_id).pluck(:stock_section_id, :stock_item_id, Arel.sql("SUM(quantity)"))
+      averages = StockItem.where(id: sums.map(&:second).uniq).pluck(:id, :avg_cost_minor_per_base).to_h
       touched = 0
-      sums.each do |section_id, item_id, qty, value|
+      sums.each do |section_id, item_id, qty|
+        value = (qty * averages[item_id].to_d).round
         level = StockLevel.find_or_initialize_by(stock_section_id: section_id, stock_item_id: item_id)
-        next if level.persisted? && level.quantity == qty && level.value_minor == value.to_i
-        level.update!(quantity: qty, value_minor: value.to_i)
+        next if level.persisted? && level.quantity == qty && level.value_minor == value
+        level.update!(quantity: qty, value_minor: value)
         touched += 1
       end
       touched

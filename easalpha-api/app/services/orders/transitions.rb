@@ -37,9 +37,9 @@ module Orders
       added.each { |i| i.update!(status: "sent", sent_at: Time.current) if i.status == "pending" }
       Kitchen::Tickets.create_for!(order, kind: "changed", items: added) if added.any?
       Kitchen::Tickets.create_for!(order, kind: "cancelled", items: removed) if removed.any?
-      Stock::Deduction.return!(order, items: removed, reason: "removed") if removed.any? && order.stock_deducted_at
-      # packaging: false keeps the order-level packaging rules (already charged); the lines' own consumables go again.
-      Stock::Deduction.deduct!(order, items: added, actor: nil, packaging: false) if added.any? && order.stock_deducted_at
+      # Once the order has taken stock (stamped, or rows left after a re-deduct failed), every line follows the edit:
+      # raised, lowered, added or removed. packaging: false keeps the order-level packaging rules (already charged).
+      Stock::Deduction.deduct!(order, actor: nil, packaging: false) if order.stock_deducted_at || Stock::Deduction.moved?(order)
       Realtime.order_changed(order)
     end
 

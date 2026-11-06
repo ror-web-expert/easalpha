@@ -10,7 +10,7 @@ module Reports
       by_method = scope.group_by { |e| e.payment_method&.code || "none" }.map { |k, es| { method: k, count: es.size, amount_minor: es.sum(&:amount_minor) } }
       by_source = scope.group(:source).sum(:amount_minor)
       days = (to - from).to_i + 1
-      orders = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed]).count
+      orders = Revenue.period(branch: branch, from: from, to: to).orders.count # the sales report's order count
       overheads = Overhead.active.where("branch_id = ? OR branch_id IS NULL", branch.id).map { |o| { id: o.id, name: o.name, kind: o.kind, basis: o.basis, amount_minor: o.amount_minor, allocated_minor: o.allocate(orders: orders, days: days) } }
       total = scope.sum(:amount_minor)
       overhead_total = overheads.sum { |o| o[:allocated_minor] }

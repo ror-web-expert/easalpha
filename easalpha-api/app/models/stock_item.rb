@@ -23,6 +23,7 @@ class StockItem < ApplicationRecord
   end
 
   def total_quantity = stock_levels.sum(:quantity)
-  def total_value_minor = stock_levels.sum(:value_minor)
+  # Quantity times the one average cost per level, as the stock reports value it (Reports::Stock.value_of).
+  def total_value_minor = Reports::Stock.value_of(stock_levels)
   def below_minimum? = minimum_qty.positive? && total_quantity < minimum_qty
 end

@@ -32,12 +32,12 @@ export default function GrandReportPage() {
         name: "grand-report",
         columns: [{ header: "Line", key: "line" }, { header: "Count", key: "count", align: "right" }, { header: "Amount", key: "amount", align: "right" }, { header: "Share of sales", key: "share", align: "right" }],
         rows: exportRows,
-        footer: s ? [`Sales ${formatMoney(s.sales_minor)}  |  ${s.orders} paid orders  |  Payments by method ${formatMoney(s.methods_total_minor)}  |  On account ${formatMoney(s.on_account_minor)}`] : undefined,
+        footer: s ? [`Sales ${formatMoney(s.sales_minor)}  |  ${s.orders} orders sold  |  Payments by method ${formatMoney(s.methods_total_minor)}  |  On account ${formatMoney(s.on_account_minor)}`] : undefined,
       }}>
       {g && s ? (
         <div className="space-y-4">
           <Cards>
-            <SummaryCard label="Sales" value={formatMoney(s.sales_minor)} sub={`${s.orders} paid orders`} tone="success" />
+            <SummaryCard label="Sales" value={formatMoney(s.sales_minor)} sub={`${s.orders} orders sold`} tone="success" />
             <SummaryCard label="Orders" value={s.orders} sub="Paid, closed or refunded" tone="info" />
             <SummaryCard label="Payments by method" value={formatMoney(s.methods_total_minor)} sub={`${methods.length} methods used`} tone="primary" />
             <SummaryCard label="On account" value={formatMoney(s.on_account_minor)} sub="Charged to customer khata" tone={s.on_account_minor ? "warning" : "neutral"} />

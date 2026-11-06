@@ -1,8 +1,9 @@
 require "rails_helper"
 
-# One revenue rule for every report (6 Nov review, item E4): paid and closed orders' totals minus their refunds; a
-# fully refunded order contributes zero. The sales report, the dashboard, COGS, commissions and the branch comparison
-# must all say the same number.
+# One revenue rule for every report (6 Nov review, item E4; dating settled in the final round): a sale on its order's
+# day, a refund on its own day, so on one day a fully refunded order comes to zero. The sales report, the dashboard,
+# COGS, commissions and the branch comparison must all say the same number. The refunded order was still sold, so it
+# counts as an order; commissions count only orders that stood.
 RSpec.describe Reports::Revenue, type: :request do
   let!(:owner) { signup_business }
   let(:biz) { owner.business }
@@ -36,16 +37,17 @@ RSpec.describe Reports::Revenue, type: :request do
     within(biz) do
       expect(Order.find(gone[:id]).status).to eq("refunded")
       sales = Reports::Sales.new(branch: branch, from: day, to: day)
-      expect(sales.overview).to include(orders: 2, revenue_minor: 94_400, refunds_minor: 62_200, average_order_minor: 47_200)
-      expect(sales.by_day.first).to include(orders: 2, revenue_minor: 94_400)
+      expect(sales.overview).to include(orders: 3, revenue_minor: 94_400, refunds_minor: 62_200, average_order_minor: 31_466)
+      expect(sales.by_day.first).to include(orders: 3, revenue_minor: 94_400)
       expect(sales.cashiers.sum { |r| r[:revenue_minor] }).to eq(94_400)
       expect(sales.by_hour.sum { |r| r[:revenue_minor] }).to eq(94_400)
       expect(Reports::Dashboard.spec(branch, period: "today")[:cards]).to include(total_revenue_minor: 94_400)
       expect(Reports::Dashboard.build(branch)[:today][:revenue_minor]).to eq(94_400)
-      expect(Reports::Branches.compare(from: day, to: day)[:rows].first).to include(orders: 2, revenue_minor: 94_400)
+      expect(Reports::Branches.compare(from: day, to: day)[:rows].first).to include(orders: 3, revenue_minor: 94_400)
       cashier = Reports::Commissions.run(branch: branch, from: day, to: day)[:rows].find { |r| r[:applies_to] == "cashier" }
       expect(cashier).to include(orders: 2, sales_minor: 94_400)
-      expect(Reports::Stock.valuation_cogs(branch: branch, from: day, to: day)[:revenue_minor]).to eq(94_400 - 14_400) # net of tax
+      # Net of the tax kept: Rs 72 on each sale, less the Rs 13.79 share of the Rs 100 refund and all of the full one's.
+      expect(Reports::Stock.valuation_cogs(branch: branch, from: day, to: day)[:revenue_minor]).to eq(94_400 - 13_021)
     end
   end
 end

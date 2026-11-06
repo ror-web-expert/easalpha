@@ -27,8 +27,14 @@ module Reports
       { rows: rows, total_value_minor: rows.sum { |r| r[:value_minor] }, negative_count: rows.count { |r| r[:negative] }, below_minimum_count: rows.count { |r| r[:below_minimum] } }
     end
 
-    def valuation
-      StockSection.active.includes(:branch).map do |s|
+    # One branch's levels (its sections), for the branch views.
+    def branch_levels(branch) = StockLevel.joins(:stock_section).where(stock_sections: { branch_id: branch.id })
+
+    # Every section of every branch, or only one branch's.
+    def valuation(branch: nil)
+      sections = StockSection.active.includes(:branch)
+      sections = sections.where(branch_id: branch.id) if branch
+      sections.map do |s|
         { section: StockSerializers.section(s), value_minor: value_of(StockLevel.where(stock_section_id: s.id)), items: StockLevel.where(stock_section_id: s.id).where.not(quantity: 0).count }
       end
     end
@@ -63,12 +69,11 @@ module Reports
       items = StockItem.where(id: cogs_by_item.keys).includes(:base_unit).index_by(&:id)
       by_item = cogs_by_item.map { |id, v| items[id] && { item: StockSerializers.item(items[id]), cogs_minor: v } }.compact.sort_by { |r| -r[:cogs_minor] }
       by_category = by_item.group_by { |r| r[:item][:category].presence || "Uncategorised" }.map { |c, rs| { category: c, cogs_minor: rs.sum { |r| r[:cogs_minor] } } }.sort_by { |r| -r[:cogs_minor] }
-      # Revenue by the one rule (Reports::Revenue): paid and closed totals minus their refunds, a refunded order is
-      # zero; here net of the tax collected, which is not the restaurant's money (the profit and loss's net sales).
-      completed = Revenue.completed(Order.where(branch_id: branch.id, business_day: from..to))
-      revenue = Revenue.sum(completed) - Revenue.tax(completed)
+      # Revenue by the one rule (Reports::Revenue), net of the tax and tips collected, which are not the restaurant's
+      # money: the profit and loss's net sales. The stock is this branch's own.
+      revenue = Revenue.period(branch: branch, from: from, to: to).income_minor
       cogs = by_item.sum { |r| r[:cogs_minor] }
-      { from: from, to: to, valuation: valuation, stock_value_minor: value_of(StockLevel.all), cogs_minor: cogs, revenue_minor: revenue,
+      { from: from, to: to, valuation: valuation(branch: branch), stock_value_minor: value_of(branch_levels(branch)), cogs_minor: cogs, revenue_minor: revenue,
         gross_margin_percent: revenue.positive? ? ((revenue - cogs) * 100.0 / revenue).round(1) : nil, cogs_by_category: by_category, cogs_by_item: by_item.first(50) }
     end
 
