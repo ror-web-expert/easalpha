@@ -74,4 +74,53 @@ RSpec.describe Finance::ProfitLoss, type: :request do
       expect(Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor]).to eq(pl[:net_profit_minor])
     end
   end
+
+  # B14 with the books package (P2): a subsidised canteen meal books the company's share to 5170 Staff Meals, and the
+  # payroll clears the worker's share into 5110 Salaries and moves the tips it pays out of Salaries into Tips Payable.
+  # Those live only in the journal; the profit and loss lists them and still comes to the balance sheet's earnings.
+  it "keeps to the books through a subsidised canteen meal and a payroll that clears it and pays out tips" do
+    api_patch "/api/v1/settings", { values: { "modules.canteen" => true } }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+    kiosk, worker = within(biz) do
+      lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
+      Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: day, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
+      [ Device.create!(branch: branch, name: "Kiosk 1", kind: "kiosk", paired_at: Time.current, code: "Q1"),
+        Employee.create!(name: "Akbar Ali", base_salary_minor: 3_000_000, pay_frequency: "monthly", joined_on: Date.new(2026, 1, 1), fingerprint_id: "FP-001", fingerprint_enrolled: true, shares_tips: true) ]
+    end
+    api_post "/api/v1/canteen/claims", { fingerprint_id: "FP-001" }, headers: device_headers(kiosk)
+    expect(response).to have_http_status(:created), response.body # Rs 522: Rs 200 the worker's, Rs 322 the company's
+    pay!(burger!, tip: 5_000)
+    month = day.beginning_of_month
+    within(biz) { (month..month.end_of_month).each { |d| Attendance.create!(employee_id: worker.id, business_day: d, status: "present", source: "manual") } }
+    api_post "/api/v1/payroll/runs", { month: month.strftime("%Y-%m") }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    expect(json[:payslips].sole).to include(deductions_minor: 20_000, tips_minor: 5_000, net_minor: 2_985_000)
+    api_post "/api/v1/payroll/runs/#{json[:id]}/pay", { method_code: "bank" }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+
+    within(biz) do
+      # A day either side: the salary expense is dated by the calendar, the books by the business day.
+      pl = Finance::ProfitLoss.run(branch: branch, from: day - 1, to: day + 1)
+      expect(pl[:revenue]).to include(revenue_minor: 109_400, net_sales_minor: 90_000, tax_collected_minor: 14_400, tips_minor: 5_000)
+      expect(pl[:operating][:expenses_minor]).to eq(2_985_000)
+      expect(pl[:operating][:other].map { |o| o.values_at(:code, :amount_minor) }).to contain_exactly([ "5170", 32_200 ], [ "5110", 20_000 - 5_000 ])
+      expect(pl[:net_profit_minor]).to eq(90_000 - 4_000 - 2_985_000 - 32_200 - 15_000)
+      expect(pl[:net_profit_minor]).to eq(pl[:books][:net_minor])
+      expect(pl[:net_profit_minor]).to eq(Finance::Statements.balance_sheet(as_of: day + 1)[:current_earnings_minor])
+    end
+  end
+
+  # reports#6: a tax-inclusive price holds its tax, so the sale is what is left of it, as the journal books it.
+  it "takes an inclusive tax out of the sale, as the journal does" do
+    within(biz) { m[:chai].update!(tax_rate: TaxRate.create!(name: "PRA 16% incl", rate: 16, inclusive: true), base_price_minor: 11_600) }
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+    expect(response).to have_http_status(:created), response.body
+    pay!(json)
+    within(biz) do
+      pl = Finance::ProfitLoss.run(branch: branch, from: day, to: day)
+      expect(pl[:revenue]).to include(revenue_minor: 11_600, gross_sales_minor: 10_000, net_sales_minor: 10_000, tax_collected_minor: 1_600)
+      expect(pl[:operating][:other]).to be_empty
+      expect(pl[:net_profit_minor]).to eq(Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor])
+    end
+  end
 end
