@@ -11,7 +11,7 @@ import { Cards, PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, Field, Input, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR, type BadgeVariant } from "@/components/ui";
-import { EXTRA_TILL_MINOR, YEARLY_TERMS, billingCurrency, includedTills, planEstimate, planLimitLabel, planMonthlyMinor } from "@/lib/plan-price";
+import { EXTRA_TILL_MINOR, YEARLY_TERMS, billingCurrency, includedTills, invoicesTotalLabel, planEstimate, planLimitLabel, planMonthlyMinor } from "@/lib/plan-price";
 
 // SPEC Plan: the subscription tier (Business in the reviewed account), trial or subscription state, invoices, and
 // how to pay. Choosing a plan issues an invoice; the owner reports the payment and EasAlpha confirms it.
@@ -65,7 +65,7 @@ function PlanBody() {
         <SummaryCard label="Current plan" value={current?.name ?? biz.plan?.name ?? "None"} sub={sub ? `${titleCase(sub.billing_cycle)} · ${tillsLabel(current ? includedTills(current) : 1, sub.tills)}` : biz.status === "trial" ? "On trial" : ""} />
         <SummaryCard label="State" value={<Badge variant={subscriptionVariant(sub?.status ?? biz.status)} className="text-sm">{titleCase(sub?.status ?? biz.status)}</Badge>}
           sub={biz.trial_ends_on && (sub?.status === "trialing" || biz.status === "trial") ? `Trial ends ${formatDate(biz.trial_ends_on)} (${biz.trial_days_left} days left)` : sub?.current_period_end ? `Period ends ${formatDate(sub.current_period_end)}` : ""} tone="info" />
-        <SummaryCard label="Open invoices" value={unpaid.length} sub={unpaid.length ? formatMoney(unpaid.reduce((a, i) => a + i.amount_minor, 0)) + " due" : "Nothing due"} tone={unpaid.length ? "warning" : "success"} />
+        <SummaryCard label="Open invoices" value={unpaid.length} sub={unpaid.length ? `${invoicesTotalLabel(unpaid)} due` : "Nothing due"} tone={unpaid.length ? "warning" : "success"} />
         <SummaryCard label="Grace period" value={sub?.grace_ends_on ? formatDate(sub.grace_ends_on) : "-"} sub={sub?.grace_ends_on ? "Pay before this date to keep selling" : "Not in grace"} tone={sub?.grace_ends_on ? "danger" : "neutral"} />
       </Cards>
       <div className="mb-6 grid gap-4 lg:grid-cols-3">

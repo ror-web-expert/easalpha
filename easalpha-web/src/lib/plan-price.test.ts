@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { YEARLY_TERMS, billingCurrency, includedTills, planEstimate, planLimitLabel, planMonthlyMinor } from "./plan-price";
+import { YEARLY_TERMS, billingCurrency, includedTills, invoicesTotalLabel, planEstimate, planLimitLabel, planMonthlyMinor } from "./plan-price";
 
 const pro = { price_pkr_minor: 4_999_00, price_usd_minor: 39_00, limits: { tills: 10, branches: 1 } };
 const business = { price_pkr_minor: 8_999_00, price_usd_minor: 69_00, limits: { tills: null, branches: 20 } };
@@ -35,5 +35,10 @@ describe("the Plan page's words", () => {
     expect(planMonthlyMinor(business, "USD")).toBe(69_00);
     expect(planLimitLabel("whatsapp_utility_messages")).toBe("WhatsApp messages a month");
     expect(planLimitLabel("kitchen_screens")).toBe("Kitchen screens");
+  });
+  it("adds open invoices up in each invoice's own currency, never dollars as rupees (L2)", () => {
+    expect(invoicesTotalLabel([{ amount_minor: 39_00, currency: "USD" }, { amount_minor: 9_00, currency: "USD" }])).toBe("$48.00");
+    expect(invoicesTotalLabel([{ amount_minor: 4_999_00, currency: "PKR" }, { amount_minor: 39_00, currency: "USD" }])).toBe("Rs 4,999 + $39.00");
+    expect(invoicesTotalLabel([{ amount_minor: 4_999_00, currency: "" }])).toBe("Rs 4,999");
   });
 });
