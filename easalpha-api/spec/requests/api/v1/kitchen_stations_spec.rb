@@ -60,6 +60,58 @@ RSpec.describe "Kitchen stations, bumps and the customers' screens", type: :requ
     expect(json[:status]).to eq("ready")
   end
 
+  # Leftovers of 7 Nov 2026 (L3): a deal is one line, kept by the station of its first part, so the Drinks screen showed
+  # a Lunch Box it could not bump and the Grill's bump readied its Chai too. Each station now bumps its own parts of a
+  # deal made at several stations (deal_components keep a bumped_at each), and the line is ready with its last part.
+  describe "a deal made at two stations" do
+    def deal_line(order_id) = within(biz) { Order.find(order_id).items.find(&:deal_id) }
+    def bumped_parts(order_id) = deal_line(order_id).deal_components.select { |c| c["bumped_at"] }.map { |c| c["name"] }
+
+    it "is on each station's screen with its parts, and each station's order bump readies its own parts only" do
+      o = placed([ { deal_id: m[:deal].id }, { product_id: m[:chai].id } ])
+      get "/api/v1/kitchen/orders", params: { station_id: m[:drinks].id }, headers: device_headers(kds)
+      deal = json[:data].first[:items].find { |i| i[:deal_id] }
+      expect(deal[:deal_components].map { |c| [ c[:name], c[:station_id] ] }).to contain_exactly([ "Zinger Burger", m[:grill].id ], [ "Chai", m[:drinks].id ])
+
+      api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", { station_id: m[:drinks].id }, headers: device_headers(kds)
+      expect(json[:status]).to eq("preparing")
+      expect(statuses(o[:id])).to eq([ [ "Chai", "ready" ], [ "Lunch Box", "sent" ] ])
+      expect(bumped_parts(o[:id])).to eq([ "Chai" ])
+      get "/api/v1/kitchen/orders", params: { station_id: m[:drinks].id }, headers: device_headers(kds)
+      expect(json[:data].first[:items].find { |i| i[:deal_id] }[:deal_components].find { |c| c[:name] == "Chai" }[:bumped_at]).to be_present
+
+      api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", { station_id: m[:grill].id }, headers: device_headers(kds)
+      expect(json[:status]).to eq("ready")
+      expect(statuses(o[:id])).to eq([ [ "Chai", "ready" ], [ "Lunch Box", "ready" ] ])
+      expect(bumped_parts(o[:id])).to eq([ "Zinger Burger", "Chai" ])
+    end
+
+    it "takes a line bump from a station's screen for that station's parts, and from the all-stations screen for the line" do
+      o = placed([ { deal_id: m[:deal].id } ])
+      line = o[:items].first[:id]
+      api_post "/api/v1/kitchen/items/#{line}/bump", { station_id: m[:grill].id }, headers: device_headers(kds)
+      expect(response).to have_http_status(:ok), response.body
+      expect(json[:status]).to eq("preparing")
+      expect(statuses(o[:id])).to eq([ [ "Lunch Box", "sent" ] ])
+      expect(bumped_parts(o[:id])).to eq([ "Zinger Burger" ])
+      api_post "/api/v1/kitchen/items/#{line}/bump", { station_id: m[:drinks].id }, headers: device_headers(kds)
+      expect(json[:status]).to eq("ready")
+
+      o2 = placed([ { deal_id: m[:deal].id } ])
+      api_post "/api/v1/kitchen/items/#{o2[:items].first[:id]}/bump", {}, headers: device_headers(kds)
+      expect(json[:status]).to eq("ready")
+      expect(statuses(o2[:id])).to eq([ [ "Lunch Box", "ready" ] ])
+    end
+
+    it "bumps a deal made at one station as one line, as before" do
+      within(biz) { m[:chai].update!(station_id: m[:grill].id) }
+      o = placed([ { deal_id: m[:deal].id } ])
+      api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", { station_id: m[:grill].id }, headers: device_headers(kds)
+      expect(json[:status]).to eq("ready")
+      expect(bumped_parts(o[:id])).to eq([])
+    end
+  end
+
   it "shows on the queue and token screens only what the kitchen display shows" do
     today = today_for(biz)
     now = placed([ { product_id: m[:burger].id } ])
