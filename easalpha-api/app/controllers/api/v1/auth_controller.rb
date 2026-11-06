@@ -92,7 +92,8 @@ module Api
                                            details: { invitations: invited })
         end
         code.consume!
-        if state == :none || new_login
+        # A new login only for a number nobody holds, or one held unproven: a proven holder just signs in.
+        if state == :none || (state == :password && new_login)
           raise Api::Errors::NotFound unless waiting.exists?
           user = Auth::Identity.new_account!(:phone, phone, name: waiting.last.name)
         end

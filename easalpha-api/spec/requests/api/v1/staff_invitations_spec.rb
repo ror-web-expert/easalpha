@@ -167,6 +167,15 @@ RSpec.describe "Proven phones and emails, and staff invitations", type: :request
     expect(within(biz) { Rider.find(rider_id).membership_id }).to eq(json[:membership][:id])
   end
 
+  it "signs the holder of a proven phone in as themself, whatever new_login says, and joins the invitation" do
+    proven = create(:user, email: "proven@example.com", phone: "+923331230030", phone_verified_at: 1.day.ago)
+    within(biz) { StaffInvitation.create!(role: role.("manager"), name: "Proven", phone: proven.phone, staff_type: "admin", expires_at: 1.day.from_now) }
+    api_post "/api/v1/auth/otp/verify", { phone: proven.phone, code: otp(proven.phone, "login"), new_login: true }
+    expect(response).to have_http_status(:ok), response.body
+    expect(json[:user][:id]).to eq(proven.id)
+    expect(json[:business][:id]).to eq(biz.id)
+  end
+
   describe "proving a phone" do
     it "asks the login's password once when the phone was never confirmed on an email login, then just the code" do
       api_post "/api/v1/auth/signup", { name: "Owner Two", business_name: "Two", email: "two@example.com", password: "password123", phone: "+923331230010" }
