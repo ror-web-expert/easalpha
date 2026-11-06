@@ -15,7 +15,8 @@ services:
     build: ../easalpha-api
     restart: unless-stopped
     # bin/start: migrations, seeds and the Row-Level Security policies, then Puma (as the easalpha_app role when
-    # EASALPHA_APP_DB_PASSWORD is set, so the policies apply; a superuser ignores them).
+    # EASALPHA_APP_DB_PASSWORD is set, so the policies apply; a superuser ignores them). Unset, every start prints a
+    # WARNING and /api/v1/health answers "rls": false (docs/DEPLOY.md, "Row-Level Security").
     command: bin/start api
     environment: &api_env
       RAILS_ENV: production
