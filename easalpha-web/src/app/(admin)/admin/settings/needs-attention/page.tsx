@@ -16,7 +16,7 @@ export default function SyncPage() {
   const resolve = useAction<{ id: string; resolution: string }>(["sync_rejections", "dashboard"], ({ id, resolution }) => api(`/sync/rejections/${id}/resolve`, { method: "POST", body: { resolution } }), "Resolved");
   return (
     <>
-      <PageHeader icon={RefreshCw} title="Needs attention" description="Records a till sent that the server could not apply. Nothing is lost: fix the cause, then resolve." />
+      <PageHeader icon={RefreshCw} title="Needs attention" description="Records a till sent that the server could not apply. Nothing is lost: fix the cause and press Try again on the till, or resolve a record here once it is settled. The till then takes it off its own list too." />
       <FilterBar><Checkbox label="Show resolved" checked={resolved} onChange={(e) => setResolved(e.target.checked)} /></FilterBar>
       {list.isLoading ? <Loading /> : (
         <Table>

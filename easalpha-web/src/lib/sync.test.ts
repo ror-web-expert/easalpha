@@ -25,7 +25,7 @@ import { ApiError } from "@/lib/api";
 import { useSyncStore } from "@/store/sync";
 import { useDeviceStore } from "@/store/device";
 import type { Session } from "@/lib/types";
-import { dismissAttention, enqueue, isMoneyRecord, patchQueued, planBatch, processQueue, reachability, recoverStuck, retryAttention, UNREACHABLE_FOR_MS } from "./sync";
+import { dismissAttention, enqueue, isMoneyRecord, noteReachable, patchQueued, planBatch, processQueue, reachability, recoverStuck, retryAttention, settleResolvedAttention, UNREACHABLE_FOR_MS } from "./sync";
 
 const item = (over: Partial<QueueItem>): QueueItem => ({ id: "o-1", type: "order", payload: {}, created_at: "2026-10-13T10:00:00Z", attempts: 0, next_at: 0, last_error: null, status: "pending", ...over });
 const payment = (id: string, order_id: string, over: Partial<QueueItem> = {}): QueueItem => item({ id, type: "payment", payload: { order_id, amount_minor: 50000, method_code: "cash" }, created_at: "2026-10-13T10:01:00Z", ...over });
@@ -428,6 +428,59 @@ describe("processQueue: the Rejected flag (final round, web-till#7)", () => {
     expect(h.orders.get("o-1")).toMatchObject({ sync_status: "rejected" });
     await retryAttention("o-1");
     expect(h.orders.get("o-1")).toMatchObject({ sync_status: undefined });
+  });
+});
+
+// Leftovers of 7 Nov 2026 (L3): a refusal a manager resolved on the admin's Needs attention stayed on the till's
+// Attention page and its badge. The till asks POST /sync/rejections/check about what it lists and drops what is resolved.
+describe("settleResolvedAttention", () => {
+  const listed = (id: string, type: string, over: Partial<AttentionItem> = {}): AttentionItem =>
+    ({ id, type, code: "approval.required", message: "Needs a manager", payload: { __membership_id: "m-1" }, created_at: "2026-10-13T10:00:00Z", ...over });
+  const asked = (call = 0) => (h.api.mock.calls[call][1] as { body: { records: { type: string; id: string }[] } }).body.records;
+  const resolved = (type: string, id: string, resolution: string) => ({ type, id, resolution, resolved_at: "2026-11-07T09:30:00Z" });
+
+  beforeEach(() => {
+    h.queue.clear(); h.attention.clear(); h.orders.clear(); h.api.mockReset();
+    noteReachable();
+    useSyncStore.setState({ status: "online", lastError: null, pending: 0, attention: 0 });
+  });
+
+  it("drops what the server resolved, with the records held back by it; the order stays Rejected unless the record went through", async () => {
+    h.attention.set("o-1", listed("o-1", "order", { code: "day.locked", payload: { payments: [{ id: "p-0" }] } }));
+    h.attention.set("p-1", listed("p-1", "payment", { code: "blocked", payload: { order_id: "o-1" }, blocked_by: "o-1" }));
+    h.attention.set("v-2", listed("v-2", "void", { payload: { order_id: "o-2" } }));
+    h.attention.set("o-3", listed("o-3", "order_update", { payload: { lines: [] } }));
+    h.orders.set("o-1", { ...localOrder("o-1", "paid"), sync_status: "rejected", sync_error: "closed" });
+    h.orders.set("o-3", { ...localOrder("o-3", "placed"), local_only: false, sync_status: "rejected", sync_error: "order update needs a manager" });
+    h.api.mockResolvedValueOnce({ resolved: [resolved("order", "o-1", "dismissed"), resolved("order_update", "o-3", "accepted")] });
+    expect(await settleResolvedAttention()).toBe(3);
+    expect(h.api.mock.calls[0][0]).toBe("/sync/rejections/check");
+    expect(asked()).toEqual([{ type: "order", id: "o-1" }, { type: "void", id: "v-2" }, { type: "order_update", id: "o-3" }]); // never the held-back one
+    expect(attention().map((a) => a.id)).toEqual(["v-2"]);
+    expect(h.orders.get("o-1")).toMatchObject({ status: "paid", sync_status: "rejected" }); // as the till's own Dismiss leaves it
+    expect(h.orders.get("o-3")).toMatchObject({ sync_status: undefined, sync_error: undefined });
+    expect(useSyncStore.getState().attention).toBe(1);
+  });
+
+  it("keeps a row refused again while it asked, one of another type, and everything when the server cannot be reached", async () => {
+    h.attention.set("o-1", listed("o-1", "order"));
+    h.attention.set("v-2", listed("v-2", "void"));
+    h.api.mockImplementationOnce(async () => {
+      h.attention.set("o-1", listed("o-1", "order", { created_at: new Date(Date.now() + 1000).toISOString() })); // a Try again refused meanwhile
+      return { resolved: [resolved("order", "o-1", "fixed"), resolved("payment", "v-2", "dismissed")] };
+    });
+    expect(await settleResolvedAttention()).toBe(0);
+    expect(attention().map((a) => a.id).sort()).toEqual(["o-1", "v-2"]);
+    h.api.mockRejectedValueOnce(new ApiError("network", "Failed to fetch", 0));
+    expect(await settleResolvedAttention()).toBe(0);
+    expect(h.attention.size).toBe(2);
+  });
+
+  it("asks nothing when the list is empty or holds only records held back on the till", async () => {
+    expect(await settleResolvedAttention()).toBe(0);
+    h.attention.set("p-1", listed("p-1", "payment", { code: "blocked", blocked_by: "o-9" }));
+    expect(await settleResolvedAttention()).toBe(0);
+    expect(h.api).not.toHaveBeenCalled();
   });
 });
 
