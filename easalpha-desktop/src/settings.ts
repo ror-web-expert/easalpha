@@ -37,6 +37,8 @@ function sanitizePrinter(p: Partial<PrinterConfig>): PrinterConfig | null {
   const kind = p.kind === "network" || p.kind === "usb" || p.kind === "system" ? p.kind : "network";
   const width: 58 | 80 = Number(p.width) === 58 ? 58 : 80;
   const role = p.role === "receipt" || p.role === "kitchen" ? p.role : undefined;
+  // Written out at the default too, so an owner editing settings.json by hand can see the option exists.
+  const barcode = p.barcode === "plain" || p.barcode === "off" ? p.barcode : "code128";
   const id = typeof p.id === "string" && p.id ? p.id : newId();
   const out: PrinterConfig = {
     id,
@@ -44,6 +46,7 @@ function sanitizePrinter(p: Partial<PrinterConfig>): PrinterConfig | null {
     kind,
     width,
     role,
+    barcode,
   };
   if (kind === "network") {
     out.host = typeof p.host === "string" ? p.host.trim() : "";

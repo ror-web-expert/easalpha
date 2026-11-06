@@ -23,7 +23,11 @@ module Api
         scope = scope.where(taken_by_membership_id: current_membership.id) if only_own?
         if params[:q].present?
           q = params[:q].to_s.strip
-          scope = q.match?(/\A#?\d+\z/) ? scope.where(serial: q.delete("#").to_i) : scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: "%#{q}%")
+          # A receipt number (yymmdd-BRANCH-serial, the barcode on the receipt) matches exactly whatever day it is from.
+          scope = if q.match?(/\A#?\d+\z/) then scope.where(serial: q.delete("#").to_i)
+          elsif q.match?(/\A\d{6}-\S+-\d+\z/) then scope.unscope(where: :business_day).where("orders.receipt_number ILIKE ?", q)
+          else scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: "%#{q}%")
+          end
         end
         if params[:sort].present? && params[:sort] != "newest"
           # SPEC sorts other than newest use page and limit rather than a cursor.
@@ -193,7 +197,7 @@ module Api
         before_items = Orders::Story.snapshot(order)
         amount_before = order.total_minor
         builder = Orders::Builder.new(order, actor: current_membership, device: current_device, branch: current_branch)
-        builder.update!(attrs: order_attrs.except(:id, :is_staff_meal, :staff_meal_reason), lines: lines_param, approvals: approvals)
+        builder.update!(attrs: staff_meal_change(order, order_attrs.except(:id), approvals), lines: lines_param, approvals: approvals)
         Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
         if order.sent?
           diff = Orders::Story.diff(before_items, Orders::Story.snapshot(order.reload))
@@ -202,7 +206,7 @@ module Api
             Orders::Story.record!(order, "edited", actor: current_membership, device: current_device, diff: diff, amount_before: amount_before, amount_after: order.total_minor)
           end
         end
-        audit!("update", record: order, after: { total_minor: order.total_minor, added: builder.added.size, removed: builder.removed.size })
+        audit!("update", record: order, after: { total_minor: order.total_minor, added: builder.added.size, removed: builder.removed.size, staff_meal: order.is_staff_meal })
         render json: OrderSerializers.full(order.reload)
       end
 
@@ -327,6 +331,21 @@ module Api
       end
 
       # A manager PIN sent with the request unlocks every permission that manager holds, for this request only.
+      # The staff-meal flag on an existing order (the till sends it on every update). Switching it on needs
+      # orders.staff_meal, the role's own or a manager's PIN, and records the approver; switching it off charges the
+      # order normally and needs nothing more; an update without the flag leaves it as it is.
+      def staff_meal_change(order, attrs, approvals)
+        return attrs.except(:is_staff_meal, :staff_meal_reason) unless attrs.key?(:is_staff_meal)
+        if attrs[:is_staff_meal]
+          attrs[:staff_meal_approved_by_id] = (approvals["orders.staff_meal"] || require_approval!("orders.staff_meal")).id unless order.is_staff_meal
+          attrs[:staff_meal_reason] = order.staff_meal_reason if attrs[:staff_meal_reason].blank?
+        else
+          attrs[:staff_meal_reason] = nil
+          attrs[:staff_meal_approved_by_id] = nil
+        end
+        attrs
+      end
+
       def collect_approvals
         return {} if params[:approver_pin].blank?
         approver = Auth::PinApproval.find_approver(pin: params[:approver_pin], permission: "app.pos", exclude_membership: current_membership)

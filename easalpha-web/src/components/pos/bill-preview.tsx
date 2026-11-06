@@ -37,7 +37,7 @@ export function BillPreviewDialog({ open, onClose, cart }: { open: boolean; onCl
       footer={<><Button variant="secondary" onClick={onClose}>Close</Button><Button onClick={print} loading={printing}><Printer className="h-4 w-4" /> Print bill</Button></>}>
       {receipt ? (
         <div className="print-area mx-auto max-w-sm rounded-lg border bg-white p-2">
-          <ReceiptView r={receipt} branding={{ secondaryPhone: branding.secondaryPhone, footerQrUrl: branding.footerQrUrl, showLogo: branding.showLogo, paper: branding.paper }} />
+          <ReceiptView r={receipt} branding={branding} />
         </div>
       ) : null}
     </Dialog>

@@ -28,12 +28,14 @@ export type Paper = "80" | "58";
 export type ReceiptLanguage = "en" | "ur";
 export interface ReceiptDraft {
   header: string; footer: string; show_logo: boolean; footer_qr_url: string; paper: Paper; language: ReceiptLanguage; secondary_phone: string;
+  /** A Code 128 of the receipt number at the bottom (a scan at the till finds the order); the return policy above the footer. */
+  barcode: boolean; policy: string;
 }
 export const RECEIPT_SETTING_KEYS: Record<keyof ReceiptDraft, string> = {
   header: "pos.receipt.header", footer: "pos.receipt.footer", show_logo: "pos.receipt.show_logo", footer_qr_url: "pos.receipt.footer_qr_url",
-  paper: "pos.receipt.paper", language: "pos.receipt.language", secondary_phone: "store.secondary_phone",
+  paper: "pos.receipt.paper", language: "pos.receipt.language", secondary_phone: "store.secondary_phone", barcode: "pos.receipt.barcode", policy: "pos.receipt.policy",
 };
-export const EMPTY_RECEIPT_DRAFT: ReceiptDraft = { header: "", footer: "", show_logo: true, footer_qr_url: "", paper: "80", language: "en", secondary_phone: "" };
+export const EMPTY_RECEIPT_DRAFT: ReceiptDraft = { header: "", footer: "", show_logo: true, footer_qr_url: "", paper: "80", language: "en", secondary_phone: "", barcode: true, policy: "" };
 
 /** Every key of every group and screen as one list, so a lookup does not care which screen the registry put a key on. */
 export function flattenSettings(res: SettingsResponse | undefined | null): SettingKey[] {
@@ -50,6 +52,7 @@ export function receiptDraftFrom(keys: SettingKey[]): ReceiptDraft {
   const paper = str(value("paper"));
   const language = str(value("language"));
   const show = value("show_logo");
+  const barcode = value("barcode");
   return {
     header: str(value("header")), footer: str(value("footer")),
     show_logo: show === undefined || show === null ? true : show === true,
@@ -57,6 +60,8 @@ export function receiptDraftFrom(keys: SettingKey[]): ReceiptDraft {
     paper: paper === "58" ? "58" : "80",
     language: language === "ur" ? "ur" : "en",
     secondary_phone: str(value("secondary_phone")),
+    barcode: barcode === undefined || barcode === null ? true : barcode === true,
+    policy: str(value("policy")),
   };
 }
 
@@ -79,10 +84,12 @@ export function brandingFor(draft: ReceiptDraft): ReceiptBranding {
     showLogo: draft.show_logo,
     footerQrUrl: draft.footer_qr_url.trim() || null,
     secondaryPhone: draft.secondary_phone.trim() || null,
+    barcode: draft.barcode,
+    policy: draft.policy.trim() || null,
   };
 }
 
-export interface SampleBusiness { name: string; legal_name?: string | null; phone?: string | null; logo_key?: string | null; currency?: string }
+export interface SampleBusiness { name: string; legal_name?: string | null; phone?: string | null; email?: string | null; logo_key?: string | null; currency?: string }
 type SampleBranch = Pick<Branch, "name" | "address" | "city" | "phone" | "tax_registration">;
 
 /** Fixed clock so the preview (and its test) never depends on the wall clock. */
@@ -100,11 +107,11 @@ export function sampleReceipt(business: SampleBusiness, draft: ReceiptDraft, bra
   const total = subtotal + tax;                         // 1,763.20
   const tendered = 200_000;
   return {
-    receipt_number: "R-000128", duplicate: false, printed_at: SAMPLE_PAID_AT,
-    business: { name: business.name || "Your business", legal_name: business.legal_name ?? null, phone: business.phone ?? null, logo_key: business.logo_key ?? null, currency: business.currency ?? "PKR" },
+    receipt_number: "261011-MAIN-128", duplicate: false, printed_at: SAMPLE_PAID_AT,
+    business: { name: business.name || "Your business", legal_name: business.legal_name ?? null, phone: business.phone ?? null, email: business.email ?? null, logo_key: business.logo_key ?? null, currency: business.currency ?? "PKR" },
     branch: { name: branch?.name ?? "Main branch", address: branch?.address ?? "12 Main Boulevard", city: branch?.city ?? "Lahore", phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
     header: draft.header.trim() || null, footer: draft.footer.trim() || null, language: draft.language, paper: draft.paper,
-    order: { id: "sample", serial: 128, label: "#128", order_type: "dine_in", table: "T4", business_day: SAMPLE_PAID_AT.slice(0, 10), placed_at: SAMPLE_PAID_AT, paid_at: SAMPLE_PAID_AT, cashier: "Ayesha", customer: null, guest_name: null, notes: null },
+    order: { id: "sample", serial: 128, label: "#128", order_type: "dine_in", table: "T4", business_day: SAMPLE_PAID_AT.slice(0, 10), placed_at: SAMPLE_PAID_AT, paid_at: SAMPLE_PAID_AT, cashier: "Ayesha", till: "Front till", customer: null, guest_name: null, notes: null },
     lines: [
       { name: "Chicken Karahi (full)", quantity: "1", unit_price_minor: karahi, modifiers: [{ name: "Extra spicy", price_minor: 0 }], line_total_minor: karahi, discount_minor: 0, notes: null },
       { name: "Roghni Naan", quantity: "4", unit_price_minor: naan, modifiers: [], line_total_minor: naan * 4, discount_minor: 0, notes: null },
