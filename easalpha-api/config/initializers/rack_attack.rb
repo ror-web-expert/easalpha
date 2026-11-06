@@ -5,6 +5,9 @@ class Rack::Attack
     body["email"].to_s.strip.downcase.presence
   end
 
+  # Local development only: the browser test runs drive many tills and screens from 127.0.0.1 at once.
+  safelist("local development") { |req| Rails.env.development? && %w[127.0.0.1 ::1].include?(req.ip) }
+
   throttle("login/ip", limit: 20, period: 1.minute) { |req| req.ip if req.path.start_with?("/api/v1/auth/") && req.post? }
   # Per account as well as per address, so a password run spread over many addresses still stops at the account
   # (review of 6 Nov 2026, A10). The super admin login was outside every throttle; it gets both.
