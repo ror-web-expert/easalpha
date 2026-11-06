@@ -159,28 +159,33 @@ export function displaySettings(settings: BusinessSettings | undefined | null) {
   };
 }
 
+/**
+ * Each line's totals with the order-level discount (loyalty points, a voucher, a manual discount) shared out after the
+ * product discounts, in proportion to what is left of each line's subtotal, as the server does, so tax is on the
+ * discounted amount. The receipt's "Tax 16% on" base comes from these too.
+ */
+export function allocatedLineTotals(lines: CartLine[], order_discount_minor = 0): LineTotals[] {
+  const lt = lines.map(lineTotals);
+  const pool_minor = lt.reduce((s, t) => s + t.line_subtotal_minor - t.line_discount_minor, 0);
+  const discount = Math.max(0, Math.min(order_discount_minor, pool_minor));
+  if (!(discount > 0 && pool_minor > 0)) return lt;
+  const bases = lt.map((t) => Math.max(0, t.line_subtotal_minor - t.line_discount_minor));
+  const shares = bases.map((b) => (discount * b) / pool_minor);
+  const alloc = shares.map(Math.floor);
+  let rem = discount - alloc.reduce((s, v) => s + v, 0);
+  shares.map((s, i) => [s - alloc[i], i] as const).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rem > 0 && bases[i] > 0) { alloc[i] += 1; rem -= 1; } });
+  return lt.map((t, i) => {
+    const line_discount_minor = t.line_discount_minor + alloc[i];
+    const { tax, total } = taxOn(t.line_subtotal_minor - line_discount_minor, lines[i].tax_rate, lines[i].tax_inclusive);
+    return { ...t, line_discount_minor, line_tax_minor: tax, line_total_minor: total };
+  });
+}
+
 export function computeTotals(lines: CartLine[], opts: { orderType: string; settings?: BusinessSettings; tip_minor?: number; rounding_minor?: number; staffMeal?: boolean; discount_minor?: number; delivery_charge_minor?: number }): Totals {
   const active = lines.filter((l) => l.status !== "cancelled");
-  let lt = active.map(lineTotals);
+  const lt = allocatedLineTotals(active, opts.discount_minor ?? 0);
   // The subtotal is the sum of the line amounts the cart shows (lineAmount), never anything else.
   const subtotal_minor = lt.reduce((s, t) => s + t.line_subtotal_minor, 0);
-  const product_discount_minor = lt.reduce((s, t) => s + t.line_discount_minor, 0);
-  // Order-level discount (e.g. loyalty points) comes after the product discounts and is allocated to lines in proportion
-  // to what is left of their subtotals, as the server does, so tax is on the discounted amount.
-  const pool_minor = subtotal_minor - product_discount_minor;
-  const order_discount_minor = Math.max(0, Math.min(opts.discount_minor ?? 0, pool_minor));
-  if (order_discount_minor > 0 && pool_minor > 0) {
-    const bases = lt.map((t) => Math.max(0, t.line_subtotal_minor - t.line_discount_minor));
-    const shares = bases.map((b) => (order_discount_minor * b) / pool_minor);
-    const alloc = shares.map(Math.floor);
-    let rem = order_discount_minor - alloc.reduce((s, v) => s + v, 0);
-    shares.map((s, i) => [s - alloc[i], i] as const).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rem > 0 && bases[i] > 0) { alloc[i] += 1; rem -= 1; } });
-    lt = lt.map((t, i) => {
-      const line_discount_minor = t.line_discount_minor + alloc[i];
-      const { tax, total } = taxOn(t.line_subtotal_minor - line_discount_minor, active[i].tax_rate, active[i].tax_inclusive);
-      return { ...t, line_discount_minor, line_tax_minor: tax, line_total_minor: total };
-    });
-  }
   const discount_minor = lt.reduce((s, t) => s + t.line_discount_minor, 0);
   const service_charge_percent = serviceChargeFor(opts.orderType, opts.settings);
   const service_charge_minor = Math.round(((subtotal_minor - discount_minor) * service_charge_percent) / 100);

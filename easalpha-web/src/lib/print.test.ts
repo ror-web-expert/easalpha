@@ -40,8 +40,8 @@ describe("receiptLines", () => {
     expect(t.find((x) => x.startsWith("QTY  ITEM"))).toMatch(/AMOUNT$/);
     expect(t.find((x) => x.startsWith("  2  Chicken Biryani"))).toMatch(/Rs 990$/);
     expect(t).toContain("     @ Rs 500 each");
-    expect(t.find((x) => x.startsWith("     + Extra raita"))).toMatch(/Rs 50$/);
-    expect(t.find((x) => x.startsWith("     Discount"))).toMatch(/-Rs 110$/);
+    expect(t).toContain("     + Extra raita (Rs 50)");
+    expect(t).toContain("     Discount -Rs 110");
     expect(t).toContain('     "less spicy"');
     expect(t.find((x) => x.startsWith("Items"))).toMatch(/3 items$/);
     expect(t.find((x) => x.startsWith("Discount"))).toMatch(/-Rs 110$/);
@@ -57,6 +57,21 @@ describe("receiptLines", () => {
     expect(t).toContain("You saved Rs 110");
     expect(lines).toContainEqual({ text: "Thank you", align: "center", bold: true });
   });
+  // QA T13: the modifier's price was listed under its item as well as inside the item's amount, so the AMOUNT column
+  // did not add up to the Subtotal.
+  it("puts an amount on the item rows only, so the AMOUNT column adds up to the Subtotal", () => {
+    const r = { ...receipt, lines: [{ ...receipt.lines[0], line_subtotal_minor: 110000 }, { ...receipt.lines[1], line_subtotal_minor: 8000 }] };
+    const all = receiptLines(r);
+    const head = all.findIndex((l) => "text" in l && l.text.startsWith("QTY  ITEM"));
+    const start = head + 2; // past the heading and its divider
+    const block = all.slice(start, all.findIndex((l, i) => i >= start && "divider" in l));
+    // A figure in the AMOUNT column is right-aligned on a full-width row; the notes under an item end short of it.
+    const amounts = block.filter((l): l is Extract<PrintLine, { text: string }> => "text" in l && l.text.length === 48).map((l) => /(-?)Rs ([\d,]+)$/.exec(l.text)).filter((x): x is RegExpExecArray => !!x).map((x) => (x[1] ? -1 : 1) * Number(x[2].replace(/,/g, "")));
+    expect(amounts).toEqual([1100, 80]);
+    expect(amounts.reduce((s, v) => s + v, 0) * 100).toBe(r.totals.subtotal_minor);
+    expect(texts(block)).toEqual(expect.arrayContaining(["     + Extra raita (Rs 50)", "     Discount -Rs 110"]));
+  });
+
   it("prints what was tendered and the change for any cash-kind method, and none for a card", () => {
     // Only a cash-kind method carries a tendered amount (the server and the offline till both set it by kind).
     const cod = texts(receiptLines({ ...receipt, payments: [{ method: "cod", amount_minor: 117700, tendered_minor: 120000, change_minor: 2300, reference: null }] }));

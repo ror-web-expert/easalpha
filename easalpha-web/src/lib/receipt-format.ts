@@ -46,6 +46,11 @@ export function unitPriceNote(l: Pick<Receipt["lines"][number], "quantity" | "un
   return qty !== 1 && l.unit_price_minor ? `@ ${money(l.unit_price_minor)} each` : null;
 }
 
+/** "+ Extra raita (Rs 50)": a modifier under its item, its price a note since the item's amount already holds it. */
+export function modifierNote(mo: { name: string; price_minor?: number | null }, money: (minor: number) => string): string {
+  return `+ ${mo.name}${mo.price_minor ? ` (${money(mo.price_minor)})` : ""}`;
+}
+
 /** Everything taken off the bill, lines and order together, as "You saved Rs 110"; null when nothing was. */
 export function savingsLine(r: Pick<Receipt, "totals" | "business">): string | null {
   const saved = r.totals?.discount_minor ?? 0;
@@ -54,4 +59,11 @@ export function savingsLine(r: Pick<Receipt, "totals" | "business">): string | n
 
 /** The receipt number as the barcode encodes it: yymmdd-BRANCH-serial, printed on every paid receipt. */
 export const RECEIPT_NUMBER_RE = /^\d{6}-\S+-\d+$/;
-export const isReceiptNumber = (code: string): boolean => RECEIPT_NUMBER_RE.test(code.trim());
+/**
+ * The label of an order saved offline: the till's code and its counter (T1-001; a tablet's is W2-014). A receipt paid
+ * offline has no receipt number yet, so this is its barcode, and the scan must find the order by it (QA T12).
+ */
+export const TILL_SERIAL_RE = /^[TW]\d+-\d{3,}$/i;
+export const isTillSerial = (code: string): boolean => TILL_SERIAL_RE.test(code.trim());
+/** A receipt's barcode: its receipt number, or the till serial of a receipt printed offline. */
+export const isReceiptNumber = (code: string): boolean => RECEIPT_NUMBER_RE.test(code.trim()) || isTillSerial(code);

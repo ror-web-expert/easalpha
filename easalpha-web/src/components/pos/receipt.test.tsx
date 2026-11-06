@@ -30,3 +30,18 @@ describe("ReceiptView payments", () => {
     expect(screen.queryByText("Change")).toBeNull();
   });
 });
+
+describe("ReceiptView items (QA T13)", () => {
+  // A modifier's price sat in the AMOUNT column as well as inside its item's amount.
+  it("shows a modifier's price and a line discount as notes, leaving the item's amount the only figure", () => {
+    const r = receipt({ method: "cash", amount_minor: 117700, tendered_minor: 117700, change_minor: 0, reference: null });
+    r.lines = [{ name: "Karahi", quantity: "1", unit_price_minor: 107700, modifiers: [{ name: "Extra cheese", price_minor: 10000 }], line_subtotal_minor: 117700, line_total_minor: 107700, discount_minor: 10000, notes: null }];
+    const { container } = render(<ReceiptView r={r} branding={{ barcode: false }} />);
+    expect(screen.getByText("+ Extra cheese (Rs 100)")).toBeInTheDocument();
+    expect(screen.getByText("Discount -Rs 100")).toBeInTheDocument();
+    // The item block's figures: only the item's own amount.
+    const block = screen.getByText("Karahi").closest(".mt-1")!;
+    expect([...block.querySelectorAll(".tabular")].map((el) => el.textContent)).toEqual(["1", "Rs 1,177"]);
+    expect(container).toBeTruthy();
+  });
+});
