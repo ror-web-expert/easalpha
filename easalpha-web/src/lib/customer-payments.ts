@@ -11,6 +11,7 @@ import { useCustomerStore } from "@/store/customers";
 import { readRecentCustomers, rememberRecentCustomer } from "@/lib/pos-customers";
 import type { Customer, CustomerPayment } from "@/lib/types";
 import type { AccountPaymentReceipt } from "@/lib/print";
+import { publicTaxRegistration } from "@/lib/receipt-format";
 
 export interface ReceiveInput { amount_minor: number; method_code: string; reference?: string | null }
 /** The customer as the dialog knows them (a search row, a cached row or the cart's customer). */
@@ -65,7 +66,8 @@ export function accountPaymentReceipt(r: ReceiveResult): AccountPaymentReceipt {
   const method = c.paymentMethods.find((m) => m.code === r.input.method_code);
   return {
     business: { name: biz?.name ?? "", legal_name: null, phone: d.business?.phone ?? null, email: null, logo_key: biz?.logo_key ?? null, currency: biz?.currency ?? "PKR" },
-    branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
+    // The public numbers only, as the order receipt takes them: a stored branch may still carry the tax API token (S1).
+    branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: publicTaxRegistration(branch?.tax_registration) },
     number: r.number, customer: { name: r.customer.name, khata_no: r.customer.khata_no == null ? null : String(r.customer.khata_no) },
     amount_minor: r.input.amount_minor, method: method?.name ?? r.input.method_code, reference: r.input.reference ?? null,
     previous_balance_minor: r.previous_balance_minor, new_balance_minor: r.new_balance_minor, received_at: r.received_at, cashier: d.session?.user?.name ?? null, offline: r.offline,

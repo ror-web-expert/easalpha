@@ -8,11 +8,12 @@ const h = vi.hoisted(() => ({
   queued: [] as { type: string; id: string; membership_id?: string; payload: Record<string, unknown> }[],
   handler: null as null | ((path: string, opts: { method?: string; body?: Record<string, unknown> }) => unknown),
   calls: [] as { path: string; body: Record<string, unknown> | undefined }[],
+  branchTax: null as Record<string, unknown> | null,
 }));
 vi.mock("@/lib/db", () => ({ db: { customers: { put: async () => undefined, toArray: async () => [], clear: async () => undefined, bulkPut: async () => undefined, bulkDelete: async () => undefined }, transaction: async (_m: string, _t: unknown, fn: () => Promise<void>) => fn() }, kvGet: async () => undefined, kvSet: async () => undefined }));
 vi.mock("@/lib/sync", () => ({ isOnline: () => h.online, noteNetworkFailure: () => {}, enqueue: async (r: (typeof h.queued)[number]) => { h.queued.push(r); } }));
 vi.mock("@/lib/api", async () => ({ ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")), api: async (path: string, opts: { method?: string; body?: Record<string, unknown> } = {}) => { h.calls.push({ path, body: opts.body }); return h.handler!(path, opts); } }));
-vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Beaconhouse Canteen", currency: "PKR", settings: {}, logo_key: null }, branch: { name: "Main", address: "12 Mall Road", city: "Lahore", phone: null, tax_registration: null } }, paymentMethods: [{ id: "m1", code: "cash", name: "Cash", kind: "cash", active: true, works_offline: true, needs_reference: false, sort_order: 0, payment_account_id: null }] }) } }));
+vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Beaconhouse Canteen", currency: "PKR", settings: {}, logo_key: null }, branch: { name: "Main", address: "12 Mall Road", city: "Lahore", phone: null, tax_registration: h.branchTax } }, paymentMethods: [{ id: "m1", code: "cash", name: "Cash", kind: "cash", active: true, works_offline: true, needs_reference: false, sort_order: 0, payment_account_id: null }] }) } }));
 vi.mock("@/store/device", () => ({ useDeviceStore: { getState: () => ({ session: { membership: { id: "m-ayesha" }, user: { name: "Ayesha" } }, branch: null, business: { phone: "042-111" } }) } }));
 
 import { ApiError } from "@/lib/api";
@@ -26,6 +27,7 @@ const serverPayment = { id: "cp-1", number: "CP-000012", customer_id: "sadia", d
 
 beforeEach(() => {
   h.online = true;
+  h.branchTax = null;
   h.queued.length = 0;
   h.calls.length = 0;
   localStorage.clear();
@@ -100,5 +102,15 @@ describe("accountPaymentReceipt", () => {
       number: null, customer: { name: "Sadia Akhtar", khata_no: "32" }, amount_minor: 50_000, method: "Cash", reference: null,
       previous_balance_minor: 194_500, new_balance_minor: 144_500, cashier: "Ayesha", offline: true,
     });
+  });
+
+  // L2, 7 Nov 2026: the receipt took the branch's whole tax registration, so a stored copy's API token went with it.
+  it("takes only the public tax numbers the order receipt prints, never a token", async () => {
+    h.online = false;
+    h.branchTax = { authority: "pra", ntn: "1234567-8", strn: " ", pos_id: "POS-9", token: "pra-secret-token", access_code: "AC-1" };
+    const r = await receiveCustomerPayment({ id: "sadia", name: "Sadia Akhtar", khata_no: 32, balance_minor: 194_500 }, { amount_minor: 50_000, method_code: "cash" });
+    const receipt = accountPaymentReceipt(r);
+    expect(receipt.branch.tax_registration).toEqual({ authority: "pra", ntn: "1234567-8", pos_id: "POS-9" });
+    expect(JSON.stringify(receipt)).not.toContain("pra-secret-token");
   });
 });
