@@ -81,4 +81,56 @@ RSpec.describe "Kitchen stations, bumps and the customers' screens", type: :requ
     get "/api/v1/kitchen/ready", headers: device_headers(screen)
     expect(json[:data].map { |o| o[:id] }).to eq([ now[:id] ])
   end
+
+  # Since paying stopped marking lines served (QA F2), an order paid at once stays paid while the kitchen cooks it: the
+  # customers' screens follow its lines and ready_at, as the kitchen display does, not its status.
+  describe "an order paid at once" do
+    before { within(biz) { PaymentMethod.seed_defaults!(biz) unless PaymentMethod.exists? } }
+
+    def paid_at_once!
+      o = placed([ { product_id: m[:burger].id }, { product_id: m[:chai].id } ], order_type: "takeaway")
+      api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor], tendered_minor: o[:total_minor] } ] }, headers: headers
+      expect(json[:order]).to include(status: "paid"), response.body
+      o
+    end
+
+    def screens
+      get "/api/v1/kitchen/queue", headers: device_headers(screen)
+      queue = json
+      get "/api/v1/kitchen/ready", headers: device_headers(screen)
+      { preparing: queue[:preparing].map { |r| r[:id] }, ready: queue[:ready].map { |r| r[:id] }, token: json[:data].map { |r| r[:id] } }
+    end
+
+    it "is preparing while a line cooks, ready once each station has bumped, and stays paid" do
+      o = paid_at_once!
+      expect(screens).to eq(preparing: [ o[:id] ], ready: [], token: [])
+      api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", { station_id: m[:grill].id }, headers: device_headers(kds)
+      expect(response).to have_http_status(:ok), response.body
+      expect(json).to include(status: "paid", ready_at: nil)
+      expect(screens).to eq(preparing: [ o[:id] ], ready: [], token: [])
+      api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", { station_id: m[:drinks].id }, headers: device_headers(kds)
+      expect(json).to include(status: "paid", ready_at: be_present)
+      expect(statuses(o[:id])).to eq([ [ "Chai", "ready" ], [ "Zinger Burger", "ready" ] ])
+      expect(screens).to eq(preparing: [], ready: [ o[:id] ], token: [ o[:id] ])
+
+      travel 16.minutes do # collected: nothing at the till records the hand-over of a paid takeaway
+        expect(screens).to eq(preparing: [], ready: [], token: [])
+      end
+    end
+
+    it "shows a line added to a ready order as preparing until it is bumped, and the order stays ready" do
+      o = placed([ { product_id: m[:burger].id } ])
+      api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", {}, headers: device_headers(kds)
+      expect(screens[:ready]).to eq([ o[:id] ])
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: o[:items].first[:id], quantity: 1 }, { product_id: m[:chai].id, quantity: 1 } ] }, headers: headers
+      expect(response).to have_http_status(:ok), response.body
+      expect(screens).to eq(preparing: [ o[:id] ], ready: [], token: [])
+      chai = within(biz) { Order.find(o[:id]).items.find { |i| i.name_snapshot == "Chai" } }
+      api_post "/api/v1/kitchen/items/#{chai.id}/bump", {}, headers: device_headers(kds)
+      expect(response).to have_http_status(:ok), response.body
+      expect(json[:status]).to eq("ready")
+      expect(statuses(o[:id])).to eq([ [ "Chai", "ready" ], [ "Zinger Burger", "ready" ] ])
+      expect(screens).to eq(preparing: [], ready: [ o[:id] ], token: [ o[:id] ])
+    end
+  end
 end
