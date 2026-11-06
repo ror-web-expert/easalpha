@@ -153,30 +153,41 @@ module Sync
       Orders::Transitions.close!(order, actor: actor, device: @device, allow_unpaid: order.is_staff_meal || order.total_minor.zero?)
     end
 
+    # The till numbers each queued update (client_seq) and sends it again when an answer is lost. The number is recorded
+    # in the same transaction as the update, so the repeat is a duplicate (its new lines carry the till's ids, which the
+    # server never matches: applied again they would be added twice, the first copies cancelled, and the kitchen sent
+    # both), while an update that was refused leaves nothing behind and is applied when it is tried again.
     def apply_order_update(id, payload, actor)
-      order = Order.includes(items: :modifiers).find(id)
-      return "duplicate" if payload[:client_seq].present? && order.notes.to_s.include?("seq:#{payload[:client_seq]}")
-      builder = Orders::Builder.new(order, actor: actor, device: @device, branch: @branch)
-      attrs = payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, :is_staff_meal, :staff_meal_reason, *CHARGE_KEYS).to_h.symbolize_keys
-      # The staff-meal flag changed offline: on needs orders.staff_meal (the actor's own or the PIN on the record), off charges normally.
-      if attrs.key?(:is_staff_meal)
-        attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal])
-        if attrs[:is_staff_meal]
-          attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id unless order.is_staff_meal
-          attrs[:staff_meal_reason] = order.staff_meal_reason if attrs[:staff_meal_reason].blank?
-        else
-          attrs[:staff_meal_reason] = nil
-          attrs[:staff_meal_approved_by_id] = nil
+      seq = payload[:client_seq].to_s.strip.first(100).presence
+      status = "accepted"
+      Order.transaction(requires_new: true) do
+        if seq && !AppliedSubmission.record!(device_id: @device.id, record_type: "order_update", record_id: id, client_seq: seq, order_id: id)
+          status = "duplicate"
+          next
+        end
+        order = Order.includes(items: :modifiers).find(id)
+        builder = Orders::Builder.new(order, actor: actor, device: @device, branch: @branch)
+        attrs = payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, :is_staff_meal, :staff_meal_reason, *CHARGE_KEYS).to_h.symbolize_keys
+        # The staff-meal flag changed offline: on needs orders.staff_meal (the actor's own or the PIN on the record), off charges normally.
+        if attrs.key?(:is_staff_meal)
+          attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal])
+          if attrs[:is_staff_meal]
+            attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id unless order.is_staff_meal
+            attrs[:staff_meal_reason] = order.staff_meal_reason if attrs[:staff_meal_reason].blank?
+          else
+            attrs[:staff_meal_reason] = nil
+            attrs[:staff_meal_approved_by_id] = nil
+          end
+        end
+        builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: @approvals)
+        Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
+        # A staff meal completed offline on an order the server already held: the till sends complete on the update.
+        if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
+          Orders::Transitions.place!(order, actor: actor, device: @device) if order.status.in?(%w[draft held])
+          complete!(order, actor)
         end
       end
-      builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: @approvals)
-      Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
-      # A staff meal completed offline on an order the server already held: the till sends complete on the update.
-      if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
-        Orders::Transitions.place!(order, actor: actor, device: @device) if order.status.in?(%w[draft held])
-        complete!(order, actor)
-      end
-      "accepted"
+      status
     end
 
     def apply_payment(id, payload, actor)
