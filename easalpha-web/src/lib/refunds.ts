@@ -1,7 +1,8 @@
 // What a refund may give back right now, for the till's Orders screen and the admin order drawer.
-// A settled order returns what it was paid. An open order is never refunded from under the kitchen, except what it
-// was paid beyond its total (reopened, then a line taken off): the server completes it only once that excess is back
-// (409 order.overpaid), so the screens offer exactly that amount.
+// A settled order returns what it was paid. An open order paid in full gives back only what it was paid beyond its
+// total (reopened, then a line taken off): the server completes it only once that excess is back (409 order.overpaid),
+// so the screens offer exactly that amount. An open order paid in part can have that part back (the customer left):
+// it stays open, owes it again, and can then be voided (final round, ledger#0).
 
 const SETTLED = ["paid", "closed", "refunded"];
 
@@ -14,6 +15,7 @@ export interface RefundOffer {
 export function refundOffer(o: { status: string; paid_minor: number; total_minor: number }): RefundOffer | null {
   if (!(o.paid_minor > 0)) return null;
   if (SETTLED.includes(o.status)) return { amount_minor: o.paid_minor, excess: false };
+  if (o.paid_minor < o.total_minor) return { amount_minor: o.paid_minor, excess: false };
   const excess = o.paid_minor - o.total_minor;
   return excess > 0 ? { amount_minor: excess, excess: true } : null;
 }

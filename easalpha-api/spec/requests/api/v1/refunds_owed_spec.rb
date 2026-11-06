@@ -67,6 +67,8 @@ RSpec.describe "Refunds and what an order still owes", type: :request do
     it "owes nothing once refunded in full, on the receipt too" do
       o = pay!(order!, 52_200)
       refund!(o, 10_000)
+      refund!(o, 52_200) # what the screen offers: the order still reads paid in full
+      expect(json[:error]).to include(code: "refund.too_much", details: { refundable_minor: 42_200 })
       refund!(o, 42_200)
       expect(json[:order]).to include(status: "refunded", payment_status: "refunded", paid_minor: 0, due_minor: 0)
       get "/api/v1/orders/#{o[:id]}/receipt", headers: headers
@@ -116,7 +118,7 @@ RSpec.describe "Refunds and what an order still owes", type: :request do
       api_post "/api/v1/orders/#{o[:id]}/void", { reason: "Customer left" }, headers: headers
       expect(json[:error][:code]).to eq("order.paid")
       refund!(o, 15_001, method: "card")
-      expect(json[:error][:code]).to eq("refund.too_much")
+      expect(json[:error]).to include(code: "refund.too_much", message: "Refund exceeds what was paid: Rs 150 is left to refund on #{o[:label]}", details: { refundable_minor: 15_000 })
       expect(pay!(o, 30_000)).to include(status: "placed", payment_status: "partial", paid_minor: 45_000, due_minor: 7_200)
     end
 

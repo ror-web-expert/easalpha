@@ -51,7 +51,11 @@ module Payments
         raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(order.branch_id, day)
         refunded = Refund.where(order_id: order.id).sum(:amount_minor)
         captured = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor)
-        raise Api::Errors::Conflict.new("refund.too_much", "Refund exceeds what was paid") if amount_minor <= 0 || refunded + amount_minor > captured
+        if amount_minor <= 0 || refunded + amount_minor > captured
+          # A part refunded order still reads paid in full, so the screens offer too much: say what is left.
+          raise Api::Errors::Conflict.new("refund.too_much", "Refund exceeds what was paid: Rs #{Customers::Notify.rupees(captured - refunded)} is left to refund on #{order.label}",
+                                          details: { refundable_minor: captured - refunded })
+        end
         check_method!(order, method, amount_minor)
         refund = Refund.create!(id: id, order: order, branch_id: order.branch_id, payment_method: method, payment_account: method.payment_account, amount_minor: amount_minor,
                                 reason: reason, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, shift_id: shift&.id, business_day: day, refunded_at: Time.current)
