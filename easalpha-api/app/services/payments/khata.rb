@@ -6,11 +6,13 @@ module Payments
     # id: the till's own UUID for a payment taken offline, so a replay of the same record is a duplicate, never a second receipt.
     # received_on: the day the money came, when it is not today (a bank transfer seen later, or entered after
     # midnight); never in the future, never into a locked day, and only for someone who may adjust accounts.
-    def receive!(customer, amount_minor:, method_code:, reference: nil, actor:, shift: nil, branch:, direction: "received", id: nil, received_on: nil)
+    # internal: the system settling an account by an internal method (the payroll's salary deduction); nobody else
+    # may pick one, since it moves no money.
+    def receive!(customer, amount_minor:, method_code:, reference: nil, actor:, shift: nil, branch:, direction: "received", id: nil, received_on: nil, internal: false)
       raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount_minor.positive?
       raise Api::Errors::Conflict.new("khata.walk_in", "The walk-in customer has no account") if customer.is_walk_in
       method = PaymentMethod.active.find_by!(code: method_code)
-      raise Api::Errors::BadRequest.new("khata.method", "Choose a cash, card, wallet or bank method") if method.khata?
+      raise Api::Errors::BadRequest.new("khata.method", "Choose a cash, card, wallet or bank method") if method.khata? || (method.internal? && !internal)
       day = dated(received_on, today: branch.business_day_for(Time.current), actor: actor)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
       cp = nil
@@ -24,6 +26,7 @@ module Payments
         cp.update_column(:payment_account_id, account.id) if account
         account&.post!(kind: direction == "received" ? "customer_payment" : "customer_refund", amount_minor: direction == "received" ? amount_minor : -amount_minor,
                                       business_day: day, ref: cp, description: "#{direction == 'received' ? 'Khata payment from' : 'Paid to'} #{customer.name}", by: actor, shift_id: shift&.id, branch_id: branch.id)
+        Finance::Journal.internal_receipt!(cp) if method.internal? # no money account: the journal only
         AuditLog.record(action: "create", record: cp, after: { customer: customer.name, amount_minor: amount_minor, direction: direction, method: method.code })
       end
       if direction == "received" && customer.phone.present? && customer.business.setting("whatsapp_balance_message", true) && Whatsapp::Account.auto_send_on_payment?(customer.business)

@@ -6,8 +6,10 @@ module Purchasing
     def record!(supplier, amount_minor:, method_code:, actor:, branch:, shift: nil, reference: nil, note: nil, goods_receipt_id: nil, direction: "paid", paid_on: nil, purchase_order_id: nil)
       raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount_minor.positive?
       method = PaymentMethod.active.find_by!(code: method_code)
-      raise Api::Errors::BadRequest.new("supplier_payment.method", "Choose a cash, card, wallet or bank method") if method.khata?
+      raise Api::Errors::BadRequest.new("supplier_payment.method", "Choose a cash, card, wallet or bank method") if method.khata? || method.internal?
       day = branch.business_day_for(Time.current)
+      # A locked day takes no more money, from the supplier screens either (QA B9).
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
       po = purchase_order_id.present? ? PurchaseOrder.find(purchase_order_id) : (goods_receipt_id.present? ? GoodsReceipt.find(goods_receipt_id).purchase_order : nil)
       raise Api::Errors::BadRequest.new("supplier_payment.purchase_order", "#{po.label} belongs to another supplier") if po && po.supplier_id != supplier.id
       SupplierPayment.transaction do

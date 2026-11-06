@@ -99,7 +99,7 @@ export function SupplierPaymentDialog({ supplier, open, onClose }: { supplier: S
   const methods = usePaymentMethods();
   const [form, setForm] = useState<PaymentForm>({ amount_minor: 0, method_code: "", reference: "", direction: "paid", note: "" });
   useEffect(() => { if (open) setForm({ amount_minor: Math.max(0, supplier.balance_minor), method_code: "", reference: "", direction: "paid", note: "" }); }, [open, supplier.balance_minor]);
-  const usable = useMemo(() => methods.data?.filter((m) => m.active && m.kind !== "khata") ?? [], [methods.data]);
+  const usable = useMemo(() => methods.data?.filter((m) => m.active && m.kind !== "khata" && !m.internal) ?? [], [methods.data]);
   useEffect(() => { if (open && !form.method_code && usable.length) setForm((f) => ({ ...f, method_code: usable.find((m) => m.kind === "cash")?.code ?? usable[0].code })); }, [open, usable, form.method_code]);
   const save = useSave<PaymentForm & { id?: string }>(["supplier", "supplier_ledger", "supplier_payments", "suppliers", "suppliers_all", "purchasing_summary", "purchasing_aging", "supplier_insights"], () => `/suppliers/${supplier.id}/payments`, { success: "Payment recorded", onSuccess: onClose });
   const method = usable.find((m) => m.code === form.method_code);

@@ -153,6 +153,36 @@ it ever fails: `docker run --rm -v easalpha_storage:/d alpine chown -R 1000:1000
 Watch a run: `gh run watch`, or Actions on GitHub. Tagged release: `git tag v1.0.0 && git push --tags` also builds and
 uploads the desktop installers to the Download page (`desktop.yml`).
 
+### Once, after the deploy that carries the books fixes (fix rounds of 6 and 7 Nov 2026)
+
+Three rake tasks put into the journal what older builds recorded without it, so the Trial Balance and Balance Sheet
+agree with the customer and supplier ledgers. Each is a dry run unless `DRY_RUN=0`: it prints, per business, every
+voucher it would post with its lines and writes nothing. Each is idempotent: what is already in the journal is left
+alone, so a second run prints nothing. A voucher is dated to the day of the record behind it, even a locked day (the
+record already sits on that day in the customer or supplier ledger); the output marks those "(locked day)". Take a
+backup first (`docker compose run --rm backup now`), then for each task run the dry run, read it, and apply:
+
+```bash
+docker compose exec api bin/rails finance:backfill_khata_refunds                 # dry run
+docker compose exec -e DRY_RUN=0 api bin/rails finance:backfill_khata_refunds    # write
+docker compose exec api bin/rails finance:backfill_supplier_openings             # then DRY_RUN=0
+docker compose exec api bin/rails finance:reclass_internal_methods               # then DRY_RUN=0
+```
+
+- `finance:backfill_khata_refunds`: refunds to a customer account made before 6 Nov 2026 lowered the customer's balance
+  but posted no voucher, so Accounts Receivable and Sales were overstated by each (review deploy#5). It posts each one as
+  the refund journal does now (the sale's split comes back out, the receivable goes down); a refund of a sale journaled
+  before the sales split comes out of Sales only.
+- `finance:backfill_supplier_openings`: a supplier's opening balance never reached the journal, so Accounts Payable fell
+  short of the supplier ledgers (QA B10). It posts each against Owner's Capital on the day the supplier was added.
+- `finance:reclass_internal_methods`: the canteen's "Company subsidy" and "Salary deduction" methods had a payment account
+  under Cash at Bank (1020.xx) holding money nobody had (QA B4). It moves each day's balance to 5170 Staff Meals or 5110
+  Salaries and Wages, closes the two accounts (a closing entry, then archived) and detaches the methods, so the Finance
+  dashboard and Balance Sheet stop showing them. An account that also holds other entries, or that a real method uses,
+  is left as it is and named in the output.
+
+`SLUG=demo-cafe` limits any of them to one business.
+
 ## Daily operations on the server
 
 ```bash

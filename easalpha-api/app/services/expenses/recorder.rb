@@ -12,6 +12,8 @@ module Expenses
       raise Api::Errors::BadRequest.new("expense.amount", "Amount must be positive") unless amount.positive?
       method = attrs[:method_code].present? ? PaymentMethod.active.find_by!(code: attrs[:method_code]) : PaymentMethod.active.find_by(kind: "cash")
       raise Api::Errors::BadRequest.new("expense.method", "Expenses cannot be paid on khata") if method&.khata?
+      # The canteen subsidy and the salary deduction move no money: an expense "paid" by one would leave no trace.
+      raise Api::Errors::BadRequest.new("expense.method", "#{method.name} is used by the system; pay from a cash, card, wallet or bank method") if method&.internal?
       spent_on = attrs[:spent_on].present? ? Date.parse(attrs[:spent_on].to_s) : branch.business_day_for(Time.current)
       day = branch.business_day_for(Time.current)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
