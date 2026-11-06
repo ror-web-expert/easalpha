@@ -155,18 +155,20 @@ uploads the desktop installers to the Download page (`desktop.yml`).
 
 ### Once, after the deploy that carries the books fixes (fix rounds of 6 and 7 Nov 2026)
 
-Three rake tasks put into the journal what older builds recorded without it, so the Trial Balance and Balance Sheet
-agree with the customer and supplier ledgers. Each is a dry run unless `DRY_RUN=0`: it prints, per business, every
-voucher it would post with its lines and writes nothing. Each is idempotent: what is already in the journal is left
-alone, so a second run prints nothing. A voucher is dated to the day of the record behind it, even a locked day (the
-record already sits on that day in the customer or supplier ledger); the output marks those "(locked day)". Take a
-backup first (`docker compose run --rm backup now`), then for each task run the dry run, read it, and apply:
+Four rake tasks correct data that older builds left behind. Three put into the journal what those builds recorded
+without it, so the Trial Balance and Balance Sheet agree with the customer and supplier ledgers. Each is a dry run
+unless `DRY_RUN=0`: it prints, per business, every voucher it would post with its lines and writes nothing. Each is
+idempotent: what is already in the journal is left alone, so a second run prints nothing. A voucher is dated to the
+day of the record behind it, even a locked day (the record already sits on that day in the customer or supplier
+ledger); the output marks those "(locked day)". Take a backup first (`docker compose run --rm backup now`), then
+for each task run the dry run, read it, and apply:
 
 ```bash
 docker compose exec api bin/rails finance:backfill_khata_refunds                 # dry run
 docker compose exec -e DRY_RUN=0 api bin/rails finance:backfill_khata_refunds    # write
 docker compose exec api bin/rails finance:backfill_supplier_openings             # then DRY_RUN=0
 docker compose exec api bin/rails finance:reclass_internal_methods               # then DRY_RUN=0
+docker compose exec api bin/rails orders:repair_part_refunds                     # then DRY_RUN=0
 ```
 
 - `finance:backfill_khata_refunds`: refunds to a customer account made before 6 Nov 2026 lowered the customer's balance
@@ -180,6 +182,14 @@ docker compose exec api bin/rails finance:reclass_internal_methods              
   Salaries and Wages, closes the two accounts (a closing entry, then archived) and detaches the methods, so the Finance
   dashboard and Balance Sheet stop showing them. An account that also holds other entries, or that a real method uses,
   is left as it is and named in the output.
+
+- `orders:repair_part_refunds`: orders part-refunded before 7 Nov 2026 still read "Partial" with a balance due, because
+  the old refund rule lowered what was paid. It puts each back to paid with nothing due; the refund itself is left as
+  it is. It writes no voucher, so it runs after the three above in any order.
+
+The audit-log redaction (secrets such as a branch's tax API token kept in older audit rows) needs no step: it is a
+migration, and `bin/start api` runs migrations as the database owner, which may lift the append-only trigger for it.
+`bin/rails audit:redact` repeats it if ever needed.
 
 `SLUG=demo-cafe` limits any of them to one business.
 
@@ -242,12 +252,3 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
 | `.github/workflows/desktop.yml` | installers on changes to `easalpha-desktop/` and on `v*` tags, uploaded to the Download page |
 | `.github/workflows/ci.yml` | tests on every push and pull request |
 | `scripts/github-setup.sh` | one-time GitHub repo, secrets, variables, deploy key, first push |
-
-### After the 7 Nov 2026 deploy: order repair
-
-Orders part-refunded before 7 Nov 2026 still read "Partial" with a balance due (the old refund rule lowered what was paid). Run once, dry run first:
-
-```
-docker compose exec easalpha-api bin/rails orders:repair_part_refunds            # shows what it would change
-docker compose exec -e DRY_RUN=0 easalpha-api bin/rails orders:repair_part_refunds
-```
