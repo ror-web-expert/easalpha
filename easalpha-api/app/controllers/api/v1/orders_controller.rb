@@ -135,19 +135,26 @@ module Api
       # GET /orders/summary?business_day=  totals for the day: paid, open, voided, counts by type and status
       def summary
         require_permission!("orders.create", "reports.view_all", "reports.view_branch")
-        day = params[:business_day].presence || current_branch.business_day_for(Time.current)
+        day = params[:business_day].present? ? Date.parse(params[:business_day]) : current_branch.business_day_for(Time.current)
         scope = Order.where(branch_id: current_branch.id, business_day: day)
         paid = scope.where(status: %w[paid closed])
         open = scope.open
+        # The money follows the one revenue rule, as the sales overview for the day does (Reports::Revenue): a sale on its
+        # order's day, a refund on its own day, staff meals out. Summing the day's paid totals dropped a fully refunded
+        # order from its own day, kept a part refund in and counted a staff meal's tax and discount.
+        sold = Reports::Revenue.period(branch: current_branch, from: day, to: day).totals
         render json: {
           business_day: day,
           orders: scope.count, paid_orders: paid.count, open_orders: open.count, voided_orders: scope.where(status: "voided").count,
-          revenue_minor: paid.sum(:total_minor), open_minor: open.sum(:total_minor), voided_minor: scope.where(status: "voided").sum(:total_minor),
-          discount_minor: paid.sum(:discount_minor), tax_minor: paid.sum(:tax_minor), service_charge_minor: paid.sum(:service_charge_minor),
-          average_order_minor: paid.count.zero? ? 0 : paid.sum(:total_minor) / paid.count,
+          revenue_minor: sold[:revenue_minor], open_minor: open.sum(:total_minor), voided_minor: scope.where(status: "voided").sum(:total_minor),
+          discount_minor: sold[:discount_minor], tax_minor: sold[:tax_minor], service_charge_minor: sold[:parts][:service_charge],
+          average_order_minor: sold[:orders].zero? ? 0 : sold[:revenue_minor] / sold[:orders],
+          sold_orders: sold[:orders], refunds_minor: sold[:refunds_minor],
           by_type: scope.group(:order_type).count, by_status: scope.group(:status).count, by_source: scope.group(:source).count,
           staff_meals: scope.where(is_staff_meal: true).count
         }
+      rescue Date::Error
+        raise Api::Errors::BadRequest.new("orders.business_day", "business_day must be YYYY-MM-DD")
       end
 
       def show
@@ -262,7 +269,7 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
-      # POST /orders/:id/discounts  kind (percent|fixed|promotion), value, reason, order_item_id?, coupon_code?, voucher_code?, approver_pin?
+      # POST /orders/:id/discounts  kind (percent|fixed; promotion with coupon_code), value, reason, order_item_id?, coupon_code?, voucher_code?, approver_pin?
       def add_discount
         require_permission!("orders.create", "discounts.apply")
         order = Order.includes(items: :modifiers).find(params[:id])
@@ -287,6 +294,13 @@ module Api
           kind = promotion.kind == "fixed" ? "fixed" : "promotion"
           value = promotion.value
         end
+        # By hand a cashier gives a percent or an amount, weighed against their limit (or a manager's PIN) below. A
+        # coupon takes its kind from its promotion; points, vouchers and the regular discount have paths of their own
+        # (redeem_points and redeem_option, voucher_code, the recency tiers). A "promotion" with no coupon was priced as
+        # a percent but weighed as an amount, so a cashier with a 10% limit took 50% off any order over Rs 500.
+        unless promotion || %w[percent fixed].include?(kind)
+          raise Api::Errors::Unprocessable.new("discount.kind", "A discount given by hand is a percent or an amount. Coupons, vouchers and loyalty points are applied with their own codes.")
+        end
         approver = nil
         if kind != "promotion" && kind != "fixed" || promotion.nil?
           limit = current_membership.limit_for("discounts.apply")
@@ -304,21 +318,39 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
+      # DELETE /orders/:id/discounts/:discount_id  approver_pin?, approval_codes?
       def remove_discount
         require_permission!("orders.create")
-        order = Order.includes(items: :modifiers).find(params[:id])
-        # As for adding one: a settled sale, or one on a locked day, keeps its discounts (and its voucher stays used).
-        raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
-        day_lock_guard!(order.business_day)
-        d = order.discounts.find(params[:discount_id])
-        before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
-        Marketing::Vouchers.release!(d) if d.kind == "voucher"
-        # A coupon taken off gives its use back, as a void does, so a one-use offer is not spent on a sale without it.
-        Promotion.where(id: d.promotion_id).update_all("units_sold = GREATEST(units_sold - 1, 0)") if d.promotion_id
-        d.destroy!
-        Orders::Pricing.recalculate!(order.reload)
-        Orders::Pricing.save_all!(order)
-        audit!("discount", record: order, before: before, after: { removed: true, discount_minor: order.discount_minor, total_minor: order.total_minor })
+        order = Order.find(params[:id])
+        approver = before = nil
+        points = 0
+        Order.transaction do
+          # Locked first: a second removal of the same discount waits here and then finds it gone, and a void waits for
+          # this one to finish, so what the discount took (a voucher, a coupon use, loyalty points) goes back once.
+          order.lock!
+          # As for adding one: a settled sale, or one on a locked day, keeps its discounts (and its voucher stays used).
+          raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+          day_lock_guard!(order.business_day)
+          d = order.discounts.find(params[:discount_id])
+          # The regular discount is the owner's offer to a returning customer, put on by the server and locked on the
+          # till: taking it off is a discount decision, so it needs discounts.apply, as adding a discount does, or the
+          # PIN of a manager who holds it.
+          approver = require_approval!("discounts.apply") if d.kind == "regular"
+          before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
+          Marketing::Vouchers.release!(d) if d.kind == "voucher"
+          # A coupon taken off gives its use back, as a void does, so a one-use offer is not spent on a sale without it.
+          Promotion.where(id: d.promotion_id).update_all("units_sold = GREATEST(units_sold - 1, 0)") if d.promotion_id
+          # And the points a loyalty discount spent go back to whoever spent them, as a void gives them back.
+          points = Loyalty.refund_on_remove!(d, by: current_membership) if d.kind == "loyalty"
+          d.destroy!
+          Orders::Pricing.recalculate!(order.reload)
+          # Taken off by a decision, the regular discount stays off this order: the next save that carries lines, online
+          # or from the sync queue, no longer puts it back (RegularDiscounts.apply!).
+          order.regular_discount_removed_at = Time.current if d.kind == "regular"
+          Orders::Pricing.save_all!(order)
+        end
+        audit!("discount", record: order, before: before, after: { removed: true, discount_minor: order.discount_minor, total_minor: order.total_minor, points_returned: points.positive? ? points : nil }.compact,
+               approved_by: approver && approver != current_membership ? approver.user : nil)
         render json: OrderSerializers.full(order.reload)
       end
 

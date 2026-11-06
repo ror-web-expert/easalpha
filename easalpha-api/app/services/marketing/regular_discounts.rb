@@ -25,6 +25,7 @@ module Marketing
     def apply!(order)
       return if order.source == "kiosk" # a canteen meal is priced by the plan, never by how often the worker eats
       return if order.source == "online" # the storefront never verifies the phone it is given: no recency discount on a claimed identity (6 Nov 2026, A11)
+      return if order.regular_discount_removed_at # taken off this order by a manager (remove_discount): a later save leaves it off
       existing = order.discounts.select { |d| d.kind == "regular" }
       customer = order.customer_id && Customer.find_by(id: order.customer_id)
       tier = enabled?(order.business) ? kept_tier(existing.first, customer, order) || tier_for(customer, order) : nil

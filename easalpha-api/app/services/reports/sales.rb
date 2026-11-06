@@ -92,10 +92,21 @@ module Reports
           .sort_by { |r| -r[:revenue_minor] }.first(limit)
     end
 
+    # Each shift's sales, its refunds and its net sales after them, by the one revenue rule: a sale in the shift that
+    # took its order, a refund in the shift that gave it back, and money handed back on an open order no refund. The Z
+    # report's own net is before refunds, which it lists on a line of their own; an open shift has none stored yet.
     def shifts(only_membership_id: nil)
       scope = Shift.where(branch_id: branch.id, business_day: from..to)
       scope = scope.where(cashier_membership_id: only_membership_id) if only_membership_id
-      scope.order(opened_at: :desc).map { |s| ShiftSerializers.shift(s, with_expected: true).merge(cashier: Membership.unscoped.includes(:user).find_by(id: s.cashier_membership_id)&.user&.name, net_sales_minor: s.z_report.dig("sales", "net_minor")) }
+      rows = scope.order(opened_at: :desc).to_a
+      ids = rows.map(&:id)
+      sales = Revenue.sold(Order.where(shift_id: ids)).group(:shift_id).sum(:total_minor)
+      refunds = Revenue.refund_lines(Refund.where(shift_id: ids).joins(:order)).group_by { |l| l.refund.shift_id }.transform_values { |lines| lines.sum(&:revenue_minor) }
+      rows.map do |s|
+        sold, back = sales[s.id].to_i, refunds[s.id].to_i
+        ShiftSerializers.shift(s, with_expected: true).merge(cashier: Membership.unscoped.includes(:user).find_by(id: s.cashier_membership_id)&.user&.name,
+                                                             sales_minor: sold, refunds_minor: back, net_sales_minor: sold - back)
+      end
     end
   end
 end

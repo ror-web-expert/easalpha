@@ -110,24 +110,46 @@ module Api
       end
 
       # POST /suppliers/import { csv }  columns: name, contact, phone, email, address, terms, opening_balance
+      # All or nothing: the rows go in one transaction, so the first that cannot be saved (an opening balance on a locked
+      # day, or one that is not a number) stops the import with its row named and keeps none of the rows above it. It
+      # stopped there before with those rows saved, so a corrected file then updated them instead of creating them.
       def import
         created = updated = 0
-        SafeCsv.parse(params.require(:csv).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each do |r|
-          name = r["name"].to_s.strip
-          next if name.blank?
-          attrs = { contact_name: r["contact"] || r["contact_name"], phone: r["phone"], email: r["email"], address: r["address"], payment_terms_days: r["terms"].to_i }
-          if (s = Supplier.active.find_by(name: name))
-            s.update!(attrs.compact)
-            updated += 1
-          else
-            Supplier.create!(attrs.merge(name: name, opening_balance_minor: (r["opening_balance"].to_d * 100).round))
-            created += 1
+        rows = SafeCsv.parse(params.require(:csv).to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") })
+        Supplier.transaction do
+          rows.each_with_index do |r, i|
+            line, name = i + 2, r["name"].to_s.strip # line 1 is the header
+            next if name.blank?
+            attrs = { contact_name: r["contact"] || r["contact_name"], phone: r["phone"], email: r["email"], address: r["address"], payment_terms_days: r["terms"].to_i }
+            if (s = Supplier.active.find_by(name: name))
+              s.update!(attrs.compact)
+              updated += 1
+            else
+              Supplier.create!(attrs.merge(name: name, opening_balance_minor: opening_minor(r["opening_balance"])))
+              created += 1
+            end
+          rescue Api::Errors::ApiError, ActiveRecord::RecordInvalid => e
+            raise import_row_error(e, line, name)
           end
         end
         render json: { created: created, updated: updated }
       end
 
       private
+
+      # Rupees as a spreadsheet writes them (1,500 or 1500.50); blank is none. "1,500" read as Rs 1 before.
+      def opening_minor(value)
+        v = value.to_s.strip.delete(",")
+        return 0 if v.empty?
+        raise Api::Errors::BadRequest.new("import.opening_balance", "opening_balance #{value.to_s.strip} is not a number.") unless v.match?(/\A-?\d+(\.\d+)?\z/)
+        (v.to_d * 100).round
+      end
+
+      # One row's error, named by its line in the file, with the reason the row was refused.
+      def import_row_error(e, line, name)
+        code, status, why = e.is_a?(Api::Errors::ApiError) ? [ e.code, e.status, e.message ] : [ "validation_failed", 422, "#{e.record.errors.full_messages.to_sentence}." ]
+        Api::Errors::ApiError.new(code, "Row #{line} (#{name}): #{why} Nothing was imported.", status: status, details: { row: line, name: name })
+      end
 
       def supplier_params
         params.permit(:name, :contact_name, :phone, :email, :address, :ntn, :opening_balance_minor, :payment_terms_days, :notes, :active)

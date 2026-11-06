@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1155,9 +1155,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_110000) do
     t.uuid "by_membership_id"
     t.datetime "occurred_at", null: false
     t.datetime "created_at", null: false
+    t.uuid "discount_applied_id"
     t.index ["business_id"], name: "index_loyalty_transactions_on_business_id"
     t.index ["customer_id", "occurred_at"], name: "index_loyalty_transactions_on_customer_id_and_occurred_at"
     t.index ["customer_id"], name: "index_loyalty_transactions_on_customer_id"
+    t.index ["discount_applied_id"], name: "index_loyalty_transactions_on_discount_applied_id"
     t.index ["order_id"], name: "index_loyalty_transactions_on_order_id"
     t.check_constraint "kind::text = ANY (ARRAY['earn'::character varying, 'redeem'::character varying, 'adjust'::character varying, 'expire'::character varying, 'refund'::character varying]::text[])", name: "loyalty_transactions_kind_check"
   end
@@ -1521,6 +1523,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_110000) do
     t.bigint "cash_rounding_minor", default: 0, null: false
     t.string "guest_phone"
     t.string "delivery_address"
+    t.datetime "regular_discount_removed_at"
     t.index ["branch_id", "business_day", "serial"], name: "index_orders_on_branch_id_and_business_day_and_serial", unique: true, where: "(serial IS NOT NULL)"
     t.index ["branch_id", "qr_status"], name: "index_orders_on_branch_id_and_qr_status", where: "(qr_status IS NOT NULL)"
     t.index ["branch_id", "scheduled_for"], name: "index_orders_on_branch_id_and_scheduled_for", where: "(scheduled_for IS NOT NULL)"

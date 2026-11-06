@@ -21,7 +21,7 @@ module OrderSerializers
       events: o.status_events.map { |e| { from: e.from_status, to: e.to_status, membership_id: e.membership_id, device_id: e.device_id, reason: e.reason, at: e.occurred_at } },
       voids: o.voids.map { |v| { id: v.id, reason: v.reason, stock_action: v.stock_action, amount_minor: v.amount_minor, by_membership_id: v.by_membership_id, approved_by_membership_id: v.approved_by_membership_id, at: v.voided_at } },
       service_charge_percent: o.service_charge_percent.to_f, service_charge_fixed_minor: o.service_charge_fixed_minor, delivery_charge_percent: o.delivery_charge_percent.to_f,
-      tax_choice: o.tax_choice, tax_rate_id: o.tax_rate_id, staff_meal_reason: o.staff_meal_reason,
+      tax_choice: o.tax_choice, tax_rate_id: o.tax_rate_id, staff_meal_reason: o.staff_meal_reason, regular_discount_removed_at: o.regular_discount_removed_at,
       # Where a delivery goes, for the till that opens it: the saved address, or what a storefront guest typed. Only in
       # the full order, so the order stream's summaries carry no guest's phone or address.
       address_text: o.address&.to_s.presence || o.delivery_address, guest_phone: o.guest_phone,
