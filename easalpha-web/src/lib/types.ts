@@ -235,6 +235,7 @@ export interface OrderSummary {
   id: ID; serial: number | null; label: string; till_serial: string | null; business_day: string; order_type: OrderType; source: string;
   status: OrderStatus; payment_status: string; table_id: ID | null; table_code: string | null; guest_name: string | null; covers: number | null;
   customer_id: ID | null; /** The customer's name and phone on order rows (since 6 Nov 2026). */ customer_name?: string | null; customer_phone?: string | null;
+  /** The delivery's saved address (since the final round of 6 Nov 2026; absent from older servers). */ address_id?: ID | null;
   rider_id: ID | null; shift_id: ID | null; is_staff_meal: boolean;
   /** rounding_minor: all the rounding in total_minor (whole rupees plus cash); cash_rounding_minor: the cash part (absent before 17 Oct 2026). */
   subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; cash_rounding_minor?: number; tip_minor: number;
@@ -278,6 +279,8 @@ export interface Order extends OrderSummary {
   service_charge_percent: number; staff_meal_reason: string | null;
   // SPEC Charges and Tax: the per-order charge settings and the cashier's No Tax / rate choice.
   service_charge_fixed_minor?: number; delivery_charge_percent?: number; tax_choice?: TaxChoice | null; tax_rate_id?: ID | null;
+  /** Where a delivery goes: the customer's saved address, or what a storefront guest typed (with their phone). */
+  address_text?: string | null; guest_phone?: string | null;
   story?: OrderStory;
 }
 export interface KitchenOrder extends OrderSummary { items: OrderItem[]; elapsed_seconds: number }
@@ -695,6 +698,8 @@ export interface Delivery {
   rider_id: ID | null; rider_name: string | null; zone_id: ID | null; zone_name: string | null; address_id: ID | null; charge_minor: number; status: DeliveryStatus; failed_reason: string | null;
   cash_collected_minor: number | null; assigned_at: string | null; picked_up_at: string | null; delivered_at: string | null; settled_at: string | null; settlement_id: ID | null; created_at: string;
   address?: Address | null; customer?: { id: ID; name: string; phone: string | null } | null; items?: { name: string; quantity: string }[];
+  /** On every row: where to go and whom to call, from the customer or, for a storefront guest attached to nobody, the order. */
+  address_text?: string | null; customer_name?: string | null; phone?: string | null;
   events?: { status: string; lat: number | null; lng: number | null; note: string | null; by_membership_id: ID | null; occurred_at: string }[];
 }
 export type RiderMovementKind = "issue" | "return" | "spend" | "adjust" | "settle";
@@ -707,7 +712,11 @@ export interface RiderSettlement {
 /** cash_collected_minor is the cash on delivery the rider still owes (orders not paid yet); paid_at_till_minor what of
  *  all the cash collected (collected_total_minor) the till already took as those orders' payments. */
 export interface SettlementPreview { rider: Rider; deliveries_count: number; cash_collected_minor: number; float_held_minor: number; expected_minor: number; deliveries: Delivery[]; collected_total_minor?: number; paid_at_till_minor?: number }
-export interface QrOrder extends OrderSummary { qr_status: "pending" | "accepted" | "rejected"; address_text?: string | null }
+export interface QrOrder extends OrderSummary {
+  qr_status: "pending" | "accepted" | "rejected"; address_text?: string | null; guest_phone?: string | null;
+  /** The lines waiting for the cashier: a guest's round on a running order, or the whole of a new one. */
+  waiting_items?: { name: string; quantity: string }[];
+}
 export interface TableRequest { id: ID; table_id: ID; table_code: string; kind: "call_waiter" | "ask_bill"; guest_name: string | null; note: string | null; requested_at: string; handled_at: string | null; handled_by_membership_id: ID | null }
 export interface QrSettings { enabled: boolean; cashier_accept: boolean; call_waiter: boolean; ask_bill: boolean; running_bill: boolean; guest_name: boolean; welcome: string | null }
 export interface TableQrCard { table_id: ID; code: string; token: string; url: string; enabled: boolean }

@@ -899,6 +899,32 @@ describe("a summary row from GET /orders (review R2)", () => {
   });
 });
 
+// T3/F3: a delivery's address stays on the order through saves and reloads, and goes when the server drops it.
+describe("a delivery's address on the till's copy", () => {
+  it("takes the server's address, keeps the zone the till quoted for it, and puts both on the cart", () => {
+    server = fresh([["Karahi", 100000]]);
+    const prev: LocalOrder = { ...serverToLocal(asOrder(server)), address_id: "a1", address_text: "House 12, Phase 5 DHA", zone_name: "DHA" };
+    const local = serverToLocal({ ...asOrder(server), address_id: "a1", address_text: "House 12, Phase 5 DHA, Lahore" } as Order, prev);
+    expect(local).toMatchObject({ address_id: "a1", address_text: "House 12, Phase 5 DHA, Lahore", zone_name: "DHA" });
+    expect(localToCart(local)).toMatchObject({ address_id: "a1", address_text: "House 12, Phase 5 DHA, Lahore", zone_name: "DHA" });
+  });
+
+  it("clears the address when the server has none (the customer changed), and keeps the till's when an older server says nothing", () => {
+    server = fresh([["Karahi", 100000]]);
+    const prev: LocalOrder = { ...serverToLocal(asOrder(server)), address_id: "a1", address_text: "House 12", zone_name: "DHA" };
+    expect(serverToLocal({ ...asOrder(server), address_id: null } as Order, prev)).toMatchObject({ address_id: null, address_text: null, zone_name: null });
+    const older = serverToLocal(asOrder(server), prev); // no address_id key at all
+    expect(older).toMatchObject({ address_id: "a1", address_text: "House 12", zone_name: "DHA" });
+  });
+
+  it("shows the address a website guest typed, which has no saved address behind it (sync-auth#6)", () => {
+    server = fresh([["Karahi", 100000]]);
+    const guest = serverToLocal({ ...asOrder(server), address_id: null, address_text: "House 9, Lahore" } as Order);
+    expect(guest).toMatchObject({ address_id: null, address_text: "House 9, Lahore", zone_name: null });
+    expect(localToCart(guest).address_text).toBe("House 9, Lahore");
+  });
+});
+
 describe("the bill preview and the offline receipt (QA T13)", () => {
   // "Tax 16% on Rs 1,090" for a bill with Rs 100 off: the base before the discount, where the server states the base after.
   it("state the tax base after the order's discount, as the server's receipt does", () => {

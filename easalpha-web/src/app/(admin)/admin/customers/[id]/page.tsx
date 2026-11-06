@@ -16,8 +16,9 @@ import { useList, useSave } from "@/components/admin/crud";
 import { loyaltyKindVariant } from "@/components/admin/phase3";
 import { balanceLabel, balanceVariant } from "@/components/admin/marketing-helpers";
 import {
-  AdjustBalanceDialog, AdjustmentsTable, BillActions, DuplicateWarning, OpeningBalanceDialog, ReverseAdjustmentDialog, useAdjustments, type ReversibleAdjustment, KhataLimitField, khataLimitText } from "@/components/admin/customer-accounts";
-import { canReverseEntry, cleanPhone, entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, khataLimitError, signedMoney } from "@/components/admin/customer-accounts-helpers";
+  AdjustBalanceDialog, AdjustmentsTable, BillActions, DuplicateWarning, OpeningBalanceDialog, ReverseAdjustmentDialog, useAdjustments, useBusinessToday, type ReversibleAdjustment, KhataLimitField, khataLimitText } from "@/components/admin/customer-accounts";
+import { canReverseEntry, cleanPhone, collectionMethods, defaultCollectionMethod, entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, isFutureDay, khataLimitError, recordPaymentBody, signedMoney } from "@/components/admin/customer-accounts-helpers";
+import { useCan } from "@/store/auth";
 import { useApproval } from "@/components/approval";
 import { toast } from "@/store/toast";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Dialog, EmptyRow, Field, Input, Label, Loading, MoneyInput, Select, SummaryCard, Switch, Table, TBody, TD, TH, THead, TR, Tabs, Textarea, orderStatusVariant } from "@/components/ui";
@@ -59,12 +60,16 @@ export default function CustomerDetailPage() {
     } catch (e) { if (!(e instanceof Error && e.message === "Approval cancelled")) toast.error("Could not adjust", e instanceof Error ? e.message : undefined); }
     finally { setAdjusting(false); }
   };
-  const [pay, setPay] = useState<{ amount_minor: number; method_code: string; reference: string; direction: "received" | "paid" } | null>(null);
+  // received_on blank means today; only an earlier day is sent, and only by a user with khata.adjust (K6).
+  const [pay, setPay] = useState<{ amount_minor: number; method_code: string; reference: string; direction: "received" | "paid"; received_on: string } | null>(null);
   const [edit, setEdit] = useState<Partial<Customer> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const payM = useSave<NonNullable<typeof pay>>(["ledger", "customer", "customers", "ledger_summary", "customer_bills"], () => `/customers/${id}/payments`, { onSuccess: () => setPay(null), success: "Payment recorded" });
+  const payM = useSave<ReturnType<typeof recordPaymentBody>>(["ledger", "customer", "customers", "ledger_summary", "customer_bills"], () => `/customers/${id}/payments`, { onSuccess: () => setPay(null), success: "Payment recorded" });
+  const canDate = useCan()("khata.adjust");
+  const today = useBusinessToday();
+  const futureDay = !!pay && canDate && isFutureDay(pay.received_on, today);
   const editM = useSave<Partial<Customer>>(["customer", "customers", "ledger"], () => `/customers/${id}`, { onSuccess: () => setEdit(null) });
-  useEffect(() => { if (pay && !pay.method_code && methods.data?.length) setPay({ ...pay, method_code: methods.data.find((m) => m.kind === "cash")?.code ?? methods.data[0].code }); }, [methods.data, pay]);
+  useEffect(() => { if (pay && !pay.method_code && methods.data?.length) setPay({ ...pay, method_code: defaultCollectionMethod(methods.data) }); }, [methods.data, pay]);
   const c = customer.data ?? ledger.data?.customer;
   if (!c) return <Loading />;
   const a = ledger.data?.aging;
@@ -92,7 +97,7 @@ export default function CustomerDetailPage() {
         description={[c.phone, c.khata_no ? `Khata ${c.khata_no}` : null, c.member_no ? `Roll ${c.member_no}` : null, c.room ? `Room ${c.room}` : null, c.company, c.group?.name].filter(Boolean).join(" · ")}
         actions={<>
           <Button variant="secondary" onClick={startEdit}><Pencil className="h-4 w-4" /> Edit</Button>
-          {khata ? <Button onClick={() => setPay({ amount_minor: Math.max(0, c.balance_minor), method_code: "", reference: "", direction: "received" })}><HandCoins className="h-4 w-4" /> Record khata payment</Button> : null}
+          {khata ? <Button onClick={() => setPay({ amount_minor: Math.max(0, c.balance_minor), method_code: "", reference: "", direction: "received", received_on: "" })}><HandCoins className="h-4 w-4" /> Record khata payment</Button> : null}
         </>} />
       {khata ? (
         <Cards>
@@ -210,13 +215,18 @@ export default function CustomerDetailPage() {
         <Card className="mt-4"><CardHeader><CardTitle>Addresses</CardTitle></CardHeader><CardBody><ul className="space-y-1 text-sm">{c.addresses.map((ad) => <li key={ad.id}>{ad.label ? <span className="font-medium">{ad.label}: </span> : null}{ad.text}{ad.is_default ? <Badge className="ml-2" variant="primary">default</Badge> : null}</li>)}</ul></CardBody></Card>
       ) : null}
       <Dialog open={!!pay} onClose={() => setPay(null)} title="Khata payment" description={`Balance ${formatMoney(c.balance_minor)}`} size="sm"
-        footer={<><Button variant="secondary" onClick={() => setPay(null)}>Cancel</Button><Button loading={payM.isPending} disabled={!pay || pay.amount_minor <= 0 || !pay.method_code} onClick={() => pay && payM.mutate(pay)}>Record {pay?.direction === "paid" ? "payout" : "payment"}</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setPay(null)}>Cancel</Button><Button loading={payM.isPending} disabled={!pay || pay.amount_minor <= 0 || !pay.method_code || futureDay} onClick={() => pay && payM.mutate(recordPaymentBody(pay, { canDate, today }))}>Record {pay?.direction === "paid" ? "payout" : "payment"}</Button></>}>
         {pay ? (
           <div className="space-y-3">
             <Field label="Direction"><Select value={pay.direction} onChange={(e) => setPay({ ...pay, direction: e.target.value as "received" | "paid" })}><option value="received">Received from customer</option><option value="paid">Paid out to customer</option></Select></Field>
             <Field label="Amount"><MoneyInput value={pay.amount_minor} onChange={(v) => setPay({ ...pay, amount_minor: v })} autoFocus /></Field>
-            <Field label="Method"><Select value={pay.method_code} onChange={(e) => setPay({ ...pay, method_code: e.target.value })}>{methods.data?.filter((m) => m.active && m.kind !== "khata").map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
+            <Field label="Method"><Select value={pay.method_code} onChange={(e) => setPay({ ...pay, method_code: e.target.value })}>{collectionMethods(methods.data).map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
             <Field label="Reference"><Input value={pay.reference} onChange={(e) => setPay({ ...pay, reference: e.target.value })} placeholder="Transaction id, cheque no" /></Field>
+            {canDate ? (
+              <Field label="Received on" hint="The day the money came, when it is not today: a bank transfer seen later." error={futureDay ? "The date cannot be in the future" : undefined}>
+                <Input type="date" value={pay.received_on || today} max={today} onChange={(e) => setPay({ ...pay, received_on: e.target.value })} />
+              </Field>
+            ) : null}
           </div>
         ) : null}
       </Dialog>

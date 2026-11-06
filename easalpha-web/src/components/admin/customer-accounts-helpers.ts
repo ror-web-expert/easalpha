@@ -2,7 +2,7 @@
 // ledger row labels, bill summary math, bill run counts, duplicate checks and the import template. No React, no API,
 // so every rule here is covered by customer-accounts-helpers.test.ts.
 import { endOfMonth, format, isValid, parseISO, startOfMonth, subMonths } from "date-fns";
-import type { BillRunResult, LedgerEntry, LedgerTotals } from "@/lib/types";
+import type { BillRunResult, LedgerEntry, LedgerTotals, PaymentMethod } from "@/lib/types";
 import type { BadgeVariant } from "@/components/ui/badge";
 import { formatMoney } from "@/lib/money";
 import { toCsv } from "@/lib/csv";
@@ -68,6 +68,29 @@ export function isFutureDay(value: string, today: string): boolean {
  *  API dates it by its own business day in the branch's time zone, and a browser clock ahead of it cannot be refused. */
 export function effectiveDay(value: string, today: string): string | undefined {
   return value && value < today ? value : undefined;
+}
+
+/**
+ * K6, contracts#8: the body of Record payment. Money that came on an earlier day (a bank transfer seen late) goes as
+ * received_on, and only for a user who may adjust accounts (khata.adjust, which the API checks too); today or blank is
+ * left for the API to date by its own business day.
+ */
+export function recordPaymentBody<P extends { amount_minor: number; method_code: string; reference: string; direction: "received" | "paid"; received_on?: string }>(p: P, opts: { canDate: boolean; today: string }) {
+  return { amount_minor: p.amount_minor, method_code: p.method_code, reference: p.reference, direction: p.direction, received_on: opts.canDate ? effectiveDay(p.received_on ?? "", opts.today) : undefined };
+}
+
+/**
+ * The methods money for an account can come or go by: active ones, never khata itself, and never the canteen's
+ * internal company subsidy and salary deduction, which the API refuses for a collection (khata.method).
+ */
+export function collectionMethods<M extends Pick<PaymentMethod, "active" | "kind" | "internal">>(methods: M[] | null | undefined): M[] {
+  return (methods ?? []).filter((m) => m.active && m.kind !== "khata" && !m.internal);
+}
+
+/** The method Record payment opens on: cash, else the first one a collection can use. */
+export function defaultCollectionMethod<M extends Pick<PaymentMethod, "active" | "kind" | "internal" | "code">>(methods: M[] | null | undefined): string {
+  const usable = collectionMethods(methods);
+  return (usable.find((m) => m.kind === "cash") ?? usable[0])?.code ?? "";
 }
 
 // ---- Khata limit ----

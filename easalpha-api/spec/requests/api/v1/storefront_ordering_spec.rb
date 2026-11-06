@@ -101,7 +101,8 @@ RSpec.describe "Storefront online ordering", type: :request do
       o = Order.find(json[:id])
       expect(o.customer_id).to be_nil
       expect(o.guest_name).to eq("Someone")
-      expect(o.notes).to include("+923005556677", "Deliver to: House 9, Lahore", "Ring the bell")
+      # The guest's phone and address are kept on the order for the cashier and the rider, not in the kitchen's notes.
+      expect(o).to have_attributes(guest_phone: "+923005556677", delivery_address: "House 9, Lahore", notes: "Ring the bell")
       expect(o.discounts).to be_empty
       expect(regular.reload.last_order_at).to be_within(1.minute).of(1.day.ago)
       expect(Customer.where(phone: "+923005556677").count).to eq(1)

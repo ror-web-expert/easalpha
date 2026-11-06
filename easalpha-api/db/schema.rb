@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_050000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1392,6 +1392,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_050000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "label_price_minor"
+    t.string "qr_ref"
     t.index ["business_id", "station_id", "status"], name: "index_order_items_on_business_id_and_station_id_and_status"
     t.index ["business_id"], name: "index_order_items_on_business_id"
     t.index ["order_id", "sort_order"], name: "index_order_items_on_order_id_and_sort_order"
@@ -1503,10 +1504,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_050000) do
     t.string "tax_choice"
     t.uuid "tax_rate_id"
     t.bigint "cash_rounding_minor", default: 0, null: false
+    t.string "guest_phone"
+    t.string "delivery_address"
     t.index ["branch_id", "business_day", "serial"], name: "index_orders_on_branch_id_and_business_day_and_serial", unique: true, where: "(serial IS NOT NULL)"
     t.index ["branch_id", "qr_status"], name: "index_orders_on_branch_id_and_qr_status", where: "(qr_status IS NOT NULL)"
     t.index ["branch_id", "scheduled_for"], name: "index_orders_on_branch_id_and_scheduled_for", where: "(scheduled_for IS NOT NULL)"
     t.index ["branch_id"], name: "index_orders_on_branch_id"
+    t.index ["business_id", "aggregator_ref"], name: "index_orders_one_per_guest_submit", unique: true, where: "(((source)::text = ANY ((ARRAY['qr'::character varying, 'online'::character varying])::text[])) AND (aggregator_ref IS NOT NULL))"
     t.index ["business_id", "branch_id", "business_day"], name: "index_orders_on_business_id_and_branch_id_and_business_day"
     t.index ["business_id", "customer_id"], name: "index_orders_on_business_id_and_customer_id"
     t.index ["business_id", "status"], name: "index_orders_on_business_id_and_status"

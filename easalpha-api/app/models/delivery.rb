@@ -7,6 +7,7 @@ class Delivery < ApplicationRecord
   belongs_to :order
   belongs_to :rider, optional: true
   belongs_to :zone, class_name: "DeliveryZone", optional: true
+  belongs_to :address, class_name: "CustomerAddress", optional: true
   has_many :events, -> { order(:occurred_at) }, class_name: "DeliveryStatusEvent", dependent: :destroy
   validates :status, inclusion: { in: STATUSES }
 

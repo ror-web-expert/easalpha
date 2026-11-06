@@ -8,13 +8,20 @@ module Api
 
       # GET /qr_orders?status=pending
       def index
-        # QR table orders and website orders share the accept-or-reject queue; ?source=qr|online narrows it.
-        scope = Order.includes(:dining_table, :items, :address).where(branch_id: current_branch.id, source: %w[qr online]).where.not(qr_status: nil).order(created_at: :desc)
-        scope = scope.where(source: params[:source]) if params[:source].present?
-        scope = scope.where(qr_status: params[:status].presence || "pending")
-        scope = scope.on_day(current_branch.business_day_for(Time.current)) unless params[:all_days] == "true"
+        # QR table orders and website orders share the accept-or-reject queue; ?source=qr|online narrows it. A guest's
+        # round on a table a waiter opened at the till waits here too (F4): qr_status is set only by guests' orders.
+        status = params[:status].presence || "pending"
+        scope = Order.includes(:dining_table, :items, :address, :customer).where(branch_id: current_branch.id).where.not(qr_status: nil).order(created_at: :desc)
+        scope = scope.where(source: params[:source] == "qr" ? %w[qr till] : params[:source]) if params[:source].present?
+        scope = scope.where(qr_status: status)
+        today = current_branch.business_day_for(Time.current)
+        # What waits is shown from yesterday's business day too: a round added after the day ended, to an order begun before.
+        scope = status == "pending" ? scope.where(business_day: (today - 1)..) : scope.on_day(today) unless params[:all_days] == "true"
         rows, cursor = paginate(scope)
-        render_page(rows, cursor) { |o| OrderSerializers.summary(o).merge(qr_status: o.qr_status, guest_name: o.guest_name, address_text: o.address&.to_s, notes: o.notes) }
+        render_page(rows, cursor) do |o|
+          OrderSerializers.summary(o).merge(qr_status: o.qr_status, guest_name: o.guest_name, address_text: o.address&.to_s.presence || o.delivery_address, guest_phone: o.guest_phone, notes: o.notes,
+                                            waiting_items: Qr::Ordering.waiting_round(o, o.items).map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, "") } })
+        end
       end
 
       def accept

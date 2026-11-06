@@ -103,6 +103,10 @@ module Api
       rescue ActiveRecord::RecordInvalid => e
         raise Api::Errors::Conflict.new("customer.phone_exists", "A customer with this phone already exists") if e.record.errors[:phone].any? { |m| m.include?("taken") }
         raise
+      rescue ActiveRecord::RecordNotUnique => e
+        # The same phone saved twice at one moment: both passed the check, the index refused the second (F8).
+        raise Api::Errors::Conflict.new("customer.phone_exists", "A customer with this phone already exists") if e.message.include?("index_customers_on_business_id_and_phone")
+        raise
       end
 
       def update

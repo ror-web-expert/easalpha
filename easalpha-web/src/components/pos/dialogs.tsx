@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Banknote, Repeat, UserPlus } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
-import type { Customer, CustomerLookup, DiningTable, Order } from "@/lib/types";
+import type { Customer, CustomerLookup, DiningTable, Order, OrderType } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { titleCase } from "@/lib/utils";
 import type { CartCustomer } from "@/store/cart";
@@ -14,11 +14,17 @@ import { useCatalogStore } from "@/store/catalog";
 import { CustomerSearch } from "./customer-search";
 import { ReceivePaymentDialog } from "./receive-payment";
 
-export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: boolean; onClose: () => void; onPick: (c: CartCustomer) => void; onRepeat: (o: Order) => void }) {
+/**
+ * onPick gets the customer and, for a new customer added with an address, that address's id: on a delivery order the
+ * page puts it (or the customer's usual address) on the order. A delivery order's new-customer form asks for the
+ * address (T3/F3).
+ */
+export function CustomerDialog({ open, onClose, onPick, onRepeat, orderType }: { open: boolean; onClose: () => void; onPick: (c: CartCustomer, addressId?: string) => void; onRepeat: (o: Order) => void; orderType?: OrderType }) {
   // Search by name or number (CustomerSearch), then use the customer or repeat their last order; or add a new one.
   const [picked, setPicked] = useState<Customer | null>(null);
   const [lastOrder, setLastOrder] = useState<Order | null>(null);
-  const [adding, setAdding] = useState<{ name: string; phone: string; room: string; member_no: string } | null>(null);
+  const [adding, setAdding] = useState<{ name: string; phone: string; room: string; member_no: string; address: string; area: string } | null>(null);
+  const delivery = orderType === "delivery";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Receive payment (khata collection) shows whenever customer accounts are on; a cashier without khata.collect is asked
@@ -37,14 +43,16 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
     }
   };
   const searchAgain = () => { pickNo.current++; setPicked(null); setLastOrder(null); };
-  const attach = (c: Customer) => { onPick(toCartCustomer(c)); onClose(); };
+  const attach = (c: Customer, addressId?: string) => { onPick(toCartCustomer(c), addressId); onClose(); };
   const create = async () => {
     if (!adding) return;
     setBusy(true); setError(null);
     try {
       const phone = adding.phone.replace(/\s/g, "");
-      const c = await api<Customer>("/customers", { method: "POST", auth: "pos", body: { name: adding.name.trim(), phone: phone && phone !== "+92" ? phone : null, room: adding.room.trim() || null, member_no: adding.member_no.trim() || null, source: "in_store" } });
-      attach(c);
+      const line1 = adding.address.trim();
+      const addresses = delivery && line1 ? [{ line1, area: adding.area.trim() || null, is_default: true }] : undefined;
+      const c = await api<Customer>("/customers", { method: "POST", auth: "pos", body: { name: adding.name.trim(), phone: phone && phone !== "+92" ? phone : null, room: adding.room.trim() || null, member_no: adding.member_no.trim() || null, source: "in_store", addresses } });
+      attach(c, addresses ? c.addresses?.[0]?.id : undefined);
     } catch (e) { setError(errorMessage(e)); }
     finally { setBusy(false); }
   };
@@ -56,10 +64,17 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
             <div className="text-sm font-semibold">New customer</div>
             <Input placeholder="Name" value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} className="h-12 text-base" autoFocus={!adding.name} />
             <Input type="tel" placeholder="Phone" value={adding.phone} onChange={(e) => setAdding({ ...adding, phone: e.target.value })} className="h-12 text-base" autoFocus={!!adding.name && adding.phone === "+92"} />
-            <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="Room" value={adding.room} onChange={(e) => setAdding({ ...adding, room: e.target.value })} className="h-12 text-base" />
-              <Input placeholder="Roll / ID no." value={adding.member_no} onChange={(e) => setAdding({ ...adding, member_no: e.target.value })} className="h-12 text-base" />
-            </div>
+            {delivery ? (
+              <div className="grid grid-cols-[2fr_1fr] gap-2">
+                <Input placeholder="Delivery address" aria-label="Delivery address" value={adding.address} onChange={(e) => setAdding({ ...adding, address: e.target.value })} className="h-12 text-base" />
+                <Input placeholder="Area" aria-label="Area" value={adding.area} onChange={(e) => setAdding({ ...adding, area: e.target.value })} className="h-12 text-base" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="Room" value={adding.room} onChange={(e) => setAdding({ ...adding, room: e.target.value })} className="h-12 text-base" />
+                <Input placeholder="Roll / ID no." value={adding.member_no} onChange={(e) => setAdding({ ...adding, member_no: e.target.value })} className="h-12 text-base" />
+              </div>
+            )}
             <div className="flex gap-2">
               <Button type="button" variant="secondary" size="lg" onClick={() => setAdding(null)}>Back</Button>
               <Button type="submit" size="lg" className="flex-1" disabled={!adding.name.trim()} loading={busy}><UserPlus className="h-4 w-4" /> Add customer</Button>
@@ -82,7 +97,7 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
             <Button className="w-full" variant="ghost" onClick={searchAgain}>Search again</Button>
           </div>
         ) : (
-          <CustomerSearch autoFocus onPick={(c) => void choose(c)} onAddNew={(q) => setAdding({ ...newCustomerPrefill(q), room: "", member_no: "" })} />
+          <CustomerSearch autoFocus onPick={(c) => void choose(c)} onAddNew={(q) => setAdding({ ...newCustomerPrefill(q), room: "", member_no: "", address: "", area: "" })} />
         )}
         {error ? <p className="text-sm text-danger">{error}</p> : null}
       </div>
