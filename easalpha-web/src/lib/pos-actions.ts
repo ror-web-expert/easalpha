@@ -268,7 +268,7 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
   // Already queued locally and not yet accepted: just update the queued record.
   if (cart.local_only && (await isQueued(cart.id))) {
     // A record that already carries the flag keeps it: its creator is the one the sync checks.
-    if (!(await db.queue.get(cart.id))?.payload.is_staff_meal) await refuseUnapprovedStaffMeal(cart);
+    if (cart.is_staff_meal && !(await db.queue.get(cart.id))?.payload.is_staff_meal) await refuseUnapprovedStaffMeal(cart);
     const local = cartToLocal(cart, place || cart.status === "placed" ? "placed" : cart.status === "held" ? "held" : "draft");
     const prev = await db.orders.get(cart.id);
     await saveLocal({ ...local, till_serial: prev?.till_serial ?? local.till_serial, label: prev?.label ?? local.label, created_at: prev?.created_at ?? local.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0 });
