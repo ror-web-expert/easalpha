@@ -37,6 +37,8 @@ module Qr
 
     # A guest's client id is a key for "this same submit again", never the order's id (review of 6 Nov 2026, A12).
     CLIENT_ID = /\A[\w-]{8,64}\z/
+    # An add to the table's running order, recorded per table with the submit's key (AppliedSubmission).
+    ADDED = "qr_add"
 
     # Places a guest order. With cashier_accept it stays a draft marked pending until a cashier accepts; otherwise it goes straight to the kitchen.
     def place!(table, lines:, guest_name: nil, notes: nil, client_id: nil)
@@ -44,7 +46,7 @@ module Qr
       cfg = branch.qr_config
       key = client_id.to_s.strip
       ref = key.match?(CLIENT_ID) ? "qr:#{key}" : nil
-      if ref && (again = Order.find_by(source: "qr", table_id: table.id, aggregator_ref: ref))
+      if ref && (again = Order.find_by(source: "qr", table_id: table.id, aggregator_ref: ref) || added_to(table, ref))
         return again # a retry of the same submit: the first order stands
       end
       raise Api::Errors::Conflict.new("qr.disabled", "Ordering is not available right now") unless cfg["enabled"]
@@ -52,8 +54,16 @@ module Qr
       raise Api::Errors::Unprocessable.new("qr.empty", "Add at least one item") if Array(lines).empty?
       existing = table.current_order_id && Order.open.find_by(id: table.current_order_id)
       order = nil
+      repeat = false
       Order.transaction do
         if existing && existing.qr_status != "pending" && existing.source == "qr"
+          # The submit's key goes in with the lines: a retry whose answer was lost adds nothing twice and is answered
+          # with this order, even once it is paid and the table free. One still running holds the key until it commits.
+          if ref && !AppliedSubmission.record!(record_type: ADDED, record_id: table.id, client_seq: ref, order_id: existing.id)
+            repeat = true
+            order = existing.reload
+            next
+          end
           builder = Orders::Builder.new(existing, actor: nil, branch: branch)
           current = existing.active_items.map { |i| { id: i.id, product_id: i.product_id, variant_id: i.variant_id, deal_id: i.deal_id, quantity: i.quantity } }
           builder.update!(lines: current + Array(lines), attrs: { guest_name: existing.guest_name.presence || guest_name })
@@ -69,9 +79,16 @@ module Qr
           Orders::Transitions.place!(order, actor: nil) unless cfg["cashier_accept"]
         end
       end
+      return order if repeat
       Notification.create!(kind: "qr_order", title: "QR order from table #{table.code}#{guest_name.present? ? " (#{guest_name})" : ''}", body: cfg["cashier_accept"] ? "Waiting for a cashier to accept" : "Sent to the kitchen", link: "/orders/#{order.id}") if cfg["cashier_accept"]
       Realtime.order_changed(order)
       order
+    end
+
+    # The order an earlier submit with this key was added to.
+    def added_to(table, ref)
+      seen = AppliedSubmission.find_by(record_type: ADDED, record_id: table.id, client_seq: ref, device_id: nil)
+      seen && Order.find_by(id: seen.order_id)
     end
 
     def accept!(order, actor:, device: nil)

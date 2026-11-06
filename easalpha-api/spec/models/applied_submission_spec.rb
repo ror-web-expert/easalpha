@@ -12,8 +12,8 @@ RSpec.describe AppliedSubmission, ".record!" do
       expect(described_class.record!(device_id: till, record_type: "order_update", record_id: order_id, client_seq: "17")).to be false
       expect(described_class.record!(device_id: till, record_type: "order_update", record_id: order_id, client_seq: 18)).to be true
       expect(described_class.record!(device_id: other, record_type: "order_update", record_id: order_id, client_seq: 17)).to be true
-      expect(described_class.record!(record_type: "qr_lines", record_id: order_id, client_seq: "qr:abc")).to be true
-      expect(described_class.record!(record_type: "qr_lines", record_id: order_id, client_seq: "qr:abc")).to be false
+      expect(described_class.record!(record_type: "qr_add", record_id: order_id, client_seq: "qr:abc")).to be true
+      expect(described_class.record!(record_type: "qr_add", record_id: order_id, client_seq: "qr:abc")).to be false
       expect(described_class.count).to eq(4)
     end
   end
