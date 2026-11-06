@@ -146,8 +146,8 @@ module Orders
       number!(order)
       order.completed_by_membership_id = actor&.id
       # Paying is not cooking (QA F2; the SPEC keeps the payment status apart from the order's): lines the kitchen has
-      # not finished stay on its display until it bumps them. A canteen meal is handed over at the counter, not cooked.
-      order.items.where(status: %w[sent preparing ready]).update_all(status: "served") if order.source == "kiosk"
+      # not finished stay on its display until it bumps them.
+      counter_served!(order)
       change!(order, "paid", actor: actor, device: device)
       Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor)
       deduct_on_completion!(order, actor: actor)
@@ -172,6 +172,7 @@ module Orders
         order.paid_at ||= Time.current
         number!(order)
       end
+      counter_served!(order) # a free canteen meal is completed at the counter without a payment
       change!(order, "closed", actor: actor, device: device)
       Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor, note: paid ? nil : "placed unpaid") unless was_completed
       deduct_on_completion!(order, actor: actor)
@@ -216,6 +217,12 @@ module Orders
       return unless order.source.in?(%w[till app]) # web, QR and aggregator orders carry their own customer details
       required = order.business.setting("pos.customer_required.#{order.order_type}")
       raise Api::Errors::Unprocessable.new("customer.required", "A customer must be selected on #{order.order_type.tr('_', '-')} orders") if required
+    end
+
+    # A canteen meal is handed over at the counter from the day's plan, never cooked to order: once it is paid or
+    # completed its lines are served, so it never waits on the kitchen display.
+    def counter_served!(order)
+      order.items.where(status: %w[sent preparing ready]).update_all(status: "served") if order.source == "kiosk"
     end
 
     # The receipt number: business day, branch code and the day's serial (the barcode on the receipt).

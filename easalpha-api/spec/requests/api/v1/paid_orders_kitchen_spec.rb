@@ -92,11 +92,28 @@ RSpec.describe "Paid orders in the kitchen, and the receipt of a completed staff
     expect(kitchen.map { |k| k[:id] }).to eq([ o[:id] ])
   end
 
-  it "never puts a canteen meal on the display: it is served at the counter" do
-    api_post "/api/v1/orders", { order_type: "takeaway", source: "kiosk", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
-    o = json
-    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor] } ] }, headers: headers
-    expect(json[:order][:items].map { |i| i[:status] }).to eq([ "served" ])
+  it "keeps canteen meals off the display: paid or free, they are handed over at the counter" do
+    api_patch "/api/v1/settings", { values: { "modules.canteen" => true } }, headers: headers
+    kiosk = within(biz) { Device.create!(branch: Branch.first, name: "Kiosk 1", kind: "kiosk", paired_at: Time.current, code: "Q1") }
+    lunch = within(biz) { MealSession.create!(branch: Branch.first, name: "Lunch", starts_at: "00:00", ends_at: "23:59") }
+    water = within(biz) { Product.create!(category: m[:chai].category, name: "Water", base_price_minor: 0) }
+    %w[FP-001 FP-002].each_with_index do |fp, i|
+      within(biz) { Employee.create!(name: "Worker #{i}", base_salary_minor: 3_000_000, pay_frequency: "monthly", fingerprint_id: fp, fingerprint_enrolled: true, fingerprint_enrolled_at: Time.current) }
+    end
+    api_post "/api/v1/canteen/plans", { meal_session_id: lunch.id, plan_date: today_for(biz).to_s, publish: true,
+                                        items: [ { product_id: m[:burger].id, planned_qty: 10, worker_price_minor: 20_000 }, { product_id: water.id, planned_qty: 10 } ] }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+    burger_item, water_item = json[:items].partition { |i| i[:product_id] == m[:burger].id }.map(&:first)
+    claims = [ [ "FP-001", burger_item ], [ "FP-002", water_item ] ].map do |fp, item|
+      api_post "/api/v1/canteen/claims", { id: SecureRandom.uuid, fingerprint_id: fp, meal_plan_item_id: item[:id] }, headers: device_headers(kiosk)
+      expect(response).to have_http_status(:created), response.body
+      json
+    end
+    claims.each do |c|
+      api_post "/api/v1/canteen/claims/#{c[:id]}/serve", {}, headers: device_headers(kiosk)
+      expect(response).to have_http_status(:ok), response.body
+    end
+    within(biz) { expect(Order.where(id: claims.map { |c| c[:order_id] }).map(&:status)).to eq(%w[closed closed]) }
     expect(kitchen).to be_empty
   end
 end
