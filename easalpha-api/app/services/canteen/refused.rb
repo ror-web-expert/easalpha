@@ -17,7 +17,9 @@ module Canteen
       claims = rows.to_h { |r| [ r.id, r.payload["payload"].is_a?(Hash) ? r.payload["payload"] : {} ] }
       ids = ->(key) { claims.values.map { |p| p[key].to_s }.select { |v| v.match?(UUID) }.uniq }
       employees = Employee.where(id: ids.call("employee_id")).index_by(&:id)
-      fingers = Employee.where(fingerprint_id: claims.values.filter_map { |p| p["fingerprint_id"].presence&.to_s }).order(:fingerprint_revoked_at).index_by(&:fingerprint_id)
+      # An archived or revoked worker may still carry the same reader id: the active, enrolled one sorts last and wins.
+      fingers = Employee.where(fingerprint_id: claims.values.filter_map { |p| p["fingerprint_id"].presence&.to_s })
+                        .order(Arel.sql("employees.archived_at IS NULL, employees.fingerprint_revoked_at IS NULL")).index_by(&:fingerprint_id)
       items = MealPlanItem.includes(:product).where(id: ids.call("meal_plan_item_id")).index_by(&:id)
       sessions = MealSession.where(id: ids.call("meal_session_id")).index_by(&:id)
       devices = Device.where(id: rows.map(&:device_id)).index_by(&:id)
