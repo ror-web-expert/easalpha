@@ -48,7 +48,8 @@ module Api
       # Rider app: GET /rider/deliveries, POST /rider/deliveries/:id/status, GET /rider/float
       def mine
         rider = own_rider!
-        scope = Delivery.where(rider_id: rider.id).includes(:rider, :zone, :address, order: :customer).order(created_at: :desc)
+        # full: true reads each row's lines and status history too: loaded once for the page, not once a row (L3).
+        scope = Delivery.where(rider_id: rider.id).includes(:rider, :zone, :address, :events, order: %i[customer items]).order(created_at: :desc)
         scope = scope.where(status: %w[assigned picked_up on_the_way arrived]) unless params[:all] == "true"
         render json: { rider: DeliverySerializers.rider(rider), data: scope.limit(100).map { |d| DeliverySerializers.delivery(d, full: true) } }
       end

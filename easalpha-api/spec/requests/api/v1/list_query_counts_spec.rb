@@ -42,7 +42,7 @@ RSpec.describe "Query counts of the QR menu and the rider lists", type: :request
     before do
       api_post "/api/v1/delivery_zones", { name: "Gulberg", areas: [ "Gulberg" ], charge_minor: 10_000, min_order_minor: 0, eta_minutes: 30 }, headers: headers
       expect(response).to have_http_status(:created), response.body
-      api_post "/api/v1/riders", { name: "Asad", phone: "03122222222" }, headers: headers
+      api_post "/api/v1/riders", { name: "Asad", phone: "03122222222", create_login: true, pin: "4321" }, headers: headers
       @rider = json
     end
 
@@ -71,6 +71,20 @@ RSpec.describe "Query counts of the QR menu and the rider lists", type: :request
       delivered!(3)
       after = [ list.call, preview.call ]
       expect(json[:deliveries].map { |d| [ d[:address_text], d[:zone_name], d[:rider_name] ] }.sort).to eq((1..4).map { |i| [ "Flat #{i}, Gulberg", "Gulberg", "Asad" ] })
+      expect(after).to eq(before)
+    end
+
+    # GET /rider/deliveries (up to 100 rows, each with its lines and its status history) loaded both one by one.
+    it "gives the rider app its list with the same queries for one delivery as for four" do
+      rider_app = auth_headers(within(biz) { Membership.find(@rider[:membership_id]) }, app: "rider")
+      delivered!(1)
+      mine = -> { selects { get "/api/v1/rider/deliveries", params: { all: "true" }, headers: rider_app } }
+      mine.call
+      before = mine.call
+      delivered!(3)
+      after = mine.call
+      expect(response).to have_http_status(:ok), response.body
+      expect(json[:data].map { |d| [ d[:address_text], d[:items], d[:events].last[:status] ] }.sort).to eq((1..4).map { |i| [ "Flat #{i}, Gulberg", [ { name: "Chai", quantity: "1" } ], "delivered" ] })
       expect(after).to eq(before)
     end
   end
