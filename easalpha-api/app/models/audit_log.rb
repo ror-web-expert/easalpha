@@ -1,9 +1,33 @@
 class AuditLog < ApplicationRecord
   # Not Tenanted: platform events have no business. Queries always filter by business_id explicitly.
-  # SPEC actions first, then the EasAlpha extras the controllers write.
-  ACTIONS = %w[create update delete bulk_update bulk_delete cancel receive status_change ledger_debit ledger_credit
-               void refund discount price_change permission_change login logout pin_login pin_failed export settings_change
-               pair_device revoke_device approve].freeze
+  # Every action the API writes, with the label the admin's Audit Logs filter shows: SPEC actions first, then the
+  # EasAlpha extras. The filter lists exactly these (GET /audit_logs/entities), so a new action written anywhere
+  # belongs here too; audit_actions_spec reads the code to keep the two together (review of 6 Nov 2026, R16).
+  ACTION_LABELS = {
+    "create" => "Create", "update" => "Update", "delete" => "Delete", "bulk_update" => "Bulk update", "bulk_delete" => "Bulk delete",
+    "cancel" => "Cancel", "receive" => "Receive", "status_change" => "Status change", "ledger_debit" => "Ledger debit", "ledger_credit" => "Ledger credit",
+    "void" => "Void", "refund" => "Refund", "discount" => "Discount", "price_change" => "Price change", "permission_change" => "Permission change",
+    "login" => "Sign-in", "logout" => "Sign-out", "pin_login" => "PIN sign-in", "pin_failed" => "Wrong PIN", "export" => "Export",
+    "settings_change" => "Settings change", "pair_device" => "Device paired", "revoke_device" => "Device removed", "approve" => "Manager approval",
+    # Offline sales replayed by the server
+    "client_time_clamped" => "Till clock corrected", "offline_payment_adjusted" => "Offline payment adjusted",
+    "khata_over_limit_offline" => "Khata over limit (offline)", "khata_overdue_offline" => "Khata overdue (offline)",
+    # Stock and purchasing
+    "stock_post" => "Stock action posted", "stock_cancel" => "Stock action cancelled", "counting" => "Stock counting", "production" => "Production",
+    "goods_receipt" => "Goods received", "goods_receipt_cancel" => "Goods receipt cancelled", "purchase_return" => "Purchase return",
+    "po_send" => "Purchase order sent", "po_cancel" => "Purchase order cancelled", "supplier_payment" => "Supplier payment",
+    "ledger_adjustment" => "Supplier ledger adjustment", "import" => "Import",
+    # People, riders and the day
+    "payroll_generate" => "Payroll generated", "payroll_pay" => "Payroll paid", "day_end_settlement" => "Day-end settlement",
+    "checklist_complete" => "Checklist completed", "rider_float_issue" => "Rider float issued", "rider_float_return" => "Rider float returned",
+    "rider_float_spend" => "Rider float spent", "rider_float_adjust" => "Rider float adjusted", "rider_settle" => "Rider settled",
+    # Customers and guests
+    "reverse" => "Account adjustment reversed", "loyalty_adjust" => "Loyalty points adjusted", "loyalty_redeem" => "Loyalty points redeemed",
+    "campaign_send" => "Campaign sent", "qr_accept" => "QR order accepted", "qr_reject" => "QR order rejected",
+    "reservation_confirmed" => "Reservation confirmed", "reservation_no_show" => "Reservation no-show",
+    "reservation_cancelled" => "Reservation cancelled", "reservation_completed" => "Reservation completed"
+  }.freeze
+  ACTIONS = ACTION_LABELS.keys.freeze
 
   # actor: who made the change, captured earlier by the Audited concern; defaults to the current request context.
   def self.record(action:, record: nil, before: nil, after: nil, business: Current.business, approved_by: nil, table_name: nil, record_id: nil, business_id: nil, actor: nil)

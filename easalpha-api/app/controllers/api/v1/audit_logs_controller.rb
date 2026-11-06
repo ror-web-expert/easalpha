@@ -10,10 +10,10 @@ module Api
         render_page(rows, cursor) { |a| Serializers.audit_log(a, names: names) }
       end
 
-      # GET /audit_logs/entities  the entity types seen in this business, for the filter
+      # GET /audit_logs/entities  the entity types seen in this business and every action with its label, for the filter
       def entities
         render json: { data: AuditLog.where(business_id: current_business.id).distinct.order(:table_name).pluck(:table_name).compact,
-                       actions: AuditLog::ACTIONS }
+                       actions: AuditLog::ACTIONS, action_labels: AuditLog::ACTION_LABELS }
       end
 
       # GET /audit_logs/insights?from&to  counts by action, actor and entity for the range

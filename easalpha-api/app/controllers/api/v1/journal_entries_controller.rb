@@ -14,7 +14,7 @@ module Api
         scope = scope.where(business_day: ..Date.parse(params[:to])) if params[:to].present?
         scope = scope.where(kind: params[:kind]) if params[:kind].present?
         scope = scope.where(id: JournalLine.where(gl_account_id: params[:account_id]).select(:journal_entry_id)) if params[:account_id].present?
-        scope = scope.where("description ILIKE ?", "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("description ILIKE ?", ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
         rows, cursor = Paginator.call(scope, cursor: params[:cursor], limit: params[:limit], order_column: :posted_at)
         render_page(rows, cursor) { |e| FinanceSerializers.journal_entry(e, full: true) }
       end

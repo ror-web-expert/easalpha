@@ -7,7 +7,7 @@ import { formatDate } from "@/lib/dates";
 import { Cards } from "@/components/admin/page";
 import { Card, CardBody, CardHeader, CardTitle, EmptyState, Loading, SummaryCard } from "@/components/ui";
 import { Breakdown, TrendChart } from "@/components/charts/charts";
-import { auditQuery, type AuditFilters } from "./audit-filters";
+import { actionLabel, auditQuery, useAuditOptions, type AuditFilters } from "./audit-filters";
 
 function top(counts: Record<string, number>, n = 10) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, n).map(([label, value]) => ({ label: label || "unknown", value }));
@@ -17,6 +17,7 @@ function top(counts: Record<string, number>, n = 10) {
 export function AuditInsightsPanel({ filters }: { filters: AuditFilters }) {
   const query = auditQuery({ ...filters, recordId: "" });
   const q = useQuery({ queryKey: ["audit_logs", "insights", query], queryFn: () => api<AuditInsights>("/audit_logs/insights", { query }) });
+  const { labels } = useAuditOptions();
   if (q.isLoading || !q.data) return <Loading />;
   const d = q.data;
   if (!d.total) return <EmptyState icon={ScrollText} title="No audit entries for these filters" hint="Widen the date range or clear the actor, action or entity filter." />;
@@ -31,7 +32,7 @@ export function AuditInsightsPanel({ filters }: { filters: AuditFilters }) {
       </Cards>
       <Card className="mb-4"><CardHeader><CardTitle>Entries by day</CardTitle></CardHeader><CardBody><TrendChart data={days} x="day" series={[{ key: "count", label: "Entries" }]} empty="No audit entries in this range." /></CardBody></Card>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card><CardHeader><CardTitle>By action</CardTitle></CardHeader><CardBody><Breakdown data={top(d.by_action)} money={false} /></CardBody></Card>
+        <Card><CardHeader><CardTitle>By action</CardTitle></CardHeader><CardBody><Breakdown data={top(d.by_action).map((r) => ({ ...r, label: actionLabel(r.label, labels) }))} money={false} /></CardBody></Card>
         <Card><CardHeader><CardTitle>By entity (top 10)</CardTitle></CardHeader><CardBody><Breakdown data={top(d.by_entity)} money={false} /></CardBody></Card>
         <Card><CardHeader><CardTitle>By actor (top 10)</CardTitle></CardHeader><CardBody><Breakdown data={actors} money={false} /></CardBody></Card>
       </div>

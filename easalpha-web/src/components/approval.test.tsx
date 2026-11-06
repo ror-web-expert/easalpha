@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
+import { attachApprovalCodes } from "@/lib/approval-codes";
 import { useApproval } from "./approval";
 
 const MANAGER = "4321";
@@ -13,7 +14,7 @@ const voidOrder = () => vi.fn(async (pin?: string) => {
   return "voided";
 });
 
-function Screen({ action }: { action: (pin?: string) => Promise<string> }) {
+function Screen({ action }: { action: (pin?: string, codes?: string[]) => Promise<string> }) {
   const { run, dialog, open } = useApproval();
   const [result, setResult] = useState("");
   return (
@@ -76,5 +77,65 @@ describe("useApproval", () => {
     await settle();
     await settle();
     expect(pins(fn)).toEqual([undefined, "8964"]);
+  });
+});
+
+// Review of 6 Nov 2026, R6: the PIN approves what the server named, shown in the dialog, and nothing more.
+describe("useApproval with named permissions", () => {
+  const VOID = { permissions: ["orders.void"], labels: { "orders.void": "Void an order before payment" } };
+  const OVERRIDE = { permissions: ["prices.override"], labels: { "prices.override": "Override an item price" } };
+  const OPEN_ITEM = { permissions: ["items.open"], labels: { "items.open": "Sell an open item" } };
+
+  it("lists what is being approved and sends those codes with the PIN, also on any request carrying it", async () => {
+    const bodies: unknown[] = [];
+    const fn = vi.fn(async (pin?: string, codes?: string[]) => {
+      if (!pin) throw new ApiError("approval.required", "A manager PIN is required", 403, VOID);
+      bodies.push(attachApprovalCodes({ reason: "x", approver_pin: pin })); // what api() sends for this screen
+      return codes?.join(",") ?? "";
+    });
+    render(<Screen action={fn} />);
+    fireEvent.click(screen.getByRole("button", { name: "Void" }));
+    const list = await screen.findByRole("group", { name: "The PIN approves only" });
+    expect(list).toHaveTextContent("Void an order before payment");
+    tap(MANAGER);
+    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("orders.void"));
+    expect(fn.mock.calls[1]).toEqual([MANAGER, ["orders.void"]]);
+    expect(bodies).toEqual([{ reason: "x", approver_pin: MANAGER, approval_codes: ["orders.void"] }]);
+  });
+
+  it("adds a permission the next step names and asks for the PIN again, instead of calling it wrong", async () => {
+    const fn = vi.fn(async (pin?: string, codes: string[] = []) => {
+      if (!pin) throw new ApiError("approval.required", "A manager PIN is required to override a price", 403, OVERRIDE);
+      if (!codes.includes("items.open")) throw new ApiError("permission.denied", "Open items need the items.open permission", 403, OPEN_ITEM);
+      return codes.join(",");
+    });
+    render(<Screen action={fn} />);
+    fireEvent.click(screen.getByRole("button", { name: "Void" }));
+    await screen.findByText("Override an item price");
+    tap(MANAGER);
+    await screen.findByText("This also needs: Sell an open item. Enter the PIN again to approve all of it.");
+    expect(screen.queryByText("Wrong PIN or not allowed. Try again.")).not.toBeInTheDocument();
+    const list = screen.getByRole("group", { name: "The PIN approves only" });
+    expect(list).toHaveTextContent("Override an item price");
+    expect(list).toHaveTextContent("Sell an open item");
+    await settle();
+    expect(pins(fn)).toEqual([undefined, MANAGER]); // the PIN was not sent again by itself
+    tap(MANAGER);
+    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("prices.override,items.open"));
+    expect(fn.mock.calls[2]).toEqual([MANAGER, ["prices.override", "items.open"]]);
+  });
+
+  it("still calls a PIN wrong when the answer names nothing new", async () => {
+    const fn = vi.fn(async (pin?: string) => {
+      if (pin !== MANAGER) throw new ApiError("approval.required", "A manager PIN is required", 403, VOID);
+      return "voided";
+    });
+    render(<Screen action={fn} />);
+    fireEvent.click(screen.getByRole("button", { name: "Void" }));
+    await screen.findByText("Void an order before payment");
+    tap("1234");
+    await screen.findByText("Wrong PIN or not allowed. Try again.");
+    tap(MANAGER);
+    await waitFor(() => expect(screen.getByLabelText("Result")).toHaveTextContent("voided"));
   });
 });

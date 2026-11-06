@@ -2,6 +2,7 @@
 import { useAuthStore } from "@/store/auth";
 import { useDeviceStore } from "@/store/device";
 import type { Session } from "@/lib/types";
+import { attachApprovalCodes } from "@/lib/approval-codes";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1").replace(/\/$/, "");
 // Accepts http(s) or ws(s); the socket always opens on ws(s) so the value can be written either way.
@@ -160,7 +161,8 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
       res = await fetch(`${API_URL}${path}${buildQuery(opts.query)}`, {
         method: opts.method ?? "GET",
         headers,
-        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        // A manager PIN being tried in the approval dialog takes the codes it approves along (lib/approval-codes.ts).
+        body: opts.body !== undefined ? JSON.stringify(attachApprovalCodes(opts.body)) : undefined,
         signal: controller.signal,
       });
     } catch (e) {

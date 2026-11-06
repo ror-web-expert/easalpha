@@ -7,10 +7,10 @@ module Audited
   SKIPPED_TABLES = %w[stock_levels push_subscriptions gl_accounts journal_entries journal_lines sync_batches sync_rejections notifications receipt_events deduction_audits settings
                       import_jobs user_permissions role_permissions support_sessions aggregator_events].freeze
   # Updates that only touch these are housekeeping, not something a person did.
-  IGNORED_ATTRIBUTES = %w[updated_at created_at last_seen_at last_sync_at last_login_at pin_failed_count pin_locked_until
+  IGNORED_ATTRIBUTES = %w[updated_at created_at last_seen_at last_sync_at last_login_at pin_failed_count pin_locked_until pin_lookup
                           current_balance_minor balance_minor loyalty_points units_sold stock_deducted_at printed_at notified_at
                           preorder_notified_at app_version].freeze
-  HIDDEN_ATTRIBUTES = %w[pin_digest password_digest token_digest otp_digest secret webhook_secret].freeze
+  HIDDEN_ATTRIBUTES = %w[pin_digest pin_lookup password_digest token_digest otp_digest secret webhook_secret].freeze
 
   included do
     # The actor is read while the change is made (inside the transaction, where Tenancy::Context has set Current) and

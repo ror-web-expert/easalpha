@@ -72,7 +72,7 @@ module Orders
       after = Builder.charge_values(order)
       return if after == before
       service_changed = SERVICE_FIELDS.any? { |f| after[f] != before[f] } && SERVICE_FIELDS.any? { |f| after[f] != Builder.default_charges(order.order_type, @branch.business)[f] }
-      raise Api::Errors::Forbidden.new("approval.required", "A manager PIN is required to change the service charge") if service_changed && !can?("prices.override")
+      raise Api::Errors.approval_required([ "prices.override" ], "A manager PIN is required to change the service charge") if service_changed && !can?("prices.override")
       @charge_audit = { before: before.select { |k, v| after[k] != v }, after: after.select { |k, v| before[k] != v } }
     end
 
@@ -170,8 +170,8 @@ module Orders
     end
 
     def cancel_item!(item, reason:)
-      raise Api::Errors::Forbidden.new("permission.denied", "Removing a sent item needs orders.edit_after_send") if item.sent_at && !can?("orders.edit_after_send")
-      raise Api::Errors::Forbidden.new("permission.denied", "Deleting a line on a reopened order needs DELETE_ORDER_ITEM") if order.reopened? && !can?("DELETE_ORDER_ITEM")
+      raise Api::Errors.approval_required([ "orders.edit_after_send" ], "Removing a sent item needs orders.edit_after_send", code: "permission.denied") if item.sent_at && !can?("orders.edit_after_send")
+      raise Api::Errors.approval_required([ "DELETE_ORDER_ITEM" ], "Deleting a line on a reopened order needs DELETE_ORDER_ITEM", code: "permission.denied") if order.reopened? && !can?("DELETE_ORDER_ITEM")
       item.update!(status: "cancelled", cancelled_reason: reason)
       @removed << item
     end
@@ -185,6 +185,8 @@ module Orders
     private
 
     # A guest (storefront, QR) has no actor and holds no permission: only a recorded approval allows a guarded step.
+    # A refusal of a step a manager's PIN can allow names its permission (Api::Errors.approval_required), so the till's
+    # dialog can show it and approve exactly that.
     def can?(code)
       return approvals[code].present? if @actor.nil?
       @actor.can?(code) || approvals[code].present?
@@ -201,8 +203,8 @@ module Orders
         changes.merge!(unit_price_minor: line[:price_override_minor].to_i, price_overridden: true, override_approved_by_id: approvals["prices.override"]&.id)
       end
       return if changes.except(:sort_order).empty?
-      raise Api::Errors::Forbidden.new("permission.denied", "Changing a sent item needs orders.edit_after_send") if item.sent_at && !can?("orders.edit_after_send") && changes.except(:sort_order, :notes).any?
-      raise Api::Errors::Forbidden.new("permission.denied", "Lowering a quantity on a reopened order needs MODIFY_REOPEN_DECREASE_QTY") if order.reopened? && changes.key?(:quantity) && changes[:quantity] < item.quantity_was.to_d && !can?("MODIFY_REOPEN_DECREASE_QTY")
+      raise Api::Errors.approval_required([ "orders.edit_after_send" ], "Changing a sent item needs orders.edit_after_send", code: "permission.denied") if item.sent_at && !can?("orders.edit_after_send") && changes.except(:sort_order, :notes).any?
+      raise Api::Errors.approval_required([ "MODIFY_REOPEN_DECREASE_QTY" ], "Lowering a quantity on a reopened order needs MODIFY_REOPEN_DECREASE_QTY", code: "permission.denied") if order.reopened? && changes.key?(:quantity) && changes[:quantity] < item.quantity_was.to_d && !can?("MODIFY_REOPEN_DECREASE_QTY")
       before = item.quantity.to_d # after update! the dirty tracking is reset, so quantity_was would equal the new value
       item.update!(changes)
       @added << item if item.sent_at && changes.key?(:quantity) && changes[:quantity] > before
@@ -212,7 +214,7 @@ module Orders
       if line[:deal_id].present?
         build_deal_item(line, idx)
       elsif line[:open_item].present?
-        raise Api::Errors::Forbidden.new("permission.denied", "Open items need the items.open permission") unless can?("items.open")
+        raise Api::Errors.approval_required([ "items.open" ], "Open items need the items.open permission", code: "permission.denied") unless can?("items.open")
         oi = line[:open_item]
         OrderItem.new(order: order, name_snapshot: oi[:name].presence || "Open item", unit_price_minor: oi[:price_minor].to_i, quantity: (line[:quantity].presence || 1).to_d,
                       open_item: true, tax_rate_snapshot: default_tax&.rate || 0, tax_inclusive_snapshot: default_tax&.inclusive || false, notes: line[:notes], course: (line[:course].presence || 1).to_i, sort_order: idx, station_id: line[:station_id])
@@ -292,7 +294,7 @@ module Orders
     end
 
     def authorize_override!
-      raise Api::Errors::Forbidden.new("approval.required", "A manager PIN is required to override a price") unless can?("prices.override")
+      raise Api::Errors.approval_required([ "prices.override" ], "A manager PIN is required to override a price") unless can?("prices.override")
     end
 
     def default_tax

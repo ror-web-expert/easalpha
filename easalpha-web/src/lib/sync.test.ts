@@ -207,6 +207,41 @@ describe("processQueue", () => {
     expect(sentRecords(1)[0]).not.toHaveProperty("approver_pin");
   });
 
+  // Review of 6 Nov 2026, R6: the PIN approves the codes the rejection named, and nothing else the manager holds.
+  it("sends the permissions the rejection named as approval_codes with the PIN, and a PIN alone for an older rejection", async () => {
+    h.attention.set("v-1", { id: "v-1", type: "void", code: "approval.required", message: "Needs a manager", payload: { order_id: "o-7", reason: "x" }, created_at: "2026-10-13T10:00:00Z",
+      permissions: ["orders.void"], permission_labels: { "orders.void": "Void an order before payment" } });
+    h.attention.set("v-2", { id: "v-2", type: "void", code: "approval.required", message: "Needs a manager", payload: { order_id: "o-8", reason: "x" }, created_at: "2026-10-13T10:00:01Z" });
+    await retryAttention("v-1", "4321");
+    await retryAttention("v-2", "4321");
+    h.api.mockResolvedValueOnce({ ...accepted(), results: [{ id: "v-1", type: "void", status: "accepted" }, { id: "v-2", type: "void", status: "accepted" }] });
+    await processQueue();
+    expect(sentRecords()[0]).toMatchObject({ id: "v-1", approver_pin: "4321", approval_codes: ["orders.void"] });
+    expect(sentRecords()[1]).toMatchObject({ id: "v-2", approver_pin: "4321" });
+    expect(sentRecords()[1]).not.toHaveProperty("approval_codes");
+    expect(JSON.stringify([...h.queue.values(), ...h.attention.values()])).not.toContain("4321");
+  });
+
+  it("keeps on the Attention page what a refused record needs, after what the last PIN approved", async () => {
+    h.queue.set("o-1", item({ payload: { status: "placed", is_staff_meal: true } }));
+    h.api.mockResolvedValueOnce({ ...accepted(), results: [{ id: "o-1", type: "order", status: "rejected", code: "approval.required", message: "A manager with orders.staff_meal must approve this",
+      details: { permissions: ["orders.staff_meal"], labels: { "orders.staff_meal": "Mark an order as staff meal" } } }] });
+    await processQueue();
+    expect(h.attention.get("o-1")).toMatchObject({ permissions: ["orders.staff_meal"], permission_labels: { "orders.staff_meal": "Mark an order as staff meal" } });
+    // Approved, the staff meal passes and the price override behind it asks for its own: both are listed for the next try.
+    await retryAttention("o-1", "4321");
+    h.api.mockResolvedValueOnce({ ...accepted(), results: [{ id: "o-1", type: "order", status: "rejected", code: "approval.required", message: "A manager with prices.override must approve this",
+      details: { permissions: ["prices.override"], labels: { "prices.override": "Override an item price" } } }] });
+    await processQueue();
+    expect(sentRecords(1)[0]).toMatchObject({ approver_pin: "4321", approval_codes: ["orders.staff_meal"] });
+    expect(h.attention.get("o-1")).toMatchObject({ permissions: ["orders.staff_meal", "prices.override"], permission_labels: { "orders.staff_meal": "Mark an order as staff meal", "prices.override": "Override an item price" } });
+    // A refusal for another reason lists nothing to approve.
+    await retryAttention("o-1");
+    h.api.mockResolvedValueOnce({ ...accepted(), results: [{ id: "o-1", type: "order", status: "rejected", code: "day.locked", message: "closed" }] });
+    await processQueue();
+    expect(h.attention.get("o-1")).not.toHaveProperty("permissions");
+  });
+
   it("Try again on a rejected order brings the records held back by it back to the queue, pending and open again", async () => {
     h.attention.set("o-1", { id: "o-1", type: "order", code: "day.locked", message: "closed", payload: { status: "placed", __membership_id: "m-1" }, created_at: "2026-10-13T10:00:00Z" });
     h.attention.set("p-1", { id: "p-1", type: "payment", code: "blocked", message: "waits", payload: { order_id: "o-1" }, blocked_by: "o-1", created_at: "2026-10-13T10:01:00Z" });

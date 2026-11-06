@@ -38,8 +38,12 @@ export function PinDots({ length, filled }: { length: number; filled: number }) 
   );
 }
 
-/** Manager PIN approval dialog: who is approving and what. Sends the PIN once, when its 4th digit goes in. */
-export function PinDialog({ open, onClose, onSubmit, title = "Manager approval", what, error, loading }: { open: boolean; onClose: () => void; onSubmit: (pin: string) => void; title?: string; what?: string; error?: string | null; loading?: boolean }) {
+/**
+ * Manager PIN approval dialog: who is approving and what. Sends the PIN once, when its 4th digit goes in.
+ * approves: the permissions the server asked for, shown so the manager knows the PIN allows those and nothing more.
+ * notice: a word between tries that is not an error (another permission was added to the list).
+ */
+export function PinDialog({ open, onClose, onSubmit, title = "Manager approval", what, approves, notice, error, loading }: { open: boolean; onClose: () => void; onSubmit: (pin: string) => void; title?: string; what?: string; approves?: { code: string; label: string }[]; notice?: string | null; error?: string | null; loading?: boolean }) {
   const [pin, setPin] = useState("");
   const live = useRef({ open, loading, onSubmit });
   useEffect(() => { live.current = { open, loading, onSubmit }; });
@@ -70,7 +74,14 @@ export function PinDialog({ open, onClose, onSubmit, title = "Manager approval",
   return (
     <Dialog open={open} onClose={onClose} title={title} description={what ? `Approve: ${what}` : "Ask a manager to enter their PIN"} size="sm">
       <div className="space-y-4">
+        {approves?.length ? (
+          <div className="rounded-lg bg-muted px-3 py-2 text-sm" role="group" aria-label="The PIN approves only">
+            <div className="text-xs font-medium text-fg-secondary">The PIN approves only</div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">{approves.map((a) => <li key={a.code}>{a.label}</li>)}</ul>
+          </div>
+        ) : null}
         <PinDots length={4} filled={pin.length} />
+        {notice ? <p className="text-center text-sm text-warning-ink">{notice}</p> : null}
         {error ? <p className="text-center text-sm text-danger">{error}</p> : null}
         <Keypad onKey={(d) => setPin((p) => (p.length < 4 ? p + d : p))} onBackspace={() => setPin((p) => p.slice(0, -1))} onClear={() => setPin("")} />
         <Button variant="secondary" className="w-full" onClick={onClose}>Cancel</Button>

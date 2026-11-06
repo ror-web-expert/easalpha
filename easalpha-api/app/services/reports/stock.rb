@@ -13,7 +13,7 @@ module Reports
 
     def levels(section_id: nil, q: nil, low_only: false)
       items = StockItem.active.includes(:base_unit).order(:name)
-      items = items.where("stock_items.name ILIKE :q OR stock_items.sku ILIKE :q OR stock_items.category ILIKE :q", q: "%#{q}%") if q.present?
+      items = items.where("stock_items.name ILIKE :q OR stock_items.sku ILIKE :q OR stock_items.category ILIKE :q", q: ApplicationRecord.contains_pattern(q)) if q.present?
       levels = StockLevel.where(stock_item_id: items.map(&:id))
       levels = levels.where(stock_section_id: section_id) if section_id.present?
       by_item = levels.group_by(&:stock_item_id)

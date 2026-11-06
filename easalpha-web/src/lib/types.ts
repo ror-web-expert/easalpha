@@ -108,7 +108,7 @@ export interface AuditLog {
   user_name?: string | null; approved_by_name?: string | null;
 }
 
-export interface AuditEntities { data: string[]; actions: string[] }
+export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string> }
 export interface AuditInsights {
   total: number; by_action: Record<string, number>; by_entity: Record<string, number>;
   by_actor: { user_id: ID | null; name: string; count: number }[]; by_day: Record<string, number>;
@@ -440,7 +440,7 @@ export interface Floor { id: ID; branch_id: ID; name: string; sort_order: number
 // ---- Sync ----
 export type SyncRecordType = "order" | "order_update" | "payment" | "refund" | "void" | "shift_open" | "shift_close" | "cash_movement" | "meal_claim" | "customer_payment";
 export interface SyncRecord { type: SyncRecordType; id: ID; membership_id?: ID; payload: Record<string, unknown> }
-export interface SyncResult { id: ID; type: string; status: "accepted" | "duplicate" | "rejected"; code?: string; message?: string }
+export interface SyncResult { id: ID; type: string; status: "accepted" | "duplicate" | "rejected"; code?: string; message?: string; details?: { permissions?: string[]; labels?: Record<string, string> } }
 export interface SyncPushResponse { batch_id: ID; results: SyncResult[]; server_time: string }
 export interface SyncRejection {
   id: ID; device_id: ID | null; record_type: string; record_id: ID; code: string; message: string; payload: Record<string, unknown>;

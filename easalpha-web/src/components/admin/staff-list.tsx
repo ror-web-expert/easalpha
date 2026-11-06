@@ -8,6 +8,7 @@ import type { Branch, CashierRole, Membership, Role, StaffType } from "@/lib/typ
 import { formatDateTime } from "@/lib/dates";
 import { FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction, useList, useSave } from "@/components/admin/crud";
+import { toast } from "@/store/toast";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 // SPEC "Staff populations": Admin Staff, Cashiers and Order Takers are separate screens over the same membership
@@ -39,7 +40,11 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
   const [pinFor, setPinFor] = useState<Membership | null>(null);
   const [pin, setPin] = useState("");
   const [deact, setDeact] = useState<Membership | null>(null);
-  const create = useSave<CreateBody>(["staff"], () => "/staff", { onSuccess: () => setForm(null), success: `${title.replace(/s$/, "")} added` });
+  // A phone or email that already has an account is linked as it is (R8): say so, since a password typed here was not used.
+  const create = useSave<CreateBody, Membership & { linked_existing_user?: boolean }>(["staff"], () => "/staff", {
+    onSuccess: (m) => { setForm(null); if (m.linked_existing_user) toast.info("Linked to an existing EasAlpha account", "They sign in with their own name and password; a password typed here was not used."); },
+    success: `${title.replace(/s$/, "")} added`,
+  });
   const setPinM = useAction<{ id: string; pin: string }>(["staff"], ({ id, pin }) => api(`/staff/${id}/set_pin`, { method: "POST", body: { pin } }), "PIN updated");
   const deactM = useAction<string>(["staff"], (id) => api(`/staff/${id}/deactivate`, { method: "POST" }), "Deactivated");
   const reactM = useAction<string>(["staff"], (id) => api(`/staff/${id}/reactivate`, { method: "POST" }), "Reactivated");

@@ -132,7 +132,14 @@ module Api
         if params[:employee_id].present?
           Employee.active.find(params[:employee_id])
         elsif params[:pin].present?
-          m = Membership.active.where.not(pin_digest: nil).find { |x| x.authenticate_pin(params[:pin].to_s) }
+          # Found by the PIN lookup among staff with an employee record. A PIN names nobody until it matches, so a
+          # wrong one counts against this device or member (PinThrottle), not against every member checked on the
+          # way, which let five wrong tries lock the whole staff out (as pin_login once did).
+          throttle = "attendance:#{current_device&.id || current_membership.id}"
+          Auth::PinThrottle.check!(throttle)
+          linked = Membership.active.where(id: Employee.active.where.not(membership_id: nil).select(:membership_id))
+          m = Auth::PinMatch.call(params[:pin].to_s, among: linked, keep: ->(x) { !x.pin_locked? }).first
+          m ? Auth::PinThrottle.clear!(throttle) : Auth::PinThrottle.failed!(throttle)
           Employee.active.find_by(membership_id: m&.id) or raise Api::Errors::NotFound.new("employee.pin", "No employee matches that PIN")
         else
           Employee.active.find_by(membership_id: current_membership.id) or raise Api::Errors::NotFound.new("employee.none", "No employee record is linked to your login")

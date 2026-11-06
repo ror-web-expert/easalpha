@@ -7,7 +7,7 @@ module Api
         def index
           scope = Business.includes(:plan).order(created_at: :desc)
           scope = scope.where(status: params[:status]) if params[:status].present?
-          scope = scope.where("name ILIKE ? OR slug ILIKE ?", "%#{params[:q]}%", "%#{params[:q]}%") if params[:q].present?
+          scope = scope.where("name ILIKE :q OR slug ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
           rows, cursor = Paginator.call(scope, cursor: params[:cursor], limit: params[:limit])
           render_page(rows, cursor) { |b| Serializers.business(b).merge(members: Membership.unscoped.where(business_id: b.id, status: "active").count) }
         end

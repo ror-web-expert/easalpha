@@ -4,6 +4,7 @@ import { Building2, Plus, Pencil, Trash2 } from "lucide-react";
 import type { Branch } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useList, useRemove, useSave } from "@/components/admin/crud";
+import { branchCode } from "@/components/admin/branch-helpers";
 import { Badge, Button, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 interface Form { id?: string; name: string; code: string; address: string; city: string; phone: string; time_zone: string; business_day_start: string; day_end_time: string; tax_registration: { authority: string; ntn: string; strn: string; pos_id: string; token: string } }
@@ -43,7 +44,9 @@ export default function BranchesPage() {
         {form ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
-            <Field label="Code" hint="Short, used in serials and receipts"><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} /></Field>
+            {/* The code is printed in every receipt number and its barcode: 1 to 8 of A-Z and 0-9 (R15). An older code is
+                left as it is until someone edits it. */}
+            <Field label="Code" hint="1 to 8 letters and digits, used in receipt numbers and their barcode"><Input className="font-mono uppercase" maxLength={8} value={form.code} onChange={(e) => setForm({ ...form, code: branchCode(e.target.value) })} /></Field>
             <Field label="Address" className="sm:col-span-2"><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
             <Field label="City"><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
             <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>

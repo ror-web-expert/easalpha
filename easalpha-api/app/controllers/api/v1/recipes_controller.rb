@@ -13,7 +13,7 @@ module Api
         scope = scope.where(product_id: params[:product_id]) if params[:product_id].present?
         scope = scope.sub_recipes if params[:sub_recipes] == "true"
         scope = scope.for_products if params[:products] == "true"
-        scope = scope.where("recipes.name ILIKE ?", "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("recipes.name ILIKE ?", ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
         render json: { data: scope.map { |r| RecipeSerializers.recipe(r) } }
       end
 

@@ -12,7 +12,7 @@ module Api
         scope = scope.where(category_id: params[:category_id]) if params[:category_id].present?
         scope = scope.where(is_favourite: true) if params[:favourites] == "true"
         scope = scope.where(active: true) unless params[:include_inactive] == "true"
-        scope = scope.where("products.name ILIKE :q OR products.sku ILIKE :q OR products.name_ur ILIKE :q OR products.id IN (SELECT product_id FROM product_barcodes WHERE code = :code)", q: "%#{params[:q]}%", code: params[:q].to_s.strip) if params[:q].present?
+        scope = scope.where("products.name ILIKE :q OR products.sku ILIKE :q OR products.name_ur ILIKE :q OR products.id IN (SELECT product_id FROM product_barcodes WHERE code = :code)", q: ApplicationRecord.contains_pattern(params[:q]), code: params[:q].to_s.strip) if params[:q].present?
         rows, cursor = paginate(scope)
         costs = Catalog::Analysis.costs_for(rows)
         render_page(rows, cursor) { |p| MenuSerializers.product(p, full: true, costs: costs) }
@@ -100,7 +100,7 @@ module Api
       # GET /products/barcodes?q=  every barcode with its product and size, for the label printer and the codes panel
       def barcodes
         scope = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product, :variant).order("products.name", :code)
-        scope = scope.where("product_barcodes.code ILIKE :q OR products.name ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("product_barcodes.code ILIKE :q OR products.name ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
         render json: { data: scope.limit(2000).map { |b| barcode_row(b) } }
       end
 

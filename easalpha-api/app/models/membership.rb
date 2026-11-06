@@ -94,7 +94,31 @@ class Membership < ApplicationRecord
 
   def set_pin!(pin)
     raise ArgumentError, "PIN must be 4 digits" unless pin.to_s.match?(/\A\d{4}\z/)
-    update!(pin_digest: BCrypt::Password.create(pin.to_s), pin_failed_count: 0, pin_locked_until: nil)
+    assign_attributes(pin_digest: BCrypt::Password.create(pin.to_s), pin_lookup: Membership.pin_lookup_for(business_id, pin), pin_failed_count: 0, pin_locked_until: nil)
+    pin_lookup_will_change! # the same PIN again gives the same lookup, which still belongs with the new digest
+    save!
+  end
+
+  # pin_lookup finds a PIN's holder in one indexed query (Auth::PinMatch) where a bcrypt per member took seconds: an
+  # HMAC of the business and the PIN under a key derived from secret_key_base, so the column alone gives away nothing
+  # a 4-digit PIN would not. Stored as "<key id>:<hmac>": after a secret_key_base change every lookup is from the old
+  # key, and those members go back to the bcrypt fallback (which stores a new one) instead of matching nobody.
+  def self.pin_lookup_key = @pin_lookup_key ||= Rails.application.key_generator.generate_key("easalpha membership pin lookup", 32)
+  def self.pin_lookup_key_id = @pin_lookup_key_id ||= OpenSSL::HMAC.hexdigest("SHA256", pin_lookup_key, "key id")[0, 8]
+  def self.pin_lookup_for(business_id, pin) = "#{pin_lookup_key_id}:#{OpenSSL::HMAC.hexdigest('SHA256', pin_lookup_key, "#{business_id}:#{pin}")}"
+
+  # Members with a PIN but no lookup from the current key: set before the column existed, or before a key change.
+  scope :pin_lookup_missing, -> { where.not(pin_digest: nil).where("memberships.pin_lookup IS NULL OR memberships.pin_lookup NOT LIKE ?", "#{pin_lookup_key_id}:%") }
+
+  # A digest written any other way than set_pin! drops the lookup it no longer matches; the fallback then finds the member.
+  before_save { self.pin_lookup = nil if will_save_change_to_pin_digest? && !will_save_change_to_pin_lookup? }
+
+  # A bcrypt check with no failure counting, for a member the lookup could not name (Auth::PinMatch's fallback). A
+  # match stores the lookup, so the next check finds this member by it.
+  def pin_matches?(pin)
+    return false unless pin_digest.present? && BCrypt::Password.new(pin_digest) == pin.to_s
+    store_pin_lookup!(pin)
+    true
   end
 
   def pin_locked? = pin_locked_until.present? && pin_locked_until > Time.current
@@ -104,12 +128,19 @@ class Membership < ApplicationRecord
     return false if pin_digest.blank? || pin_locked? || !active?
     if BCrypt::Password.new(pin_digest) == pin.to_s
       update_columns(pin_failed_count: 0, pin_locked_until: nil) if pin_failed_count.positive?
+      store_pin_lookup!(pin)
       true
     else
       n = pin_failed_count + 1
       update_columns(pin_failed_count: n, pin_locked_until: (n >= PIN_LOCK_AFTER ? 15.minutes.from_now : nil))
       false
     end
+  end
+
+  # The lazy backfill: housekeeping, so no callbacks, no audit row and no updated_at (that would resend the staff list).
+  def store_pin_lookup!(pin)
+    value = Membership.pin_lookup_for(business_id, pin)
+    update_columns(pin_lookup: value) unless pin_lookup == value
   end
 
   def deactivate!

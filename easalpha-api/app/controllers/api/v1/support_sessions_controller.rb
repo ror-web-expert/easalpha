@@ -37,8 +37,11 @@ module Api
       end
 
       # POST /super/support_sessions/:id/token  -> an owner-level access token for the approved window
+      # Only the super admin who asked, the one the owner approved, may open it; any other super admin could before
+      # (review of 6 Nov 2026, R10).
       def token
         s = SupportSession.unscoped.find(params[:id])
+        raise Api::Errors::Forbidden.new("support.not_yours", "This support session was asked for, and approved, for another EasAlpha admin") unless s.super_admin_id == @super_admin.id
         raise Api::Errors::Forbidden.new("support.not_approved", "The owner has not approved this session") unless s.active?
         Tenancy::Context.with(s.business) do
           owner = Membership.active.joins(:role).where(roles: { system_key: "owner" }).includes(:user).first
