@@ -318,6 +318,11 @@ module Sync
       approver = approver_for("orders.void", actor)
       Orders::Transitions.void!(order, reason: payload[:reason].presence || "voided on till", actor: actor, approver: approver, device: @device)
       "accepted"
+    rescue Api::Errors::Conflict => e
+      # Another void landed between the read above and void!'s row lock (another till, the admin): the order is voided,
+      # as the record asked, so it is the duplicate a void replayed twice is, not a refusal for the Attention page (L3).
+      raise unless e.code == "order.status" && order && Order.where(id: order.id, status: "voided").exists?
+      "duplicate"
     end
 
     # Shift records go through the checks the online shift endpoints make (ShiftsController): queued, they skipped
