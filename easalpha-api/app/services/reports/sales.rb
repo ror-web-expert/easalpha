@@ -94,7 +94,7 @@ module Reports
 
     # Each shift's sales, its refunds and its net sales after them, by the one revenue rule: a sale in the shift that
     # took its order, a refund in the shift that gave it back, and money handed back on an open order no refund. The Z
-    # report's own net is before refunds, which it lists on a line of their own; an open shift has no Z report yet.
+    # report's own net is before refunds, which it lists on a line of their own; an open shift has none stored yet.
     def shifts(only_membership_id: nil)
       scope = Shift.where(branch_id: branch.id, business_day: from..to)
       scope = scope.where(cashier_membership_id: only_membership_id) if only_membership_id
