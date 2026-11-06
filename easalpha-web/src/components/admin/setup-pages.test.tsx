@@ -88,6 +88,14 @@ describe("Store Management (S1)", () => {
     expect(sent.tax_registration).not.toHaveProperty("token");
     expect(sent.tax_registration).not.toHaveProperty("token_set");
   });
+
+  it("starts a new branch on the store's time zone (S3)", async () => {
+    const s = useAuthStore.getState().session!;
+    useAuthStore.setState({ session: { ...s, business: { ...s.business, time_zone: "Asia/Dubai" } } });
+    show(<StoreManagementPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /New branch/ }));
+    expect(within(screen.getByRole("dialog")).getByLabelText("Time zone")).toHaveValue("Asia/Dubai");
+  });
 });
 
 describe("Modules (S16)", () => {

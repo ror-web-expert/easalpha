@@ -26,13 +26,14 @@ RSpec.describe "A new owner setting up a business", type: :request do
       h = headers_for(s)
       api_post "/api/v1/branches", { name: "Dubai", code: "DXB", time_zone: "Asia/Dubai" }, headers: h
       expect(response).to have_http_status(:created), response.body # the trial plan (Business) allows 20 branches
+      api_post "/api/v1/branches", { name: "Queens", code: "NYC2" }, headers: h # no zone given: the store's, not Karachi
+      expect(json[:time_zone]).to eq("America/New_York")
       api_patch "/api/v1/business", { country: "PK", currency: "PKR", time_zone: "Asia/Karachi" }, headers: h
       expect(response).to have_http_status(:ok), response.body
       expect(json).to include(country: "PK", currency: "PKR", time_zone: "Asia/Karachi")
       get "/api/v1/branches", headers: h
       zones = json[:data].to_h { |b| [ b[:code], b[:time_zone] ] }
-      expect(zones["B1"]).to eq("Asia/Karachi")
-      expect(zones["DXB"]).to eq("Asia/Dubai")
+      expect(zones).to eq("B1" => "Asia/Karachi", "NYC2" => "Asia/Karachi", "DXB" => "Asia/Dubai")
     end
   end
 
@@ -153,6 +154,33 @@ RSpec.describe "A new owner setting up a business", type: :request do
       api_post "/api/v1/deals", { name: "Backwards", price_minor: 50_000, valid_from: "2026-11-07", valid_to: "2026-11-06", items: [ { product_id: m[:chai].id } ] }, headers: headers
       expect(response).to have_http_status(:unprocessable_content)
       expect(json[:error][:message]).to eq("Valid to must be on or after Valid from")
+    end
+  end
+
+  describe "S13: words a person reads" do
+    let!(:owner) { signup_business }
+    let(:headers) { auth_headers(owner) }
+    let!(:m) { build_menu!(owner.business) }
+
+    it "names the modifier group fields as the form does" do
+      api_post "/api/v1/modifier_groups", { name: "Sauces", min_select: 2, max_select: 1, modifiers: [ { name: "Mint", price_minor: 0 } ] }, headers: headers
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(json[:error][:message]).to eq("Max select cannot be less than Min select")
+    end
+
+    it "writes the orders and audit CSVs in the business's clock, and labels the audit entities" do
+      travel_to Time.zone.parse("2026-11-06 16:41:00 UTC") do # 21:41 in Karachi
+        api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+        get "/api/v1/exports/orders.csv", headers: headers
+        expect(CSV.parse(response.body, headers: true).first["placed_at"]).to eq("2026-11-06 21:41:00")
+        get "/api/v1/exports/audit_logs.csv", headers: headers
+        times = CSV.parse(response.body, headers: true).map { |r| r["occurred_at"] }
+        expect(times).to all(match(/\A\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\z/))
+        expect(times).to include(start_with("2026-11-06 21:41"))
+      end
+      get "/api/v1/audit_logs/entities", headers: headers
+      expect(json[:entity_labels]).to include(orders: "Orders")
+      expect(json[:entity_labels].values).not_to include("order_items")
     end
   end
 

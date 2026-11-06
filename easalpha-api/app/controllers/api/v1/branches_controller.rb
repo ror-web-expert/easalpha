@@ -17,6 +17,7 @@ module Api
         limit = current_business.plan_limit("branches")
         raise Api::Errors::Forbidden.new("plan.limit", "Your plan allows #{limit} branch(es). Upgrade to add more.") if limit && Branch.active.count >= limit
         branch = Branch.new(branch_params.merge(is_main: Branch.active.none?))
+        branch.time_zone = current_business.time_zone if params[:time_zone].blank? # the store's clock, not the column's Karachi default (S3)
         token = branch.apply_tax_registration(tax_params) if params.key?(:tax_registration)
         branch.save!
         audit!("create", record: branch, after: audit_view(branch, token))

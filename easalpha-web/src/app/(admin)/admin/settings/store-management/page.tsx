@@ -7,6 +7,7 @@ import { useList, useRemove, useSave } from "@/components/admin/crud";
 import { branchCode } from "@/components/admin/branch-helpers";
 import { isTimeZone, taxRegistrationPayload, timeZoneOptions, type TaxForm } from "@/components/admin/store-helpers";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { useAuthStore } from "@/store/auth";
 
 // token_set and token_hint come from the API (settings.manage only); the token itself never does (S1).
 interface Form { id?: string; name: string; code: string; address: string; city: string; phone: string; time_zone: string; business_day_start: string; day_end_time: string; tax: TaxForm; token_set: boolean; token_hint: string | null }
@@ -28,6 +29,8 @@ export default function BranchesPage() {
   const remove = useRemove(["branches"], (id) => `/branches/${id}`);
   const [form, setForm] = useState<Form | null>(null);
   const [del, setDel] = useState<Branch | null>(null);
+  // A new branch starts on the store's clock (S3), as the API does when no zone is sent.
+  const storeZone = useAuthStore((s) => s.session?.business?.time_zone) ?? "Asia/Karachi";
   const setTax = (patch: Partial<TaxForm>) => form && setForm({ ...form, tax: { ...form.tax, ...patch } });
   const zoneError = form && !isTimeZone(form.time_zone) ? "Pick a time zone from the list, such as Asia/Karachi" : undefined;
   const submit = () => {
@@ -37,7 +40,7 @@ export default function BranchesPage() {
   };
   return (
     <>
-      <PageHeader icon={Building2} title="Store Management" description="Branches managed from this dashboard. Each has its own business-day window, tax registration and devices." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New branch</Button>} />
+      <PageHeader icon={Building2} title="Store Management" description="Branches managed from this dashboard. Each has its own business-day window, tax registration and devices." actions={<Button onClick={() => setForm({ ...blank, time_zone: storeZone })}><Plus className="h-4 w-4" /> New branch</Button>} />
       {list.isLoading ? <Loading /> : (
         <Table>
           <THead><tr><TH>Branch</TH><TH>City</TH><TH>Phone</TH><TH>Business day</TH><TH>Tax</TH><TH right>Actions</TH></tr></THead>
