@@ -1,5 +1,5 @@
 "use client";
-import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent, Receipt, Lock } from "lucide-react";
+import { Minus, Plus, Trash2, User, Grid3X3, Utensils, ShoppingBag, Bike, Coffee, Pause, Send, Banknote, StickyNote, BadgePercent, Receipt, Lock, MapPin } from "lucide-react";
 import type { Cart } from "@/store/cart";
 import type { OrderType } from "@/lib/types";
 import { lineAmount, lineTotals, type CartLine } from "@/lib/pricing";
@@ -43,9 +43,11 @@ interface Props {
   canRemove?: boolean; canDecrease?: boolean;
   /** SPEC "Direct Unpaid Orders": when given, a button that places (or completes) the order without the payment screen. */
   onPlaceUnpaid?: () => void; unpaidLabel?: string;
+  /** T3/F3: a delivery order's address and zone; opens the address picker. */
+  onAddress?: () => void;
 }
 
-export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride, overrideNeedsPin, onPreview, canRemove = true, canDecrease = true, onPlaceUnpaid, unpaidLabel }: Props) {
+export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOverride, onRemove, onCustomer, onTable, onNotes, onStaffMeal, onHold, onSend, onPay, onNew, busy, canOverride, overrideNeedsPin, onPreview, canRemove = true, canDecrease = true, onPlaceUnpaid, unpaidLabel, onAddress }: Props) {
   // SPEC Charges: the same totals as the payment page, with the charges in force on this order, plus the cash rounding
   // and tips earlier payments stored (the server keeps both in the order's total).
   const t = totalsWithCharges(cart.lines, cart, { settings, staffMeal: cart.is_staff_meal, discount_minor: cart.discount_minor, rounding_minor: cart.rounding_minor, tip_minor: cart.tip_minor });
@@ -78,6 +80,16 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
         <button onClick={onNotes} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.notes ? "border-primary bg-primary-soft" : "hover:bg-muted")} title="Order notes"><StickyNote className="h-4 w-4 shrink-0" />Notes</button>
         <button onClick={onStaffMeal} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.is_staff_meal ? "border-accent bg-accent-soft" : "hover:bg-muted")} title={cart.is_staff_meal ? "Staff meal is on: tap to charge this order normally" : "Staff meal: the bill shows a Staff meal line and the total becomes zero"}><BadgePercent className="h-4 w-4 shrink-0" />Staff</button>
       </div>
+      {cart.order_type === "delivery" && onAddress ? (
+        <div className="border-b px-2 pb-2">
+          <button onClick={onAddress} className={cn("flex min-h-11 w-full items-center gap-1.5 rounded-md border px-2 text-left text-sm", cart.address_id || cart.address_text ? "border-primary bg-primary-soft" : "border-dashed hover:bg-muted")} title="Where this delivery goes">
+            <MapPin className="h-4 w-4 shrink-0" />
+            {/* A saved address, or the one a website guest typed (they have none saved). */}
+            <span className="min-w-0 flex-1 truncate">{cart.address_text || "Delivery address"}</span>
+            {cart.address_id && cart.zone_name ? <Badge variant="info">{cart.zone_name}</Badge> : null}
+          </button>
+        </div>
+      ) : null}
       <ul className="flex-1 overflow-y-auto">
         {empty ? <li className="px-4 py-12 text-center text-fg-muted">Tap items to add them. F2 searches.</li> : null}
         {reopened && (!canRemove || !canDecrease) ? <li className="px-3 py-2 text-xs text-fg-secondary">Reopened order: {!canRemove && !canDecrease ? "lines cannot be removed or reduced" : !canRemove ? "lines cannot be removed" : "quantities cannot be reduced"} with your permissions.</li> : null}
@@ -119,7 +131,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           {/* One bill block for every surface (lib/bill.ts): Subtotal, each discount (voucher with its code, loyalty, the
               automatic regular discount, item discounts), charges, exclusive tax, tip and a Rounding line when the shown
               figures need it, so the block always adds up to the total by hand. */}
-          {billRows({ ...t, is_staff_meal: cart.is_staff_meal, discounts: discountRows(cart.discounts, t.discount_minor), service_charge_label: `Service charge ${chargeDisplay(resolveServiceCharge(cart, settings), currency)}`.trim() }, currency).map((r) => (
+          {billRows({ ...t, is_staff_meal: cart.is_staff_meal, discounts: discountRows(cart.discounts, t.discount_minor), service_charge_label: `Service charge ${chargeDisplay(resolveServiceCharge(cart, settings), currency)}`.trim(), delivery_label: cart.zone_name && cart.address_id ? `Delivery (${cart.zone_name})` : "Delivery" }, currency).map((r) => (
             <div key={r.key} className={cn("flex justify-between gap-2", r.info && "text-xs text-fg-muted")}><span className="truncate">{r.label}</span><span className="shrink-0 tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</span></div>
           ))}
           {paid ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(t.total_minor, currency)}</span></div> : null}

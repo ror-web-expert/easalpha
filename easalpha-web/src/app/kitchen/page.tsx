@@ -6,6 +6,7 @@ import { api, errorMessage } from "@/lib/api";
 import { subscribe } from "@/lib/cable";
 import type { BusinessSettings, KitchenOrder, KitchenTicket, Station } from "@/lib/types";
 import { formatElapsed, formatTime } from "@/lib/dates";
+import { bumpRequest, doneAtStation, linesText } from "@/lib/kitchen-bump";
 import { cn, titleCase } from "@/lib/utils";
 import { kdsAlerts, kdsTone } from "@/lib/pos-rules";
 import { KitchenGate, useBeep, useKitchenToken } from "@/components/kitchen/auth";
@@ -79,9 +80,11 @@ function Board() {
     list.forEach((o) => seen.current!.add(o.id));
   }, [orders.data, soundOn, beep]);
 
-  const act = async (path: string) => {
-    try { await api(path, { method: "POST" }); refresh(); } catch (e) { toast.error("Could not update", errorMessage(e)); }
+  const act = async (path: string, body?: Record<string, unknown>) => {
+    try { await api(path, { method: "POST", body }); refresh(); } catch (e) { toast.error("Could not update", errorMessage(e)); }
   };
+  // F10: on one station's screen, Bump order readies that station's lines only.
+  const bump = (orderId: string) => { const r = bumpRequest(orderId, station); return act(r.path, r.body); };
   const list = useMemo(() => [...(orders.data?.data ?? [])].sort((a, b) => (a.placed_at ?? a.created_at) < (b.placed_at ?? b.created_at) ? -1 : 1), [orders.data]);
   // SPEC: a one-shot sound the first time a card turns red. Cards already red when the page opens do not sound.
   useEffect(() => {
@@ -125,7 +128,7 @@ function Board() {
       ) : null}
       {changed.length ? (
         <div className="flex gap-2 overflow-x-auto border-b border-white/10 bg-warning-soft px-3 py-2 text-warning-ink">
-          {changed.map((t) => <div key={t.id} className={cn("shrink-0 rounded-md border px-3 py-1 text-sm", t.kind === "cancelled" ? "border-danger bg-danger-soft" : "border-warning")}><b className="uppercase">{t.kind}</b> #{t.serial ?? "?"}{t.table_code ? ` · ${t.table_code}` : ""}: {(t.lines ?? []).map((l) => `${(l as { quantity?: string }).quantity ?? ""} ${(l as { name?: string }).name ?? ""}`).join(", ")} <span className="text-fg-muted">{formatTime(t.created_at)}</span></div>)}
+          {changed.map((t) => <div key={t.id} className={cn("shrink-0 rounded-md border px-3 py-1 text-sm", t.kind === "cancelled" ? "border-danger bg-danger-soft" : "border-warning")}><b className="uppercase">{t.kind}</b> #{t.serial ?? "?"}{t.table_code ? ` · ${t.table_code}` : ""}: {linesText((t.lines ?? []) as { quantity?: string; name?: string }[])} <span className="text-fg-muted">{formatTime(t.created_at)}</span></div>)}
         </div>
       ) : null}
       <div className="grid flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
@@ -150,7 +153,9 @@ function Board() {
             {o.notes ? <div className="px-3 pb-2 text-sm italic text-fg-secondary">{o.notes}</div> : null}
             <footer className="grid grid-cols-[auto_1fr] gap-2 p-2">
               {o.status === "placed" ? <Button variant="secondary" size="lg" onClick={() => act(`/kitchen/orders/${o.id}/start`)}><Play className="h-5 w-5" /> Start</Button> : <span />}
-              <Button size="lg" className="h-14 w-full text-lg" onClick={() => act(`/kitchen/orders/${o.id}/bump`)}><Check className="h-6 w-6" /> Bump order</Button>
+              {doneAtStation(station, o.status, o.items)
+                ? <Button size="lg" variant="secondary" className="h-14 w-full text-base" disabled><Check className="h-6 w-6" /> Done here, waiting for other stations</Button>
+                : <Button size="lg" className="h-14 w-full text-lg" onClick={() => bump(o.id)}><Check className="h-6 w-6" /> Bump order</Button>}
             </footer>
           </article>
         ))}

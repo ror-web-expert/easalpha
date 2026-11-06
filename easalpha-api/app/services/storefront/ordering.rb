@@ -46,26 +46,39 @@ module Storefront
 
       name = c[:name].to_s.strip
       order = nil
-      Order.transaction do
-        cust = storefront_customer(name, phone)
-        address = nil
-        if cust && order_type.to_s == "delivery"
-          line1 = c[:address].to_s.strip
-          address = cust.addresses.find_by(line1: line1) || cust.addresses.create!(line1: line1, area: c[:area].presence, city: c[:city].presence, is_default: cust.addresses.none?)
+      tries = 0
+      begin
+        Order.transaction(requires_new: true) do
+          cust = storefront_customer(name, phone)
+          address = nil
+          if cust && order_type.to_s == "delivery"
+            line1 = c[:address].to_s.strip
+            address = cust.addresses.find_by(line1: line1) || cust.addresses.create!(line1: line1, area: c[:area].presence, city: c[:city].presence, is_default: cust.addresses.none?)
+          end
+          # Attached to nobody: the guest's phone and address stay on the order itself, where the cashier, the rider and
+          # the delivery board read them (sync-auth#6). Not in the notes: those go to the kitchen screen.
+          typed = [ c[:address], c[:area], c[:city] ].map { |v| v.to_s.strip }.reject(&:blank?).join(", ")
+          attrs = { order_type: order_type.to_s, source: "online", customer_id: cust&.id, address_id: address&.id, guest_name: name, guest_phone: cust ? nil : phone,
+                    delivery_address: cust || order_type.to_s != "delivery" ? nil : typed.presence, notes: notes.presence,
+                    aggregator_ref: ref, qr_status: "pending", qr_guest_token: SecureRandom.hex(8) }
+          order = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch).order
+          min = delivery["min_order_minor"].to_i
+          if order_type.to_s == "delivery" && min.positive? && order.subtotal_minor < min
+            raise Api::Errors::Unprocessable.new("online.min_order", "Minimum order for delivery is #{business.currency} #{format('%.0f', min / 100.0)}")
+          end
+          free_above = delivery["free_above_minor"]
+          if order_type.to_s == "delivery" && free_above.present? && order.subtotal_minor >= free_above.to_i && order.delivery_charge_minor.positive?
+            Orders::Builder.new(order, actor: nil, branch: branch).update!(attrs: { delivery_charge_minor: 0, delivery_charge_percent: 0 })
+          end
         end
-        # Attached to nobody: the cashier and the rider read the guest's phone and address from the order itself.
-        contact = cust ? nil : [ "Guest #{name}, #{phone}", (order_type.to_s == "delivery" ? "Deliver to: #{[ c[:address], c[:area], c[:city] ].map { |v| v.to_s.strip }.reject(&:blank?).join(', ')}" : nil) ].compact.join("; ")
-        attrs = { order_type: order_type.to_s, source: "online", customer_id: cust&.id, address_id: address&.id, guest_name: name, notes: [ contact, notes.presence ].compact.join("\n").presence,
-                  aggregator_ref: ref, qr_status: "pending", qr_guest_token: SecureRandom.hex(8) }
-        order = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch).order
-        min = delivery["min_order_minor"].to_i
-        if order_type.to_s == "delivery" && min.positive? && order.subtotal_minor < min
-          raise Api::Errors::Unprocessable.new("online.min_order", "Minimum order for delivery is #{business.currency} #{format('%.0f', min / 100.0)}")
-        end
-        free_above = delivery["free_above_minor"]
-        if order_type.to_s == "delivery" && free_above.present? && order.subtotal_minor >= free_above.to_i && order.delivery_charge_minor.positive?
-          Orders::Builder.new(order, actor: nil, branch: branch).update!(attrs: { delivery_charge_minor: 0, delivery_charge_percent: 0 })
-        end
+      rescue ActiveRecord::RecordNotUnique
+        # Two submits at the same moment (F5, F8): the same one twice, which the submit key's unique index makes one
+        # order, answered here; or two new guests with one phone, where the second finds the customer the first made.
+        again = ref && Order.find_by(source: "online", aggregator_ref: ref)
+        return again if again
+        tries += 1
+        retry if tries < 2
+        raise
       end
       Notification.create!(kind: "online_order", title: "Online #{order.order_type} order from #{order.guest_name}", body: "Waiting for a cashier to accept", link: "/orders/#{order.id}")
       Realtime.order_changed(order)
@@ -77,7 +90,7 @@ module Storefront
       eta = (cfg.sections["delivery"] || {})["eta_minutes"]
       { id: order.id, label: order.label, guest_token: order.qr_guest_token, order_type: order.order_type, status: order.status, qr_status: order.qr_status,
         spec_status: order.spec_status, stage: stage(order), eta_minutes: order.order_type == "delivery" ? eta : nil, created_at: order.created_at, placed_at: order.placed_at, ready_at: order.ready_at,
-        customer: { name: order.guest_name, address: order.address&.to_s },
+        customer: { name: order.guest_name, address: order.address&.to_s || order.delivery_address },
         items: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, ""), line_subtotal_minor: i.line_subtotal_minor, line_total_minor: i.line_subtotal_minor - i.line_discount_minor } },
         subtotal_minor: order.subtotal_minor, discount_minor: order.discount_minor, service_charge_minor: order.service_charge_minor, delivery_charge_minor: order.delivery_charge_minor,
         tax_minor: order.tax_minor, tax_inclusive_minor: Receipts::Builder.inclusive_tax_minor(order), rounding_minor: order.rounding_minor, total_minor: order.total_minor, currency: order.business.currency }

@@ -78,6 +78,40 @@ module Orders
       order
     end
 
+    # Statuses a kitchen bump moves on: cooking, or past the kitchen with lines still cooking (kitchen_done!).
+    BUMPABLE = (%w[placed preparing] + Order::AFTER_KITCHEN_STATUSES).freeze
+
+    # A kitchen screen's "Bump order" (F10). From one station's screen it marks that station's lines ready, not every
+    # station's; the order is ready once every station's lines are. Lines that belong to no station show on no station's
+    # screen, so they go ready with the last station. Without a station (the all-stations screen) the whole order is
+    # ready, as before. On a ready order only a line added since it was ready is left to bump, and the order stays as
+    # it is, so a second press changes nothing.
+    def bump!(order, station_id: nil, actor: nil, device: nil)
+      cooking = order.items.where(status: %w[sent preparing])
+      cooking = cooking.where(station_id: station_id) if station_id.present?
+      if order.status == "ready"
+        Realtime.kitchen_changed(order.branch_id, order.business_id) if cooking.update_all(status: "ready", bumped_at: Time.current).positive?
+        return order
+      end
+      return ready!(order, actor: actor, device: device) if station_id.blank?
+      raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.status.in?(BUMPABLE)
+      cooking.update_all(status: "ready", bumped_at: Time.current)
+      ready_when_stations_done!(order, actor: actor, device: device)
+    end
+
+    # Ready once every line the kitchen has (sent, not waiting for a cashier's accept) is ready at its station; with
+    # no stations at all, once every line is. An order past the kitchen keeps its status (kitchen_done!). Otherwise the
+    # order is in preparation and the screens refresh.
+    def ready_when_stations_done!(order, actor: nil, device: nil)
+      cooking = order.items.reload.reject { |i| i.status.in?(%w[cancelled pending]) }
+      owned = cooking.select(&:station_id)
+      done = (owned.any? ? owned : cooking).all? { |i| i.status.in?(%w[ready served]) }
+      return ready!(order.reload, actor: actor, device: device) if done && order.status.in?(BUMPABLE)
+      start!(order, actor: actor, device: device)
+      Realtime.kitchen_changed(order.branch_id, order.business_id)
+      order
+    end
+
     def serve!(order, actor:, device: nil)
       raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.status.in?(%w[placed preparing ready])
       to = order.order_type == "delivery" ? "dispatched" : "served"

@@ -95,7 +95,8 @@ RSpec.describe "Paid orders in the kitchen, and the receipt of a completed staff
   it "keeps canteen meals off the display: paid or free, they are handed over at the counter" do
     api_patch "/api/v1/settings", { values: { "modules.canteen" => true } }, headers: headers
     kiosk = within(biz) { Device.create!(branch: Branch.first, name: "Kiosk 1", kind: "kiosk", paired_at: Time.current, code: "Q1") }
-    lunch = within(biz) { MealSession.create!(branch: Branch.first, name: "Lunch", starts_at: "00:00", ends_at: "23:59") }
+    # All day from the day end: a session opening before 02:01 belongs to the previous business day (canteen package).
+    lunch = within(biz) { MealSession.create!(branch: Branch.first, name: "Lunch", starts_at: "02:01", ends_at: "02:00") }
     water = within(biz) { Product.create!(category: m[:chai].category, name: "Water", base_price_minor: 0) }
     %w[FP-001 FP-002].each_with_index do |fp, i|
       within(biz) { Employee.create!(name: "Worker #{i}", base_salary_minor: 3_000_000, pay_frequency: "monthly", fingerprint_id: fp, fingerprint_enrolled: true, fingerprint_enrolled_at: Time.current) }

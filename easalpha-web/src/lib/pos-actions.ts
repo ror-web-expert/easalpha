@@ -120,7 +120,7 @@ export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrd
     subtotal_minor: t.subtotal_minor, discount_minor: t.discount_minor, service_charge_minor: t.service_charge_minor, tax_minor: t.tax_minor, rounding_minor: t.rounding_minor, cash_rounding_minor: t.cash_rounding_minor ?? 0, tip_minor: t.tip_minor, total_minor: t.total_minor,
     paid_minor: 0, payments: [], receipt_number: null, void_reason: null, membership_id: membershipId, cashier_name: cashier, business_day: businessDayFor(branch?.day_end_time),
     client_created_at: cart.client_created_at, created_at: now, updated_at: now, local_only: true, open: OPEN_STATUSES.includes(status as never) ? 1 : 0,
-    delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null,
+    delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null, address_text: cart.address_text ?? null, zone_name: cart.zone_name ?? null,
     ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null,
     // Kept so the order opens again with its discount lines (the till's own regular discount among them) and not twice.
     order_discounts: cart.discounts?.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })),
@@ -135,6 +135,12 @@ export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrd
  */
 export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
   const full = Array.isArray(o.items);
+  // T3/F3: the server names the delivery's address (an older one sends no key: the till's own stays). Its text (a
+  // saved address, or what a website guest typed) comes from the full order, or stays from the till while the address
+  // is the same one; the zone the till quoted stays with its address.
+  const addressId = "address_id" in o ? o.address_id ?? null : prev?.address_id ?? null;
+  const sameAddress = (prev?.address_id ?? null) === addressId;
+  const addressText = full && "address_text" in o ? o.address_text ?? null : sameAddress ? prev?.address_text ?? null : null;
   const lines: CartLine[] = full ? o.items.map((i) => ({
     key: i.id, id: i.id, product_id: i.product_id ?? undefined, variant_id: i.variant_id, deal_id: i.deal_id ?? undefined, name: i.name, unit_price_minor: i.unit_price_minor, quantity: Number(i.quantity),
     notes: i.notes, modifiers: (i.modifiers ?? []).map((m) => ({ modifier_id: m.modifier_id ?? "", name: m.name, price_minor: m.price_minor, quantity: Number(m.quantity) })),
@@ -148,7 +154,8 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     tax_minor: o.tax_minor, rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor ?? o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, payments: prev?.payments ?? [], payment_method_summary: o.payment_method_summary ?? prev?.payment_method_summary ?? null, receipt_number: o.receipt_number,
     void_reason: o.void_reason, membership_id: o.taken_by_membership_id, cashier_name: prev?.cashier_name ?? null, business_day: o.business_day, client_created_at: o.client_created_at ?? o.created_at,
     created_at: o.created_at, updated_at: o.updated_at, local_only: false, open: OPEN_STATUSES.includes(o.status) ? 1 : 0,
-    delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: prev?.address_id ?? null,
+    delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: addressId,
+    address_text: addressText, zone_name: addressId && sameAddress ? prev?.zone_name ?? null : null,
     service_charge_percent: (full ? o.service_charge_percent : prev?.service_charge_percent) ?? null, service_charge_fixed_minor: (full ? o.service_charge_fixed_minor : prev?.service_charge_fixed_minor) ?? 0,
     delivery_charge_percent: (full ? o.delivery_charge_percent : prev?.delivery_charge_percent) ?? 0,
     tax_choice: (full ? o.tax_choice : prev?.tax_choice) ?? null, tax_rate_id: (full ? o.tax_rate_id : prev?.tax_rate_id) ?? null,
@@ -198,6 +205,7 @@ export function localToCart(o: LocalOrder): Cart {
     customer: o.customer_id ? { id: o.customer_id, name: o.customer_name ?? "Customer", phone: o.customer_phone } : null, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name ?? "", covers: o.covers, notes: o.notes ?? "", is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? "", label: o.label, client_created_at: o.client_created_at,
     discount_minor: orderLevelDiscount(o), discounts: o.order_discounts, delivery_charge_minor: o.delivery_charge_minor || undefined, address_id: o.address_id ?? null,
+    address_text: o.address_text ?? null, zone_name: o.zone_name ?? null,
     paid_minor: o.paid_minor || undefined, rounding_minor: (o.cash_rounding_minor ?? o.rounding_minor) || undefined, tip_minor: o.tip_minor || undefined,
     service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,

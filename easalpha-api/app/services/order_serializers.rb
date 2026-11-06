@@ -5,7 +5,7 @@ module OrderSerializers
     { id: o.id, serial: o.serial, label: o.label, till_serial: o.till_serial, business_day: o.business_day, order_type: o.order_type, source: o.source,
       status: o.status, payment_status: o.payment_status, spec_status: o.spec_status, spec_payment_status: o.spec_payment_status,
       reopen_count: o.reopen_count, edit_count: o.edit_count, reopened_at: o.reopened_at, unpaid_direct: o.unpaid_direct, completed_by_membership_id: o.completed_by_membership_id, table_id: o.table_id, table_code: o.dining_table&.code, guest_name: o.guest_name, covers: o.covers,
-      customer_id: o.customer_id, customer_name: o.customer&.name, customer_phone: o.customer&.phone, rider_id: o.rider_id, shift_id: o.shift_id, is_staff_meal: o.is_staff_meal, scheduled_for: o.scheduled_for,
+      customer_id: o.customer_id, customer_name: o.customer&.name, customer_phone: o.customer&.phone, address_id: o.address_id, rider_id: o.rider_id, shift_id: o.shift_id, is_staff_meal: o.is_staff_meal, scheduled_for: o.scheduled_for,
       subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor,
       rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor, tip_minor: o.tip_minor, delivery_charge_minor: o.delivery_charge_minor, total_minor: o.total_minor,
       paid_minor: o.paid_minor, due_minor: o.due_minor, item_count: o.items.count { |i| !i.cancelled? },
@@ -22,6 +22,9 @@ module OrderSerializers
       voids: o.voids.map { |v| { id: v.id, reason: v.reason, stock_action: v.stock_action, amount_minor: v.amount_minor, by_membership_id: v.by_membership_id, approved_by_membership_id: v.approved_by_membership_id, at: v.voided_at } },
       service_charge_percent: o.service_charge_percent.to_f, service_charge_fixed_minor: o.service_charge_fixed_minor, delivery_charge_percent: o.delivery_charge_percent.to_f,
       tax_choice: o.tax_choice, tax_rate_id: o.tax_rate_id, staff_meal_reason: o.staff_meal_reason,
+      # Where a delivery goes, for the till that opens it: the saved address, or what a storefront guest typed. Only in
+      # the full order, so the order stream's summaries carry no guest's phone or address.
+      address_text: o.address&.to_s.presence || o.delivery_address, guest_phone: o.guest_phone,
       story: Orders::Story.for(o)
     )
   end

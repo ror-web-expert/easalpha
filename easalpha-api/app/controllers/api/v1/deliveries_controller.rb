@@ -9,7 +9,7 @@ module Api
 
       # GET /deliveries?status=&rider_id=&business_day=&open=true
       def index
-        scope = Delivery.includes(:rider, :zone, order: :customer).where(branch_id: current_branch.id).order(created_at: :desc)
+        scope = Delivery.includes(:rider, :zone, :address, order: :customer).where(branch_id: current_branch.id).order(created_at: :desc)
         scope = scope.joins(:order).where(orders: { business_day: params[:business_day].presence || current_branch.business_day_for(Time.current) }) unless params[:all_days] == "true"
         scope = scope.where(status: %w[unassigned assigned picked_up on_the_way arrived]) if params[:open] == "true"
         scope = scope.where(status: params[:status]) if params[:status].present?
@@ -48,7 +48,7 @@ module Api
       # Rider app: GET /rider/deliveries, POST /rider/deliveries/:id/status, GET /rider/float
       def mine
         rider = own_rider!
-        scope = Delivery.where(rider_id: rider.id).includes(:rider, :zone, order: :customer).order(created_at: :desc)
+        scope = Delivery.where(rider_id: rider.id).includes(:rider, :zone, :address, order: :customer).order(created_at: :desc)
         scope = scope.where(status: %w[assigned picked_up on_the_way arrived]) unless params[:all] == "true"
         render json: { rider: DeliverySerializers.rider(rider), data: scope.limit(100).map { |d| DeliverySerializers.delivery(d, full: true) } }
       end

@@ -14,7 +14,12 @@ class Customer < ApplicationRecord
   validates :phone, uniqueness: { scope: :business_id, conditions: -> { where(archived_at: nil) } }, allow_nil: true
   validates :guardian_phone, format: { with: /\A\+[1-9]\d{7,14}\z/ }, allow_nil: true
   before_validation :normalize
-  before_create { self.khata_no ||= (Customer.unscoped.where(business_id: business_id).maximum(:khata_no) || 0) + 1 }
+  # From the business's counter, as customer payments are: max + 1 gave two customers made at the same moment (two
+  # storefront guests) the same number, and the unique index turned the second order into a 500. The counter carries
+  # on from the numbers given before it existed.
+  before_create do
+    self.khata_no ||= DocumentCounter.next!("customer_khata_no", business_id: business_id, after: Customer.unscoped.where(business_id: business_id).maximum(:khata_no).to_i)
+  end
   scope :active, -> { where(archived_at: nil) }
 
   def self.walk_in

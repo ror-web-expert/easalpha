@@ -29,7 +29,7 @@ module Settings
       [ "khata.monthly_bills.due_days", "store", "Customer Accounts", "integer", 10, "Days after the bill date the payment is due" ],
       [ "khata.monthly_bills.min_balance", "store", "Customer Accounts", "integer", 1, "Skip customers who owe less than this many rupees" ],
       [ "khata.monthly_bills.attach_pdf", "store", "Customer Accounts", "boolean", true, "Attach the bill as a PDF when a phone is linked by QR" ],
-      [ "khata.overdue.remind_after_days", "store", "Customer Accounts", "integer", 3, "Days after the bill's due date to send a WhatsApp reminder; 0 never" ],
+      [ "khata.overdue.remind_after_days", "store", "Customer Accounts", "integer", 0, "Days after the bill's due date to send a WhatsApp reminder; 0 never (off until the owner sets it)" ],
       [ "khata.credit_hold_days", "store", "Customer Accounts", "integer", 0, "Refuse new sales on account when a bill is this many days overdue; 0 never" ],
       [ "payroll.whatsapp.advance_paid", "store", "Payroll Notifications", "boolean", true, "WhatsApp the employee when an advance is paid" ],
       [ "payroll.whatsapp.wage_paid", "store", "Payroll Notifications", "boolean", true, "WhatsApp the employee when a daily or weekly wage is paid" ],

@@ -19,9 +19,10 @@ module Orders
       order.business_day ||= branch.business_day_for(order.client_created_at || Time.current)
       builder = new(order, actor: actor, device: device, branch: branch)
       builder.approvals.merge!(approvals)
-      builder.guard_charges!(default_charges(order.order_type, branch.business))
+      builder.guard_charges!(default_charges(order.order_type, branch.business, zone: Deliveries::Manager.zone_for(order)))
       Order.transaction do
         builder.validate_customer!
+        builder.validate_address!
         order.save!
         builder.audit_charges!
         builder.apply_lines!(lines)
@@ -79,10 +80,11 @@ module Orders
       CHARGE_FIELDS.index_with { |f| v = order.public_send(f); f.to_s.end_with?("percent") ? v.to_d.to_s : v.to_i }
     end
 
-    # What a fresh order of this type would carry from the settings.
-    def self.default_charges(order_type, business)
+    # What a fresh order of this type would carry from the settings (and, for a delivery, from the zone its address is in).
+    def self.default_charges(order_type, business, zone: nil)
       tmp = Order.new(order_type: order_type, delivery_charge_minor: 0, delivery_charge_percent: 0, service_charge_percent: 0, service_charge_fixed_minor: 0)
       apply_charge_defaults!(tmp, { order_type: order_type }, business)
+      zone_charge!(tmp, zone) if zone && order_type.to_s == "delivery"
       charge_values(tmp)
     end
 
@@ -127,13 +129,28 @@ module Orders
           order.service_charge_fixed_minor = 0
         end
       end
-      return unless (attrs[:order_type] || order.order_type).to_s == "delivery" && !attrs.key?(:delivery_charge_minor) && !attrs.key?(:delivery_charge_percent)
+      apply_delivery_default!(order, attrs, business)
+    end
+
+    # The delivery charge a delivery takes when the request names none (the till sends the one it quoted, or the one the
+    # cashier changed it to): its address's zone's charge (T3/F3), else the settings default. reset: the address moved,
+    # so the charge set for the old one goes.
+    def self.apply_delivery_default!(order, attrs, business, reset: false)
+      return unless order.order_type.to_s == "delivery" && !attrs.key?(:delivery_charge_minor) && !attrs.key?(:delivery_charge_percent)
+      zone = Deliveries::Manager.zone_for(order)
+      return zone_charge!(order, zone) if zone
       dv = business.setting("charges.delivery_charge.value").to_d
       if business.setting("charges.delivery_charge.mode").to_s == "percent"
         order.delivery_charge_percent = dv
-      elsif dv.positive? && order.delivery_charge_minor.to_i.zero?
+      elsif reset || (dv.positive? && order.delivery_charge_minor.to_i.zero?)
+        order.delivery_charge_percent = 0
         order.delivery_charge_minor = (dv * 100).round
       end
+    end
+
+    def self.zone_charge!(order, zone)
+      order.delivery_charge_percent = 0
+      order.delivery_charge_minor = zone.charge_minor
     end
 
     # Replace or amend lines. Existing lines are matched by id; lines not in the payload are cancelled (removed).
@@ -145,10 +162,13 @@ module Orders
         charges_before = Builder.charge_values(order)
         order.assign_attributes(attrs.except(:id))
         Builder.apply_charge_defaults!(order, attrs, order.business) if attrs.key?(:order_type) && order.order_type_changed?
+        address_moved = order.address_id_changed? || order.delivery_address_changed?
+        Builder.apply_delivery_default!(order, attrs, order.business, reset: true) if address_moved
         guard_charges!(charges_before)
         audit_charges!
         lock_customer! if order.customer_id_changed?
         validate_customer! if order.customer_id_changed?
+        validate_address!(kept: !address_moved) if address_moved || order.customer_id_changed?
         apply_lines!(lines, amend: true) if lines
         reprice_lines! if attrs.key?(:order_type)
         Pricing.recalculate!(order)
@@ -156,6 +176,7 @@ module Orders
         Pricing.recalculate!(order)
         Pricing.save_all!(order)
         assign_table!(order.table_id) if order.table_id_changed? && order.table_id
+        Deliveries::Manager.follow!(order)
       end
       self
     end
@@ -190,6 +211,17 @@ module Orders
       customer = Customer.active.find(order.customer_id)
       raise Api::Errors::Conflict.new("customer.pending", "#{customer.name} is waiting for approval") if customer.status == "pending_approval"
       raise Api::Errors::Conflict.new("customer.deactivated", "#{customer.name} is deactivated") if customer.status == "deactivated"
+    end
+
+    # A delivery goes to one of the order's own customer's addresses, or the rider rides to someone else's door. An
+    # address the request names must be the customer's; one the order kept while its customer changed (an older
+    # till, or an offline edit, sends no address) was the previous customer's and is dropped.
+    def validate_address!(kept: false)
+      return if order.address_id.blank?
+      address = CustomerAddress.find_by(id: order.address_id)
+      return if address && address.customer_id == order.customer_id
+      return order.address_id = nil if kept
+      raise Api::Errors::Unprocessable.new("order.address", "That address is not one of this order's customer's addresses")
     end
 
     # Khata taken on this order sits on its customer's account, and a refund of it would credit whoever the order names

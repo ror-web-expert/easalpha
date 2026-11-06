@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useCartStore, type Cart } from "@/store/cart";
+import { useCartStore, type Cart, type CartCustomer } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore, usePosCan } from "@/store/device";
 import { ApiError, errorMessage } from "@/lib/api";
@@ -28,6 +28,8 @@ import { OrderPanel, OrderTypeSwitch } from "@/components/pos/order-panel";
 import { PaymentDialog, type TaxChoiceInput } from "@/components/pos/payment-dialog";
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { CustomerDialog, OpenItemDialog, PriceOverrideDialog, StaffMealDialog, TablePicker } from "@/components/pos/dialogs";
+import { useDeliveryAddress } from "@/components/pos/delivery-address";
+import { afterCustomerChange, typedAddress } from "@/lib/delivery-address";
 import { Button, Dialog, EmptyState, Field, PinDialog, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 import { BillPreviewDialog } from "@/components/pos/bill-preview";
@@ -81,6 +83,8 @@ function SellScreen() {
   const settings = catalog?.business.settings;
   const currency = catalog?.business.currency;
   const display = displaySettings(settings);
+  // T3/F3: where a delivery goes, with its zone's charge.
+  const deliveryAddress = useDeliveryAddress({ onChooseCustomer: () => setCustomerOpen(true), currency });
   const perms = session?.permissions;
   const staffType = session?.membership?.staff_type;
   // SPEC "Take Orders": SALES_WALKIN / SALES_TAKEAWAY / SALES_DELIVERY gate the type switch.
@@ -180,7 +184,17 @@ function SellScreen() {
     if (editing) { updateLine(editing.key, line); setEditing(null); } else addLine(quickLabel && line.product_id ? withLabel(line, quickLabel) : line);
   };
   // A new type takes the charge defaults of that type again (SPEC Charges: the service charge is per order type).
-  const changeType = (t: typeof cart.order_type) => patch({ order_type: t, lines: repriceLines(cart.lines, t, catalog, catalog?.branch?.id), table_id: t === "dine_in" ? cart.table_id : null, table_code: t === "dine_in" ? cart.table_code : null, service_charge_percent: undefined, service_charge_fixed_minor: undefined, delivery_charge_percent: undefined, delivery_charge_minor: t === "delivery" ? cart.delivery_charge_minor : undefined });
+  const changeType = (t: typeof cart.order_type) => {
+    patch({ order_type: t, lines: repriceLines(cart.lines, t, catalog, catalog?.branch?.id), table_id: t === "dine_in" ? cart.table_id : null, table_code: t === "dine_in" ? cart.table_code : null, service_charge_percent: undefined, service_charge_fixed_minor: undefined, delivery_charge_percent: undefined, delivery_charge_minor: t === "delivery" ? cart.delivery_charge_minor : undefined });
+    if (t === "delivery" && cart.customer && !cart.address_id) void deliveryAddress.forCustomer(cart.customer);
+  };
+  // A different customer takes the previous one's saved address off; on a delivery their usual address goes on
+  // (T3/F3). The address a website guest typed stays: it is where this order goes, whoever it is put on.
+  const pickCustomer = (c: CartCustomer, addressId?: string) => {
+    const same = cart.customer?.id === c.id;
+    patch({ customer: c, ...afterCustomerChange(cart, c.id) });
+    if (cart.order_type === "delivery" && (addressId || (!typedAddress(cart) && (!same || !cart.address_id)))) void deliveryAddress.forCustomer(c, addressId ?? (same ? cart.address_id : null));
+  };
   const repeatOrder = (o: Order) => {
     const lines: CartLine[] = (o.items ?? []).filter((i) => i.status !== "cancelled").map((i) => {
       const p = catalog?.products.find((x) => x.id === i.product_id) ?? null;
@@ -404,7 +418,7 @@ function SellScreen() {
     finally { setBusy(false); }
   };
 
-  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen;
+  const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen || deliveryAddress.open;
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -429,7 +443,7 @@ function SellScreen() {
     catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned,
     onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`),
     // A student's ID card: the account goes on the order, as picking them in the Customer dialog would.
-    onCustomer: (c) => { patch({ customer: toCartCustomer(c) }); rememberRecentCustomer(c); toast.success(`${c.name} on the order`, customerDetails(c) || undefined); },
+    onCustomer: (c) => { pickCustomer(toCartCustomer(c)); rememberRecentCustomer(c); toast.success(`${c.name} on the order`, customerDetails(c) || undefined); },
   });
 
   if (!catalog) {
@@ -454,12 +468,13 @@ function SellScreen() {
             <OrderPanel cart={shownCart} currency={currency} settings={settings} onQty={qtyWithUndo} onEditLine={editLine} onOverride={setOverride} onRemove={removeWithUndo}
               onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? void setStaffMeal(false) : setStaffOpen(true))}
               onHold={hold} onSend={send} onPay={openPay} onNew={newOrder} busy={busy} canOverride={true} overrideNeedsPin={!can("prices.override")} onPreview={() => setBillOpen(true)}
-              canRemove={canRemove} canDecrease={canDecrease} onPlaceUnpaid={unpaidOk ? placeUnpaid : undefined} unpaidLabel={unpaidLabel} />
+              canRemove={canRemove} canDecrease={canDecrease} onPlaceUnpaid={unpaidOk ? placeUnpaid : undefined} unpaidLabel={unpaidLabel} onAddress={deliveryAddress.show} />
           </div>
         </div>
       </div>
       <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} initialVariantId={quickVariant} initialQuantity={quickQty} onClose={() => { setProduct(null); setDeal(null); setEditing(null); setQuickVariant(null); setQuickQty(null); setQuickLabel(null); }} onAdd={onSheetAdd} />
-      <CustomerDialog open={customerOpen} onClose={() => setCustomerOpen(false)} onPick={(c) => patch({ customer: c })} onRepeat={repeatOrder} />
+      <CustomerDialog open={customerOpen} onClose={() => setCustomerOpen(false)} onPick={pickCustomer} onRepeat={repeatOrder} orderType={cart.order_type} />
+      {deliveryAddress.dialog}
       <TablePicker open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} current={cart.table_id} onPick={pickTable} onRefresh={refreshTables} />
       <OpenItemDialog open={openItem} onClose={() => setOpenItem(false)} onAdd={(name, price) => { const tax = taxFor(null, catalog); addLine({ name, unit_price_minor: price, quantity: 1, modifiers: [], open_item: { name, price_minor: price }, tax_rate: tax.rate, tax_inclusive: tax.inclusive }); }} />
       <PriceOverrideDialog open={!!override} onClose={() => setOverride(null)} current={override?.price_override_minor ?? override?.unit_price_minor ?? 0} onSet={(p) => override && updateLine(override.key, { price_override_minor: p })} />
@@ -468,7 +483,7 @@ function SellScreen() {
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
       <BillPreviewDialog open={billOpen} onClose={() => setBillOpen(false)} cart={shownCart} />
-      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={shownCart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c })} />
+      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={shownCart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c, ...afterCustomerChange(cart, c.id) })} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />
