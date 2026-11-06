@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_010100) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_050000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -2036,8 +2036,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_010100) do
     t.string "ip"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "session_root_id"
     t.index ["device_id"], name: "index_refresh_tokens_on_device_id"
     t.index ["membership_id"], name: "index_refresh_tokens_on_membership_id"
+    t.index ["session_root_id"], name: "index_refresh_tokens_on_session_root_id"
     t.index ["token_digest"], name: "index_refresh_tokens_on_token_digest", unique: true
     t.index ["user_id"], name: "index_refresh_tokens_on_user_id"
   end
@@ -2837,6 +2839,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_010100) do
     t.datetime "updated_at", null: false
     t.index ["business_id", "resolved_at"], name: "index_sync_rejections_on_business_id_and_resolved_at"
     t.index ["business_id"], name: "index_sync_rejections_on_business_id"
+    t.index ["device_id", "record_type", "record_id"], name: "index_sync_rejections_open_once", unique: true, where: "(resolved_at IS NULL)"
+    t.index ["record_type", "record_id"], name: "index_sync_rejections_on_record_type_and_record_id"
   end
 
   create_table "table_requests", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

@@ -50,7 +50,10 @@ RSpec.describe "Sync push: session, actor, approvals, khata, completion, clock",
     end
   end
 
+  # The rule for unsigned records, which a till build from before the signatures still sends until
+  # Sync::Signature::SUNSET (sync_signatures_spec.rb covers signed records and the date itself).
   describe "A2: who made the record" do
+    around { |example| travel_to(Sync::Signature::SUNSET - 10.days) { example.run } }
     let(:other) { add_member!(biz, "cashier", pin: "2222") }
 
     it "takes a record from another member only if they signed in on this till within 60 days" do

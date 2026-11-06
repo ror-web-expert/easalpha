@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RotateCw, Trash2, Clock, Lock, KeyRound } from "lucide-react";
 import { db, type AttentionItem, type QueueItem } from "@/lib/db";
-import { dismissAttention, isMoneyRecord, processQueue, retryAttention } from "@/lib/sync";
+import { dismissAttention, flushDismissals, isMoneyRecord, processQueue, retryAttention } from "@/lib/sync";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
@@ -59,6 +59,8 @@ export default function AttentionPage() {
     setQueue((await db.queue.orderBy("created_at").toArray()).filter((q) => mine(q.membership_id)));
   }, [everyone, me]);
   useEffect(() => { reload(); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [reload]);
+  // A Dismiss made without a connection reaches the server's Needs attention once there is one (K7).
+  useEffect(() => { void flushDismissals(); const t = setInterval(() => void flushDismissals(), 30_000); return () => clearInterval(t); }, []);
   // A payment, void or update held back by a rejected order shows under that order and goes back, or away, with it.
   const ids = useMemo(() => new Set(items.map((a) => a.id)), [items]);
   const top = items.filter((a) => !a.blocked_by || !ids.has(a.blocked_by));

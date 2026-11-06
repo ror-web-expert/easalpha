@@ -143,10 +143,12 @@ class Membership < ApplicationRecord
     update_columns(pin_lookup: value) unless pin_lookup == value
   end
 
+  # Only the live tokens are revoked: a token rotated or signed out earlier keeps the time it ended, which is when
+  # that session's signed sync records stop counting (Sync::Signature.session_end).
   def deactivate!
     transaction do
       update!(status: "deactivated", deactivated_at: Time.current)
-      refresh_tokens.update_all(revoked_at: Time.current)
+      refresh_tokens.where(revoked_at: nil).update_all(revoked_at: Time.current)
     end
   end
 

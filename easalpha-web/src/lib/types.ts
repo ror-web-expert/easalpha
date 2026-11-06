@@ -125,6 +125,8 @@ export interface Session {
   pills?: HeaderPills | null;
   /** Modules the owner switches on (Settings, Modules). Missing on sessions saved before 12 Oct 2026: read through useModules. */
   modules?: BusinessModules;
+  /** POS sessions: the key the till signs queued records with and its id, the same on every refresh (lib/sync-sign.ts). */
+  sync_key?: string; sync_key_id?: string;
 }
 /** Optional parts of EasAlpha, off for a new business. */
 export interface BusinessModules { customer_accounts: boolean; payroll: boolean; canteen: boolean }

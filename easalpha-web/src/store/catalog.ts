@@ -6,6 +6,7 @@ import type { Catalog, DiningTable, PaymentMethod, Shift, SyncChanges } from "@/
 import { useCustomerStore } from "@/store/customers";
 import { useCartStore } from "@/store/cart";
 import { clearRecentCustomers } from "@/lib/pos-customers";
+import { clearStashes } from "@/lib/session-stash";
 
 interface CatalogState {
   catalog: Catalog | null;
@@ -87,9 +88,11 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 }));
 
-/** Everything this browser holds for a till, including the sync queue: a new pairing starts clean (confirmDiscardUnsynced first). */
+/** Everything this browser holds for a till, including the sync queue and the sessions kept for an offline unlock: a new
+ *  pairing starts clean (confirmDiscardUnsynced first). */
 export async function clearTillData() {
   useCartStore.getState().clear();
   clearRecentCustomers();
+  clearStashes();
   await Promise.all([db.kv.clear(), db.orders.clear(), db.queue.clear(), db.attention.clear(), useCustomerStore.getState().clear()]);
 }
