@@ -61,7 +61,7 @@ ui/offline.html          "Cannot reach the server" page
 ```ts
 type PrintLine =
   | { text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: 1 | 2 }
-  | { qr: string } | { feed: number } | { divider: true } | { cut: true } | { drawer: true };
+  | { qr: string } | { barcode: string; bars?: string } | { feed: number } | { divider: true } | { cut: true } | { drawer: true };
 type PrintJob = { role: "receipt" | "kitchen" | "report"; printerId?: string; lines: PrintLine[]; copies?: number };
 
 interface EasAlphaDesktop {
@@ -108,7 +108,7 @@ Printers are stored in `settings.json`:
 
 ### ESC/POS encoder
 
-`src/escpos.ts` is a small, dependency-free encoder: `ESC @` init, codepage CP437 (`ESC t 0`), `ESC a` alignment, `ESC E` bold, `GS !` double size, `ESC d` feed, `GS V 1` partial cut, `ESC p 0` drawer kick and the `GS ( k` QR sequence (model 2, module size 6, error correction M). Dividers are dashes across the full line width and long text wraps at the paper width. Only ASCII is encoded; any other character prints as `?` for now (see "Not done yet").
+`src/escpos.ts` is a small, dependency-free encoder: `ESC @` init, codepage CP437 (`ESC t 0`), `ESC a` alignment, `ESC E` bold, `GS !` double size, `ESC d` feed, `GS V 1` partial cut, `ESC p 0` drawer kick, the `GS ( k` QR sequence (model 2, module size 6, error correction M) and `GS k 73` Code 128 barcodes (code set B, HRI below; since 0.5.0, used for the receipt number). The System transport draws a barcode from the `bars` the web app sends with the line. Dividers are dashes across the full line width and long text wraps at the paper width. Only ASCII is encoded; any other character prints as `?` for now (see "Not done yet").
 
 ## Print server for tablets
 

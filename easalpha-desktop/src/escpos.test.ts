@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CMD, charsPerLine, divider, encodeLines, encodeText, feedLines, qrCode, renderPlainText } from "./escpos";
+import { CMD, barcode, charsPerLine, divider, encodeLines, encodeText, feedLines, qrCode, renderPlainText } from "./escpos";
 
 const hex = (b: Buffer) => b.toString("hex");
 const includes = (hay: Buffer, needle: Buffer) => hay.indexOf(needle) !== -1;
@@ -132,4 +132,18 @@ test("renderPlainText centres, right-aligns and wraps for the system transport",
   assert.equal(rows[2], "-".repeat(32));
   assert.equal(rows[3], "B".repeat(32));
   assert.equal(rows[4], "B".repeat(3));
+});
+
+test("barcode is GS k 73 CODE128 in code set B with HRI below, centred, and skips an empty or non-ASCII value", () => {
+  const out = encodeLines([{ barcode: "261030-MAIN-42" }], 80);
+  assert.ok(includes(out, Buffer.from([0x1d, 0x48, 0x02]))); // HRI below
+  assert.ok(includes(out, Buffer.from([0x1d, 0x68, 64]))); // height
+  assert.ok(includes(out, Buffer.from([0x1d, 0x77, 0x02]))); // module width
+  const payload = Buffer.from("{B261030-MAIN-42", "ascii");
+  assert.ok(includes(out, Buffer.concat([Buffer.from([0x1d, 0x6b, 0x49, payload.length]), payload])));
+  assert.ok(out.indexOf(CMD.alignCenter) < out.indexOf(payload));
+  assert.equal(barcode("").length, 0);
+  assert.equal(barcode("چائے").length, 0);
+  assert.equal(encodeLines([{ barcode: "" }], 80).length, encodeLines([], 80).length);
+  assert.deepEqual(renderPlainText([{ barcode: "261030-MAIN-42" }], 58), ["    [BARCODE] 261030-MAIN-42"]); // centred on 32 columns
 });

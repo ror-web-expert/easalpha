@@ -9,11 +9,12 @@ module Receipts
       receipt = business.setting("receipt") || {}
       {
         receipt_number: order.receipt_number, duplicate: duplicate, printed_at: Time.current,
-        business: { name: business.name, legal_name: business.legal_name, phone: business.phone, logo_key: business.logo_key, currency: business.currency },
+        business: { name: business.name, legal_name: business.legal_name, phone: business.phone, email: business.email, logo_key: business.logo_key, currency: business.currency },
         branch: { name: branch.name, address: branch.address, city: branch.city, phone: branch.phone, tax_registration: branch.tax_registration },
         header: receipt["header"], footer: receipt["footer"], language: receipt["language"] || "en", paper: receipt["paper"] || "80",
         order: { id: order.id, serial: order.serial, label: order.label, order_type: order.order_type, table: order.dining_table&.code, business_day: order.business_day,
                  placed_at: order.placed_at, paid_at: order.paid_at, cashier: Membership.unscoped.find_by(id: order.completed_by_membership_id || order.taken_by_membership_id)&.user&.name,
+                 till: order.device&.name,
                  customer: order.customer && { name: order.customer.name, phone: order.customer.phone, khata_no: order.customer.khata_no }, guest_name: order.guest_name, notes: order.notes,
                  is_staff_meal: order.is_staff_meal, staff_meal_reason: order.staff_meal_reason },
         lines: order.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F"), unit_price_minor: i.unit_price_minor, modifiers: i.modifiers.map { |m| { name: m.name_snapshot, price_minor: m.price_minor_snapshot } }, line_subtotal_minor: i.line_subtotal_minor, line_total_minor: i.line_total_minor, discount_minor: i.line_discount_minor, notes: i.notes } },

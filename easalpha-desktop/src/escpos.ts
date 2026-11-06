@@ -74,6 +74,25 @@ export function qrCode(data: string, moduleSize = 6): Buffer {
   ]);
 }
 
+/**
+ * Code 128 barcode via GS k 73 (code set B selected with the "{B" prefix), HRI text below (GS H 2), 2-dot modules
+ * (GS w 2), 64 dots high (GS h 64). Only printable ASCII is sent; anything else is dropped so the printer never
+ * swallows the rest of the job on a bad byte. An empty value prints nothing.
+ */
+export function barcode(data: string, height = 64): Buffer {
+  const clean = [...data].filter((ch) => { const c = ch.codePointAt(0) ?? 0; return c >= 0x20 && c <= 0x7e; }).join("");
+  if (!clean) return Buffer.alloc(0);
+  const payload = Buffer.concat([Buffer.from("{B", "ascii"), Buffer.from(clean, "ascii")]);
+  return Buffer.concat([
+    Buffer.from([GS, 0x48, 0x02]), // GS H 2: HRI below the bars
+    Buffer.from([GS, 0x66, 0x00]), // GS f 0: HRI font A
+    Buffer.from([GS, 0x68, Math.max(1, Math.min(255, height))]), // GS h n: height in dots
+    Buffer.from([GS, 0x77, 0x02]), // GS w 2: module width
+    Buffer.from([GS, 0x6b, 0x49, payload.length]), // GS k 73 n: CODE128
+    payload,
+  ]);
+}
+
 export function divider(width: PaperWidth): Buffer {
   return Buffer.concat([encodeText("-".repeat(charsPerLine(width))), CMD.lf]);
 }
@@ -119,6 +138,9 @@ export function encodeLines(lines: PrintLine[], width: PaperWidth): Buffer {
       parts.push(textLine(line, width));
     } else if ("qr" in line) {
       parts.push(CMD.alignCenter, qrCode(line.qr), CMD.alignLeft);
+    } else if ("barcode" in line) {
+      const code = barcode(line.barcode);
+      if (code.length) parts.push(CMD.alignCenter, code, CMD.lf, CMD.alignLeft);
     } else if ("feed" in line) {
       parts.push(feedLines(line.feed));
     } else if ("divider" in line) {
@@ -161,6 +183,8 @@ export function renderPlainText(lines: PrintLine[], width: PaperWidth): string[]
       }
     } else if ("qr" in line) {
       out.push(pad(`[QR] ${line.qr}`, "center", cols));
+    } else if ("barcode" in line) {
+      out.push(pad(`[BARCODE] ${line.barcode}`, "center", cols));
     } else if ("feed" in line) {
       for (let i = 0; i < Math.min(line.feed, 10); i++) out.push("");
     } else if ("divider" in line) {

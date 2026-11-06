@@ -23,7 +23,11 @@ module Api
         scope = scope.where(taken_by_membership_id: current_membership.id) if only_own?
         if params[:q].present?
           q = params[:q].to_s.strip
-          scope = q.match?(/\A#?\d+\z/) ? scope.where(serial: q.delete("#").to_i) : scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: "%#{q}%")
+          # A receipt number (yymmdd-BRANCH-serial, the barcode on the receipt) matches exactly whatever day it is from.
+          scope = if q.match?(/\A#?\d+\z/) then scope.where(serial: q.delete("#").to_i)
+          elsif q.match?(/\A\d{6}-\S+-\d+\z/) then scope.unscope(where: :business_day).where("orders.receipt_number ILIKE ?", q)
+          else scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: "%#{q}%")
+          end
         end
         if params[:sort].present? && params[:sort] != "newest"
           # SPEC sorts other than newest use page and limit rather than a cursor.

@@ -19,6 +19,7 @@ import { Badge, Button, Dialog, Field, Input, Select, Switch } from "@/component
 import { useCatalogStore } from "@/store/catalog";
 import { toast } from "@/store/toast";
 import { cn } from "@/lib/utils";
+import { isReceiptNumber } from "@/lib/receipt-format";
 
 // ---- Keyboard-wedge scanner ----
 
@@ -183,7 +184,7 @@ type Finder = (code: string, products?: Product[]) => BarcodeMatch | null;
  * product is switched off). Returns the typed-code lookup for the item search, the camera button (only when the
  * camera setting is on and the device has a camera), and the dialogs to render.
  */
-export function useTillScanner({ catalog, orderType, paused, onMatch }: { catalog: Catalog | null; orderType: string; paused?: boolean; onMatch: (m: BarcodeMatch) => boolean | void }) {
+export function useTillScanner({ catalog, orderType, paused, onMatch, onReceipt }: { catalog: Catalog | null; orderType: string; paused?: boolean; onMatch: (m: BarcodeMatch) => boolean | void; /** A scanned receipt barcode (yymmdd-BRANCH-serial): open that order rather than look for a product. */ onReceipt?: (code: string) => void }) {
   const settings = catalog?.business.settings;
   const branchId = catalog?.branch?.id;
   const config = useMemo(() => scannerConfig(settings), [settings]);
@@ -192,6 +193,8 @@ export function useTillScanner({ catalog, orderType, paused, onMatch }: { catalo
   const hasCamera = useHasCamera(config.enabled && config.camera);
   const onMatchRef = useRef(onMatch);
   useEffect(() => { onMatchRef.current = onMatch; });
+  const onReceiptRef = useRef(onReceipt);
+  useEffect(() => { onReceiptRef.current = onReceipt; });
 
   // Reads the store at call time, so a product saved a moment ago is found.
   const find = useCallback<Finder>((code, products) => findBarcode(products ?? useCatalogStore.getState().catalog?.products ?? [], code, {
@@ -204,6 +207,7 @@ export function useTillScanner({ catalog, orderType, paused, onMatch }: { catalo
   }, [config.beep]);
 
   const resolve = useCallback(async (code: string): Promise<BarcodeMatch | null> => {
+    if (onReceiptRef.current && isReceiptNumber(code)) { if (config.beep) playScanTone("ok"); onReceiptRef.current(code.trim()); return null; }
     let m = find(code);
     if (!m && isOnline()) {
       try {

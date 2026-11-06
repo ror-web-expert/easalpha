@@ -4,6 +4,9 @@
 export type PrintLine =
   | { text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: 1 | 2 }
   | { qr: string }
+  /** Code 128 of the data, the data printed under it. `bars` ("1" a bar module, "0" a space) is set by the web app for
+   *  transports that draw the bars themselves (the system driver); ESC/POS printers encode the data on their own. */
+  | { barcode: string; bars?: string }
   | { feed: number }
   | { divider: true }
   | { cut: true }
