@@ -63,3 +63,33 @@ describe("AdminShell", () => {
     expect(qc.getQueryData(["modules", "biz1"])).toBeUndefined();
   });
 });
+
+// QA of 6 Nov 2026, P5: a page reached by URL whose calls the API refuses shows the standard no-access state, not a page
+// drawn around 403s; a page that only needs what every session has (staff lists, settings forms) shows read-only.
+describe("AdminShell page guard", () => {
+  const as = (permissions: string[], extra: Partial<Session> = {}) => useAuthStore.setState({ session: { ...session, permissions, membership: { role: { name: "Clerk", system_key: null } }, ...extra } as unknown as Session, branchId: "b1" });
+  const clerk = ["app.admin", "stock.view", "stock.count", "menu.view", "PURCHASE_ORDERS"];
+
+  it.each([["/admin/finance/balance-sheet"], ["/admin/customers/c-1"], ["/admin/suppliers/payments"], ["/admin/settings/plan"]])("shows no access on %s for a stock clerk", async (path) => {
+    nav.pathname = path;
+    as(clerk);
+    shell();
+    expect(await screen.findByText("You don't have access to this page")).toBeInTheDocument();
+    expect(screen.queryByText("report body")).toBeNull();
+  });
+
+  it.each([["/admin/staff/cashiers"], ["/admin/settings/store"], ["/admin/inventory/stock-in-hand"], ["/admin"]])("opens %s for the stock clerk", (path) => {
+    nav.pathname = path;
+    as(clerk);
+    shell();
+    expect(screen.getByText("report body")).toBeInTheDocument();
+  });
+
+  it("shows the support banner on a support session", () => {
+    nav.pathname = "/admin";
+    as(["app.admin", "settings.manage"], { support: { session_id: "s1", reason: "Printer", expires_at: new Date(Date.now() + 30 * 60000).toISOString(), by: { name: "Hina", email: "hina@easalpha.com" } } });
+    shell();
+    expect(screen.getByRole("status").textContent).toContain("as EasAlpha support (Hina)");
+  });
+});
+

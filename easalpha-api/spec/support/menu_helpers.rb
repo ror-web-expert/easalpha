@@ -30,6 +30,13 @@ module MenuHelpers
       m
     end
   end
+
+  # A PIN another active member also holds, as businesses have from before set_pin! refused one in use (QA of 6 Nov
+  # 2026, S5): written past that check, so the specs of what the till does with such data keep their setup.
+  def share_pin!(member, pin)
+    Tenancy::Context.with(member.business) { member.update_columns(pin_digest: BCrypt::Password.create(pin), pin_lookup: Membership.pin_lookup_for(member.business_id, pin)) }
+    member
+  end
 end
 
 RSpec.configure { |c| c.include MenuHelpers }

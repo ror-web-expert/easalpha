@@ -10,6 +10,7 @@ import { useList, useSave } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Field, Loading, Select, Switch, Textarea } from "@/components/ui";
 import { useAuthStore } from "@/store/auth";
 import { toast } from "@/store/toast";
+import { ReadOnly } from "@/components/admin/read-only";
 
 const DEFAULTS: QrSettings = { enabled: false, cashier_accept: true, call_waiter: true, ask_bill: true, running_bill: true, guest_name: true, welcome: null };
 
@@ -43,7 +44,7 @@ export default function QrSettingsPage() {
   const set = <K extends keyof QrSettings>(k: K, v: QrSettings[K]) => setS({ ...s, [k]: v });
   const printable = (tables.data ?? []).filter((t) => cardByTable[t.id]);
   return (
-    <>
+    <ReadOnly>
       <style>{`@media print { @page { size: A4; margin: 10mm; } body * { visibility: hidden; } .qr-print-area, .qr-print-area * { visibility: visible; } .qr-print-area { position: absolute; left: 0; top: 0; width: 100%; display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 8mm; } .qr-card { break-inside: avoid; border: 1px solid #ccc; } }`}</style>
       <div className="no-print">
         <PageHeader icon={QrCode} title="QR ordering" description="Guests scan a table card, see the live menu and order from their phone. Settings are per branch." actions={<>
@@ -109,6 +110,6 @@ export default function QrSettingsPage() {
           );
         })}
       </div>
-    </>
+    </ReadOnly>
   );
 }

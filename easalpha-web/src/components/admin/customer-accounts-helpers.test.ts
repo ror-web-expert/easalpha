@@ -167,6 +167,9 @@ describe("bill summary", () => {
     expect(closingMessage({ closing_balance_minor: 675000, due_on: null })).toBe("Please pay Rs 6,750.");
     expect(closingMessage({ closing_balance_minor: -20000, due_on: "2026-10-10" })).toBe("You have Rs 200 in advance. Nothing to pay.");
     expect(closingMessage({ closing_balance_minor: 0, due_on: null })).toBe("Nothing to pay. Thank you.");
+    // QA P8: the default receipt footer is "Thank you", printed under this line on the public bill.
+    expect(closingMessage({ closing_balance_minor: 0, due_on: null }, "PKR", "Thank you")).toBe("Nothing to pay.");
+    expect(closingMessage({ closing_balance_minor: 0, due_on: null }, "PKR", "Come again soon")).toBe("Nothing to pay. Thank you.");
   });
   it("names the PDF after the khata no and month", () => {
     expect(billFileName(12, "2026-09-30")).toBe("bill-12-2026-09.pdf");

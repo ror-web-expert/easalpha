@@ -3,6 +3,7 @@ module Api
     class RolesController < BaseController
       before_action :authenticate!
       before_action -> { require_permission!("staff.manage") }, except: [ :index, :show, :permissions, :presets ]
+      before_action :refuse_support!, except: [ :index, :show, :permissions, :presets ]
 
       def index
         render json: { data: Role.active.includes(:role_permissions).order(:created_at).map { |r| Serializers.role(r) } }

@@ -3,39 +3,56 @@ module Api
     class StaffController < BaseController
       before_action :authenticate!
       before_action -> { require_permission!("staff.manage") }, except: [ :index, :show, :permissions, :sessions ]
+      before_action :refuse_support!, except: [ :index, :show, :permissions, :sessions ]
 
       def index
         scope = Membership.includes(:user, :role).order(:created_at)
         scope = scope.where(status: params[:status]) if params[:status].present?
         scope = scope.of_type(params[:staff_type]) if params[:staff_type].present?
         scope = scope.where(cashier_role: params[:cashier_role]) if params[:cashier_role].present?
-        render json: { data: scope.map { |m| Serializers.membership(m) } }
+        render json: { data: scope.map { |m| member_json(m) } }
       end
 
       def show
-        render json: Serializers.membership(Membership.includes(:user, :role).find(params[:id]))
+        render json: member_json(Membership.includes(:user, :role).find(params[:id]))
       end
 
       # POST /staff  name, phone|email, role_id, branch_ids|all_branches, pin, [password]
       # A phone or email that already has an EasAlpha account links that account as it is: its holder's name and
       # password stay, and a password sent here is not used. Only a brand-new login gets the name and password the
       # owner typed. The answer says linked_existing_user so the screen can tell the owner (review of 6 Nov 2026, R8).
+      # An account is linked only by a phone or email it proved, or when that is its only way in; any other match waits
+      # as an invitation the person accepts by proving the phone or email: 202 { invited: true, invitation } (QA of 6 Nov
+      # 2026, P1: a stranger who had signed up with a cashier's phone was linked in her place).
       def create
         read_only_guard!
         role = Role.active.find(params.require(:role_id))
         raise Api::Errors::Forbidden.new("staff.owner_role", "Use the owner transfer to add another owner") if role.owner?
         limit = current_business.plan_limit("staff")
         raise Api::Errors::Forbidden.new("plan.limit", "Your plan allows #{limit} staff. Upgrade to add more.") if limit && Membership.active.count >= limit
+        raise Membership::PinTaken if params[:pin].present? && Membership.new(business: current_business).pin_taken?(params[:pin].to_s)
         phone = User.normalize_phone(params[:phone])
         email = params[:email].to_s.strip.downcase.presence
-        existing = (phone && User.find_by(phone: phone)) || (email && User.find_by(email: email))
-        user = existing || User.create!(name: params.require(:name), phone: phone, email: email, password: params[:password].presence)
-        raise Api::Errors::Conflict.new("staff.exists", "This person is already a member") if Membership.exists?(user_id: user.id)
+        holder = Staff::Linking.any_holder(phone: phone, email: email)
+        raise Api::Errors::Conflict.new("staff.exists", "This person is already a member") if holder && Membership.exists?(user_id: holder.id)
         staff_type = params[:staff_type].presence || Membership.staff_type_for(role)
         cashier_role = params[:cashier_role].presence || Membership.cashier_role_for(role)
-        m = Membership.create!(user: user, role: role, status: "active", all_branches: params[:all_branches].nil? ? params[:branch_ids].blank? : ActiveModel::Type::Boolean.new.cast(params[:all_branches]),
-                               branch_ids: Array(params[:branch_ids]), invited_via: phone ? "whatsapp" : "email", staff_type: staff_type, cashier_role: cashier_role)
-        m.set_pin!(params[:pin]) if params[:pin].present?
+        all_branches = params[:all_branches].nil? ? params[:branch_ids].blank? : ActiveModel::Type::Boolean.new.cast(params[:all_branches])
+        link = Staff::Linking.resolve(phone: phone, email: email)
+        if link.invite
+          inv = StaffInvitation.invite!(role: role, name: params.require(:name), phone: phone, email: email, staff_type: staff_type, cashier_role: cashier_role,
+                                        all_branches: all_branches, branch_ids: Array(params[:branch_ids]), pin: params[:pin])
+          return render json: { invited: true, invitation: Serializers.staff_invitation(inv) }, status: :accepted
+        end
+        existing = link.user
+        m = Membership.transaction do
+          user = existing || User.create!(name: params.require(:name), phone: phone, email: email, password: params[:password].presence)
+          created = Membership.create!(user: user, role: role, status: "active", all_branches: all_branches,
+                                       branch_ids: Array(params[:branch_ids]), invited_via: phone ? "whatsapp" : "email", staff_type: staff_type, cashier_role: cashier_role)
+          created.set_pin!(params[:pin]) if params[:pin].present?
+          created
+        end
+        user = m.user
         Whatsapp::Sender.deliver(phone: phone, template: "staff_invite", variables: { business: current_business.name, role: role.name }) if phone
         audit!("create", record: m, after: { user_id: user.id, role: role.name, linked_existing_user: existing.present? })
         SetupChecklistItem.complete!("staff")
@@ -126,15 +143,39 @@ module Api
         render json: after
       end
 
+      # GET /staff/invitations  people added by a phone or email they have not proved yet, until they join
+      def invitations
+        render json: { data: StaffInvitation.pending.includes(:role).order(created_at: :desc).map { |i| Serializers.staff_invitation(i) } }
+      end
+
+      # POST /staff/invitations/:id/resend  the message again, and two more weeks to accept
+      def resend_invitation
+        inv = StaffInvitation.pending.find(params[:id])
+        inv.update!(expires_at: StaffInvitation::TTL.from_now)
+        inv.deliver!
+        render json: Serializers.staff_invitation(inv)
+      end
+
+      def cancel_invitation
+        inv = StaffInvitation.where(status: "pending").find(params[:id])
+        inv.update!(status: "cancelled")
+        head :no_content
+      end
+
       def reactivate
         read_only_guard!
         m = Membership.find(params[:id])
+        raise Api::Errors::Conflict.new("pin.taken", "#{m.user.name}'s PIN is now used by another active member. Set a new PIN for #{m.user.name} first.") if m.pin_clashes?
         m.update!(status: "active", deactivated_at: nil)
         audit!("permission_change", record: m, after: { status: "active" })
         render json: Serializers.membership(m)
       end
 
       private
+
+      def member_json(m)
+        current_membership.can?("staff.manage") || m.id == current_membership.id ? Serializers.membership(m) : Serializers.membership_listing(m)
+      end
 
       # A login this business made: the user was created with this membership (POST /staff for a new person) and no
       # other business has them. The owner may correct its name; an account that was linked, or that works elsewhere
@@ -145,10 +186,13 @@ module Api
         made_here && !Membership.unscoped.where(user_id: m.user_id).where.not(business_id: m.business_id).exists?
       end
 
+      # apps: what the set opens, so the editor can say when a save leaves someone unable to sign in where they work
+      # (QA of 6 Nov 2026, S4: "Access saved", then "You don't have access to this app").
       def permissions_payload(m)
         granted = m.granted_codes
-        { membership_id: m.id, mode: m.permissions_mode, owner: m.owner?, granted: granted, effective: Permission.expand(granted),
-          modules: Permission.module_counts(Permission.expand(granted)), takes_effect: "next sign-in" }
+        effective = Permission.expand(granted)
+        { membership_id: m.id, mode: m.permissions_mode, owner: m.owner?, granted: granted, effective: effective,
+          modules: Permission.module_counts(effective), apps: Auth::SessionIssuer::APPS.select { |a| effective.include?("app.#{a}") }, takes_effect: "next sign-in" }
       end
     end
   end

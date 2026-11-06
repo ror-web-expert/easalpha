@@ -37,6 +37,7 @@ module Api
 
       def update_foodpanda
         require_permission!("settings.manage")
+        refuse_support! # the webhook secret, shown once, lets whoever holds it post orders long after the support hour
         read_only_guard!
         current = Aggregators::Foodpanda.settings(current_business)
         incoming = params.permit(:enabled, :secret, :commission_percent, :auto_accept, :branch_id).to_h

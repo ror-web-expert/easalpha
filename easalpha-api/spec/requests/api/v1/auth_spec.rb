@@ -74,7 +74,8 @@ RSpec.describe "Auth", type: :request do
     end
 
     it "logs in by phone OTP" do
-      owner.user.update!(phone: "+923009999999")
+      # A proven phone: one never proven on an email login asks that login's password once (staff_invitations_spec).
+      owner.user.update!(phone: "+923009999999", phone_verified_at: Time.current)
       api_post "/api/v1/auth/otp/request", { phone: "+923009999999" }
       code = json[:dev_code]
       api_post "/api/v1/auth/otp/verify", { phone: "+923009999999", code: code }

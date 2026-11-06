@@ -3,7 +3,8 @@ module Serializers
   module_function
 
   def user(u)
-    { id: u.id, name: u.name, email: u.email, phone: u.phone, locale: u.locale, two_factor_enabled: u.two_factor_enabled, last_login_at: u.last_login_at }
+    { id: u.id, name: u.name, email: u.email, phone: u.phone, locale: u.locale, two_factor_enabled: u.two_factor_enabled, last_login_at: u.last_login_at,
+      phone_verified: u.verified?(:phone), email_verified: u.verified?(:email) }
   end
 
   def business(b)
@@ -29,6 +30,22 @@ module Serializers
     h
   end
 
+  # A member as a colleague sees them: the name and the role, for the pickers of stock counts, checklists and
+  # commissions. Contact details, sign-in times and PIN state are for staff.manage or the member themself (QA of 6 Nov
+  # 2026, P7: GET /staff gave them to every token, the rider's and the kitchen's too).
+  def membership_listing(m)
+    { id: m.id, business_id: m.business_id, user_id: m.user_id, role: { id: m.role.id, name: m.role.name, system_key: m.role.system_key },
+      status: m.status, all_branches: m.all_branches, branch_ids: m.branch_ids, staff_type: m.staff_type, cashier_role: m.cashier_role,
+      user: { id: m.user.id, name: m.user.name } }
+  end
+
+  # url: the link the owner may copy and send; it opens nothing without the code that goes to the phone or email.
+  def staff_invitation(i)
+    { id: i.id, name: i.name, phone: i.phone, email: i.email, role: { id: i.role.id, name: i.role.name, system_key: i.role.system_key },
+      staff_type: i.staff_type, cashier_role: i.cashier_role, has_pin: i.pin_digest.present?, status: i.status, expires_at: i.expires_at,
+      created_at: i.created_at, url: i.url, rider_id: i.rider_id }
+  end
+
   def role(r)
     { id: r.id, name: r.name, system_key: r.system_key, is_system: r.is_system, copied_from_role_id: r.copied_from_role_id,
       permissions: r.role_permissions.map { |rp| { code: rp.permission_code, limit: rp.limit_value } }, archived_at: r.archived_at }
@@ -50,8 +67,10 @@ module Serializers
       signed_out_at: rt.revoked_at, expires_at: rt.expires_at, active: rt.revoked_at.nil? && rt.expires_at > Time.current }
   end
 
-  def audit_log(a, names: {})
-    { id: a.id, action: a.action, table_name: a.table_name, record_id: a.record_id, user_id: a.user_id, user_name: names[a.user_id],
+  # A row EasAlpha support wrote on an approved session names the support person (super_admin_id), not the owner.
+  def audit_log(a, names: {}, support_names: {})
+    actor = a.super_admin_id ? "EasAlpha support (#{support_names[a.super_admin_id] || 'staff'})" : names[a.user_id]
+    { id: a.id, action: a.action, table_name: a.table_name, record_id: a.record_id, user_id: a.user_id, user_name: actor, super_admin_id: a.super_admin_id,
       device_id: a.device_id, approved_by_user_id: a.approved_by_user_id, approved_by_name: names[a.approved_by_user_id],
       before: a.before, after: a.after, ip: a.ip, occurred_at: a.occurred_at }
   end

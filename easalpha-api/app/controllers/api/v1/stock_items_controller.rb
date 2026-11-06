@@ -2,10 +2,12 @@ module Api
   module V1
     class StockItemsController < BaseController
       before_action :authenticate!
-      before_action :read_only_guard!, except: %i[index show ledger]
-      before_action -> { require_permission!("stock.view", "stock.actions", "stock.waste", "stock.count", "menu.edit") }, only: %i[index show ledger]
+      before_action :read_only_guard!, except: %i[index show ledger categories]
+      # The category list is read like the items: the Items and Demand pages filter by it, and it took stock.actions,
+      # so a stock clerk who may look got a page with a failing filter (QA of 6 Nov 2026, P5).
+      before_action -> { require_permission!("stock.view", "stock.actions", "stock.waste", "stock.count", "menu.edit") }, only: %i[index show ledger categories]
       before_action -> { require_permission!("stock.actions", "PO_ADD_ITEM") }, only: :create # SPEC: an item created inline while building a PO
-      before_action -> { require_permission!("stock.actions") }, except: %i[index show ledger create]
+      before_action -> { require_permission!("stock.actions") }, except: %i[index show ledger create categories]
 
       # GET /stock_items?q=&category=&low=true&packaging=true
       def index

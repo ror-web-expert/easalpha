@@ -8,6 +8,7 @@ import { formatMoney, majorToMinor, minorToMajor } from "@/lib/money";
 import { PageHeader } from "@/components/admin/page";
 import { useSave } from "@/components/admin/crud";
 import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Switch } from "@/components/ui";
+import { ReadOnly } from "@/components/admin/read-only";
 
 interface Form { enabled: boolean; rupees_per_point: string; point_value: string; min_redeem: string; max_redeem_percent: string; birthday_percent: string; birthday_days: string }
 const truthy = (v: unknown) => v === true || v === "true" || v === 1 || v === "1";
@@ -28,7 +29,7 @@ export default function LoyaltyPage() {
   const example = Math.floor(2000 / rpp);
   const submit = () => save.mutate({ id: "x", loyalty_enabled: f.enabled, loyalty_rupees_per_point: Number(f.rupees_per_point) || 100, loyalty_point_value_minor: pv, loyalty_min_redeem_points: Number(f.min_redeem) || 0, loyalty_max_redeem_percent: Number(f.max_redeem_percent) || 0, birthday_discount_percent: Number(f.birthday_percent) || 0, birthday_offer_days: Number(f.birthday_days) || 0 });
   return (
-    <>
+    <ReadOnly>
       <PageHeader icon={Star} title="Loyalty" description="Points earned on paid orders for named customers, redeemed as a discount before payment. Birthday offers go out by WhatsApp as a one-use coupon." actions={<Button onClick={submit} loading={save.isPending}>Save</Button>} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -50,6 +51,6 @@ export default function LoyaltyPage() {
           </CardBody>
         </Card>
       </div>
-    </>
+    </ReadOnly>
   );
 }

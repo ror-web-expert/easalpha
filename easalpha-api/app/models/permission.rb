@@ -128,8 +128,13 @@ module Permission
   ].freeze
 
   MODULES = SPEC_ROWS.map(&:first).uniq.freeze
-  # SPEC codes that must be granted explicitly: a role's EasAlpha codes never imply them in reverse.
-  EXPLICIT_ONLY = %w[REOPEN_ORDER DELETE_ORDER_ITEM MODIFY_REOPEN_DECREASE_QTY PLACE_UNPAID_DIRECT PLACE_AND_COMPLETE_ORDER].freeze
+  # SPEC codes that must be granted explicitly: a role's EasAlpha codes never imply them in reverse. Either the code adds a
+  # step of its own (reopen, unpaid, place and complete), or it means more than the EasAlpha codes it implies, so a role
+  # holding those was never meant to have it (QA of 6 Nov 2026, P2): customers.manage is adding and editing customers, not
+  # sending campaigns to all of them (the default Cashier sent one); app.pos and reports.view_own open the till and one's
+  # own shift or deliveries, not the branch's sales on the dashboard (the Waiter and the Rider read them).
+  EXPLICIT_ONLY = %w[REOPEN_ORDER DELETE_ORDER_ITEM MODIFY_REOPEN_DECREASE_QTY PLACE_UNPAID_DIRECT PLACE_AND_COMPLETE_ORDER
+                     MARKETING_CAMPAIGN MARKETING_CONTACTS DASHBOARD VIEW_DAILY_SALES].freeze
 
   REGISTRY = (
     SPEC_ROWS.map { |m, code, label, desc, surface, restriction, implies| Entry.new(code: code, module_name: m, label: label, description: desc, surface: surface, restriction: restriction, implies: implies) } +

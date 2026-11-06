@@ -509,7 +509,7 @@ export function BillDocument({ bill, className }: { bill: CustomerBill; classNam
         ) : <p className="text-sm text-fg-muted">No purchases or payments in this period.</p>}
       </section>
       <footer className="border-t pt-4 text-center">
-        <p className="text-base font-semibold text-heading">{closingMessage(bill, cur)}</p>
+        <p className="text-base font-semibold text-heading">{closingMessage(bill, cur, bill.business.footer)}</p>
         {bill.business.footer ? <p className="mt-1 text-sm text-fg-secondary">{bill.business.footer}</p> : null}
       </footer>
     </article>

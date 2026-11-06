@@ -1,12 +1,20 @@
 # The seven default roles, created for every new business. The owner can copy and edit them.
 module RoleTemplate
   ALL_CODES = Permission.grantable_codes
+  # docs/01-features.md section 10: a Manager has no payroll, settings or billing.
+  MANAGER_LACKS = %w[payroll.manage billing.manage settings.manage].freeze
+
+  # Every grantable code but `lacking`, and but the SPEC codes that would bring any of it back: PAYROLL implies
+  # payroll.manage, so the Manager kept payroll through it (QA of 6 Nov 2026, P2).
+  def self.all_but(lacking)
+    ALL_CODES.reject { |c| lacking.include?(c) || Permission.entry(c).implies.intersect?(lacking) }
+  end
 
   TEMPLATES = {
     "owner" => { name: "Owner", permissions: ALL_CODES, limits: {} },
     "manager" => {
       name: "Manager",
-      permissions: ALL_CODES - %w[payroll.manage billing.manage settings.manage],
+      permissions: all_but(MANAGER_LACKS),
       limits: {}
     },
     "cashier" => {

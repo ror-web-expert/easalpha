@@ -92,8 +92,25 @@ class Membership < ApplicationRecord
     all_branches || branch_ids.include?(branch_id)
   end
 
+  # A till signs in whoever a PIN names first, so two active members with one PIN put sales under the wrong name (QA of
+  # 6 Nov 2026, S5). Every PIN set goes through set_pin!, which refuses one already in use.
+  class PinTaken < StandardError
+    def initialize(msg = "Another active member of this business already uses this PIN. Choose a different one.") = super
+  end
+
+  # Whether another active member of this business holds `pin`: the indexed lookup first, then a bcrypt check of the
+  # members whose PIN predates the lookup (Auth::PinMatch's fallback; a match stores their lookup).
+  def pin_taken?(pin)
+    others = Membership.unscoped.where(business_id: business_id, status: "active").where.not(id: id)
+    others.where(pin_lookup: Membership.pin_lookup_for(business_id, pin)).exists? || others.pin_lookup_missing.any? { |m| m.pin_matches?(pin) }
+  end
+
+  # This member's PIN against the other active members, for a reactivation: by the lookup, the raw PIN being unknown.
+  def pin_clashes? = pin_lookup.present? && Membership.unscoped.where(business_id: business_id, status: "active", pin_lookup: pin_lookup).where.not(id: id).exists?
+
   def set_pin!(pin)
     raise ArgumentError, "PIN must be 4 digits" unless pin.to_s.match?(/\A\d{4}\z/)
+    raise PinTaken if pin_taken?(pin)
     assign_attributes(pin_digest: BCrypt::Password.create(pin.to_s), pin_lookup: Membership.pin_lookup_for(business_id, pin), pin_failed_count: 0, pin_locked_until: nil)
     pin_lookup_will_change! # the same PIN again gives the same lookup, which still belongs with the new digest
     save!

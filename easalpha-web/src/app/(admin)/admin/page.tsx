@@ -15,10 +15,44 @@ import { titleCase } from "@/lib/utils";
 import { Cards, DateRangePicker, FilterBar, PageHeader, type DateRange } from "@/components/admin/page";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, ErrorState, SummaryCard, SummaryCardSkeleton, Table, TBody, TD, TH, THead, TR, EmptyRow, Tabs } from "@/components/ui";
 import { TrendChart, BarsChart, Breakdown } from "@/components/charts/charts";
-import { useAuthStore } from "@/store/auth";
+import { hasPermission, useAuthStore } from "@/store/auth";
 import { DASHBOARD_PERIODS, hourLabel, specStatusVariant } from "@/components/admin/order-helpers";
+import { useVisibleNav } from "@/components/admin/sidebar";
+import { accessDenial } from "@/components/admin/no-access";
 
+/** What GET /reports/dashboard/all asks (reports_controller.rb): a report code, and one of the dashboard's. */
+export function canReadDashboard(perms: string[] | undefined): boolean {
+  return hasPermission(perms, "reports.view_all", "reports.view_branch", "reports.view_own") && hasPermission(perms, "reports.view_all", "reports.view_branch", "DASHBOARD", "VIEW_DAILY_SALES");
+}
+
+// The landing page for every admin login. A role without the dashboard's codes (a stock clerk) got a raw "Missing
+// permission" and cards that never loaded (QA of 6 Nov 2026, P5): it is greeted with the pages it opens instead.
 export default function DashboardPage() {
+  const perms = useAuthStore((s) => s.session?.permissions);
+  return canReadDashboard(perms) ? <DashboardBoard /> : <Welcome />;
+}
+
+function Welcome() {
+  const business = useAuthStore((s) => s.session?.business);
+  const items = useVisibleNav().flatMap((g) => g.items.filter((it) => it.href !== "/admin" && !it.soon).map((it) => ({ ...it, group: g.flat ? null : g.label })));
+  return (
+    <>
+      <PageHeader icon={LayoutDashboard} title={`Good day, ${business?.name ?? ""}`} description="Your role does not include the sales dashboard. These are the pages you can open." />
+      {items.length ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-welcome>
+          {items.map((it) => (
+            <Link key={it.href} href={it.href} className="flex items-center gap-3 rounded-2xl border bg-card p-4 transition-colors hover:border-primary">
+              <it.icon className="h-5 w-5 shrink-0 text-primary" />
+              <span className="min-w-0"><span className="block truncate font-medium">{it.label}</span>{it.group ? <span className="block truncate text-xs text-fg-secondary">{it.group}</span> : null}</span>
+            </Link>
+          ))}
+        </div>
+      ) : <EmptyState icon={LayoutDashboard} title="Nothing to open yet" hint="Ask the owner to add what you need to your role in Staff, Roles." />}
+    </>
+  );
+}
+
+function DashboardBoard() {
   const qc = useQueryClient();
   const business = useAuthStore((s) => s.session?.business);
   const [period, setPeriodState] = useState<DashboardPeriod>("today");
@@ -55,6 +89,8 @@ export default function DashboardPage() {
   const expenses = d?.charts.expenses_by_category ?? [];
   const statuses = d?.charts.order_status ?? [];
   const rangeLabel = d ? (d.from === d.to ? formatDate(d.from) : `${formatDate(d.from)} to ${formatDate(d.to)}`) : "";
+  // The session's codes were out of date and the API refused the dashboard: the same greeting, not a raw error.
+  if (accessDenial(all.error)) return <Welcome />;
   return (
     <>
       <PageHeader icon={LayoutDashboard} title={`Good day, ${business?.name ?? ""}`} description={`${rangeLabel}${x?.day_locked ? " · day locked" : ""}${fellBack ? " · nothing has sold yet today, so this shows the last 7 days" : ""}`}

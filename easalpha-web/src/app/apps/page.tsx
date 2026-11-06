@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { pageMetadata } from "@/components/site/seo";
 import Link from "next/link";
+import Image from "next/image";
 import { LayoutDashboard, Monitor, ChefHat, Megaphone, Settings2, Download } from "lucide-react";
 import { JsonLd } from "@/components/site/json-ld";
 import { breadcrumbs, itemList } from "@/lib/schema";
@@ -21,10 +22,12 @@ export default function AppsPage() {
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-8 px-4 py-12">
       <JsonLd data={[itemList("EasAlpha app screens", links.map((l) => ({ name: l.title, url: l.href }))), breadcrumbs("Open an app screen", "/apps")]} />
       <div>
-        <div className="flex items-center gap-2 text-primary">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-fg font-bold">S</span>
-          <span className="text-xl font-semibold text-fg">EasAlpha</span>
-        </div>
+        {/* The EasAlpha logo, not the old "S" tile (QA of 6 Nov 2026, P8), and the page's heading for screen readers. */}
+        <Link href="/" className="inline-flex" aria-label="EasAlpha home">
+          <Image src="/brand/logo.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="h-9 w-auto dark:hidden" />
+          <Image src="/brand/logo-white.svg" alt="" width={150} height={37} priority unoptimized className="hidden h-9 w-auto dark:block" />
+        </Link>
+        <h1 className="mt-6 text-2xl font-semibold">Open an app screen</h1>
         <p className="mt-2 text-fg-secondary">Restaurant POS. Pick the screen for this device.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

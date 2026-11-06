@@ -303,9 +303,11 @@ function Hero({ name, description, logo, cover, theme, onTheme, ink, rating, rev
           {facts.length ? (
             <dl className={cn("mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t pt-5 sm:mt-6", facts.length >= 4 ? "sm:grid-cols-4" : facts.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
               {facts.map((f) => (
-                <div key={f.label} className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ backgroundColor: `${theme}14`, color: ink }}><f.icon className="h-5 w-5" /></span>
-                  <div className="min-w-0"><dt className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">{f.label}</dt><dd className="truncate text-sm font-semibold text-heading">{f.value}</dd></div>
+                // At 360 px a tile left about 88 px for its value and cut "About 45 min" short (QA of 6 Nov 2026, P8): a smaller
+                // icon on phones, and the value wraps rather than truncates.
+                <div key={f.label} className="flex items-center gap-2.5 sm:gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl sm:h-10 sm:w-10" style={{ backgroundColor: `${theme}14`, color: ink }}><f.icon className="h-5 w-5" /></span>
+                  <div className="min-w-0"><dt className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-fg-muted">{f.label}</dt><dd className="text-sm font-semibold leading-snug text-heading [overflow-wrap:anywhere]">{f.value}</dd></div>
                 </div>
               ))}
             </dl>

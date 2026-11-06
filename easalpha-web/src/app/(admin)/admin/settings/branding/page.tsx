@@ -20,6 +20,7 @@ import { ReceiptView } from "@/components/pos/receipt";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Select, Switch, Textarea } from "@/components/ui";
 import { WhatsAppCard } from "@/components/admin/branding-whatsapp";
 import { useAuthStore } from "@/store/auth";
+import { ReadOnly } from "@/components/admin/read-only";
 
 // Branding: every place the brand shows, edited in one screen with live previews. Three saves, three API calls:
 //   Logo             -> PATCH /business        { logo_key }
@@ -83,7 +84,7 @@ export default function BrandingPage() {
 
   if (business.isLoading || settings.isLoading || site.isLoading) return <Loading />;
   return (
-    <>
+    <ReadOnly>
       <PageHeader icon={Palette} title="Branding" description="Your logo, receipt header and footer, WhatsApp number, and the storefront's colour, cover and favicon. Each card saves on its own; previews update as you type."
         actions={storefrontHref && site.data?.published ? <a href={storefrontHref} target="_blank" rel="noreferrer"><Button variant="secondary"><ExternalLink className="h-4 w-4" /> View storefront</Button></a> : null} />
 
@@ -235,6 +236,6 @@ export default function BrandingPage() {
         {/* e. WhatsApp: receipt line and storefront button */}
         <WhatsAppCard business={business.data} sections={site.data?.sections} />
       </div>
-    </>
+    </ReadOnly>
   );
 }

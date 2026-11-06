@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_07_100200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -234,6 +234,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
     t.datetime "occurred_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.uuid "super_admin_id"
     t.index ["business_id", "action", "occurred_at"], name: "index_audit_logs_on_business_id_and_action_and_occurred_at"
     t.index ["business_id", "occurred_at"], name: "index_audit_logs_on_business_id_and_occurred_at"
     t.index ["business_id", "table_name", "record_id"], name: "index_audit_logs_on_business_id_and_table_name_and_record_id"
@@ -762,6 +763,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
     t.string "kind", null: false
     t.integer "last_number", default: 0, null: false
     t.index ["business_id", "kind"], name: "index_document_counters_on_business_id_and_kind", unique: true
+  end
+
+  create_table "email_codes", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email", null: false
+    t.string "purpose", null: false
+    t.string "code_digest", null: false
+    t.datetime "expires_at", null: false
+    t.integer "attempts", default: 0, null: false
+    t.datetime "consumed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email", "purpose"], name: "index_email_codes_on_email_and_purpose"
   end
 
   create_table "employee_salary_components", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2499,6 +2512,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
     t.index ["key"], name: "index_solid_queue_semaphores_on_key", unique: true
   end
 
+  create_table "staff_invitations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "role_id", null: false
+    t.uuid "rider_id"
+    t.uuid "invited_by_membership_id"
+    t.string "name", null: false
+    t.string "phone"
+    t.string "email"
+    t.string "staff_type", null: false
+    t.string "cashier_role"
+    t.boolean "all_branches", default: true, null: false
+    t.uuid "branch_ids", default: [], null: false, array: true
+    t.string "pin_digest"
+    t.string "pin_lookup"
+    t.string "status", default: "pending", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "accepted_at"
+    t.uuid "accepted_by_user_id"
+    t.uuid "membership_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["business_id"], name: "index_staff_invitations_on_business_id"
+    t.index ["email"], name: "index_staff_invitations_on_email", where: "((status)::text = 'pending'::text)"
+    t.index ["phone"], name: "index_staff_invitations_on_phone", where: "((status)::text = 'pending'::text)"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'accepted'::character varying, 'cancelled'::character varying]::text[])", name: "staff_invitations_status_check"
+  end
+
   create_table "stations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "business_id", null: false
     t.uuid "branch_id", null: false
@@ -2954,6 +2994,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "phone_verified_at"
+    t.datetime "email_verified_at"
     t.index ["email"], name: "index_users_on_email", unique: true, where: "(email IS NOT NULL)"
     t.index ["phone"], name: "index_users_on_phone", unique: true, where: "(phone IS NOT NULL)"
   end

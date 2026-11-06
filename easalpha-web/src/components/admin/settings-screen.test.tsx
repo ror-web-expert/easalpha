@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { SettingKey, SettingsResponse } from "@/lib/types";
+import type { Session, SettingKey, SettingsResponse } from "@/lib/types";
+import { useAuthStore } from "@/store/auth";
 import { changedValues, controlFor, editValue, payloadValue, SettingsGroupPage } from "./settings-screen";
 
 const k = (key: string, type: SettingKey["type"], value: unknown = null, extra: Partial<SettingKey> = {}): SettingKey =>
@@ -88,7 +89,11 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("SettingsGroupPage", () => {
+  const signIn = (permissions: string[]) => useAuthStore.setState({ session: { permissions } as unknown as Session });
+  afterEach(() => { cleanup(); useAuthStore.setState({ session: null }); });
+
   it("renders one card per screen and the version line", async () => {
+    signIn(["settings.manage"]);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={qc}><SettingsGroupPage group="point_of_sale" title="Point of Sale" /></QueryClientProvider>);
     expect(await screen.findByText("Customer Required")).toBeInTheDocument();
@@ -97,5 +102,18 @@ describe("SettingsGroupPage", () => {
     expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
     expect(screen.getByDisplayValue("10")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
+  });
+
+  // QA of 6 Nov 2026, P6: a manager without settings.manage got these forms editable, and every Save failed.
+  it("shows the values read-only without settings.manage: no Save, every control off, a note why", async () => {
+    signIn(["app.admin", "staff.manage", "menu.edit"]);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><SettingsGroupPage group="point_of_sale" title="Point of Sale" /></QueryClientProvider>);
+    expect(await screen.findByText("Customer Required")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getAllByText("Read only")).toHaveLength(2);
+    expect(screen.getByRole("note").textContent).toContain("Changing it needs Settings, Manage");
+    expect(screen.getByRole("switch").closest("fieldset")).toHaveAttribute("disabled");
+    expect(screen.getByDisplayValue("10")).toBeDisabled();
   });
 });

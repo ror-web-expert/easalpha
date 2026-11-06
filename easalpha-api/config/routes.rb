@@ -10,6 +10,13 @@ Rails.application.routes.draw do
       post "auth/refresh", to: "auth#refresh"
       post "auth/logout", to: "auth#logout"
       post "auth/switch", to: "auth#switch"
+      post "auth/password/forgot", to: "auth#password_forgot"
+      post "auth/password/reset", to: "auth#password_reset"
+      post "me/email_code", to: "me#email_code"
+      # Staff invitations (QA of 6 Nov 2026, P1): the invitee's side, signed in with nothing but the link and a code.
+      get "invitations/:token", to: "invitations#show"
+      post "invitations/:token/code", to: "invitations#send_code"
+      post "invitations/:token/accept", to: "invitations#accept"
 
       get "me", to: "me#show"
       patch "me", to: "me#update"
@@ -18,6 +25,9 @@ Rails.application.routes.draw do
       resources :branches, only: %i[index show create update destroy]
       get "staff/sessions", to: "staff#sessions"
       post "staff/sessions/:id/revoke", to: "staff#revoke_session"
+      get "staff/invitations", to: "staff#invitations"
+      post "staff/invitations/:id/resend", to: "staff#resend_invitation"
+      delete "staff/invitations/:id", to: "staff#cancel_invitation"
       resources :staff, only: %i[index show create update] do
         member do
           post :set_pin
@@ -539,6 +549,7 @@ Rails.application.routes.draw do
       get "support_sessions", to: "support_sessions#index"
       post "support_sessions/:id/approve", to: "support_sessions#approve"
       post "support_sessions/:id/deny", to: "support_sessions#deny"
+      post "support_sessions/:id/end", to: "support_sessions#end_session"
       get "platform", to: "platform#show"
       get "support_requests", to: "support_requests#index"
       post "support_requests", to: "support_requests#create"

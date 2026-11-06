@@ -19,6 +19,8 @@ module Api
         require_permission!("settings.manage")
         read_only_guard!
         values = params.require(:values).to_unsafe_h
+        # The PRA credentials and the expense and report PIN are secrets others rely on: never set by EasAlpha support.
+        refuse_support! if values.keys.any? { |k| Settings::Registry::KEYS[k]&.secret }
         unknown = values.keys - Settings::Registry.keys
         raise Api::Errors::BadRequest.new("settings.unknown_key", "Unknown settings: #{unknown.join(', ')}") if unknown.any?
         if values.keys.any? { |k| k.start_with?("modules.") } && !current_membership.owner?

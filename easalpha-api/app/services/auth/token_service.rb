@@ -25,6 +25,15 @@ module Auth
         encode({ typ: "access", sub: user.id, mid: membership.id, bid: membership.business_id, brid: branch&.id, did: device&.id, app: app, perms: membership.permission_codes }, ttl: ACCESS_TTL)
       end
 
+      # EasAlpha support working in a business on an approved session, as its owner's membership: marked (sup, sa) so the
+      # API refuses sign-in, staff and billing changes and the audit log names the support person, and it lasts exactly
+      # as long as the session. It used to be a plain owner token (QA of 6 Nov 2026, P3).
+      def support_token(support_session:, membership:)
+        ttl = [ support_session.expires_at - Time.current, 0 ].max
+        encode({ typ: "access", sub: membership.user_id, mid: membership.id, bid: membership.business_id, app: "admin", perms: membership.permission_codes,
+                 sup: support_session.id, sa: support_session.super_admin_id }, ttl: ttl)
+      end
+
       # Long-lived token identifying a paired device before anyone logs in with a PIN.
       def device_token(device)
         encode({ typ: "device", did: device.id, bid: device.business_id, brid: device.branch_id, app: "pos" }, ttl: DEVICE_TTL)

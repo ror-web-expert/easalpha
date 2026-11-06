@@ -45,15 +45,15 @@ RSpec.describe "PIN lookup for sign-in, approvals and attendance", type: :reques
   end
 
   it "resolves a shared PIN as before: the member who may use this device's app, or who holds the permission" do
-    accountant = add_member!(biz, "accountant", pin: "1111") # shares the cashier's PIN, cannot open the POS
+    accountant = share_pin!(add_member!(biz, "accountant"), "1111") # shares the cashier's PIN, cannot open the POS
     pin_login("1111")
     expect(json[:membership][:id]).to eq(cashier.id)
-    within(biz) { waiter.set_pin!("3333") } # shares the cook's PIN; only the cook opens the kitchen display
+    share_pin!(waiter, "3333") # shares the cook's PIN; only the cook opens the kitchen display
     pin_login("3333", device: kitchen)
     expect(json[:membership][:id]).to eq(cook.id)
     pin_login("3333")
     expect(json[:membership][:id]).to eq(waiter.id)
-    within(biz) { cashier.set_pin!("9999") } # the cashier and the manager share one: only the manager may void
+    share_pin!(cashier, "9999") # the cashier and the manager share one: only the manager may void
     expect(approver("9999", "orders.void", exclude: accountant)).to eq(manager)
     # Someone who holds the PIN but may not use the app is refused as before, not told the PIN is wrong.
     pin_login("1111", device: kitchen)
@@ -80,7 +80,7 @@ RSpec.describe "PIN lookup for sign-in, approvals and attendance", type: :reques
   end
 
   it "prefers a member without a lookup who may use the app over one found by the lookup who may not" do
-    within(biz) { waiter.set_pin!("3333") }
+    share_pin!(waiter, "3333")
     legacy!(cook)
     pin_login("3333", device: kitchen)
     expect(json[:membership][:id]).to eq(cook.id)

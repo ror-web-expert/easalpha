@@ -34,16 +34,31 @@ module Api
             life = Rider.lifetime_for(params[:lifetime_kind].to_s, params[:lifetime_value], branch: current_branch) or raise Api::Errors::BadRequest.new("rider.lifetime", "Choose a lifetime: one order, N orders, the rest of today or N hours")
             attrs.merge!(temporary: true, lifetime_kind: params[:lifetime_kind].to_s, lifetime_value: params[:lifetime_value].presence&.to_i, permissions: Array(params[:permissions]).map(&:to_s), created_by_membership_id: current_membership.id, **life)
           end
+          invite = nil
           if ActiveModel::Type::Boolean.new.cast(params[:create_login]) && attrs[:membership_id].blank?
-            user = User.find_by(phone: User.normalize_phone(attrs[:phone])) || User.create!(name: attrs[:name], phone: attrs[:phone])
-            m = Membership.create!(user: user, role: Role.find_by!(system_key: "rider"), status: "active", all_branches: false, branch_ids: [ current_branch.id ])
-            m.set_pin!(params[:pin]) if params[:pin].present?
-            attrs[:membership_id] = m.id
+            refuse_support! # a rider login is a way in
+            phone = User.normalize_phone(attrs[:phone])
+            raise Membership::PinTaken if params[:pin].present? && Membership.new(business: current_business).pin_taken?(params[:pin].to_s)
+            # As adding staff: a login is linked only by a phone it proved, or that is its only way in; else the rider
+            # joins by proving the phone (QA of 6 Nov 2026, P1).
+            link = Staff::Linking.resolve(phone: phone, email: nil)
+            if link.invite
+              invite = { role: Role.find_by!(system_key: "rider"), name: attrs[:name], phone: phone, email: nil, staff_type: "rider", cashier_role: nil,
+                         all_branches: false, branch_ids: [ current_branch.id ], pin: params[:pin] }
+            else
+              user = link.user || User.create!(name: attrs[:name], phone: attrs[:phone])
+              m = Membership.create!(user: user, role: Role.find_by!(system_key: "rider"), status: "active", all_branches: false, branch_ids: [ current_branch.id ])
+              m.set_pin!(params[:pin]) if params[:pin].present?
+              attrs[:membership_id] = m.id
+            end
           end
           r = Rider.create!(attrs.merge(branch_id: params[:branch_id].presence || current_branch.id))
+          @invitation = StaffInvitation.invite!(**invite, rider_id: r.id) if invite
         end
         audit!("create", record: r, after: { name: r.name })
-        render json: DeliverySerializers.rider(r), status: :created
+        body = DeliverySerializers.rider(r)
+        body = body.merge(invited: true, invitation: Serializers.staff_invitation(@invitation)) if @invitation
+        render json: body, status: :created
       end
 
       def update

@@ -12,6 +12,7 @@ import { useAction, useList, useRemove, useSave } from "@/components/admin/crud"
 import { CustomerMultiSelect } from "@/components/admin/customers-picker";
 import { CASHIER_LIMIT_NOTE, voucherBatchState, voucherExpiryLabel, voucherStatusLabel, voucherStatusVariant, voucherTerms } from "@/components/admin/marketing-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, Sheet, Switch, Table, TBody, TD, TH, THead, TR, Tabs } from "@/components/ui";
+import { ReadOnly } from "@/components/admin/read-only";
 
 // SPEC Vouchers: code batches with a value, a minimum spend and an expiry. Personal codes are generated per customer
 // and sent from the POS campaign screen, redeemable only by that customer. A public code is a single code posted on
@@ -40,7 +41,7 @@ export default function VouchersPage() {
   const submit = () => form && save.mutate({ name: form.name, kind: form.kind, value_kind: form.value_kind, value: Number(form.value), min_spend_minor: form.min_spend_minor, expires_on: form.expires_on || null, usage_limit: form.kind === "public" && form.usage_limit ? Number(form.usage_limit) : null, public_code: form.kind === "public" ? form.public_code : null });
   const b = detail.data;
   return (
-    <>
+    <ReadOnly perms={["settings.manage", "MARKETING"]}>
       <PageHeader icon={Ticket} title="Vouchers" description="Code batches with a value, a minimum spend and an expiry. Personal codes go to named customers; a public code is one code anyone can use until it expires or hits its limit." actions={<Button onClick={() => setForm({ ...blank, kind })}><Plus className="h-4 w-4" /> New batch</Button>} />
       <p className="mb-4 rounded-md bg-muted px-3 py-2 text-sm text-fg-secondary">{CASHIER_LIMIT_NOTE}</p>
       <Tabs value={kind} onChange={setKind} className="mb-4" items={[{ value: "personal", label: "Personal" }, { value: "public", label: "Public" }]} />
@@ -132,6 +133,6 @@ export default function VouchersPage() {
       </Sheet>
       <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title="Remove this batch?" description={removing ? `${removing.name} is archived and its codes stop working. Redeemed vouchers stay on their orders.` : undefined} confirmLabel="Remove" destructive loading={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing.id, { onSuccess: () => { setRemoving(null); if (openId === removing.id) setOpenId(null); } })} />
-    </>
+    </ReadOnly>
   );
 }

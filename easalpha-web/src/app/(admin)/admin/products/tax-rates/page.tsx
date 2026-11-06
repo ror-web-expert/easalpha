@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Tag, Plus, Pencil, Trash2 } from "lucide-react";
+import { useCan } from "@/store/auth";
 import { api } from "@/lib/api";
 import type { PaymentAccount, TaxRate } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
@@ -18,7 +19,10 @@ export default function TaxRatesPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [del, setDel] = useState<TaxRate | null>(null);
   // SPEC: tax rates are linked to finance accounts (a cash rate, a reduced card rate); the cashier only sees a No Tax / rate choice when a linked account is selected.
-  const accounts = useQuery({ queryKey: ["payment_accounts"], queryFn: () => api<{ data: PaymentAccount[] }>("/payment_accounts"), select: (r) => r.data });
+  // The account picker reads GET /payment_accounts (finance.view, settings.manage or shifts.any); without them the rates
+  // still show, with no failed call (QA of 6 Nov 2026, P5).
+  const canAccounts = useCan()("finance.view", "settings.manage", "shifts.any");
+  const accounts = useQuery({ queryKey: ["payment_accounts"], queryFn: () => api<{ data: PaymentAccount[] }>("/payment_accounts"), select: (r) => r.data, enabled: canAccounts });
   const accountName = (id: string | null | undefined) => accounts.data?.find((a) => a.id === id)?.name;
   return (
     <>

@@ -29,9 +29,16 @@ class AuditLog < ApplicationRecord
   }.freeze
   ACTIONS = ACTION_LABELS.keys.freeze
 
+  # Who acts now: the signed-in person, or EasAlpha support on an approved session, which works through the owner's
+  # membership but is logged as itself (super_admin_id, no user; QA of 6 Nov 2026, P3).
+  def self.current_actor
+    support = Current.support_session&.super_admin_id
+    { user_id: support ? nil : Current.user_id, super_admin_id: support, branch_id: Current.branch_id, device_id: Current.device&.id, ip: Current.ip }
+  end
+
   # actor: who made the change, captured earlier by the Audited concern; defaults to the current request context.
   def self.record(action:, record: nil, before: nil, after: nil, business: Current.business, approved_by: nil, table_name: nil, record_id: nil, business_id: nil, actor: nil)
-    actor ||= { user_id: Current.user_id, branch_id: Current.branch_id, device_id: Current.device&.id, ip: Current.ip }
+    actor ||= current_actor
     table_name ||= record&.class&.table_name
     record_id ||= record&.id
     # The Audited concern already wrote this create, update or delete in this request; keep the one richer row.
@@ -39,7 +46,7 @@ class AuditLog < ApplicationRecord
     remember(table_name, record_id, action)
     create!(
       business_id: business_id || business&.id, branch_id: actor[:branch_id], user_id: actor[:user_id], device_id: actor[:device_id],
-      approved_by_user_id: approved_by&.id, action: action.to_s,
+      super_admin_id: actor[:super_admin_id], approved_by_user_id: approved_by&.id, action: action.to_s,
       table_name: table_name, record_id: record_id,
       before: before, after: after, ip: actor[:ip], occurred_at: Time.current
     )

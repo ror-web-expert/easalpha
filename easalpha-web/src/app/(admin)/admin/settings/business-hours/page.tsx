@@ -6,6 +6,7 @@ import type { Branch } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useList, useSave } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, Field, Input, Loading } from "@/components/ui";
+import { ReadOnly } from "@/components/admin/read-only";
 
 // SPEC "Business Hours is two fields, start and end, and the end may fall on the next day": the window every daily
 // figure is derived from. Stored per branch (business_day_start, day_end_time) so each outlet can close at its own hour.
@@ -39,13 +40,13 @@ function BranchHoursCard({ branch }: { branch: Branch }) {
 export default function BusinessHoursPage() {
   const list = useList<Branch>("branches", "/branches");
   return (
-    <>
+    <ReadOnly>
       <PageHeader icon={Timer} title="Business Hours" description="The business day each branch reports on. The dashboard, every daily report and the attendance rules read this window; attendance treats the start as the last fallback for a shift start." />
       {list.isLoading ? <Loading /> : list.data?.length ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {list.data.map((b) => <BranchHoursCard key={b.id} branch={b} />)}
         </div>
       ) : <EmptyState title="No branches yet" hint="Add a branch under Store Management to set its business day." />}
-    </>
+    </ReadOnly>
   );
 }

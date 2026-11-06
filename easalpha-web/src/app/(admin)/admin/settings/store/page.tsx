@@ -10,6 +10,7 @@ import { useAction } from "@/components/admin/crud";
 import { useSettings } from "@/components/admin/settings-screen";
 import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Select } from "@/components/ui";
 import { useAuthStore } from "@/store/auth";
+import { ReadOnly } from "@/components/admin/read-only";
 
 // SPEC Store Profile: the business name and phones that print on the receipt, plus currency and time zone.
 // Selling rules and receipt design moved to Point of Sale and Charges & Tax (the settings registry screens).
@@ -45,7 +46,7 @@ export default function StoreProfilePage() {
 
   if (q.isLoading) return <Loading />;
   return (
-    <>
+    <ReadOnly>
       <PageHeader icon={Store} title="Store Profile" description="The business name, phones and contact details that print on every receipt." actions={<Button onClick={onSave} loading={save.isPending}>Save</Button>} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -71,6 +72,6 @@ export default function StoreProfilePage() {
           </CardBody>
         </Card>
       </div>
-    </>
+    </ReadOnly>
   );
 }

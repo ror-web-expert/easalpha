@@ -2,13 +2,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Plus, KeyRound, UserX, UserCheck, ShieldCheck } from "lucide-react";
+import { Plus, KeyRound, UserX, UserCheck, ShieldCheck, Copy, Send, X } from "lucide-react";
 import { api } from "@/lib/api";
-import type { Branch, CashierRole, Membership, Role, StaffType } from "@/lib/types";
-import { formatDateTime } from "@/lib/dates";
+import type { Branch, CashierRole, Membership, Role, StaffInvitation, StaffType } from "@/lib/types";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { FilterBar, PageHeader } from "@/components/admin/page";
-import { useAction, useList, useSave } from "@/components/admin/crud";
+import { useAction, useList } from "@/components/admin/crud";
 import { toast } from "@/store/toast";
+import { useCan } from "@/store/auth";
+import { addOutcome, invitationContact, type AddResult } from "./staff-helpers";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 // SPEC "Staff populations": Admin Staff, Cashiers and Order Takers are separate screens over the same membership
@@ -31,20 +33,27 @@ type CreateBody = Omit<Form, "phone" | "email" | "password" | "pin" | "cashier_r
 
 export function StaffList({ staffType, title, description, icon }: { staffType: StaffType; title: string; description: string; icon: LucideIcon }) {
   const isCashier = staffType === "cashier";
+  // Without staff.manage the list is for looking only: GET /staff answers names and roles, and every change is refused
+  // (QA of 6 Nov 2026, P6: accountants got role dropdowns, PIN and Deactivate that failed on save).
+  const canManage = useCan()("staff.manage");
   const [status, setStatus] = useState("");
   const [cashierRole, setCashierRole] = useState("");
   const list = useList<Membership>("staff", "/staff", { staff_type: staffType, status, cashier_role: isCashier ? cashierRole : undefined });
-  const roles = useList<Role>("roles", "/roles");
-  const branches = useList<Branch>("branches", "/branches");
+  const roles = useList<Role>("roles", "/roles", {}, canManage);
+  const branches = useList<Branch>("branches", "/branches", {}, canManage);
+  const invitations = useList<StaffInvitation>("staff_invitations", "/staff/invitations", {}, canManage);
+  const waiting = (invitations.data ?? []).filter((i) => i.staff_type === staffType);
   const [form, setForm] = useState<Form | null>(null);
   const [pinFor, setPinFor] = useState<Membership | null>(null);
   const [pin, setPin] = useState("");
   const [deact, setDeact] = useState<Membership | null>(null);
-  // A phone or email that already has an account is linked as it is (R8): say so, since a password typed here was not used.
-  const create = useSave<CreateBody, Membership & { linked_existing_user?: boolean }>(["staff"], () => "/staff", {
-    onSuccess: (m) => { setForm(null); if (m.linked_existing_user) toast.info("Linked to an existing EasAlpha account", "They sign in with their own name and password; a password typed here was not used."); },
-    success: `${title.replace(/s$/, "")} added`,
-  });
+  const create = useAction<CreateBody, AddResult>(["staff", "staff_invitations"], (body) => api<AddResult>("/staff", { method: "POST", body }));
+  const resendM = useAction<string>(["staff_invitations"], (id) => api(`/staff/invitations/${id}/resend`, { method: "POST" }), "Invitation sent again");
+  const cancelM = useAction<string>(["staff_invitations"], (id) => api(`/staff/invitations/${id}`, { method: "DELETE" }), "Invitation cancelled");
+  const copyLink = async (i: StaffInvitation) => {
+    try { await navigator.clipboard.writeText(i.url); toast.success("Link copied", "It opens nothing without the code we send to their phone or email."); }
+    catch { toast.info("Copy this link", i.url); }
+  };
   const setPinM = useAction<{ id: string; pin: string }>(["staff"], ({ id, pin }) => api(`/staff/${id}/set_pin`, { method: "POST", body: { pin } }), "PIN updated");
   const deactM = useAction<string>(["staff"], (id) => api(`/staff/${id}/deactivate`, { method: "POST" }), "Deactivated");
   const reactM = useAction<string>(["staff"], (id) => api(`/staff/${id}/reactivate`, { method: "POST" }), "Reactivated");
@@ -61,17 +70,38 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
       phone: form.phone.length > 4 ? form.phone : null, email: form.email || null, password: form.password || null, pin: form.pin || null,
     };
     if (isCashier) body.cashier_role = form.cashier_role;
-    create.mutate(body);
+    create.mutate(body, {
+      onSuccess: (r) => {
+        setForm(null);
+        const o = addOutcome(r, SINGULAR[staffType]);
+        if (o.tone === "info") toast.info(o.title, o.body); else toast.success(o.title, o.body);
+      },
+    });
   };
   const cols = 8 + (isCashier ? 1 : 0);
   return (
     <>
-      <PageHeader icon={icon} title={title} description={description} actions={<><Link href="/admin/staff/roles"><Button variant="secondary">Roles</Button></Link><Button onClick={openAdd}><Plus className="h-4 w-4" /> Add {SINGULAR[staffType]}</Button></>} />
+      <PageHeader icon={icon} title={title} description={canManage ? description : `${description} You can see the team here; adding people or changing their access needs Staff, Manage.`}
+        actions={canManage ? <><Link href="/admin/staff/roles"><Button variant="secondary">Roles</Button></Link><Button onClick={openAdd}><Plus className="h-4 w-4" /> Add {SINGULAR[staffType]}</Button></> : null} />
       <FilterBar>
         <Select className="w-auto" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">All</option><option value="active">Active</option><option value="deactivated">Deactivated</option></Select>
         {isCashier ? <Select className="w-auto" value={cashierRole} onChange={(e) => setCashierRole(e.target.value)} aria-label="Cashier role"><option value="">All cashier roles</option>{CASHIER_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select> : null}
       </FilterBar>
-      {list.isLoading ? <Loading /> : (
+      {list.isLoading ? <Loading /> : !canManage ? (
+        <Table>
+          <THead><tr><TH>Name</TH><TH>Role</TH>{isCashier ? <TH>Cashier role</TH> : null}<TH>Status</TH></tr></THead>
+          <TBody>
+            {list.data?.length ? list.data.map((m) => (
+              <TR key={m.id}>
+                <TD className="font-medium">{m.user?.name}</TD>
+                <TD>{m.role.name}</TD>
+                {isCashier ? <TD>{cashierRoleLabel(m.cashier_role)}</TD> : null}
+                <TD><Badge variant={m.status === "active" ? "success" : "neutral"}>{m.status}</Badge></TD>
+              </TR>
+            )) : <EmptyRow colSpan={isCashier ? 4 : 3}>No {title.toLowerCase()} yet.</EmptyRow>}
+          </TBody>
+        </Table>
+      ) : (
         <Table>
           <THead><tr><TH>Name</TH><TH>Contact</TH><TH>Role</TH>{isCashier ? <TH>Cashier role</TH> : null}<TH>Access</TH><TH>PIN</TH><TH>Status</TH><TH>Last login</TH><TH right>Actions</TH></tr></THead>
           <TBody>
@@ -105,6 +135,31 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
           </TBody>
         </Table>
       )}
+      {canManage && waiting.length ? (
+        <section className="mt-6" aria-label="Waiting to join">
+          <h2 className="mb-1 text-base font-medium">Waiting to join</h2>
+          <p className="mb-3 text-sm text-fg-secondary">Added by a phone or email that is on an EasAlpha login which never confirmed it. They join when they confirm it with the code we send; until then they have no access.</p>
+          <Table>
+            <THead><tr><TH>Name</TH><TH>Phone or email</TH><TH>Role</TH><TH>PIN</TH><TH>Open until</TH><TH right>Actions</TH></tr></THead>
+            <TBody>
+              {waiting.map((i) => (
+                <TR key={i.id}>
+                  <TD className="font-medium">{i.name}</TD>
+                  <TD className="text-fg-secondary">{invitationContact(i)}</TD>
+                  <TD>{i.role.name}</TD>
+                  <TD>{i.has_pin ? <Badge variant="success">set</Badge> : <Badge variant="warning">no PIN</Badge>}</TD>
+                  <TD className="text-fg-secondary">{formatDate(i.expires_at)}</TD>
+                  <TD right>
+                    <Button variant="ghost" size="sm" onClick={() => copyLink(i)}><Copy className="h-4 w-4" /> Copy link</Button>
+                    <Button variant="ghost" size="sm" loading={resendM.isPending} onClick={() => resendM.mutate(i.id)}><Send className="h-4 w-4" /> Resend</Button>
+                    <Button variant="ghost" size="icon-sm" title="Cancel invitation" aria-label={`Cancel the invitation for ${i.name}`} onClick={() => cancelM.mutate(i.id)}><X className="h-4 w-4 text-danger" /></Button>
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </section>
+      ) : null}
       <Dialog open={!!form} onClose={() => setForm(null)} title={`Add ${SINGULAR[staffType]}`} description="A phone sends a WhatsApp invite; email plus password lets them open the admin."
         footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={create.isPending} disabled={!form?.name || !form?.role_id || (!form?.phone && !form?.email)} onClick={submit}>Add</Button></>}>
         {form ? (
