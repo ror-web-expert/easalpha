@@ -51,7 +51,7 @@ module Orders
     end
 
     def ready!(order, actor: nil, device: nil)
-      return kitchen_done!(order) if order.completed?
+      return kitchen_done!(order) if order.status.in?(Order::AFTER_KITCHEN_STATUSES)
       raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.status.in?(%w[placed preparing])
       Order.transaction do
         order.items.where(status: %w[sent preparing]).update_all(status: "ready", bumped_at: Time.current)
@@ -63,8 +63,9 @@ module Orders
       order
     end
 
-    # The kitchen finished an order that was paid (or completed) before it was cooked, a takeaway paid at once: its
-    # lines are ready and it leaves the kitchen display, while the order stays paid (QA F2). A second bump changes nothing.
+    # The kitchen finished an order already past it: paid before it was cooked (a takeaway paid at once), or served or
+    # reopened with a line added. Its lines are ready and it leaves the kitchen display; its status stays (QA F2). A
+    # second bump changes nothing.
     def kitchen_done!(order)
       cooking = order.items.where(status: %w[sent preparing])
       return order if order.ready_at && !cooking.exists?

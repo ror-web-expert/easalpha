@@ -54,6 +54,29 @@ RSpec.describe "Paid orders in the kitchen, and the receipt of a completed staff
     within(biz) { expect(Order.find(o[:id])).to have_attributes(status: "paid", payment_status: "paid") }
   end
 
+  it "keeps a paid order reopened while it cooks on the display, and shows a line added to a served order until it is bumped" do
+    o = paid_takeaway!
+    api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: headers
+    expect(json[:status]).to eq("served")
+    expect(kitchen.map { |k| [ k[:id], k[:status] ] }).to eq([ [ o[:id], "served" ] ])
+    api_post "/api/v1/kitchen/orders/#{o[:id]}/bump", {}, headers: device_headers(kds)
+    expect(response).to have_http_status(:ok), response.body
+    expect(json[:status]).to eq("served")
+    expect(kitchen).to be_empty
+
+    api_post "/api/v1/orders", { order_type: "dine_in", lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
+    dine = json
+    api_post "/api/v1/orders/#{dine[:id]}/serve", {}, headers: headers
+    expect(kitchen.map { |k| k[:id] }).to eq([]) # served, nothing left to cook
+    api_patch "/api/v1/orders/#{dine[:id]}", { lines: [ { id: dine[:items].first[:id], quantity: 1 }, { product_id: m[:chai].id, quantity: 1 } ] }, headers: headers
+    expect(kitchen.map { |k| [ k[:id], k[:items].map { |i| [ i[:name], i[:status] ] } ] }).to eq([ [ dine[:id], [ [ "Zinger Burger", "served" ], [ "Chai", "sent" ] ] ] ])
+    chai = kitchen.first[:items].find { |i| i[:name] == "Chai" }
+    api_post "/api/v1/kitchen/items/#{chai[:id]}/bump", {}, headers: device_headers(kds)
+    expect(response).to have_http_status(:ok), response.body
+    expect(json[:status]).to eq("served")
+    expect(kitchen).to be_empty
+  end
+
   it "keeps a staff meal completed online on the display too, with a receipt number and paid_at" do
     api_post "/api/v1/orders", { order_type: "takeaway", is_staff_meal: true, staff_meal_reason: "Kitchen lunch", lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
     expect(response).to have_http_status(:created), response.body

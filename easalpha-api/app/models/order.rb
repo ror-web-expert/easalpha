@@ -5,6 +5,7 @@ class Order < ApplicationRecord
   STATUSES = %w[draft held placed preparing ready served dispatched paid closed voided refunded].freeze
   OPEN_STATUSES = %w[draft held placed preparing ready served dispatched].freeze
   KITCHEN_STATUSES = %w[placed preparing ready].freeze
+  AFTER_KITCHEN_STATUSES = %w[served dispatched paid closed].freeze
 
   belongs_to :branch
   belongs_to :device, optional: true
@@ -30,9 +31,9 @@ class Order < ApplicationRecord
 
   scope :open, -> { where(status: OPEN_STATUSES) }
   scope :on_day, ->(day) { where(business_day: day) }
-  # Orders the kitchen is working on, and those paid or completed before it finished them (a takeaway paid at once):
-  # paying is not cooking, so they stay until their lines are bumped (QA F2).
-  scope :in_kitchen, -> { where(status: KITCHEN_STATUSES).or(where(status: %w[paid closed], id: OrderItem.where(status: %w[sent preparing]).select(:order_id))) }
+  # Orders the kitchen is working on, and any order further on with lines it has not finished: paid at once (a
+  # takeaway), served or reopened with a line added. Paying is not cooking, so they stay until those are bumped (QA F2).
+  scope :in_kitchen, -> { where(status: KITCHEN_STATUSES).or(where(status: AFTER_KITCHEN_STATUSES, id: OrderItem.where(status: %w[sent preparing]).select(:order_id))) }
   # Pre-orders stay off the kitchen screen until two hours before they are due.
   scope :due_in_kitchen, -> { where("scheduled_for IS NULL OR scheduled_for <= ?", 2.hours.from_now) }
   scope :preorders, -> { where.not(scheduled_for: nil) }
