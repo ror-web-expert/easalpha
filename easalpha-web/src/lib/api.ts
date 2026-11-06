@@ -42,7 +42,11 @@ function areaFromPath(): AuthArea {
   if (p.startsWith("/pos")) return "pos";
   if (p.startsWith("/kitchen") || p.startsWith("/token") || p.startsWith("/queue") || p.startsWith("/canteen")) {
     const d = useDeviceStore.getState();
-    if (d.session?.access_token || d.deviceToken) return "pos";
+    if (d.session?.access_token) return "pos";
+    // A till or tablet's own token opens the queue and token lists only: a manager logged in here comes first, as in
+    // the kitchen screens' useKitchenToken (final round, contracts#7).
+    const adminFirst = ["till", "tablet"].includes(d.device?.kind ?? "") && !!useAuthStore.getState().session?.access_token;
+    if (d.deviceToken && !adminFirst) return "pos";
     return "admin";
   }
   return "admin";

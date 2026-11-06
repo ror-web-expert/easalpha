@@ -49,9 +49,12 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
 
   // Sync engine + catalog refresh once logged in, on a till, a tablet or a kiosk only: a kitchen display, rider phone or
   // token screen signed in here has no queue and may not download the till's catalogue or customers (review R4).
+  // Started per person signed in, not per session object: a token refresh every 15 minutes stores a new session, and
+  // restarting sync under a push still out sent its rows back to pending (final round, web-till#4).
   const tillData = useDeviceStore((s) => keepsTillData(s.device?.kind));
+  const signedIn = useDeviceStore((s) => (s.session ? s.session.membership?.id ?? "signed-in" : null));
   useEffect(() => {
-    if (!session || !tillData) return;
+    if (!signedIn || !tillData) return;
     const stop = startSync();
     const cs = useCatalogStore.getState();
     (cs.catalog ? pullChanges() : cs.refresh().catch(() => {})).then(() => loadCurrentShift());
@@ -59,7 +62,7 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
     void useCustomerStore.getState().downloadIfStale();
     pruneOldOrders();
     return stop;
-  }, [session, tillData]);
+  }, [signedIn, tillData]);
 
   // Inactivity lock
   useEffect(() => {

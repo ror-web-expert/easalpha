@@ -30,6 +30,15 @@ RSpec.describe "Manager approvals limited to the codes the till showed", type: :
       expect(json[:error][:details]).to eq(permissions: [ "prices.override" ], labels: { "prices.override": "Override an item price or change an order's service charge" })
     end
 
+    it "gives each code to the holder of a shared PIN who has it, not to whoever is found first (sync-auth#7)" do
+      waiter = add_member!(biz, "waiter")
+      # A PIN shared by a waiter (no prices.override, no items.open) and the manager, set before duplicates were refused.
+      within(biz) { waiter.update_columns(pin_digest: Membership.find(manager.id).pin_digest, pin_lookup: Membership.find(manager.id).pin_lookup) }
+      api_post "/api/v1/orders", two_step_order(approver_pin: "9999", approval_codes: %w[prices.override items.open]), headers: pos
+      expect(response).to have_http_status(:created), response.body
+      expect(within(biz) { Order.find(json[:id]).items.find { |i| i.price_overridden }&.override_approved_by_id }).to eq(manager.id)
+    end
+
     it "grants only the codes sent with the PIN: the next guarded step asks again, naming its own" do
       api_post "/api/v1/orders", two_step_order(approver_pin: "9999", approval_codes: [ "prices.override" ]), headers: pos
       expect(response).to have_http_status(:forbidden)

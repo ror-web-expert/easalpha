@@ -19,7 +19,8 @@ const h = vi.hoisted(() => {
   const queue = new Map<string, unknown>();
   const attention = new Map<string, unknown>();
   const orders = new Map<string, unknown>();
-  return { queue, attention, orders, api: vi.fn(), db: { queue: table(queue), attention: table(attention), orders: table(orders) } };
+  // A transaction runs its function (the sync queue reads and writes a row in one).
+  return { queue, attention, orders, api: vi.fn(), db: { queue: table(queue), attention: table(attention), orders: table(orders), transaction: (_mode: string, _tables: unknown, fn: () => Promise<unknown>) => fn() } };
 });
 vi.mock("@/lib/db", () => ({ db: h.db, kvGet: async () => undefined, kvSet: async () => undefined }));
 vi.mock("@/lib/api", async () => ({ ...(await vi.importActual<typeof import("@/lib/api")>("@/lib/api")), api: (...a: unknown[]) => h.api(...a) }));

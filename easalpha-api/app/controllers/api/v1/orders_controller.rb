@@ -405,9 +405,10 @@ module Api
         approver = Auth::PinApproval.find_approver(pin: params[:approver_pin], permission: "app.pos", exclude_membership: current_membership)
         raise Api::Errors::Forbidden.new("approval.invalid", "Manager PIN is wrong") unless approver
         codes = approval_codes
-        return (codes & approver.permission_codes).index_with { approver } if codes
-        log_legacy_approval("grants every permission of membership #{approver.id}")
-        approver.permission_codes.index_with { approver }
+        log_legacy_approval("grants every permission of the PIN's holders") unless codes
+        # Each code goes to a holder of this PIN who has it, as at sync replay: two members may share a PIN (made before
+        # duplicates were refused), and the first one found must not decide what is approved (final round, sync-auth#7).
+        Auth::PinApproval.approvals_for(pin: params[:approver_pin], permissions: codes, exclude_membership: current_membership)
       end
     end
   end
