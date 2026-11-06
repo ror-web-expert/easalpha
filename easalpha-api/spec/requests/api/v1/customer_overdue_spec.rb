@@ -42,13 +42,15 @@ RSpec.describe "Customer bills overdue", type: :request do
   it "exposes the overdue settings and the till lock under their screens" do
     get "/api/v1/settings", headers: headers
     accounts = json[:groups][:store][:screens][:"Customer Accounts"].index_by { |k| k[:key] }
-    expect(accounts["khata.overdue.remind_after_days"]).to include(type: "integer", value: 3)
+    # Off by default: no business starts messaging its customers on the day this ships; the owner opts in.
+    expect(accounts["khata.overdue.remind_after_days"]).to include(type: "integer", value: 0)
     expect(accounts["khata.credit_hold_days"]).to include(type: "integer", value: 0)
     pos = json[:groups][:point_of_sale][:screens][:"Order Behavior"].index_by { |k| k[:key] }
     expect(pos["pos.lock_minutes"]).to include(type: "integer", value: 5)
   end
 
   it "reminds a customer once per bill run after the set days, customer and guardian alike, and skips small balances and bills not yet due" do
+    within(biz) { Setting.write!(biz, { "khata.overdue.remind_after_days" => 3 }) }
     a = customer!
     b = customer!(name: "Bilal", phone: "+923001112244", guardian_phone: nil)
     c = customer!(name: "Sana", phone: "+923001112255", guardian_phone: nil)
@@ -120,6 +122,7 @@ RSpec.describe "Customer bills overdue", type: :request do
 
   # ledger#1, deploy#1: a customer who paid the bill and bought again owes only new purchases, which are not overdue.
   it "never reminds a customer who paid the bill, whatever they bought since, and quotes what is unpaid of it" do
+    within(biz) { Setting.write!(biz, { "khata.overdue.remind_after_days" => 3 }) }
     allow(Whatsapp::Provider).to receive(:live?).and_return(true)
     a = customer!(guardian_phone: nil)
     b = customer!(name: "Bilal", phone: "+923001112244", guardian_phone: nil)
@@ -160,7 +163,7 @@ RSpec.describe "Customer bills overdue", type: :request do
   # hold works without WhatsApp, and the reminder goes once per period.
   it "holds credit and reminds by the monthly cycle when no bill run was ever made" do
     travel_to(Time.find_zone("Asia/Karachi").local(2026, 11, 20, 13)) do
-      within(biz) { Setting.write!(biz, { "khata.credit_hold_days" => 5, "khata.monthly_bills.day" => 1, "khata.monthly_bills.due_days" => 10 }) }
+      within(biz) { Setting.write!(biz, { "khata.credit_hold_days" => 5, "khata.overdue.remind_after_days" => 3, "khata.monthly_bills.day" => 1, "khata.monthly_bills.due_days" => 10 }) }
       a = customer!(guardian_phone: nil)
       b = customer!(name: "Bilal", phone: "+923001112244", guardian_phone: nil)
       sale!(a[:id], on: Date.new(2026, 10, 20))
