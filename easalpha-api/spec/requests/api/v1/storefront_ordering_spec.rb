@@ -89,4 +89,45 @@ RSpec.describe "Storefront online ordering", type: :request do
     post "/api/v1/public/storefront/nobody/orders", params: { lines: [] }
     expect(response).to have_http_status(:not_found)
   end
+
+  # Review of 6 Nov 2026, A11: the storefront never verifies a phone, so a guest cannot claim a till customer's account
+  # or their regular discount by typing their number.
+  it "attaches nobody when the phone belongs to a customer the till knows, and gives online orders no regular discount" do
+    api_post "/api/v1/regular_discount_tiers", { name: "Back within 3 days", within_days: 3, kind: "percent", value: 10 }, headers: auth_headers(owner)
+    regular = within(business) { Customer.create!(name: "Rao Bilal", phone: "+923005556677", source: "in_store", khata_no: 7, last_order_at: 1.day.ago) }
+    place(lines: [ { product_id: product.id, quantity: 3 } ], order_type: "delivery", customer: { name: "Someone", phone: "0300 5556677", address: "House 9", city: "Lahore" }, notes: "Ring the bell")
+    expect(response).to have_http_status(:created), response.body
+    within(business) do
+      o = Order.find(json[:id])
+      expect(o.customer_id).to be_nil
+      expect(o.guest_name).to eq("Someone")
+      expect(o.notes).to include("+923005556677", "Deliver to: House 9, Lahore", "Ring the bell")
+      expect(o.discounts).to be_empty
+      expect(regular.reload.last_order_at).to be_within(1.minute).of(1.day.ago)
+      expect(Customer.where(phone: "+923005556677").count).to eq(1)
+    end
+
+    # A customer the storefront made itself is reused, but a returning online guest earns no recency discount either.
+    place(lines: [ { product_id: product.id, quantity: 1 } ], order_type: "takeaway", customer: { name: "Hina", phone: "03007778899" })
+    within(business) { Customer.find_by!(phone: "+923007778899").update!(last_order_at: 1.day.ago) }
+    place(lines: [ { product_id: product.id, quantity: 1 } ], order_type: "takeaway", customer: { name: "Hina", phone: "03007778899" })
+    within(business) do
+      o = Order.find(json[:id])
+      expect(o.customer).to have_attributes(phone: "+923007778899", source: "online")
+      expect(o.discounts).to be_empty
+    end
+  end
+
+  # Review of 6 Nov 2026, A12: the guest's client id is only a retry key; the order id is the server's.
+  it "answers the same order for a retried submit and never uses the client id as the order id" do
+    client_id = SecureRandom.uuid
+    2.times { place(lines: [ { product_id: product.id, quantity: 1 } ], order_type: "takeaway", customer: { name: "Ali", phone: "03009990000" }, client_id: client_id) }
+    expect(response).to have_http_status(:created), response.body
+    id = json[:id]
+    expect(id).not_to eq(client_id)
+    within(business) do
+      expect(Order.where(source: "online").count).to eq(1)
+      expect(Order.find(id).aggregator_ref).to eq("online:#{client_id}")
+    end
+  end
 end

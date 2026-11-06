@@ -2,8 +2,11 @@ module Api
   module V1
     # Inbound webhooks. WhatsApp status updates arrive here; the signature is checked when an app secret is set.
     class WebhooksController < ActionController::API
+      # Meta's subscription handshake. With no WHATSAPP_VERIFY_TOKEN set nothing verifies: a known default would let
+      # anyone subscribe the endpoint (review of 6 Nov 2026, A13).
       def whatsapp_verify
-        if params["hub.mode"] == "subscribe" && params["hub.verify_token"] == ENV.fetch("WHATSAPP_VERIFY_TOKEN", "easalpha")
+        expected = ENV["WHATSAPP_VERIFY_TOKEN"].presence
+        if expected && params["hub.mode"] == "subscribe" && ActiveSupport::SecurityUtils.secure_compare(params["hub.verify_token"].to_s, expected)
           render plain: params["hub.challenge"]
         else
           head :forbidden

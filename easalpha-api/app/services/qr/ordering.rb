@@ -35,10 +35,18 @@ module Qr
         rounding_minor: order.rounding_minor, total_minor: order.total_minor, paid_minor: order.paid_minor }
     end
 
+    # A guest's client id is a key for "this same submit again", never the order's id (review of 6 Nov 2026, A12).
+    CLIENT_ID = /\A[\w-]{8,64}\z/
+
     # Places a guest order. With cashier_accept it stays a draft marked pending until a cashier accepts; otherwise it goes straight to the kitchen.
     def place!(table, lines:, guest_name: nil, notes: nil, client_id: nil)
       branch = table.branch
       cfg = branch.qr_config
+      key = client_id.to_s.strip
+      ref = key.match?(CLIENT_ID) ? "qr:#{key}" : nil
+      if ref && (again = Order.find_by(source: "qr", table_id: table.id, aggregator_ref: ref))
+        return again # a retry of the same submit: the first order stands
+      end
       raise Api::Errors::Conflict.new("qr.disabled", "Ordering is not available right now") unless cfg["enabled"]
       raise Api::Errors::Unprocessable.new("qr.guest_name", "Please tell us your name") if cfg["guest_name"] && guest_name.blank?
       raise Api::Errors::Unprocessable.new("qr.empty", "Add at least one item") if Array(lines).empty?
@@ -55,7 +63,7 @@ module Qr
             order.update!(qr_status: "pending")
           end
         else
-          attrs = { id: client_id.presence, order_type: "dine_in", source: "qr", table_id: table.id, guest_name: guest_name, notes: notes, qr_status: cfg["cashier_accept"] ? "pending" : "accepted", qr_guest_token: SecureRandom.hex(8) }
+          attrs = { order_type: "dine_in", source: "qr", table_id: table.id, guest_name: guest_name, notes: notes, aggregator_ref: ref, qr_status: cfg["cashier_accept"] ? "pending" : "accepted", qr_guest_token: SecureRandom.hex(8) }
           builder = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch)
           order = builder.order
           Orders::Transitions.place!(order, actor: nil) unless cfg["cashier_accept"]

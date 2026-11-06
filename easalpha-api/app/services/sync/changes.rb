@@ -35,13 +35,18 @@ module Sync
       }.compact
     end
 
+    # What the till keeps about the staff. The web reads nothing from it today (SyncChanges types it unknown[]); the
+    # names and roles stay so a queued record can be labelled with who made it. Permissions, limits and the PIN lock
+    # travel only for the member whose session asked: a copied till database then says nothing about anyone else
+    # (review of 6 Nov 2026, A7).
     def staff_payload(branch, device, since)
+      me = Current.membership&.id
       scope = Membership.includes(:role, :user).where(status: %w[active deactivated])
       scope = scope.where("memberships.updated_at > ?", since) if since
       scope.select { |m| m.branch_allowed?(branch.id) }.map do |m|
-        h = { id: m.id, user_id: m.user_id, name: m.user.name, role: m.role.name, role_key: m.role.system_key, status: m.status, permissions: m.permission_codes,
-              limits: m.role.role_permissions.where.not(limit_value: nil).pluck(:permission_code, :limit_value).to_h, pin_locked: m.pin_locked?, updated_at: m.updated_at }
-        h
+        h = { id: m.id, name: m.user.name, role: m.role.name, role_key: m.role.system_key, status: m.status, updated_at: m.updated_at }
+        next h unless m.id == me
+        h.merge(user_id: m.user_id, permissions: m.permission_codes, limits: m.role.role_permissions.where.not(limit_value: nil).pluck(:permission_code, :limit_value).to_h, pin_locked: m.pin_locked?)
       end
     end
   end

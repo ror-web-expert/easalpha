@@ -11,9 +11,12 @@ module Api
         require_permission!("menu.edit", "settings.manage")
         read_only_guard!
         file = params.require(:file)
-        raise Api::Errors::BadRequest.new("upload.type", "Only PNG, JPG or WEBP images are allowed") unless TYPES.include?(file.content_type)
         raise Api::Errors::BadRequest.new("upload.size", "The image must be 5 MB or smaller") if file.size > MAX_BYTES
-        blob = ActiveStorage::Blob.create_and_upload!(io: file.tempfile, filename: file.original_filename, content_type: file.content_type,
+        # The bytes say what the file is; the client's header is only a claim (review of 6 Nov 2026, A16).
+        type = Marcel::MimeType.for(file.tempfile)
+        file.tempfile.rewind
+        raise Api::Errors::BadRequest.new("upload.type", "Only PNG, JPG or WEBP images are allowed") unless TYPES.include?(type)
+        blob = ActiveStorage::Blob.create_and_upload!(io: file.tempfile, filename: file.original_filename, content_type: type, identify: false,
                                                        metadata: { business_id: current_business.id })
         key = "#{request.base_url}/api/v1/uploads/#{blob.signed_id}"
         audit!("create", table_name: "uploads", record_id: blob.id, after: { filename: blob.filename.to_s, bytes: blob.byte_size })

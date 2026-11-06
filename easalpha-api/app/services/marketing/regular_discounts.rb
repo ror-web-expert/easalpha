@@ -22,6 +22,7 @@ module Marketing
     # Replaces the order's regular discount with the current best match (or removes it). Idempotent.
     def apply!(order)
       return if order.source == "kiosk" # a canteen meal is priced by the plan, never by how often the worker eats
+      return if order.source == "online" # the storefront never verifies the phone it is given: no recency discount on a claimed identity (6 Nov 2026, A11)
       existing = order.discounts.select { |d| d.kind == "regular" }
       customer = order.customer_id && Customer.find_by(id: order.customer_id)
       tier = enabled?(order.business) ? tier_for(customer, order) : nil

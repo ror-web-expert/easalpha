@@ -8,5 +8,10 @@ easalpha.com, www.easalpha.com {
 
 api.easalpha.com {
   encode zstd gzip
+  # The largest legitimate body is a 5 MB image upload or a 200-record sync batch; anything bigger is dropped here,
+  # before it reaches Puma (6 Nov 2026 review, A15).
+  request_body {
+    max_size 25MB
+  }
   reverse_proxy easalpha-api:3001
 }

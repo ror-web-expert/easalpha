@@ -6,9 +6,7 @@ module Api
 
       # POST /sync/push  records: [...]
       def push
-        raw = params[:records]
-        raw = raw.to_unsafe_h.values if raw.respond_to?(:to_unsafe_h)
-        records = Array(raw).map { |r| r.respond_to?(:to_unsafe_h) ? r.to_unsafe_h : r.to_h }
+        records = push_records
         raise Api::Errors::BadRequest.new("sync.empty", "No records") if records.empty?
         raise Api::Errors::BadRequest.new("sync.too_many", "At most 200 records per batch") if records.size > 200
         render json: Sync::Push.new(device: current_device, branch: current_branch, actor: current_membership).call(records)
@@ -57,13 +55,17 @@ module Api
 
       TILL_KINDS = %w[till tablet kiosk].freeze
 
-      # Pushing is the till's alone. The catalogue and customer downloads belong to a till too, or to a POS session of
-      # someone who takes orders; a kitchen or rider token gets neither. The needs-attention lists are for managers.
+      # Pushing is the till's alone, and only while a cashier is signed in on it: the device token names nobody, so
+      # money it pushed alone could be anyone's (review of 6 Nov 2026, A1). A locked till gets session.required and
+      # keeps its queue until someone signs in. A canteen kiosk has no cashier; its meal claims are the one record it
+      # pushes by itself. The catalogue and customer downloads belong to a till too, or to a POS session of someone
+      # who takes orders; a kitchen or rider token gets neither. The needs-attention lists are for managers.
       def require_device!
         till = current_device&.paired? && current_device.kind.in?(TILL_KINDS)
         case action_name
         when "push"
           raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") unless till
+          raise Api::Errors::Forbidden.new("session.required", "Sign in on the till to sync") unless current_membership || kiosk_claims_only?
         when "changes", "customers"
           return if till
           raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") if current_device&.paired? # a kitchen screen or rider phone
@@ -73,6 +75,18 @@ module Api
         else
           require_permission!("settings.manage", "devices.manage", "reports.view_all", "reports.view_branch")
         end
+      end
+
+      def push_records
+        @push_records ||= begin
+          raw = params[:records]
+          raw = raw.to_unsafe_h.values if raw.respond_to?(:to_unsafe_h)
+          Array(raw).map { |r| r.respond_to?(:to_unsafe_h) ? r.to_unsafe_h : r.to_h }
+        end
+      end
+
+      def kiosk_claims_only?
+        current_device.kind == "kiosk" && push_records.all? { |r| r.with_indifferent_access[:type].to_s == "meal_claim" }
       end
     end
   end

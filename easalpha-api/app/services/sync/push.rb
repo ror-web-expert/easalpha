@@ -1,9 +1,15 @@
 module Sync
   # Applies a till's offline queue in order. Every record carries the UUID the device made; repeats are duplicates, never double writes.
-  # records: [{ type, id, membership_id?, payload }]
+  # records: [{ type, id, membership_id?, approver_pin?, payload }]
+  # The pushing session (actor) is the cashier signed in on the till; a record may name another member who signed in
+  # on this till before (A2). approver_pin is a manager PIN typed on the till for that record (A3): it is checked here
+  # and never stored.
   class Push
-    TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement meal_claim].freeze
+    TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement meal_claim customer_payment].freeze
     CHARGE_KEYS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent].freeze
+    # A refresh token this old says that person signed in on this till at some point; older than this and the till
+    # itself would have lost the session long ago.
+    SIGNED_IN_WITHIN = 60.days
 
     def initialize(device:, branch:, actor:)
       @device, @branch, @actor = device, branch, actor
@@ -20,11 +26,19 @@ module Sync
     private
 
     def apply(record, batch)
+      # The PIN leaves the record first: a rejection keeps the payload, the audit log keeps what was approved, neither keeps the PIN.
+      pin = record.delete(:approver_pin).to_s
       type, id, payload = record[:type].to_s, record[:id].to_s, (record[:payload] || {}).to_h.with_indifferent_access
+      payload.delete(:approver_pin)
+      record[:payload] = payload
       return reject(record, batch, "sync.type", "Unknown record type #{type}") unless TYPES.include?(type)
       return reject(record, batch, "sync.id", "Record id must be a UUID") unless id.match?(/\A[0-9a-f-]{36}\z/i)
       actor = actor_for(record)
-      return reject(record, batch, "sync.member", "Staff member is not active at this branch") unless actor || type == "meal_claim" # a kiosk has no cashier
+      if actor.nil?
+        return reject(record, batch, "actor.unknown", "That staff member has not signed in on this till") if record[:membership_id].present?
+        return reject(record, batch, "sync.member", "Staff member is not active at this branch") unless type == "meal_claim" # a kiosk has no cashier
+      end
+      @approvals = approvals_for(pin, actor)
       status = send("apply_#{type}", id, payload, actor)
       { id: id, type: type, status: status }
     rescue Api::Errors::ApiError => e
@@ -41,20 +55,36 @@ module Sync
       payload[key].presence || raise(Api::Errors::BadRequest.new("sync.payload", "#{key} is required"))
     end
 
+    # Who made the record. The signed-in cashier by default; another member only if they signed in on this very till
+    # (a refresh token for that membership and device), and were active when the record was made.
     def actor_for(record)
       return @actor if record[:membership_id].blank? || record[:membership_id] == @actor&.id
       m = Membership.includes(:role, :user).find_by(id: record[:membership_id])
-      m if m && (m.active? || m.deactivated_at && record.dig(:payload, :client_created_at) && Time.iso8601(record[:payload][:client_created_at].to_s) < m.deactivated_at) && m.branch_allowed?(@branch.id)
+      return nil unless m && m.branch_allowed?(@branch.id) && signed_in_here?(m)
+      return m if m.active?
+      made_at = record.dig(:payload, :client_created_at).presence
+      m if m.deactivated_at && made_at && Time.iso8601(made_at.to_s) < m.deactivated_at
+    rescue ArgumentError
+      nil
     end
 
-    # A manager approval made on the till names the approving member. It counts only if that member is active and
-    # holds the permission; a cashier who holds it approves their own action, as online.
-    def approver_for(payload, permission, actor)
+    def signed_in_here?(membership)
+      RefreshToken.where(membership_id: membership.id, device_id: @device.id).where("created_at > ?", SIGNED_IN_WITHIN.ago).exists?
+    end
+
+    # One manager PIN typed on the till covers every guarded step of that record, as approver_pin does online
+    # (OrdersController#collect_approvals). A wrong PIN counts against the cashier's PIN throttle, as online, and
+    # leaves the record with no approval: the guarded step then answers approval.required.
+    def approvals_for(pin, actor)
+      return {} if pin.blank? || actor.nil?
+      approver = Auth::PinApproval.find_approver(pin: pin, permission: "app.pos", exclude_membership: actor)
+      approver ? approver.permission_codes.index_with { approver } : {}
+    end
+
+    # The member whose PIN approved this step, nil when the cashier holds the permission themselves (as online).
+    def approver_for(permission, actor)
       return nil if actor.can?(permission)
-      id = payload[:approved_by_membership_id].presence || payload[:staff_meal_approved_by_id].presence
-      m = id && Membership.includes(:role, :user).find_by(id: id)
-      raise Api::Errors::Forbidden.new("approval.required", "A manager with #{permission} must approve this") unless m&.active? && m.can?(permission)
-      m
+      @approvals[permission] || raise(Api::Errors::Forbidden.new("approval.required", "A manager with #{permission} must approve this"))
     end
 
     def reject(record, batch, code, message)
@@ -62,6 +92,8 @@ module Sync
                             code: code, message: message, payload: record.to_h)
       { id: record[:id], type: record[:type], status: "rejected", code: code, message: message }
     end
+
+    def complete?(payload) = ActiveModel::Type::Boolean.new.cast(payload[:complete]) || payload[:status].to_s == "completed"
 
     # An order from the till: lines, optional payments, and the status it reached offline. Sent again (Try again on the
     # till) after its payments were refused, the order is already here: only the payments it does not have yet are
@@ -77,30 +109,48 @@ module Sync
       attrs[:id] = id
       attrs[:source] ||= "till"
       attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
-      attrs[:staff_meal_approved_by_id] = (approver_for(payload, "orders.staff_meal", actor) || actor).id if attrs[:is_staff_meal]
-      day = @branch.business_day_for(attrs[:client_created_at].present? ? Time.iso8601(attrs[:client_created_at].to_s) : Time.current)
+      attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id if attrs[:is_staff_meal]
+      attrs[:client_created_at] = Orders::ClientTime.clamp(attrs[:client_created_at], record_id: id) if attrs.key?(:client_created_at)
+      day = @branch.business_day_for(attrs[:client_created_at] || Time.current)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
-      builder = Orders::Builder.create!(attrs, lines: Array(payload[:lines]).map(&:to_h), actor: actor, device: @device, branch: @branch, approvals: {})
+      builder = Orders::Builder.create!(attrs, lines: Array(payload[:lines]).map(&:to_h), actor: actor, device: @device, branch: @branch, approvals: @approvals)
       order = builder.order
-      Orders::Transitions.place!(order, actor: actor, device: @device) if payload[:status].to_s != "draft" && payload[:status].present?
+      Orders::Transitions.place!(order, actor: actor, device: @device) if complete?(payload) || payload[:status].to_s != "draft" && payload[:status].present?
       if payload[:voided].present? || payload[:status].to_s == "voided"
-        Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for(payload, "orders.void", actor), device: @device)
+        Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for("orders.void", actor), device: @device)
       elsif payload[:payments].present?
         Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
       end
+      complete!(order, actor) if complete?(payload)
       "accepted"
     end
 
-    # True when the order took payments it was missing. A voided or settled order, or one whose payments are all
-    # recorded, is left as it is.
+    # True when the order took payments it was missing, or was completed as the till asked. A voided or settled order,
+    # or one whose payments are all recorded, is left as it is.
     def apply_missing_payments(order, payload, actor)
       return false if payload[:voided].present? || payload[:status].to_s == "voided"
       return false unless order.status.in?(%w[draft held placed preparing ready served dispatched])
       missing = Array(payload[:payments]).map { |p| p.to_h.with_indifferent_access }.reject { |p| p[:id].present? && Payment.exists?(id: p[:id]) }
-      return false if missing.empty?
-      tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
-      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: missing, tip_minor: tip, offline: true)
-      true
+      changed = false
+      if missing.any?
+        tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: missing, tip_minor: tip, offline: true)
+        changed = true
+      end
+      if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
+        Orders::Transitions.place!(order, actor: actor, device: @device) if order.status.in?(%w[draft held])
+        complete!(order, actor)
+        changed = true
+      end
+      changed
+    end
+
+    # A staff meal or a zero-total order taken offline closes without a payment. Anything else must be paid first:
+    # the till does not place Direct Unpaid orders offline, so an unpaid order here comes back order.unpaid.
+    def complete!(order, actor)
+      order.reload
+      return if order.completed?
+      Orders::Transitions.close!(order, actor: actor, device: @device, allow_unpaid: order.is_staff_meal || order.total_minor.zero?)
     end
 
     def apply_order_update(id, payload, actor)
@@ -108,18 +158,18 @@ module Sync
       return "duplicate" if payload[:client_seq].present? && order.notes.to_s.include?("seq:#{payload[:client_seq]}")
       builder = Orders::Builder.new(order, actor: actor, device: @device, branch: @branch)
       attrs = payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, :is_staff_meal, :staff_meal_reason, *CHARGE_KEYS).to_h.symbolize_keys
-      # The staff-meal flag changed offline: on needs orders.staff_meal (the actor's own or the recorded approver), off charges normally.
+      # The staff-meal flag changed offline: on needs orders.staff_meal (the actor's own or the PIN on the record), off charges normally.
       if attrs.key?(:is_staff_meal)
         attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal])
         if attrs[:is_staff_meal]
-          attrs[:staff_meal_approved_by_id] = (approver_for(payload, "orders.staff_meal", actor) || actor).id unless order.is_staff_meal
+          attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id unless order.is_staff_meal
           attrs[:staff_meal_reason] = order.staff_meal_reason if attrs[:staff_meal_reason].blank?
         else
           attrs[:staff_meal_reason] = nil
           attrs[:staff_meal_approved_by_id] = nil
         end
       end
-      builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: {})
+      builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: @approvals)
       Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
       "accepted"
     end
@@ -134,7 +184,7 @@ module Sync
     def apply_refund(id, payload, actor)
       return "duplicate" if Refund.exists?(id: id)
       order = Order.find(need(payload, :order_id))
-      approver = approver_for(payload, "orders.refund", actor)
+      approver = approver_for("orders.refund", actor)
       Payments::Refunder.call(order, amount_minor: payload[:amount_minor].to_i, method_code: payload[:method_code], reason: payload[:reason].to_s, actor: actor, approver: approver, device: @device, id: id)
       "accepted"
     end
@@ -142,7 +192,7 @@ module Sync
     def apply_void(id, payload, actor)
       order = Order.find(need(payload, :order_id))
       return "duplicate" if order.status == "voided"
-      approver = approver_for(payload, "orders.void", actor)
+      approver = approver_for("orders.void", actor)
       Orders::Transitions.void!(order, reason: payload[:reason].presence || "voided on till", actor: actor, approver: approver, device: @device)
       "accepted"
     end
@@ -153,10 +203,12 @@ module Sync
       "accepted"
     end
 
+    # The manager approval on a close or a cash-out is recorded when a PIN came with the record, and not demanded
+    # when none did: the same as the online endpoints.
     def apply_shift_close(id, payload, actor)
       shift = Shift.find(id)
       return "duplicate" unless shift.open?
-      Shifts::Manager.close!(shift, counted_cash_minor: payload[:counted_cash_minor].to_i, count_detail: payload[:count_detail].to_h, by: actor, note: payload[:note])
+      Shifts::Manager.close!(shift, counted_cash_minor: payload[:counted_cash_minor].to_i, count_detail: payload[:count_detail].to_h, by: actor, approver: @approvals["shifts.any"], note: payload[:note])
       "accepted"
     end
 
@@ -172,7 +224,25 @@ module Sync
     def apply_cash_movement(id, payload, actor)
       return "duplicate" if CashMovement.exists?(id: id)
       shift = Shift.find(need(payload, :shift_id))
-      Shifts::Manager.cash_movement!(shift, kind: payload[:kind].to_s, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, reference: payload[:reference], id: id)
+      Shifts::Manager.cash_movement!(shift, kind: payload[:kind].to_s, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, approver: @approvals["shifts.any"], reference: payload[:reference], id: id)
+      "accepted"
+    end
+
+    # Money taken against a customer's account while the till was offline (the Khata screen's Receive). The till's id
+    # makes a replay a duplicate; the module must be on, the day open, and the cashier allowed to collect (or a
+    # manager PIN with the record). The payment is dated the day it lands, as online; the till's day is checked too.
+    def apply_customer_payment(id, payload, actor)
+      return "duplicate" if CustomerPayment.exists?(id: id)
+      BusinessModules.require!(@branch.business, "customer_accounts")
+      approver = actor.can?("customers.manage") ? nil : approver_for("khata.collect", actor)
+      customer = Customer.active.find(need(payload, :customer_id))
+      made_at = Orders::ClientTime.clamp(payload[:client_created_at], table_name: "customer_payments", record_id: id)
+      [ @branch.business_day_for(made_at || Time.current), @branch.business_day_for(Time.current) ].uniq.each do |day|
+        raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
+      end
+      cp = Payments::Khata.receive!(customer, id: id, amount_minor: payload[:amount_minor].to_i, method_code: need(payload, :method_code), reference: payload[:reference].presence,
+                                    actor: actor, shift: Shift.open.find_by(cashier_membership_id: actor.id), branch: @branch, direction: payload[:direction].presence_in(%w[received paid]) || "received")
+      AuditLog.record(action: "approve", record: cp, approved_by: approver.user, after: { permission: "khata.collect", amount_minor: cp.amount_minor }) if approver
       "accepted"
     end
   end

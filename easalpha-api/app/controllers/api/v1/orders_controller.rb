@@ -160,7 +160,9 @@ module Api
         if attrs[:is_staff_meal]
           attrs[:staff_meal_approved_by_id] = (approvals["orders.staff_meal"] || require_approval!("orders.staff_meal")).id
         end
-        day_lock_guard!(current_branch.business_day_for(attrs[:client_created_at].present? ? Time.iso8601(attrs[:client_created_at].to_s) : Time.current))
+        # The till's clock dates the order, within a week back and an hour ahead (Orders::ClientTime); the day lock is checked on the day it lands.
+        attrs[:client_created_at] = Orders::ClientTime.clamp(attrs[:client_created_at], record_id: attrs[:id].presence) if attrs.key?(:client_created_at)
+        day_lock_guard!(current_branch.business_day_for(attrs[:client_created_at] || Time.current))
         builder = Orders::Builder.create!(attrs, lines: lines_param, actor: current_membership, device: current_device, branch: current_branch, approvals: approvals)
         order = builder.order
         audit!("create", record: order, after: { total_minor: order.total_minor, items: order.items.size })

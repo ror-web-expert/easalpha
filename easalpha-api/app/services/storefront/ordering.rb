@@ -5,8 +5,30 @@ module Storefront
     module_function
 
     ORDER_TYPES = %w[delivery takeaway].freeze
+    # A guest's client id is a key for "this same submit again", never the order's id (review of 6 Nov 2026, A12).
+    CLIENT_ID = /\A[\w-]{8,64}\z/
+
+    def client_ref(client_id)
+      key = client_id.to_s.strip
+      "online:#{key}" if key.match?(CLIENT_ID)
+    end
+
+    # The storefront has no OTP step, so a phone is a claim, not an identity. It keeps its own customer records (the
+    # ones it created, source "online") and attaches an order only to one of those that never got an account at the
+    # till; a phone that belongs to any other customer attaches to nobody, so a guest cannot sit on a regular's
+    # history or khata by typing their number (review of 6 Nov 2026, A11). Online orders earn no regular discount
+    # either way (Marketing::RegularDiscounts).
+    def storefront_customer(name, phone)
+      known = Customer.active.find_by(phone: phone)
+      return Customer.create!(name: name, phone: phone, source: "online") if known.nil?
+      known if known.source == "online" && known.credit_limit_minor.nil? && known.balance_minor.to_i.zero?
+    end
 
     def place!(business, cfg, lines:, order_type:, customer:, notes: nil, client_id: nil)
+      ref = client_ref(client_id)
+      if ref && (again = Order.find_by(source: "online", aggregator_ref: ref))
+        return again # a retry of the same submit: the first order stands
+      end
       sections = cfg.sections
       availability = sections["availability"] || {}
       delivery = sections["delivery"] || {}
@@ -22,16 +44,19 @@ module Storefront
       raise Api::Errors::Unprocessable.new("online.address", "Please give a delivery address") if order_type.to_s == "delivery" && c[:address].to_s.strip.blank?
       branch = Branch.active.order(is_main: :desc).first or raise Api::Errors::Conflict.new("online.no_branch", "No branch takes online orders")
 
+      name = c[:name].to_s.strip
       order = nil
       Order.transaction do
-        cust = Customer.active.find_by(phone: phone) || Customer.create!(name: c[:name].to_s.strip, phone: phone, source: "online")
+        cust = storefront_customer(name, phone)
         address = nil
-        if order_type.to_s == "delivery"
+        if cust && order_type.to_s == "delivery"
           line1 = c[:address].to_s.strip
           address = cust.addresses.find_by(line1: line1) || cust.addresses.create!(line1: line1, area: c[:area].presence, city: c[:city].presence, is_default: cust.addresses.none?)
         end
-        attrs = { id: client_id.presence, order_type: order_type.to_s, source: "online", customer_id: cust.id, address_id: address&.id, guest_name: cust.name, notes: notes.presence,
-                  qr_status: "pending", qr_guest_token: SecureRandom.hex(8) }
+        # Attached to nobody: the cashier and the rider read the guest's phone and address from the order itself.
+        contact = cust ? nil : [ "Guest #{name}, #{phone}", (order_type.to_s == "delivery" ? "Deliver to: #{[ c[:address], c[:area], c[:city] ].map { |v| v.to_s.strip }.reject(&:blank?).join(', ')}" : nil) ].compact.join("; ")
+        attrs = { order_type: order_type.to_s, source: "online", customer_id: cust&.id, address_id: address&.id, guest_name: name, notes: [ contact, notes.presence ].compact.join("\n").presence,
+                  aggregator_ref: ref, qr_status: "pending", qr_guest_token: SecureRandom.hex(8) }
         order = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch).order
         min = delivery["min_order_minor"].to_i
         if order_type.to_s == "delivery" && min.positive? && order.subtotal_minor < min

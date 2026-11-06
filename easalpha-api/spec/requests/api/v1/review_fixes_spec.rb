@@ -10,6 +10,8 @@ RSpec.describe "Review fixes: public prices, webhooks, approvals, locks", type: 
   let(:device) { within(biz) { Device.create!(branch: Branch.first, name: "Till", kind: "till", paired_at: Time.current, code: "T2") } }
   let(:cashier) { add_member!(biz, "cashier", pin: "1111") }
   let(:manager) { add_member!(biz, "manager", pin: "9999") }
+  # The till pushes with the cashier's PIN session on the paired device (6 Nov 2026 review, A1).
+  let(:pos) { auth_headers(cashier, app: "pos", device: device) }
 
   before { within(biz) { PaymentMethod.seed_defaults!(biz) unless PaymentMethod.exists? } }
 
@@ -17,7 +19,7 @@ RSpec.describe "Review fixes: public prices, webhooks, approvals, locks", type: 
   def paid_order!
     id = SecureRandom.uuid
     api_post "/api/v1/sync/push", { records: [ { type: "order", id: id, membership_id: cashier.id, payload: { order_type: "takeaway", status: "placed",
-      lines: [ { product_id: m[:chai].id, quantity: 1 } ], payments: [ { id: SecureRandom.uuid, method_code: "cash", amount_minor: 9_280 } ] } } ] }, headers: device_headers(device)
+      lines: [ { product_id: m[:chai].id, quantity: 1 } ], payments: [ { id: SecureRandom.uuid, method_code: "cash", amount_minor: 9_280 } ] } } ] }, headers: pos
     expect(json[:results].first[:status]).to eq("accepted"), response.body
     id
   end
@@ -87,14 +89,15 @@ RSpec.describe "Review fixes: public prices, webhooks, approvals, locks", type: 
   end
 
   describe "offline sync" do
+    # A named approver in the payload is only a name; the manager's PIN on the record is the approval (6 Nov 2026, A3).
     it "takes a refund from the till only with a real manager approval" do
       order_id = paid_order!
-      refund = { type: "refund", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_id: order_id, amount_minor: 9_280, method_code: "cash", reason: "cold", approved_by_membership_id: cashier.id } }
-      api_post "/api/v1/sync/push", { records: [ refund ] }, headers: device_headers(device)
+      refund = { type: "refund", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_id: order_id, amount_minor: 9_280, method_code: "cash", reason: "cold", approved_by_membership_id: manager.id } }
+      api_post "/api/v1/sync/push", { records: [ refund ] }, headers: pos
       expect(json[:results].first).to include(status: "rejected", code: "approval.required")
       expect(within(biz) { Refund.count }).to eq(0)
 
-      api_post "/api/v1/sync/push", { records: [ refund.merge(id: SecureRandom.uuid).deep_merge(payload: { approved_by_membership_id: manager.id }) ] }, headers: device_headers(device)
+      api_post "/api/v1/sync/push", { records: [ refund.merge(id: SecureRandom.uuid, approver_pin: "9999") ] }, headers: pos
       expect(json[:results].first[:status]).to eq("accepted"), response.body
       within(biz) do
         expect(Order.find(order_id).status).to eq("refunded")
@@ -104,7 +107,7 @@ RSpec.describe "Review fixes: public prices, webhooks, approvals, locks", type: 
 
     it "refuses a staff meal the till marked without an approver" do
       api_post "/api/v1/sync/push", { records: [ { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "takeaway", status: "placed", is_staff_meal: true, staff_meal_reason: "lunch",
-        lines: [ { product_id: m[:chai].id, quantity: 1 } ] } } ] }, headers: device_headers(device)
+        lines: [ { product_id: m[:chai].id, quantity: 1 } ] } } ] }, headers: pos
       expect(json[:results].first).to include(status: "rejected", code: "approval.required")
       expect(within(biz) { Order.count }).to eq(0)
     end
@@ -114,7 +117,7 @@ RSpec.describe "Review fixes: public prices, webhooks, approvals, locks", type: 
       om = build_menu!(other.business)
       existing = within(other.business) { Orders::Builder.create!({ order_type: "takeaway" }, lines: [ { product_id: om[:chai].id, quantity: 1 } ], actor: other, device: nil, branch: Branch.first).order }
       api_post "/api/v1/sync/push", { records: [ { type: "order", id: existing.id, membership_id: cashier.id, payload: { order_type: "takeaway", status: "placed", lines: [ { product_id: m[:chai].id, quantity: 1 } ] } },
-                                                 { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "takeaway", status: "placed", lines: [ { product_id: m[:chai].id, quantity: 1 } ] } } ] }, headers: device_headers(device)
+                                                 { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "takeaway", status: "placed", lines: [ { product_id: m[:chai].id, quantity: 1 } ] } } ] }, headers: pos
       expect(response).to have_http_status(:ok)
       expect(json[:results].map { |r| r[:status] }).to eq(%w[rejected accepted])
       expect(json[:results].first[:code]).to eq("sync.duplicate_id")

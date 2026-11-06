@@ -71,12 +71,16 @@ module Api
 
       private
 
+      # A device token alone opens the kitchen only for a device paired as a kitchen screen (and the ready list for a
+      # token screen). A till or tablet token names nobody, so on those the display needs the cashier signed in, with
+      # the kitchen permission (review of 6 Nov 2026, A8); the web sends the POS session when there is one.
       def require_kitchen!
-        if current_device&.paired?
-          return if current_device.kind.in?(%w[kitchen till tablet])
+        if current_device&.paired? && current_membership.nil?
+          return if current_device.kind == "kitchen"
           # A token or queue screen faces the customers: it reads what is ready and never bumps.
           return if current_device.kind == "token_screen" && action_name.in?(%w[ready queue])
           raise Api::Errors::Forbidden.new("permission.denied", "This screen can only read the ready list") if current_device.kind == "token_screen"
+          raise Api::Errors::Forbidden.new("session.required", "Sign in on the till to open the kitchen display") if current_device.kind.in?(%w[till tablet])
         end
         require_permission!("kitchen.view", "kitchen.bump", "orders.create")
         raise Api::Errors::Forbidden.new("permission.denied", "Bumping needs kitchen.bump") if action_name.in?(%w[start bump bump_item]) && !current_membership.can?("kitchen.bump") && !current_membership.can?("orders.create")
