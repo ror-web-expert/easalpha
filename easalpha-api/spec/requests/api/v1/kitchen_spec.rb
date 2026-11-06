@@ -42,6 +42,7 @@ RSpec.describe "Kitchen display", type: :request do
     end
     get "/api/v1/kitchen/orders", headers: device_headers(kds)
     expect(json[:data].map { |o| o[:id] }).to eq([ late[:id] ])
+    expect(json[:data].first.keys).not_to include(:customer_name, :customer_phone)
     api_post "/api/v1/kitchen/orders/#{late[:id]}/bump", {}, headers: device_headers(kds)
     api_post "/api/v1/kitchen/orders/#{stale[:id]}/bump", {}, headers: device_headers(kds)
     get "/api/v1/kitchen/ready", headers: device_headers(kds)

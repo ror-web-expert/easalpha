@@ -49,7 +49,7 @@ export function KitchenGate({ children, title }: { children: React.ReactNode; ti
   if (!ready) return <Loading />;
   // The kitchen display on a till or tablet with nobody signed in: the API answers session.required, so say who can
   // open it rather than show a board that never loads (the queue and token screens work on the till's token).
-  if (token && tillOnly && pathname?.startsWith("/kitchen")) {
+  if (token && tillOnly && (pathname === "/kitchen" || pathname?.startsWith("/kitchen/"))) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-page px-4 text-fg">
         <div className="w-full max-w-sm space-y-6 text-center">

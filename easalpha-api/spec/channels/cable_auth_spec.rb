@@ -20,7 +20,8 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
     token = Auth::TokenService.access_token(user: cashier.user, membership: cashier, app: "pos", device: device)
     connect "/cable", params: { token: token }
     expect(connection.principal).to include(membership_id: cashier.id, device_id: device.id, branch_ids: "all")
-    expect(connection.principal[:permissions]).to include("orders.create")
+    expect(connection.principal).not_to have_key(:permissions) # looked up again by the channels, not kept in the identifier
+    expect(ApplicationCable::Connection.resolve(typ: "access", business_id: biz.id, membership_id: cashier.id, device_id: device.id)[:permissions]).to include("orders.create")
     device.update!(revoked_at: Time.current)
     expect { connect "/cable", params: { token: token } }.to have_rejected_connection
     plain = Auth::TokenService.access_token(user: cashier.user, membership: cashier, app: "admin")
@@ -40,10 +41,11 @@ RSpec.describe "Cable channels", type: :channel do
   let(:rider) { add_member!(biz, "rider", pin: "2222") }
 
   def paired(kind, at: branch) = within(biz) { Device.create!(branch: at, name: kind, kind: kind, paired_at: Time.current) }
-  def device_principal(device) = ApplicationCable::Connection.resolve(typ: "device", business_id: biz.id, device_id: device.id, branch_id: device.branch_id, app: "pos")
+  # As the connection keeps them: the identifier without the permissions, which the channels look up again.
+  def device_principal(device) = ApplicationCable::Connection.resolve(typ: "device", business_id: biz.id, device_id: device.id, branch_id: device.branch_id, app: "pos")&.except(:permissions)
   def session_principal(member, device: nil, app: "pos")
     token = Auth::TokenService.decode(Auth::TokenService.access_token(user: member.user, membership: member, app: app, device: device, branch: device&.branch))
-    ApplicationCable::Connection.resolve(typ: "access", business_id: biz.id, device_id: token[:did], membership_id: member.id, branch_id: token[:brid], app: app, perms: token[:perms])
+    ApplicationCable::Connection.resolve(typ: "access", business_id: biz.id, device_id: token[:did], membership_id: member.id, branch_id: token[:brid], app: app).except(:permissions)
   end
 
   # A subscription to any channel on the stub connection, as the channel test case's subscribe makes one.

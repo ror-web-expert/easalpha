@@ -5,7 +5,8 @@ module Api
       before_action :require_kitchen!
 
       # GET /kitchen/orders?station_id=&from=  active orders with their items for this station, from the previous
-      # business day (or the given day) on; a pre-order keeps its place until it is due whatever day it was taken
+      # business day (or the given day) on; a pre-order keeps its place until it is due whatever day it was taken.
+      # The customer's name and phone stay off a kitchen screen, which shows neither.
       def orders
         from = params[:from].present? ? Date.parse(params[:from].to_s) : nil
         scope = in_kitchen(from).includes(:dining_table, :customer, items: :modifiers).order(:placed_at)
@@ -13,7 +14,7 @@ module Api
           items = o.items.reject(&:cancelled?)
           items = items.select { |i| i.station_id == params[:station_id] || (i.deal_components.any? { |c| c["station_id"] == params[:station_id] }) } if params[:station_id].present?
           next if items.empty?
-          OrderSerializers.summary(o).merge(items: items.map { |i| OrderSerializers.item(i) }, elapsed_seconds: (Time.current - (o.placed_at || o.created_at)).to_i)
+          OrderSerializers.summary(o).except(:customer_name, :customer_phone).merge(items: items.map { |i| OrderSerializers.item(i) }, elapsed_seconds: (Time.current - (o.placed_at || o.created_at)).to_i)
         end.compact
         render json: { data: orders, server_time: Time.current }
       rescue Date::Error

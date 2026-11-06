@@ -32,7 +32,7 @@ module ApplicationCable
       wanted if wanted.present? && (allowed == "all" || Array(allowed).include?(wanted))
     end
 
-    def fresh_principal = Connection.resolve(**principal.to_h.symbolize_keys.slice(:typ, :business_id, :device_id, :membership_id, :branch_id, :app, :perms))
+    def fresh_principal = Connection.resolve(**principal.to_h.symbolize_keys.slice(:typ, :business_id, :device_id, :membership_id, :branch_id, :app))
 
     def recheck_access
       return unless @listening
