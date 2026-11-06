@@ -37,6 +37,13 @@ describe("PaymentDialog totals", () => {
     expect(figure("Total due")).toBe("Rs 1,256");
   });
 
+  it("rounds a second cash method (cash on delivery) as it rounds Cash, as the server does", () => {
+    (h.state.paymentMethods as PaymentMethod[]).push(method("cod", "cash", "Cash on delivery", 3));
+    render(<PaymentDialog open onClose={() => {}} cart={order()} onPay={vi.fn()} busy={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Cash on delivery" }));
+    expect(figure("Total due")).toBe("Rs 1,260");
+  });
+
   it("asks for the rest of a rounded total by cash or by card, and passes the amount due it showed", async () => {
     const onPay = vi.fn(async () => {});
     render(<PaymentDialog open onClose={() => {}} cart={order({ paid_minor: 50000, rounding_minor: 400 })} onPay={onPay} busy={false} />);

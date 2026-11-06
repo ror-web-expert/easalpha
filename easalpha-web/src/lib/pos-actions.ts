@@ -4,7 +4,7 @@ import { api, ApiError } from "@/lib/api";
 import { db, kvGet, kvSet, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, noteNetworkFailure, patchQueued, probeHealth, processQueue, reachabilityUnknown } from "@/lib/sync";
 import { lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
-import { payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
+import { isCashCode, payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
 import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
 import { businessDayFor } from "@/lib/business-day";
 import { uuid } from "@/lib/utils";
@@ -261,7 +261,8 @@ export class TotalChangedError extends Error {
  */
 export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor = 0, approver_pin?: string, opts: { pin?: string; shownDue?: number; seenDue?: number | null } = {}): Promise<{ receipt: Receipt; change_minor: number; offline: boolean; local: LocalOrder; cart: Cart }> {
   const { settings, membershipId } = ctx();
-  const cash = roundsCash(payments.map((p) => p.method_code));
+  const methods = useCatalogStore.getState().paymentMethods ?? [];
+  const cash = roundsCash(payments.map((p) => p.method_code), methods);
   // Ids are fixed before anything is sent: a payment the server took but answered too late (a timeout counts as
   // offline) is queued under the same id, and the server skips it instead of recording it twice.
   let pays = payments.map((p) => ({ ...p, id: p.id ?? uuid() }));
@@ -329,8 +330,10 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
   for (const p of pays) {
     const applied = Math.min(p.amount_minor, due);
     if (applied <= 0) continue;
-    const tendered = p.method_code === "cash" ? Math.max(p.tendered_minor ?? 0, p.amount_minor) : undefined;
-    const ch = p.method_code === "cash" ? Math.max((tendered ?? 0) - applied, 0) : 0;
+    // Tendered and change for any cash-kind method, as the server works them out at replay.
+    const isCash = isCashCode(p.method_code, methods);
+    const tendered = isCash ? Math.max(p.tendered_minor ?? 0, p.amount_minor) : undefined;
+    const ch = isCash ? Math.max((tendered ?? 0) - applied, 0) : 0;
     change += ch;
     due -= applied;
     newPayments.push({ id: p.id, method_code: p.method_code, amount_minor: applied, tendered_minor: tendered, change_minor: ch, reference: p.reference, client_created_at: now });

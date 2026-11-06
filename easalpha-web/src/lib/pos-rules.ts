@@ -3,7 +3,7 @@
 // (settingValue) and the session's permission codes, so the till behaves the same offline as online.
 import { cashRounding, roundToStep, settingValue, totalRoundingStep, type CartLine, type Totals } from "@/lib/pricing";
 import { totalsWithCharges, type ChargeFields } from "@/lib/pos-charges";
-import type { BusinessSettings, OrderType } from "@/lib/types";
+import type { BusinessSettings, OrderType, PaymentMethod } from "@/lib/types";
 
 export type Settings = BusinessSettings | Record<string, unknown> | null | undefined;
 
@@ -137,9 +137,19 @@ export function defaultPaymentMethod(settings: Settings, order?: { reopened?: bo
   return typeof code === "string" && code.trim() ? code.trim() : null;
 }
 
-/** Payments::Processor rounds only when one of the payments uses the method coded "cash" (the default Cash method). */
-export function roundsCash(methodCodes: readonly (string | null | undefined)[]): boolean {
-  return methodCodes.includes("cash");
+/**
+ * A payment is cash when its method's kind is cash, as on the server: Cash, or any method a business added with the
+ * kind cash (cash on delivery, say). A code missing from `methods` counts only when it is "cash".
+ */
+export function isCashCode(code: string | null | undefined, methods: readonly Pick<PaymentMethod, "code" | "kind">[] = []): boolean {
+  if (!code) return false;
+  const kind = methods.find((m) => m.code === code)?.kind;
+  return kind ? kind === "cash" : code === "cash";
+}
+
+/** Payments::Processor rounds only when one of the payments is cash (isCashCode). */
+export function roundsCash(methodCodes: readonly (string | null | undefined)[], methods: readonly Pick<PaymentMethod, "code" | "kind">[] = []): boolean {
+  return methodCodes.some((code) => isCashCode(code, methods));
 }
 
 /**

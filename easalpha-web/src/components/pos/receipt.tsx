@@ -122,8 +122,9 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
       {r.payments?.map((p, i) => (
         <div key={i}>
           {row(titleCase(p.method), m(p.amount_minor))}
-          {p.method === "cash" && p.tendered_minor ? row("Cash tendered", m(p.tendered_minor), { muted: true }) : null}
-          {p.method === "cash" && p.tendered_minor ? row("Change", m(p.change_minor ?? 0), { bold: true }) : null}
+          {/* Only a cash-kind method carries a tendered amount, whatever its code (Cash, cash on delivery). */}
+          {p.tendered_minor ? row("Cash tendered", m(p.tendered_minor), { muted: true }) : null}
+          {p.tendered_minor ? row("Change", m(p.change_minor ?? 0), { bold: true }) : null}
           {p.reference ? <div className="text-[0.9em]">Ref {p.reference}</div> : null}
         </div>
       ))}

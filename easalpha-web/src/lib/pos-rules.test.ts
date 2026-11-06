@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CartLine } from "./pricing";
 import {
-  allowedOrderTypes, canTakeOrderType, confirmationPopup, customerRequired, defaultPaymentMethod, directUnpaidAllowed,
+  allowedOrderTypes, canTakeOrderType, confirmationPopup, customerRequired, defaultPaymentMethod, directUnpaidAllowed, isCashCode,
   kdsAlerts, kdsTimeoutMinutes, kdsTone, minutesUntilDayEnd, parsePaymentSummary, payableTotals, pendingReminderState, reconcilePayments,
   roundingForPayment, roundsCash, serverDueForPayment } from "./pos-rules";
 
@@ -151,9 +151,14 @@ describe("cash rounding and tips as Payments::Processor takes them", () => {
   const line = (price: number): CartLine => ({ key: `l${price}`, name: "Karahi", unit_price_minor: price, quantity: 1, modifiers: [], tax_rate: 0, tax_inclusive: false });
   const order = (over: Record<string, unknown> = {}) => ({ order_type: "takeaway", lines: [line(125600)], is_staff_meal: false, ...over });
 
-  it("rounds only with the method coded cash, and only while nothing has been paid", () => {
+  it("rounds only with a cash-kind method, and only while nothing has been paid", () => {
     expect(roundsCash(["card", "cash"])).toBe(true);
-    expect(roundsCash(["card", "cash_usd", undefined])).toBe(false);
+    expect(roundsCash(["card", "cash_usd", undefined])).toBe(false); // a code the till has no method for
+    const methods = [{ code: "cash", kind: "cash" }, { code: "cod", kind: "cash" }, { code: "card", kind: "card" }, { code: "khata", kind: "khata" }];
+    expect(roundsCash(["card", "cod"], methods)).toBe(true); // a second cash method, as Payments::Processor takes it
+    expect(roundsCash(["card", "khata"], methods)).toBe(false);
+    expect(isCashCode("cash", [{ code: "cash", kind: "custom" }])).toBe(false); // the kind decides, not the code
+    expect(isCashCode(undefined, methods)).toBe(false);
     expect(roundingForPayment(125600, 0, 0, true, settings)).toBe(400);
     expect(roundingForPayment(125600, 0, 0, false, settings)).toBe(0);
     expect(roundingForPayment(125600, 400, 50000, true, settings)).toBe(400); // later payments keep the stored rounding

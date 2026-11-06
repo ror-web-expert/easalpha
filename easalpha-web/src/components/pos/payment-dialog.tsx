@@ -64,7 +64,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const delivery = resolveDeliveryCharge(cart, settings);
   // As the server will charge it: tips already taken plus this one; cash rounding on the first cash payment only,
   // after which the rounding stored with that payment stays in the total.
-  const cash = roundsCash([...splits.map((s) => s.method.code), draft.method?.code]);
+  const cash = roundsCash([...splits.map((s) => s.method.code), draft.method?.code], methods);
   const base = payableTotals(cart, { settings, tip_minor: tip, cash });
   const net = base.subtotal_minor - base.discount_minor;
   const total = base.total_minor;

@@ -20,6 +20,8 @@ const h = vi.hoisted(() => ({
   health: true,
   /** The timeout each save asked the API for. */
   timeouts: [] as (number | undefined)[],
+  /** The till's payment methods (catalog store); empty means only the code "cash" is cash. */
+  methods: [] as { code: string; kind: string }[],
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -48,7 +50,7 @@ vi.mock("@/lib/sync", () => ({
     h.queued.push(r);
   },
 }));
-vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Test Cafe", currency: "PKR", settings: h.settings }, regular_discount_tiers: h.tiers, products: [] }, paymentMethods: [] }) } }));
+vi.mock("@/store/catalog", () => ({ useCatalogStore: { getState: () => ({ catalog: { business: { name: "Test Cafe", currency: "PKR", settings: h.settings }, regular_discount_tiers: h.tiers, products: [] }, paymentMethods: h.methods }) } }));
 vi.mock("@/store/device", () => ({ useDeviceStore: { getState: () => ({ device: null, branch: null, session: null, business: null }) } }));
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
@@ -89,12 +91,15 @@ function asOrder(o: ServerOrder): Order {
   } as unknown as Order;
 }
 
+/** A cash-kind method, as Payments::Processor tells cash (PaymentMethod#cash?). */
+const serverCash = (code: string) => (h.methods.find((m) => m.code === code)?.kind ?? (code === "cash" ? "cash" : null)) === "cash";
+
 /** Payments::Processor#call: all or nothing, like its transaction. */
 function takePayments(o: ServerOrder, body: { payments: PaymentInput[]; tip_minor: number }): PaymentResult {
   const next: ServerOrder = JSON.parse(JSON.stringify(o));
   if (body.tip_minor > 0) next.tip_minor += body.tip_minor;
   const step = Math.trunc(Number(h.settings.cash_rounding ?? 0)) * 100;
-  if (step > 0 && body.payments.some((p) => p.method_code === "cash") && next.paid_minor === 0) {
+  if (step > 0 && body.payments.some((p) => serverCash(p.method_code)) && next.paid_minor === 0) {
     const before = total(next) - next.rounding_minor;
     next.rounding_minor = Math.floor((before + step / 2) / step) * step - before;
   }
@@ -104,10 +109,10 @@ function takePayments(o: ServerOrder, body: { payments: PaymentInput[]; tip_mino
   const created = body.payments.map((p) => {
     if (!(p.amount_minor > 0)) throw new ApiError("payment.amount", "Amount must be positive", 400);
     const remaining = due - taken;
-    if (p.amount_minor > remaining && p.method_code !== "cash") throw new ApiError("payment.overpaid", "Payment exceeds the amount due", 409);
+    if (p.amount_minor > remaining && !serverCash(p.method_code)) throw new ApiError("payment.overpaid", "Payment exceeds the amount due", 409);
     const applied = Math.min(p.amount_minor, remaining);
     if (applied <= 0) throw new ApiError("payment.overpaid", "Order is already paid", 409);
-    const tendered = p.method_code === "cash" ? Math.max(p.tendered_minor ?? 0, p.amount_minor) : null;
+    const tendered = serverCash(p.method_code) ? Math.max(p.tendered_minor ?? 0, p.amount_minor) : null;
     const ch = tendered === null ? 0 : Math.max(tendered - applied, 0);
     taken += applied;
     change += ch;
@@ -130,7 +135,7 @@ const openLine = (name: string, price: number): CartLine => ({ key: `new-${name}
 const cash = (amount: number, tendered = amount): PaymentInput => ({ method_code: "cash", amount_minor: amount, tendered_minor: tendered });
 const card = (amount: number): PaymentInput => ({ method_code: "card", amount_minor: amount, reference: "4242" });
 /** The amount due the payment screen shows for these methods (the same sum PaymentDialog makes). */
-const screenDue = (cart: Cart, codes: string[], tip = 0) => Math.max(0, payableTotals(cart, { settings: h.settings, tip_minor: tip, cash: roundsCash(codes) }).total_minor - (cart.paid_minor ?? 0));
+const screenDue = (cart: Cart, codes: string[], tip = 0) => Math.max(0, payableTotals(cart, { settings: h.settings, tip_minor: tip, cash: roundsCash(codes, h.methods) }).total_minor - (cart.paid_minor ?? 0));
 
 beforeEach(() => {
   h.rows.clear();
@@ -142,6 +147,7 @@ beforeEach(() => {
   h.timeouts.length = 0;
   for (const k of Object.keys(h.settings)) delete h.settings[k];
   h.tiers = [];
+  h.methods.length = 0;
   h.handler = (path, opts) => {
     const [, id, action] = /^\/orders\/([^/]+)(?:\/(\w+))?$/.exec(path) ?? [];
     if (id === server.id && opts.method === "POST" && action === "place") { h.calls.push("place"); server.status = "placed"; return asOrder(server); }
@@ -201,6 +207,28 @@ describe("payOrder with Rs 10 cash rounding", () => {
     h.rows.clear(); // a new order under the same id: nothing stored for it yet
     const byCard = await payOrder(opened(), [card(125600)], 0, undefined, { shownDue: screenDue(opened(), ["card"]) });
     expect(byCard.local).toMatchObject({ status: "paid", total_minor: 125600, rounding_minor: 0 });
+  });
+
+  it("rounds and gives change for a second cash method (cash on delivery) as for Cash, online and offline", async () => {
+    h.methods.push({ code: "cash", kind: "cash" }, { code: "cod", kind: "cash" }, { code: "card", kind: "card" });
+    const cod = (amount: number, tendered = amount): PaymentInput => ({ method_code: "cod", amount_minor: amount, tendered_minor: tendered });
+    const shown = screenDue(opened(), ["cod"]);
+    expect(shown).toBe(126000);
+    const r = await payOrder(opened(), [cod(126000, 130000)], 0, undefined, { shownDue: shown });
+    expect(r.local).toMatchObject({ status: "paid", total_minor: 126000 });
+    expect(r.change_minor).toBe(4000);
+    expect(server).toMatchObject({ rounding_minor: 400, paid_minor: 126000 });
+
+    // Offline the till rounds the same way and keeps the tendered amount and the change for the receipt and the replay.
+    server = fresh([["Karahi", 125600]]);
+    h.rows.clear();
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    h.online = false;
+    const off = await payOrder(opened(), [cod(126000, 130000)], 0);
+    expect(off.local).toMatchObject({ status: "paid", total_minor: 126000 });
+    expect(off.change_minor).toBe(4000);
+    expect(off.local.payments.at(-1)).toMatchObject({ method_code: "cod", tendered_minor: 130000, change_minor: 4000 });
+    expect(h.queued.find((q) => q.type === "payment")?.payload).toMatchObject({ method_code: "cod", amount_minor: 126000, tendered_minor: 130000 });
   });
 });
 
