@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { afterOfflineSale, customersStale, mergeCustomers, searchCachedCustomers, toCachedCustomer, type CachedCustomer } from "@/lib/offline-customers";
+import { afterOfflineSale, afterPayment, customersStale, mergeCustomers, searchCachedCustomers, toCachedCustomer, type CachedCustomer } from "@/lib/offline-customers";
 import type { Customer } from "@/lib/types";
 
 const c = (id: string, name: string, extra: Partial<CachedCustomer> = {}): CachedCustomer => toCachedCustomer({
@@ -69,5 +69,14 @@ describe("the saved customer list", () => {
     expect(customersStale(null, now)).toBe(true);
     expect(customersStale("2026-10-18T07:00:00Z", now)).toBe(false);
     expect(customersStale("2026-10-18T05:00:00Z", now)).toBe(true);
+  });
+});
+
+describe("a payment received at the till", () => {
+  it("takes the amount off the saved balance, into credit if it is more than they owe", () => {
+    const s = { ...c("1", "Sadia Akhtar"), balance_minor: 194_500 };
+    expect(afterPayment(s, 100_000).balance_minor).toBe(94_500);
+    expect(afterPayment(s, 200_000).balance_minor).toBe(-5_500);
+    expect(afterPayment(s, -5).balance_minor).toBe(194_500);
   });
 });

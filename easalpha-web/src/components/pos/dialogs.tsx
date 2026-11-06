@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Repeat, UserPlus } from "lucide-react";
+import { Banknote, Repeat, UserPlus } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { Customer, CustomerLookup, DiningTable, Order } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
@@ -9,7 +9,10 @@ import type { CartCustomer } from "@/store/cart";
 import { Badge, Button, Dialog, Field, Input, MoneyInput, Textarea, tableStatusVariant } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { customerDetails, newCustomerPrefill, toCartCustomer } from "@/lib/pos-customers";
+import { moduleOn } from "@/lib/modules";
+import { useCatalogStore } from "@/store/catalog";
 import { CustomerSearch } from "./customer-search";
+import { ReceivePaymentDialog } from "./receive-payment";
 
 export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: boolean; onClose: () => void; onPick: (c: CartCustomer) => void; onRepeat: (o: Order) => void }) {
   // Search by name or number (CustomerSearch), then use the customer or repeat their last order; or add a new one.
@@ -18,9 +21,13 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
   const [adding, setAdding] = useState<{ name: string; phone: string; room: string; member_no: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Receive payment (khata collection) shows whenever customer accounts are on; a cashier without khata.collect is asked
+  // for a manager's PIN inside it, so the counter can take a student's payment without the admin panel.
+  const [receiving, setReceiving] = useState(false);
+  const khataOn = moduleOn(useCatalogStore((s) => s.catalog?.business.settings), "customer_accounts");
   // Counts picks, so a slow lookup for an earlier pick never shows its last order on a later one.
   const pickNo = useRef(0);
-  useEffect(() => { if (open) { pickNo.current++; setPicked(null); setLastOrder(null); setAdding(null); setError(null); } }, [open]);
+  useEffect(() => { if (open) { pickNo.current++; setPicked(null); setLastOrder(null); setAdding(null); setError(null); setReceiving(false); } }, [open]);
   const choose = async (c: Customer) => {
     const n = ++pickNo.current;
     setPicked(c); setLastOrder(null); setError(null);
@@ -66,6 +73,7 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
             </div>
             {picked.status !== "active" ? <p className="text-sm text-danger">This customer is {picked.status.replace("_", " ")}.</p> : null}
             <Button className="w-full" size="lg" onClick={() => attach(picked)}>Use this customer</Button>
+            {khataOn && !picked.is_walk_in ? <Button className="w-full" size="lg" variant="secondary" onClick={() => setReceiving(true)}><Banknote className="h-4 w-4" /> Receive payment</Button> : null}
             {lastOrder ? (
               <Button className="w-full" size="lg" variant="secondary" onClick={() => { onPick(toCartCustomer(picked)); onRepeat(lastOrder); onClose(); }}>
                 <Repeat className="h-4 w-4" /> Repeat last order · {formatMoney(lastOrder.total_minor)} · {lastOrder.items?.length} items
@@ -78,6 +86,7 @@ export function CustomerDialog({ open, onClose, onPick, onRepeat }: { open: bool
         )}
         {error ? <p className="text-sm text-danger">{error}</p> : null}
       </div>
+      {picked ? <ReceivePaymentDialog open={receiving} onClose={() => setReceiving(false)} customer={picked} onReceived={(b) => { if (b !== null) setPicked({ ...picked, balance_minor: b }); }} /> : null}
     </Dialog>
   );
 }
