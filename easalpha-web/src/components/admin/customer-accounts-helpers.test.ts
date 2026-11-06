@@ -4,7 +4,7 @@ import {
   ALL_TIME, accountPhones, amountDue, balanceText, billEntryLabel, billFileName, billLines, canReverseEntry, cleanPhone, closingFrom, closingMessage, duplicateQuery,
   entryDay, entryDetails, entryKindLabel, entryKindVariant, entryRef, importColumns, isAllTime, isApprovalCancelled, isFutureDay, ledgerRows, openingAmount, periodError,
   periodFor, periodLabel, periodQuery, presetOf, runCounts, runStatusLabel, runStatusVariant, sendErrorText, signedAmount, signedMoney, templateCsv, toggleAll, toggleId, triggerLabel,
-  billTargets, effectiveDay, IMPORT_COLUMNS, khataLimitError, MIN_KHATA_LIMIT, printIds, templateTable,
+  billTargets, effectiveDay, IMPORT_COLUMNS, khataLimitError, MIN_KHATA_LIMIT, printIds, recordPaymentBody, templateTable,
 } from "./customer-accounts-helpers";
 import { businessDayFor } from "@/lib/business-day";
 
@@ -58,6 +58,13 @@ describe("periods", () => {
     expect(effectiveDay("2026-10-12", "2026-10-12")).toBeUndefined();
     expect(effectiveDay("2026-10-01", "2026-10-12")).toBe("2026-10-01");
     expect(effectiveDay("2026-10-13", "2026-10-12")).toBeUndefined(); // Save is held for a future day anyway
+  });
+  it("dates a recorded payment to an earlier day only for a user with khata.adjust (K6)", () => {
+    const pay = { amount_minor: 9_280, method_code: "bank", reference: "IBFT 77", direction: "received" as const, received_on: "2026-10-01" };
+    expect(recordPaymentBody(pay, { canDate: true, today: "2026-10-12" })).toEqual({ amount_minor: 9_280, method_code: "bank", reference: "IBFT 77", direction: "received", received_on: "2026-10-01" });
+    expect(recordPaymentBody(pay, { canDate: false, today: "2026-10-12" }).received_on).toBeUndefined();
+    expect(recordPaymentBody({ ...pay, received_on: "2026-10-12" }, { canDate: true, today: "2026-10-12" }).received_on).toBeUndefined();
+    expect(recordPaymentBody({ ...pay, received_on: "" }, { canDate: true, today: "2026-10-12" }).received_on).toBeUndefined();
   });
 });
 

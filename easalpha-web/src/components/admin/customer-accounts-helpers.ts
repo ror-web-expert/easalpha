@@ -70,6 +70,15 @@ export function effectiveDay(value: string, today: string): string | undefined {
   return value && value < today ? value : undefined;
 }
 
+/**
+ * K6, contracts#8: the body of Record payment. Money that came on an earlier day (a bank transfer seen late) goes as
+ * received_on, and only for a user who may adjust accounts (khata.adjust, which the API checks too); today or blank is
+ * left for the API to date by its own business day.
+ */
+export function recordPaymentBody<P extends { amount_minor: number; method_code: string; reference: string; direction: "received" | "paid"; received_on?: string }>(p: P, opts: { canDate: boolean; today: string }) {
+  return { amount_minor: p.amount_minor, method_code: p.method_code, reference: p.reference, direction: p.direction, received_on: opts.canDate ? effectiveDay(p.received_on ?? "", opts.today) : undefined };
+}
+
 // ---- Khata limit ----
 
 /** The smallest credit limit: Rs 1. A limit of 0 means khata is not allowed. */
