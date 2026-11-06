@@ -394,7 +394,8 @@ export interface Shift {
   id: ID; branch_id: ID; device_id: ID | null; cashier_membership_id: ID; drawer_account_id: ID | null; business_day: string; status: string;
   settlement_status: string; opened_at: string; closed_at: string | null; opening_cash_minor: number; counted_cash_minor: number | null;
   approved_by_membership_id: ID | null; close_note: string | null; movements: CashMovement[]; expected_cash_minor?: number; over_short_minor?: number | null;
-  cashier?: string | null; net_sales_minor?: number | null;
+  /** On the shifts report: the shift's sales, the refunds it made (the revenue rule's) and its net sales after them. */
+  cashier?: string | null; sales_minor?: number | null; refunds_minor?: number | null; net_sales_minor?: number | null;
   /** Whose shift it is: on a till the shift open there may be another cashier's (GET /shifts/current). */
   cashier_name?: string | null;
 }
