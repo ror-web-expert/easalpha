@@ -163,6 +163,7 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     order_discounts: o.discounts ? o.discounts.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })) : prev?.order_discounts,
     // The Orders cards read "? items" for every order known only from a summary row (roles QA, 6 Nov 2026).
     item_count: o.item_count ?? (full ? lines.filter((l) => l.status !== "cancelled").length : prev?.item_count) ?? null,
+    reopened_at: o.reopened_at ?? null, reopen_count: o.reopen_count ?? 0,
   };
 }
 
@@ -210,6 +211,8 @@ export function localToCart(o: LocalOrder): Cart {
     paid_minor: o.paid_minor || undefined, rounding_minor: (o.cash_rounding_minor ?? o.rounding_minor) || undefined, tip_minor: o.tip_minor || undefined,
     service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
+    // As reopenFields reads the server's order: the till's copy opens reopened too (L3, 7 Nov 2026).
+    reopened: !!o.reopened_at && OPEN_STATUSES.includes(o.status as never), reopen_count: o.reopen_count ?? 0, payment_method_summary: o.payment_method_summary ?? null,
   };
 }
 
@@ -316,7 +319,8 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
   if (onServer) {
     // Exists on the server: queue an update; status changes wait for the connection.
     const prev = await db.orders.get(cart.id);
-    const local = cartToLocal(cart, place ? "placed" : cart.status, { till_serial: prev?.till_serial ?? null, label: prev?.label ?? cart.label ?? "draft", serial: prev?.serial ?? null, created_at: prev?.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0, local_only: false });
+    const local = cartToLocal(cart, place ? "placed" : cart.status, { till_serial: prev?.till_serial ?? null, label: prev?.label ?? cart.label ?? "draft", serial: prev?.serial ?? null, created_at: prev?.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0, local_only: false,
+      reopened_at: prev?.reopened_at ?? null, reopen_count: prev?.reopen_count ?? 0, payment_method_summary: prev?.payment_method_summary ?? null });
     await saveLocal(local);
     await enqueue({ type: "order_update", id: cart.id, membership_id: membershipId ?? undefined, payload: { order_type: cart.order_type, table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, notes: cart.notes || null, lines: cart.lines.map(toLineInput), client_seq: Date.now(), address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null, ...chargeFields(cart), ...staffMealFields(cart) } });
     return { cart: { ...cart, saved: true, local_only: false, status: local.status }, local, offline: true };

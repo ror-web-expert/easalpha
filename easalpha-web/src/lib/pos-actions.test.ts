@@ -483,6 +483,25 @@ describe("payOrder saves only what the server lacks", () => {
     expect(cart.lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
   });
 
+  // Leftovers of 7 Nov 2026 (L3): the till's copy carried no reopen state, so a reopened order edited offline opened
+  // again as an ordinary one: lines removable without DELETE_ORDER_ITEM, Place unpaid offered, no Save and pay.
+  it("opens a reopened order with a queued offline edit still reopened, on its original method", async () => {
+    server = fresh([["Karahi", 100000]], { status: "served", paid_minor: 100000, methods: { easypaisa: 100000 }, reopened_at: "2026-10-13T11:00:00Z", reopen_count: 2 });
+    await storeServerOrder(asOrder(server)); // as reopenOrder stores it
+    const reopened = opened();
+    h.online = false;
+    const saved = await saveOrder({ ...reopened, lines: [...reopened.lines, openLine("Naan", 30000)] });
+    expect(saved.offline).toBe(true);
+    expect(h.queued.map((q) => q.type)).toEqual(["order_update"]);
+    h.online = true;
+    const cart = await loadOrderForEdit(server.id); // from the till's copy: a GET would throw here
+    expect(cart.lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
+    expect(cart).toMatchObject({ reopened: true, reopen_count: 2, paid_minor: 100000, payment_method_summary: "easypaisa:100000" });
+    // Completed since, the same copy opens as a plain order: reopened means open again after a completion.
+    h.rows.set(server.id, { ...(h.rows.get(server.id) as LocalOrder), status: "closed", open: 0 });
+    expect(localToCart(h.rows.get(server.id) as LocalOrder).reopened).toBe(false);
+  });
+
   it("still saves a changed note, and names the save as the step that failed", async () => {
     server = fresh([["Karahi", 100000]]);
     h.rows.set(server.id, serverToLocal(asOrder(server)));
