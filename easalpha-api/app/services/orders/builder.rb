@@ -65,9 +65,13 @@ module Orders
 
     # The label price a line asks for, when it may have one: a whole positive amount on a product sold by weight.
     def self.label_price(line, product)
-      v = line[:label_price_minor]
-      price = v.is_a?(Numeric) ? (v == v.to_i ? v.to_i : nil) : Integer(v.to_s, 10, exception: false)
-      price&.positive? && product&.sold_by_weight ? price : nil
+      price = label_amount(line[:label_price_minor])
+      price && product&.sold_by_weight ? price : nil
+    end
+
+    def self.label_amount(value)
+      price = value.is_a?(Numeric) ? (value == value.to_i ? value.to_i : nil) : Integer(value.to_s, 10, exception: false)
+      price&.positive? ? price : nil
     end
 
     # The four charge settings of an order, normalised so 10 and 10.0 compare equal.
@@ -318,9 +322,11 @@ module Orders
 
     # A scale-label line keeps its printed price and the weight that price buys at the line's unit price, whatever
     # quantity the line sends; label_price_minor null, or a price override, makes it an ordinary line priced by weight.
-    # Absent, the label stays as it was (the QR flow re-sends lines without it).
+    # Absent, the label stays as it was (the QR flow re-sends lines without it); the same label sent again stays even
+    # if the product has stopped being sold by weight since, so a later save never reprices a sale already made.
     def label_changes!(item, line, changes)
-      label = line.key?(:label_price_minor) ? Builder.label_price(line, item.product) : item.label_price_minor
+      asked = line.key?(:label_price_minor) ? Builder.label_amount(line[:label_price_minor]) : item.label_price_minor
+      label = asked == item.label_price_minor || item.product&.sold_by_weight ? asked : nil
       label = nil if changes[:price_overridden] || item.price_overridden
       changes[:label_price_minor] = label if label != item.label_price_minor
       return unless label

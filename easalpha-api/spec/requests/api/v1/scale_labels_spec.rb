@@ -100,6 +100,17 @@ RSpec.describe "Scale labels: the line charges the label price", type: :request 
     expect(items.first).to include(price_overridden: true, label_price_minor: nil, line_subtotal_minor: 4_200)
   end
 
+  it "keeps a label already on an order when the product stops being sold by weight, and takes no new one" do
+    api_post "/api/v1/orders", { order_type: "takeaway", lines: [ label_line(5_000, quantity: 0.042) ] }, headers: pos
+    id = json[:id]
+    line = items.first[:id]
+    within(biz) { mithai.update!(sold_by_weight: false) }
+    api_patch "/api/v1/orders/#{id}", { notes: "later", lines: [ label_line(5_000, quantity: 0.042, id: line) ] }, headers: pos
+    expect(items.first).to include(label_price_minor: 5_000, line_subtotal_minor: 5_000)
+    api_post "/api/v1/orders", { order_type: "takeaway", lines: [ label_line(5_000, quantity: 0.042) ] }, headers: pos
+    expect(items.first).to include(label_price_minor: nil, line_subtotal_minor: 5_040)
+  end
+
   it "replays an offline label sale paid in cash as paid in full" do
     id = SecureRandom.uuid
     api_post "/api/v1/sync/push", { records: [ { type: "order", id: id, membership_id: cashier.id, payload: { order_type: "takeaway", status: "placed",
