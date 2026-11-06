@@ -108,7 +108,7 @@ export interface AuditLog {
   user_name?: string | null; approved_by_name?: string | null;
 }
 
-export interface AuditEntities { data: string[]; actions: string[] }
+export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string> }
 export interface AuditInsights {
   total: number; by_action: Record<string, number>; by_entity: Record<string, number>;
   by_actor: { user_id: ID | null; name: string; count: number }[]; by_day: Record<string, number>;

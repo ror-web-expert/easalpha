@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionVariant, auditQuery } from "./audit-filters";
+import { actionLabel, actionVariant, auditQuery } from "./audit-filters";
 
 const range = { from: "2026-10-04", to: "2026-10-10" };
 
@@ -30,5 +30,20 @@ describe("actionVariant", () => {
   });
   it("is neutral for everything else", () => {
     for (const a of ["create", "update", "login", "receive"]) expect(actionVariant(a)).toBe("neutral");
+  });
+});
+
+// Review of 6 Nov 2026, R16: the filter shows the API's label for every action, the new ones included.
+describe("actionLabel", () => {
+  const labels = { client_time_clamped: "Till clock corrected", khata_over_limit_offline: "Khata over limit (offline)" };
+  it("uses the API's label, and the action's words for one it does not know", () => {
+    expect(actionLabel("client_time_clamped", labels)).toBe("Till clock corrected");
+    expect(actionLabel("khata_over_limit_offline", labels)).toBe("Khata over limit (offline)");
+    expect(actionLabel("bulk_update", labels)).toBe("bulk update");
+    expect(actionLabel("bulk_update")).toBe("bulk update");
+  });
+  it("marks what the server corrected or let through on an offline replay for a second look", () => {
+    for (const a of ["client_time_clamped", "offline_payment_adjusted", "khata_over_limit_offline", "khata_overdue_offline"]) expect(actionVariant(a)).toBe("warning");
+    for (const a of ["stock_cancel", "goods_receipt_cancel", "po_cancel"]) expect(actionVariant(a)).toBe("danger");
   });
 });
