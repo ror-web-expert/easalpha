@@ -132,7 +132,7 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
   describe "a PIN two staff share (sync-auth#7)" do
     it "approves each step with the holder who has its permission, with approval codes and without" do
       sharer = add_member!(biz, "waiter", pin: "4444") # joined first, holds no orders.void
-      boss = add_member!(biz, "manager", pin: "4444")
+      boss = share_pin!(add_member!(biz, "manager"), "4444") # a shared PIN from before duplicates were refused
       ids = Array.new(2) { SecureRandom.uuid }
       push(ids.map { |i| order(i) })
       voids = ids.map { |i| { type: "void", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_id: i, reason: "Wrong table" } } }
