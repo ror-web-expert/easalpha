@@ -1,7 +1,8 @@
 /* EasAlpha service worker: caches the app shell so /pos, /kitchen, /token and the rider app open offline (data lives in
    IndexedDB or localStorage) and shows browser push notifications for the admin, till, kitchen and rider apps, even
    while no tab is open. Restaurant customer apps (/store/<slug>) use it to install and to reopen their last page. */
-const VERSION = "easalpha-shell-v3";
+// v4: failed answers are no longer stored, and the bump drops any a v3 cache kept (review R30).
+const VERSION = "easalpha-shell-v4";
 const SHELL = ["/pos", "/pos/pin", "/pos/orders", "/pos/shift", "/pos/attention", "/kitchen", "/token", "/rider", "/rider/pin", "/rider/pair", "/manifest.json", "/manifest-rider.json", "/icon.svg", "/icon-192.png"];
 
 /** With no signal, a page falls back to the cached copy of itself, else to the start page of the app it belongs to. */
@@ -21,6 +22,13 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
+/** Keeps a copy of a good answer only. A 404 for a chunk the last build had, or a 502 while the server restarts, stored
+ *  under cache-first would be served for that file from then on, even once the file is back (review R30). */
+function keep(req, res) {
+  if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
+  return res;
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -29,13 +37,13 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; })
+      fetch(req).then((res) => keep(req, res))
         .catch(() => caches.match(req).then((hit) => { if (hit) return hit; const f = offlineFallback(url.pathname); return f ? caches.match(f) : undefined; }).then((res) => res || new Response("<h1>No connection</h1><p>Reconnect and try again.</p>", { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } }))),
     );
     return;
   }
   if (url.pathname.startsWith("/_next/static/") || url.pathname.endsWith(".svg") || url.pathname.endsWith(".png") || url.pathname.endsWith(".json")) {
-    event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res; })));
+    event.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => keep(req, res))));
   }
 });
 
