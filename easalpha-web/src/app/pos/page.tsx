@@ -9,7 +9,7 @@ import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
 import type { BarcodeMatch } from "@/lib/barcode";
 import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
-import { holdOrder, payOrder, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError, regularPricing } from "@/lib/pos-actions";
+import { holdOrder, payOrder, payStep, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError, regularPricing } from "@/lib/pos-actions";
 import { useSyncStore } from "@/store/sync";
 import { useCustomerStore } from "@/store/customers";
 import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAllowed } from "@/lib/pos-rules";
@@ -345,7 +345,7 @@ function SellScreen() {
         seenDue.current = { id: e.cart.id, due: e.toMinor };
         loadCart(e.cart);
         toast.info("Total updated", `The amount due is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
-      } else toast.error("Payment failed", errorMessage(e));
+      } else toast.error(payStep(e) === "save" ? "Could not save the order" : payStep(e) === "complete" ? "Could not complete the staff meal" : "Payment failed", errorMessage(e));
     }
     finally { setBusy(false); }
   };
