@@ -125,6 +125,7 @@ module Orders
         Builder.apply_charge_defaults!(order, attrs, order.business) if attrs.key?(:order_type) && order.order_type_changed?
         guard_charges!(charges_before)
         audit_charges!
+        lock_customer! if order.customer_id_changed?
         validate_customer! if order.customer_id_changed?
         apply_lines!(lines, amend: true) if lines
         reprice_lines! if attrs.key?(:order_type)
@@ -167,6 +168,15 @@ module Orders
       customer = Customer.active.find(order.customer_id)
       raise Api::Errors::Conflict.new("customer.pending", "#{customer.name} is waiting for approval") if customer.status == "pending_approval"
       raise Api::Errors::Conflict.new("customer.deactivated", "#{customer.name} is deactivated") if customer.status == "deactivated"
+    end
+
+    # Khata taken on this order sits on its customer's account, and a refund of it would credit whoever the order names
+    # then: once any is captured, the customer stays (review of 6 Nov 2026, R24).
+    def lock_customer!
+      khata = Payment.where(order_id: order.id, status: "captured", payment_method_id: PaymentMethod.where(kind: "khata").select(:id)).sum(:amount_minor)
+      return unless khata.positive?
+      owner = Customer.find_by(id: order.customer_id_was)&.name || "the customer"
+      raise Api::Errors::Conflict.new("order.customer_locked", "Rs #{Customers::Notify.rupees(khata)} of #{order.label} is on #{owner}'s account, so its customer cannot be changed")
     end
 
     def cancel_item!(item, reason:)
