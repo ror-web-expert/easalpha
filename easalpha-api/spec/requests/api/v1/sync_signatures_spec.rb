@@ -244,6 +244,16 @@ RSpec.describe "Sync push: signed records", type: :request do
       expect(response).to have_http_status(:no_content) # nothing left open: the till may send it again
     end
 
+    it "updates the open row a push running alongside wrote first, instead of failing on the one-open-row index" do
+      void = waiter_void
+      push([ void ], headers: as_waiter)
+      row = within(biz) { SyncRejection.sole }
+      allow(SyncRejection).to receive(:transaction).and_raise(ActiveRecord::RecordNotUnique) # the other push's insert won
+      push([ void ], headers: as_waiter)
+      expect(result).to include(status: "rejected", code: "approval.required")
+      within(biz) { expect(SyncRejection.sole).to have_attributes(id: row.id, sync_batch_id: SyncBatch.order(:started_at).last.id) }
+    end
+
     it "keeps a record whose id is not a UUID, without failing the push" do
       push([ { type: "order", id: "not-a-uuid", membership_id: cashier.id, payload: {} }, chai_order(by: cashier) ])
       expect(json[:results].map { |r| r[:status] }).to eq(%w[rejected accepted]), response.body

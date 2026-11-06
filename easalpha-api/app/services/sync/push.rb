@@ -146,7 +146,7 @@ module Sync
       key = { device_id: @device.id, record_type: record[:type].to_s, record_id: record[:id].to_s.match?(UUID) ? record[:id].to_s : SecureRandom.uuid }
       attrs = { branch_id: @branch.id, sync_batch_id: batch.id, code: code, message: message, payload: record.to_h.except("sig") }
       begin
-        SyncRejection.open.find_or_initialize_by(key).update!(attrs)
+        SyncRejection.transaction(requires_new: true) { SyncRejection.open.find_or_initialize_by(key).update!(attrs) }
       rescue ActiveRecord::RecordNotUnique # the same record refused by a push running alongside this one
         SyncRejection.open.find_by!(key).update!(attrs)
       end
