@@ -81,7 +81,7 @@ module Payments
 
     # A sale put on a customer account is messaged to the customer on WhatsApp (setting khata.notify_each_sale).
     def notify_khata!(created)
-      return unless created.any? { |p| p.payment_method.khata? && p.previously_new_record? }
+      return unless created.any? { |p| p.previously_new_record? && p.payment_method.khata? }
       Customers::Notify.sale!(@order.reload)
     rescue StandardError => e
       Rails.logger.error("[khata] sale message failed for #{@order.id}: #{e.message}")
