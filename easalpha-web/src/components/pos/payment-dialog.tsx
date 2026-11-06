@@ -137,14 +137,19 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
     let list = splits;
     if (remaining > 0 && draft.method && amountShown > 0) list = [...splits, { method: draft.method, amount_minor: draftAmount, tendered_minor: isCash ? tenderFor(draftAmount) : 0, reference: draft.reference }];
     const sum = list.reduce((s, x) => s + x.amount_minor, 0);
-    if (sum <= 0 && !(cart.is_staff_meal && total === 0)) return;
+    // No payments with nothing due: the page completes the order instead (a staff meal, or one already paid in full).
+    if (sum <= 0 && !(cart.is_staff_meal && total === 0) && !settled) return;
     await onPay(toInputs(list), tip, due);
   };
   // The exact amount first, then what a customer can hand over in notes (Rs 50, 100, 500, 1,000, 5,000).
   const quick = cashSuggestions(remaining, currency ?? "PKR");
   const draftOk = !!draft.method && remaining > 0 && amountShown > 0 && !needsRef && !khataBlocked && !offlineBlocked && !khataOverOffline && (!isCash || tenderedShown >= draftAmount);
-  const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0);
-  const payLabel = remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
+  // A reopened order whose new total is covered by what was paid has nothing left to take: Complete closes it (QA T5,
+  // Pay sat disabled at Rs 0). What was paid above the total goes back first, through Refund overpaid on Orders.
+  const settled = !cart.is_staff_meal && paidBefore > 0 && due === 0 && !splits.length;
+  const overpaidMinor = settled ? Math.max(0, paidBefore - total) : 0;
+  const canPay = (remaining === 0 && splits.length > 0) || draftOk || (cart.is_staff_meal && total === 0) || settled;
+  const payLabel = settled ? "Complete order" : remaining === 0 && splits.length ? "Finish" : partial ? `Pay ${formatMoney(draftAmount, currency)} now` : `Pay ${formatMoney(remaining, currency)}`;
   // Charges cannot change once money has been taken against the order; the total they feed is already partly settled.
   const chargesLocked = !onCharges || paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
   // SPEC discounts: the same lock, and the lines by kind for the totals block.
@@ -227,6 +232,11 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
         <div className="flex min-h-0 flex-col rounded-lg bg-muted p-4">
           <div className="text-sm text-fg-secondary">{paidBefore ? "Amount due" : "Total due"}</div>
           <div className="text-4xl font-bold tabular">{formatMoney(due, currency)}</div>
+          {settled ? (
+            <p className={cn("mt-2 text-sm", overpaidMinor ? "text-warning-ink" : "text-fg-secondary")}>
+              {overpaidMinor ? `${formatMoney(overpaidMinor, currency)} was paid above the new total. Refund it first (Orders, Refund overpaid), then complete the order.` : "Paid in full. Complete the order to close it."}
+            </p>
+          ) : null}
           {change > 0 ? <div className="mt-3 rounded-md bg-success-soft p-3 text-success-ink"><div className="text-sm font-medium">Change</div><div className="text-4xl font-bold tabular">{formatMoney(change, currency)}</div></div> : null}
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <ul className="mb-2 hidden space-y-1.5 border-b pb-2 text-sm md:block" aria-label="Items">

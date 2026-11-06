@@ -351,7 +351,11 @@ function SellScreen() {
         seenDue.current = { id: e.cart.id, due: e.toMinor };
         loadCart(e.cart);
         toast.info("Total updated", `The amount due is now ${formatMoney(e.toMinor, currency)} (it was ${formatMoney(e.fromMinor, currency)}). Nothing was charged. Check it and press Pay again.`);
-      } else toast.error(payStep(e) === "save" ? "Could not save the order" : payStep(e) === "complete" ? "Could not complete the staff meal" : "Payment failed", errorMessage(e));
+      } else if (payStep(e) === "complete") {
+        // order.overpaid: the excess goes back through Refund overpaid on Orders, which then offers Complete (QA T5).
+        const overpaid = e instanceof ApiError && e.code === "order.overpaid";
+        toast.error(cart.is_staff_meal ? "Could not complete the staff meal" : "Could not complete the order", `${errorMessage(e)}${overpaid ? " Refund overpaid is on the Orders screen." : ""}`);
+      } else toast.error(payStep(e) === "save" ? "Could not save the order" : "Payment failed", errorMessage(e));
     }
     finally { setBusy(false); }
   };

@@ -183,6 +183,23 @@ describe("PaymentDialog tendered and change (QA T1, K2)", () => {
   });
 });
 
+describe("PaymentDialog on a reopened order with nothing left to pay (QA T5)", () => {
+  it("offers Complete order, which hands the page no payments, the way a staff meal completes", async () => {
+    const onPay = vi.fn(async () => {});
+    render(<PaymentDialog open onClose={() => {}} cart={order({ lines: [line("Karahi", 80000)], paid_minor: 80000, reopened: true })} onPay={onPay} busy={false} />);
+    expect(figure("Amount due")).toBe("Rs 0");
+    expect(screen.getByText("Paid in full. Complete the order to close it.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Complete order/ }));
+    await waitFor(() => expect(onPay).toHaveBeenCalledWith([], 0, 0));
+  });
+
+  it("says what was paid above the new total goes back first", () => {
+    render(<PaymentDialog open onClose={() => {}} cart={order({ lines: [line("Karahi", 80000)], paid_minor: 100000, reopened: true })} onPay={vi.fn()} busy={false} />);
+    expect(screen.getByText(/Rs 200 was paid above the new total. Refund it first \(Orders, Refund overpaid\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Complete order/ })).toBeEnabled();
+  });
+});
+
 describe("PaymentDialog opened again on the same order (QA T13)", () => {
   it("shows the amount due and the tender again, and Pay is enabled", () => {
     const cart = order({ lines: [line("Karahi", 52000)] });
