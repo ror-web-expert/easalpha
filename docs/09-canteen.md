@@ -49,6 +49,12 @@ Payroll: with `canteen.payroll_deduction` on (default), the monthly payroll run 
 (n)" with the month's worker share, and paying the run records a receipt on the worker's account (method "Salary
 deduction"), so the account clears. Daily and weekly wage earners keep their account balance for the statement.
 
+In the books (7 Nov 2026, QA B4): the meal is a sale at its menu price, so Sales Revenue and Tax Payable carry the
+order's own figures (as the receipt and any tax invoice do). The worker's share is a receivable (1100, the worker's
+account) until the payroll deduction clears it as salary (5110, so the salary expense is gross of the deduction); the
+company's share is an expense, 5170 Staff Meals. Neither internal method has a payment account, so nothing appears as
+money in a bank; `finance:reclass_internal_methods` (docs/DEPLOY.md) moves what older builds put there.
+
 ## 4. Offline
 
 The kiosk keeps today's sessions and plans, every worker and today's claims in its browser store (from `GET

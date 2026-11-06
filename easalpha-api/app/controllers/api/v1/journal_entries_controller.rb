@@ -27,7 +27,9 @@ module Api
           h = l.respond_to?(:to_unsafe_h) ? l.to_unsafe_h.symbolize_keys : l.to_h.symbolize_keys
           { account: h[:gl_account_id].present? ? GlAccount.active.find(h[:gl_account_id]) : h[:code], debit_minor: h[:debit_minor], credit_minor: h[:credit_minor], description: h[:description] }
         end
-        day = params[:business_day].present? ? Date.parse(params[:business_day]) : current_branch.business_day_for(Time.current)
+        day = params[:business_day].present? ? Date.parse(params[:business_day]) : today
+        # The screen stops a future date; the API does too, so nothing is booked ahead of the day it happens (QA B15).
+        raise Api::Errors::BadRequest.new("journal.future_date", "A voucher cannot be dated after today (#{today})") if day > today
         day_lock_guard!(day)
         e = Finance::Journal.post!(business_day: day, description: params[:description], lines: lines, kind: "manual", actor: current_membership, branch_id: current_branch.id)
         render json: FinanceSerializers.journal_entry(e.reload, full: true), status: :created

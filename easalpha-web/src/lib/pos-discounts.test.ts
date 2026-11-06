@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
-import { batchSendable, discountLabel, discountLocked, discountRows, optionAvailability, optionGives, ratingWord, valueLabel, voucherCode, voucherError } from "./pos-discounts";
+import { batchSendable, discountLabel, discountLocked, discountRows, optionAvailability, optionGives, ratingWord, savedLineId, valueLabel, voucherCode, voucherError } from "./pos-discounts";
+import type { CartLine } from "./pricing";
+
+describe("a discount on one line (QA T10)", () => {
+  const cartLine = (key: string, id?: string, status?: string): CartLine => ({ key, id, status, name: key, unit_price_minor: 100, quantity: 1, modifiers: [], tax_rate: 0, tax_inclusive: false });
+  it("finds the line's server id: its own, or the saved line in the same place", () => {
+    const lines = [cartLine("a", "i-1"), cartLine("x", undefined, "cancelled"), cartLine("b")];
+    const saved = { lines: [cartLine("i-1", "i-1"), cartLine("i-2", "i-2")] };
+    expect(savedLineId(lines, "a", saved)).toBe("i-1");
+    expect(savedLineId(lines, "b", saved)).toBe("i-2");
+    expect(savedLineId(lines, "zz", saved)).toBeNull();
+    expect(savedLineId([cartLine("c")], "c", { lines: [] })).toBeNull();
+  });
+  it("names the line in its row", () => {
+    const rows = discountRows([{ id: "d-1", kind: "percent", value: 10, amount_minor: 500, reason: "Burnt", order_item_id: "i-2" }], 500, (id) => (id === "i-2" ? "Naan" : undefined));
+    expect(rows.map((r) => r.label)).toEqual(["10% discount (Burnt) on Naan"]);
+  });
+});
 
 const line = (kind: string, reason: string | null, amount_minor = 10000, value = 100) => ({ id: `${kind}-1`, kind, reason, amount_minor, value, order_item_id: null });
 

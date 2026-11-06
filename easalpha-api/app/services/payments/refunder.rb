@@ -52,6 +52,7 @@ module Payments
           customer.update!(balance_minor: customer.balance_minor - amount_minor)
           Finance::Journal.khata_refund!(refund) # khata has no payment account, so the journal is posted here
         end
+        Finance::Journal.internal_refund!(refund) if method.internal? # nor has an internal method (the canteen subsidy)
         order.paid_minor -= amount_minor
         # An open order handing back its excess stays open, even a zero-total one (a staff meal) refunded in full.
         full = settled && refunded + amount_minor >= captured
