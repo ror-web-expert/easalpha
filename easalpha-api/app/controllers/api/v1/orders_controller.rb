@@ -311,21 +311,36 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
+      # DELETE /orders/:id/discounts/:discount_id  approver_pin?, approval_codes?
       def remove_discount
         require_permission!("orders.create")
-        order = Order.includes(items: :modifiers).find(params[:id])
-        # As for adding one: a settled sale, or one on a locked day, keeps its discounts (and its voucher stays used).
-        raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
-        day_lock_guard!(order.business_day)
-        d = order.discounts.find(params[:discount_id])
-        before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
-        Marketing::Vouchers.release!(d) if d.kind == "voucher"
-        # A coupon taken off gives its use back, as a void does, so a one-use offer is not spent on a sale without it.
-        Promotion.where(id: d.promotion_id).update_all("units_sold = GREATEST(units_sold - 1, 0)") if d.promotion_id
-        d.destroy!
-        Orders::Pricing.recalculate!(order.reload)
-        Orders::Pricing.save_all!(order)
-        audit!("discount", record: order, before: before, after: { removed: true, discount_minor: order.discount_minor, total_minor: order.total_minor })
+        order = Order.find(params[:id])
+        approver = before = nil
+        points = 0
+        Order.transaction do
+          # Locked first: a second removal of the same discount waits here and then finds it gone, and a void waits for
+          # this one to finish, so what the discount took (a voucher, a coupon use, loyalty points) goes back once.
+          order.lock!
+          # As for adding one: a settled sale, or one on a locked day, keeps its discounts (and its voucher stays used).
+          raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+          day_lock_guard!(order.business_day)
+          d = order.discounts.find(params[:discount_id])
+          # The regular discount is the owner's offer to a returning customer, put on by the server and locked on the
+          # till: taking it off is a discount decision, so it needs discounts.apply, as adding a discount does, or the
+          # PIN of a manager who holds it.
+          approver = require_approval!("discounts.apply") if d.kind == "regular"
+          before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
+          Marketing::Vouchers.release!(d) if d.kind == "voucher"
+          # A coupon taken off gives its use back, as a void does, so a one-use offer is not spent on a sale without it.
+          Promotion.where(id: d.promotion_id).update_all("units_sold = GREATEST(units_sold - 1, 0)") if d.promotion_id
+          # And the points a loyalty discount spent go back to whoever spent them, as a void gives them back.
+          points = Loyalty.refund_on_remove!(d, by: current_membership) if d.kind == "loyalty"
+          d.destroy!
+          Orders::Pricing.recalculate!(order.reload)
+          Orders::Pricing.save_all!(order)
+        end
+        audit!("discount", record: order, before: before, after: { removed: true, discount_minor: order.discount_minor, total_minor: order.total_minor, points_returned: points.positive? ? points : nil }.compact,
+               approved_by: approver && approver != current_membership ? approver.user : nil)
         render json: OrderSerializers.full(order.reload)
       end
 
