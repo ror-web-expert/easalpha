@@ -34,4 +34,32 @@ RSpec.describe Stock::Ledger do
       expect(Reports::Stock.valuation_cogs(branch: branch, from: today_for(biz), to: today_for(biz))[:stock_value_minor]).to eq(100_000)
     end
   end
+
+  # stock#5: the nightly balance rebuild set each level to the sum of its rows' values, taken at the average of their
+  # moment, so the items pages and the export disagreed with the valuation after it ran.
+  it "rebuilds every level at quantity times the average, which the items pages and export read" do
+    within(biz) do
+      Unit.seed_defaults!
+      kitchen, warehouse = StockSection.ensure_system!(branch)
+      oil = StockItem.create!(name: "Oil", base_unit: Unit.find_by!(code: "pcs"))
+      post = ->(attrs, lines) { Stock::Posting.post!(Stock::Posting.create!(attrs, lines: lines, actor: owner, branch: branch), actor: owner) }
+      post.call({ kind: "receive", to_section_id: warehouse.id }, [ { stock_item_id: oil.id, quantity: 100, unit_cost_minor: 1_000 } ])
+      post.call({ kind: "receive", to_section_id: kitchen.id }, [ { stock_item_id: oil.id, quantity: 100, unit_cost_minor: 3_000 } ])
+      post.call({ kind: "waste", from_section_id: kitchen.id, reason: "Spilt" }, [ { stock_item_id: oil.id, quantity: 50 } ])
+      Balances::Rebuild.stock_levels!
+      value = ->(section) { StockLevel.find_by(stock_section_id: section.id, stock_item_id: oil.id).value_minor }
+      expect([ value.call(warehouse), value.call(kitchen) ]).to eq([ 200_000, 100_000 ])
+
+      ghee = StockItem.create!(name: "Ghee", base_unit: Unit.find_by!(code: "pcs"))
+      post.call({ kind: "receive", to_section_id: warehouse.id }, [ { stock_item_id: ghee.id, quantity: 100, unit_cost_minor: 1_000 } ])
+      dear = post.call({ kind: "receive", to_section_id: warehouse.id }, [ { stock_item_id: ghee.id, quantity: 100, unit_cost_minor: 3_000 } ])
+      post.call({ kind: "waste", from_section_id: warehouse.id, reason: "Spilt" }, [ { stock_item_id: ghee.id, quantity: 50 } ])
+      Stock::Posting.cancel!(dear, actor: owner, reason: "wrong price")
+      Balances::Rebuild.stock_levels!
+      ghee.reload
+      expect(ghee.total_value_minor).to eq(50_000)
+      expect(StockSerializers.item(ghee, levels: ghee.stock_levels)[:value_minor]).to eq(50_000)
+      expect(Reports::Stock.levels[:rows].find { |r| r[:item][:id] == ghee.id }[:value_minor]).to eq(50_000)
+    end
+  end
 end

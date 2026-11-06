@@ -12,9 +12,10 @@ module StockSerializers
           minimum_qty: i.minimum_qty.to_s, reorder_qty: i.reorder_qty.to_s, avg_cost_minor_per_base: i.avg_cost_minor_per_base.to_s, track_expiry: i.track_expiry, is_packaging: i.is_packaging,
           archived_at: i.archived_at, created_at: i.created_at }
     if levels
-      h[:levels] = levels.map { |l| { section_id: l.stock_section_id, quantity: l.quantity.to_s, value_minor: l.value_minor } }
+      # Worth quantity times the one average, as every valuation reads it, whatever the cached value_minor says.
+      h[:levels] = levels.map { |l| { section_id: l.stock_section_id, quantity: l.quantity.to_s, value_minor: (l.quantity * i.avg_cost_minor_per_base).round } }
       h[:quantity] = levels.sum(&:quantity).to_s
-      h[:value_minor] = levels.sum(&:value_minor)
+      h[:value_minor] = h[:levels].sum { |l| l[:value_minor] }
     end
     h
   end

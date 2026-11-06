@@ -50,6 +50,7 @@ module Finance
       [ "5160", "Transport and Fuel", "expense", false, "5100" ],
       [ "5190", "Other Expenses", "expense", false, "5100" ],
       [ "5200", "Waste and Spoilage", "expense", false, nil ],
+      [ "5210", "Stock Revaluation", "expense", false, nil ],
       [ "5300", "Rider Commissions", "expense", false, nil ],
       [ "5900", "Depreciation Expense", "expense", false, nil ]
     ].freeze
