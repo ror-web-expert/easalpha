@@ -16,6 +16,7 @@ import { allowedOrderTypes, confirmationPopup, customerRequired, directUnpaidAll
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
 import { titleCase } from "@/lib/utils";
+import { customerDetails, rememberRecentCustomer, toCartCustomer } from "@/lib/pos-customers";
 import { useApproval } from "@/components/approval";
 import { PosShell } from "@/components/pos/shell";
 import { ItemGrid } from "@/components/pos/item-grid";
@@ -382,7 +383,12 @@ function SellScreen() {
   // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
   // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.
   const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen;
-  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned, onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`) });
+  const scanner = useTillScanner({
+    catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned,
+    onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`),
+    // A student's ID card: the account goes on the order, as picking them in the Customer dialog would.
+    onCustomer: (c) => { patch({ customer: toCartCustomer(c) }); rememberRecentCustomer(c); toast.success(`${c.name} on the order`, customerDetails(c) || undefined); },
+  });
 
   if (!catalog) {
     return (
