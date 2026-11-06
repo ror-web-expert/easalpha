@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1378,10 +1378,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_000001) do
     t.integer "sort_order", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "label_price_minor"
     t.index ["business_id", "station_id", "status"], name: "index_order_items_on_business_id_and_station_id_and_status"
     t.index ["business_id"], name: "index_order_items_on_business_id"
     t.index ["order_id", "sort_order"], name: "index_order_items_on_order_id_and_sort_order"
     t.index ["order_id"], name: "index_order_items_on_order_id"
+    t.check_constraint "label_price_minor IS NULL OR label_price_minor > 0", name: "order_items_label_price_positive"
     t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'preparing'::character varying, 'ready'::character varying, 'served'::character varying, 'cancelled'::character varying]::text[])", name: "order_items_status_check"
   end
 

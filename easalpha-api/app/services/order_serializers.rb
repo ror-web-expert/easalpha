@@ -31,7 +31,7 @@ module OrderSerializers
       quantity: i.quantity.to_s("F"), unit: i.unit, modifiers_minor: i.modifiers_minor, line_subtotal_minor: i.line_subtotal_minor, line_discount_minor: i.line_discount_minor,
       line_tax_minor: i.line_tax_minor, line_total_minor: i.line_total_minor, tax_rate: i.tax_rate_snapshot.to_f, tax_inclusive: i.tax_inclusive_snapshot,
       notes: i.notes, station_id: i.station_id, course: i.course, status: i.status, sent_at: i.sent_at, bumped_at: i.bumped_at, cancelled_reason: i.cancelled_reason,
-      open_item: i.open_item, price_overridden: i.price_overridden, deal_components: i.deal_components, sort_order: i.sort_order, recipe_cost_minor_snapshot: i.recipe_cost_minor_snapshot,
+      open_item: i.open_item, price_overridden: i.price_overridden, label_price_minor: i.label_price_minor, deal_components: i.deal_components, sort_order: i.sort_order, recipe_cost_minor_snapshot: i.recipe_cost_minor_snapshot,
       modifiers: i.modifiers.map { |m| { id: m.id, modifier_id: m.modifier_id, name: m.name_snapshot, price_minor: m.price_minor_snapshot, quantity: m.quantity.to_s("F") } } }
   end
 

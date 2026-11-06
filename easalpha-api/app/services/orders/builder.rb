@@ -1,7 +1,7 @@
 module Orders
   # Creates and edits orders from the till payload. Snapshots names, prices and tax at the time of sale.
   # lines: [{ id?, product_id, variant_id, quantity, notes, course, modifiers: [{ modifier_id, quantity }],
-  #           open_item: { name, price_minor }, price_override_minor, deal_id, deal_choices: [{ product_id, variant_id, quantity }] }]
+  #           open_item: { name, price_minor }, price_override_minor, label_price_minor, deal_id, deal_choices: [{ product_id, variant_id, quantity }] }]
   class Builder
     attr_reader :order, :added, :removed, :approvals
 
@@ -51,6 +51,24 @@ module Orders
       end
     end
     SERVICE_FIELDS = %i[service_charge_percent service_charge_fixed_minor].freeze
+
+    # Review of 6 Nov 2026, R1: a price-embedded scale label on a product sold by weight. The line charges the printed
+    # price exactly, and its quantity is the weight that price buys at the line's unit price: 3 decimals, halves up, in
+    # the integer arithmetic of labelWeight in src/lib/pricing.ts, so the till, its receipt and this server agree. The
+    # weight is worked out here, never taken from the till, so a label always buys its weight at the catalogue price
+    # and cannot hide a discount (no prices.override needed). Guest lines never carry one (GUEST_LINE_KEYS).
+    def self.label_weight(label_minor, unit_minor)
+      label, unit = label_minor.to_i, unit_minor.to_i
+      return BigDecimal(0) unless label.positive? && unit.positive?
+      BigDecimal((2000 * label + unit) / (2 * unit)) / 1000
+    end
+
+    # The label price a line asks for, when it may have one: a whole positive amount on a product sold by weight.
+    def self.label_price(line, product)
+      v = line[:label_price_minor]
+      price = v.is_a?(Numeric) ? (v == v.to_i ? v.to_i : nil) : Integer(v.to_s, 10, exception: false)
+      price&.positive? && product&.sold_by_weight ? price : nil
+    end
 
     # The four charge settings of an order, normalised so 10 and 10.0 compare equal.
     def self.charge_values(order)
@@ -200,6 +218,7 @@ module Orders
         authorize_override!
         changes.merge!(unit_price_minor: line[:price_override_minor].to_i, price_overridden: true, override_approved_by_id: approvals["prices.override"]&.id)
       end
+      label_changes!(item, line, changes)
       return if changes.except(:sort_order).empty?
       raise Api::Errors::Forbidden.new("permission.denied", "Changing a sent item needs orders.edit_after_send") if item.sent_at && !can?("orders.edit_after_send") && changes.except(:sort_order, :notes).any?
       raise Api::Errors::Forbidden.new("permission.denied", "Lowering a quantity on a reopened order needs MODIFY_REOPEN_DECREASE_QTY") if order.reopened? && changes.key?(:quantity) && changes[:quantity] < item.quantity_was.to_d && !can?("MODIFY_REOPEN_DECREASE_QTY")
@@ -231,6 +250,9 @@ module Orders
           item.unit_price_minor = line[:price_override_minor].to_i
           item.price_overridden = true
           item.override_approved_by_id = approvals["prices.override"]&.id
+        elsif (label = Builder.label_price(line, product))
+          item.label_price_minor = label
+          item.quantity = label_weight!(item, label)
         end
         item
       end
@@ -288,7 +310,32 @@ module Orders
       order.items.each do |i|
         next if i.cancelled? || i.open_item || i.price_overridden || i.product.nil?
         i.unit_price_minor = i.product.price_for(order_type: order.order_type, variant: i.variant, branch_id: @branch.id)
+        # A scale label keeps its printed price; the weight it stands for follows the new unit price, as on the till.
+        weight = i.label_price_minor ? Builder.label_weight(i.label_price_minor, i.unit_price_minor) : 0
+        i.quantity = weight if weight.positive?
       end
+    end
+
+    # A scale-label line keeps its printed price and the weight that price buys at the line's unit price, whatever
+    # quantity the line sends; label_price_minor null, or a price override, makes it an ordinary line priced by weight.
+    # Absent, the label stays as it was (the QR flow re-sends lines without it).
+    def label_changes!(item, line, changes)
+      label = line.key?(:label_price_minor) ? Builder.label_price(line, item.product) : item.label_price_minor
+      label = nil if changes[:price_overridden] || item.price_overridden
+      changes[:label_price_minor] = label if label != item.label_price_minor
+      return unless label
+      weight = label_weight!(item, label)
+      if weight == item.quantity
+        changes.delete(:quantity)
+      else
+        changes[:quantity] = weight
+      end
+    end
+
+    def label_weight!(item, label)
+      weight = Builder.label_weight(label, item.unit_price_minor)
+      return weight if weight.positive?
+      raise Api::Errors::Unprocessable.new("label.no_weight", "The scale label for #{item.name_snapshot} is less than 0.001 #{item.unit.presence || 'kg'} at its price")
     end
 
     def authorize_override!
