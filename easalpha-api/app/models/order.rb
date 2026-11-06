@@ -15,7 +15,8 @@ class Order < ApplicationRecord
   has_many :items, -> { order(:sort_order, :created_at) }, class_name: "OrderItem", dependent: :destroy
   has_many :status_events, -> { order(:occurred_at) }, class_name: "OrderStatusEvent", dependent: :destroy
   has_many :story_events, -> { order(:occurred_at) }, class_name: "OrderEvent", dependent: :destroy
-  has_many :discounts, class_name: "DiscountApplied", dependent: :destroy
+  # In the order they were applied: a fixed and a percent discount price differently the other way round.
+  has_many :discounts, -> { order(:created_at, :id) }, class_name: "DiscountApplied", dependent: :destroy
   has_many :voids, dependent: :destroy
   has_many :kitchen_tickets, dependent: :destroy
   has_many :payments, dependent: :destroy
@@ -38,7 +39,9 @@ class Order < ApplicationRecord
   def sent? = placed_at.present?
   def preorder? = scheduled_for.present?
   def paid? = payment_status == "paid"
-  def editable? = status.in?(%w[draft held placed preparing ready served])
+  # Dispatched is a delivery's "served": the food has left, the bill is still settled at the till, and the till saves
+  # the order before it pays (Orders::Builder#update!), so a dispatched order takes a save like a served one does.
+  def editable? = status.in?(%w[draft held placed preparing ready served dispatched])
   def active_items = items.reject { |i| i.status == "cancelled" }
   def due_minor = [ total_minor - paid_minor, 0 ].max
   def label = serial ? "##{serial}" : (till_serial || "draft")

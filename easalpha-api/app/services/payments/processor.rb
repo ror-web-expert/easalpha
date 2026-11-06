@@ -132,7 +132,17 @@ module Payments
         AuditLog.record(action: "khata_over_limit_offline", record: @order,
                         after: { customer_id: customer.id, customer: customer.name, credit_limit_minor: customer.credit_limit_minor, balance_minor: customer.balance_minor, amount_minor: amount })
       end
+      credit_hold!(customer, offline: offline)
       customer.update!(balance_minor: customer.balance_minor + amount)
+    end
+
+    # No new sales on account while a bill is overdue beyond khata.credit_hold_days; offline, as with the limit, the
+    # sale stands and the breach goes to the audit log.
+    def credit_hold!(customer, offline:)
+      Customers::Overdue.check_credit!(customer, business: @business, today: @order.branch.business_day_for(Time.current))
+    rescue Api::Errors::Conflict => e
+      raise unless offline && e.code == "khata.overdue"
+      AuditLog.record(action: "khata_overdue_offline", record: @order, after: { customer_id: customer.id, customer: customer.name, balance_minor: customer.balance_minor, reason: e.message })
     end
 
     # A payment id names one payment of this order; one from another order is a mistake, not a repeat.

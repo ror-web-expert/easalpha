@@ -265,6 +265,7 @@ module Api
           promotion = Promotion.active.find_by(coupon_code: params[:coupon_code].to_s.strip.upcase)
           raise Api::Errors::NotFound.new("coupon.invalid", "This coupon does not exist") unless promotion
           raise Api::Errors::Conflict.new("coupon.unavailable", "This coupon is not valid right now") unless promotion.available_at?(Time.current, zone: current_business.time_zone)
+          raise Api::Errors::Conflict.new("discount.applied", "#{promotion.coupon_code} is already applied to this order") if order.discounts.exists?(promotion_id: promotion.id)
           kind = promotion.kind == "fixed" ? "fixed" : "promotion"
           value = promotion.value
         end

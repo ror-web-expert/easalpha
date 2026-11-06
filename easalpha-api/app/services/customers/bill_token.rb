@@ -1,10 +1,11 @@
 module Customers
   # Signed, URL-safe token for the public bill link sent on WhatsApp: names the business, customer and period, and
-  # expires after 120 days. Nothing is stored; the bill is rebuilt from the ledger when the link is opened.
+  # expires after 400 days, so a semester bill sent in February still opens the next year. Nothing is stored; the
+  # bill is rebuilt from the ledger when the link is opened.
   module BillToken
     module_function
 
-    TTL = 120.days
+    TTL = 400.days
 
     def verifier
       @verifier ||= ActiveSupport::MessageVerifier.new(Rails.application.key_generator.generate_key("easalpha customer bill", 32), url_safe: true, serializer: JSON)

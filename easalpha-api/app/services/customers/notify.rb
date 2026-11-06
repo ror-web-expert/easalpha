@@ -7,7 +7,8 @@ module Customers
     TEMPLATES = [
       [ "account_adjustment", "{business_name}: {customer_name} (Khata {khata_no}), your account was {direction} by Rs {amount}. Reason: {reason}. Previous balance Rs {previous_balance}, new balance Rs {new_balance}." ],
       [ "account_opening", "{business_name}: {customer_name} (Khata {khata_no}), your opening balance of Rs {amount} has been entered. Balance Rs {new_balance}." ],
-      [ "account_bill", "{business_name}: {customer_name} (Khata {khata_no}), your bill for {period} is ready. Previous balance Rs {previous_balance}, purchases Rs {period_charges}, paid Rs {period_payments}. Amount due Rs {due_amount} by {due_on}. View or download: {link}" ]
+      [ "account_bill", "{business_name}: {customer_name} (Khata {khata_no}), your bill for {period} is ready. Previous balance Rs {previous_balance}, purchases Rs {period_charges}, paid Rs {period_payments}. Amount due Rs {due_amount} by {due_on}. View or download: {link}" ],
+      [ "account_overdue", "{business_name}: {customer_name} (Khata {khata_no}), your bill for {period} was due on {due_on} and is {days_overdue} days overdue. Balance Rs {due_amount}. Please pay at the counter. View the bill: {link}" ]
     ].freeze
 
     def sale!(order)
@@ -38,6 +39,16 @@ module Customers
       )
       document = attach_pdf ? { "kind" => "customer_bill", "customer_id" => customer.id, "from" => bill[:from].to_s, "to" => bill[:to].to_s, "due_on" => bill[:due_on]&.to_s, "filename" => bill[:filename] } : nil
       deliver(customer, "account_bill", vars, document: document, strict: true)
+    end
+
+    # A bill past its due date, to the same phones as the bill; the run's id travels in the message so it goes once.
+    def overdue!(customer, run:, today:)
+      period = run.period_from.beginning_of_month == run.period_from && run.period_to == run.period_from.end_of_month ? run.period_from.strftime("%B %Y") : "#{run.period_from.strftime('%-d %b %Y')} to #{run.period_to.strftime('%-d %b %Y')}"
+      vars = Whatsapp::Account.variables_for(customer).merge(
+        period: period, due_on: run.due_on.strftime("%-d %b %Y"), days_overdue: (today - run.due_on).to_i, due_amount: rupees([ customer.balance_minor, 0 ].max),
+        link: Customers::BillToken.url(customer, from: run.period_from, to: run.period_to, due_on: run.due_on), bill_run_id: run.id
+      )
+      deliver(customer, "account_overdue", vars)
     end
 
     # strict: raise when nothing can be sent, so a bill run can record why.
