@@ -45,6 +45,7 @@ module Api
         amount = params.require(:amount_minor).to_i
         raise Api::Errors::BadRequest.new("transfer.amount", "Amount must be positive") unless amount.positive?
         day = current_branch.business_day_for(Time.current)
+        day_lock_guard!(day)
         PaymentAccount.transaction do
           from.post!(kind: "transfer_out", amount_minor: -amount, business_day: day, description: "Transfer to #{to.name}: #{params[:note]}", by: current_membership)
           to.post!(kind: "transfer_in", amount_minor: amount, business_day: day, description: "Transfer from #{from.name}: #{params[:note]}", by: current_membership)
@@ -63,7 +64,9 @@ module Api
         amount = -amount.abs if kind == "withdrawal"
         amount = amount.abs if kind == "deposit"
         raise Api::Errors::BadRequest.new("adjust.note", "A note is required") if params[:note].blank?
-        a.post!(kind: kind, amount_minor: amount, business_day: current_branch.business_day_for(Time.current), description: params[:note], by: current_membership)
+        day = current_branch.business_day_for(Time.current)
+        day_lock_guard!(day)
+        a.post!(kind: kind, amount_minor: amount, business_day: day, description: params[:note], by: current_membership)
         audit!("create", record: a, after: { kind: kind, amount_minor: amount, note: params[:note] })
         render json: PaymentSerializers.account(a.reload)
       end

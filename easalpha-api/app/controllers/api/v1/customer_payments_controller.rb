@@ -25,11 +25,12 @@ module Api
         render_page(rows, cursor) { |p| PaymentSerializers.customer_payment(p) }
       end
 
-      # POST /customers/:customer_id/payments  amount_minor, method_code, reference, direction (received|paid)
+      # POST /customers/:customer_id/payments  amount_minor, method_code, reference, direction (received|paid), received_on? (YYYY-MM-DD, managers)
       def create
         customer = Customer.active.find(params[:id])
         cp = Payments::Khata.receive!(customer, amount_minor: params.require(:amount_minor).to_i, method_code: params.require(:method_code), reference: params[:reference],
-                                      actor: current_membership, branch: current_branch, shift: current_shift, direction: params[:direction].presence_in(%w[received paid]) || "received")
+                                      actor: current_membership, branch: current_branch, shift: current_shift, direction: params[:direction].presence_in(%w[received paid]) || "received",
+                                      received_on: params[:received_on].presence)
         render json: { payment: PaymentSerializers.customer_payment(cp), customer: CustomerSerializers.customer(customer.reload) }, status: :created
       end
     end

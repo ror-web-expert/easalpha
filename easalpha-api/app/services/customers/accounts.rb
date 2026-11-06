@@ -16,6 +16,8 @@ module Customers
       today = branch.business_day_for(Time.current)
       on = effective_on.present? ? Date.parse(effective_on.to_s) : today
       raise Api::Errors::BadRequest.new("adjustment.date", "The date cannot be in the future") if on > today
+      # The statement day and the voucher day (today) are both closed to new money once locked.
+      [ on, today ].uniq.each { |d| raise Api::Errors::Conflict.new("day.locked", "#{d} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, d) }
       if kind.to_s == "opening" && open_opening(customer).exists?
         raise Api::Errors::Conflict.new("khata.opening_exists", "#{customer.name} already has an opening balance. Reverse it first, or enter an adjustment.")
       end

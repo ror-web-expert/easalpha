@@ -14,6 +14,7 @@ module Expenses
       raise Api::Errors::BadRequest.new("expense.method", "Expenses cannot be paid on khata") if method&.khata?
       spent_on = attrs[:spent_on].present? ? Date.parse(attrs[:spent_on].to_s) : branch.business_day_for(Time.current)
       day = branch.business_day_for(Time.current)
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
       Expense.transaction do
         account = method&.cash? && shift&.drawer_account ? shift.drawer_account : method&.payment_account
         e = Expense.create!(branch: branch, category: category, number: DocumentCounter.next!("expense"), amount_minor: amount, payment_method: method, payment_account: account, shift: shift,
