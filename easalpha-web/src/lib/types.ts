@@ -332,6 +332,9 @@ export type TaxChoice = "none" | "rate";
 export interface OrdersSummary {
   business_day: string; orders: number; paid_orders: number; open_orders: number; voided_orders: number; revenue_minor: number; open_minor: number;
   voided_minor: number; discount_minor: number; tax_minor: number; service_charge_minor: number; average_order_minor: number;
+  /** The money above follows the one revenue rule, as GET /reports/overview: sold_orders is its order count and
+   *  refunds_minor what the day's refunds took off the revenue. */
+  sold_orders: number; refunds_minor: number;
   by_type: Record<string, number>; by_status: Record<string, number>; by_source: Record<string, number>; staff_meals: number;
 }
 

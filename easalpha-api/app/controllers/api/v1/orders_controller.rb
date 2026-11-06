@@ -135,19 +135,26 @@ module Api
       # GET /orders/summary?business_day=  totals for the day: paid, open, voided, counts by type and status
       def summary
         require_permission!("orders.create", "reports.view_all", "reports.view_branch")
-        day = params[:business_day].presence || current_branch.business_day_for(Time.current)
+        day = params[:business_day].present? ? Date.parse(params[:business_day]) : current_branch.business_day_for(Time.current)
         scope = Order.where(branch_id: current_branch.id, business_day: day)
         paid = scope.where(status: %w[paid closed])
         open = scope.open
+        # The money follows the one revenue rule, as the sales overview for the day does (Reports::Revenue): a sale on its
+        # order's day, a refund on its own day, staff meals out. Summing the day's paid totals dropped a fully refunded
+        # order from its own day, kept a part refund in and counted a staff meal's tax and discount.
+        sold = Reports::Revenue.period(branch: current_branch, from: day, to: day).totals
         render json: {
           business_day: day,
           orders: scope.count, paid_orders: paid.count, open_orders: open.count, voided_orders: scope.where(status: "voided").count,
-          revenue_minor: paid.sum(:total_minor), open_minor: open.sum(:total_minor), voided_minor: scope.where(status: "voided").sum(:total_minor),
-          discount_minor: paid.sum(:discount_minor), tax_minor: paid.sum(:tax_minor), service_charge_minor: paid.sum(:service_charge_minor),
-          average_order_minor: paid.count.zero? ? 0 : paid.sum(:total_minor) / paid.count,
+          revenue_minor: sold[:revenue_minor], open_minor: open.sum(:total_minor), voided_minor: scope.where(status: "voided").sum(:total_minor),
+          discount_minor: sold[:discount_minor], tax_minor: sold[:tax_minor], service_charge_minor: sold[:parts][:service_charge],
+          average_order_minor: sold[:orders].zero? ? 0 : sold[:revenue_minor] / sold[:orders],
+          sold_orders: sold[:orders], refunds_minor: sold[:refunds_minor],
           by_type: scope.group(:order_type).count, by_status: scope.group(:status).count, by_source: scope.group(:source).count,
           staff_meals: scope.where(is_staff_meal: true).count
         }
+      rescue Date::Error
+        raise Api::Errors::BadRequest.new("orders.business_day", "business_day must be YYYY-MM-DD")
       end
 
       def show
