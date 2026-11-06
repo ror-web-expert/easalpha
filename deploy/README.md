@@ -20,6 +20,6 @@ On a shop LAN without a domain, set `FORCE_SSL=false`, `PUBLIC_URL=http://<serve
 
 First start runs the migrations and creates the super admin from `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` (sign in at `/super`). The demo business is seeded in development only; on a server create your business from `/signup`. Every container restarts on its own after a reboot (`restart: unless-stopped`).
 
-Backups: the `pgdata` volume (database), `storage` (uploaded images and documents) and `wasessions` (the linked WhatsApp phone). Updates: run the compose command again; migrations run on start.
+Backups: the `pgdata` volume (database), `storage` (uploaded images and documents) and `wasessions` (the linked WhatsApp phone). Updates: run the compose command again; migrations run on start. The API, job worker and WhatsApp containers run as uid 1000, not root; the one-shot `volume-owner` service gives `storage` and `wasessions` to that uid before they start, so volumes left by an older root image need nothing by hand.
 
 The desktop POS installers are built from `easalpha-desktop/` (`pnpm dist:linux`, `pnpm dist:win`, `pnpm dist:mac`) or by the `desktop` GitHub Actions workflow. The app opens `PUBLIC_URL/pos`; set that address once in EasAlpha > Printers on each till.

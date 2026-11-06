@@ -141,9 +141,14 @@ policies apply to; without it they stay on `postgres`, say so in a WARNING at ev
 images stay on the server, so `IMAGE_TAG=<previous sha>` in `.env` and `docker compose up -d` rolls back.
 
 Since 6 Nov 2026 the API, web and WhatsApp containers run as uid 1000 (`rails` / `node`), not root (security review,
-A14; the images were not rebuilt on a laptop, so the first CI build is the test). The two volumes they write were made
-by root, so once, before the first deploy of those images: `docker run --rm -v easalpha_storage:/d alpine chown -R 1000:1000 /d`
-and the same for `easalpha_wasessions`. Without it uploads and the WhatsApp session fail with "permission denied".
+A14; the images were not rebuilt on a laptop, so the first CI build is the test). The two volumes they write,
+`easalpha_storage` (uploads, logos, bill PDFs) and `easalpha_wasessions` (the linked WhatsApp phone), were made by root
+on this server. The `volume-owner` service in `docker-compose.yml` (alpine, as root, no network) chowns both to
+`1000:1000` at every `docker compose up`, and the api, jobs and whatsapp containers start only once it has exited 0, so
+no deploy needs a hand step for it (6 Nov 2026 review, R32; not yet run on the server: no Docker where it was written).
+`docker compose ps -a` lists it as Exited (0); `docker compose logs volume-owner` shows any error. Fallback by hand, if
+it ever fails: `docker run --rm -v easalpha_storage:/d alpine chown -R 1000:1000 /d` and the same for
+`easalpha_wasessions`. Without either, uploads and the WhatsApp session fail with "permission denied".
 
 Watch a run: `gh run watch`, or Actions on GitHub. Tagged release: `git tag v1.0.0 && git push --tags` also builds and
 uploads the desktop installers to the Download page (`desktop.yml`).
@@ -152,7 +157,7 @@ uploads the desktop installers to the Download page (`desktop.yml`).
 
 ```bash
 ssh sajid@103.173.62.218 && cd ~/easalpha
-docker compose ps                         # five containers Up
+docker compose ps                         # db, api, jobs, web, whatsapp, backup, umami Up (ps -a: volume-owner and umami-db-init Exited (0))
 docker compose logs -f api                # or jobs, web, whatsapp, db
 docker compose exec api bin/rails console # Rails console (production)
 docker compose restart api                # after editing .env
@@ -175,7 +180,8 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
   (for example `rclone copy "$1" remote:easalpha-backups`) or pull the folder nightly from another machine with rsync.
   Restore the database: `docker compose stop api jobs`, then
   `docker compose exec -T db pg_restore -U postgres --clean --if-exists -d easalpha_production < backups/easalpha-<date>.dump`,
-  then `docker compose start api jobs`. Restore uploads: `docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data`.
+  then `docker compose start api jobs`. Restore uploads: `docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data`,
+  then `docker compose up -d` (volume-owner gives the restored files back to uid 1000).
 - **Paddle**: international card subscriptions arrive as webhooks at `POST /api/v1/webhooks/paddle`. The API refuses them
   (503) until `PADDLE_WEBHOOK_SECRET` is in `.env` (Paddle, Notifications, the endpoint's secret), and checks the signature
   and a five-minute freshness window on every event.
@@ -196,7 +202,7 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
 
 | File | Purpose |
 |---|---|
-| `deploy/docker-compose.yml` | the five services; builds from source when used alone |
+| `deploy/docker-compose.yml` | the services (and the one-shot `volume-owner` and `umami-db-init`); builds from source when used alone |
 | `deploy/docker-compose.images.yml` | overlay: use the ghcr.io images instead of building |
 | `deploy/docker-compose.proxy.yml` | overlay: no published ports, web and api join the `kamal` network for Caddy |
 | `deploy/backup.sh` | the nightly backup loop the `backup` service runs; `backup.sh now` for one backup |
