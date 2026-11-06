@@ -86,11 +86,11 @@ RSpec.describe "Payment methods by kind", type: :request do
     get "/api/v1/customers/#{sana.id}/ledger?from=#{today}&to=#{today}", headers: headers
     expect(json).to include(balance_minor: 0, closing_balance_minor: 0)
     expect(json[:entries].map { |e| e[:kind] }).to eq(%w[charge refund])
-    expect(within(biz) { Balances::Rebuild.customers! }).to eq(0)
-    expect(within(biz) { Customer.find(rao.id).balance_minor }).to eq(42_200)
     # The month's bills list every customer with account activity, Sana too though she owes nothing now.
     get "/api/v1/customer_bills?from=#{today}&to=#{today}", headers: headers
     expect(json[:rows].map { |r| r[:customer][:id] }).to contain_exactly(rao.id, sana.id)
+    expect(within(biz) { Balances::Rebuild.customers! }).to eq(0)
+    expect(within(biz) { Customer.find(rao.id).balance_minor }).to eq(42_200)
 
     get "/api/v1/shifts/#{shift[:id]}/z_report", headers: headers
     expect(json[:khata]).to include(on_account_minor: 61_480)
