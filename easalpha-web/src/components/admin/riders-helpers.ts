@@ -19,7 +19,7 @@ export function riderAddOutcome(r: RiderAddResult, listed: boolean): Outcome {
       body: `That number is on an EasAlpha login that has not confirmed it, so nothing is linked yet. We sent WhatsApp to ${r.invitation.phone ?? r.phone ?? "their phone"}; ${r.name} gets the rider app once they confirm it with a code.${listed ? " Until then they are under Waiting to join." : ""}`,
     };
   }
-  if (r.linked_existing_user) return { tone: "info", title: "Rider added and linked to their EasAlpha login", body: "They confirmed this phone. They sign in to the rider app with the PIN set here." };
+  if (r.linked_existing_user) return { tone: "info", title: "Rider added on their EasAlpha login", body: "This phone is already their login, so no new one was made. They sign in to the rider app with the PIN set here." };
   return { tone: "success", title: "Rider saved" };
 }
 

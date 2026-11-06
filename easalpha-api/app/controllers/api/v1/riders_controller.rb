@@ -35,29 +35,51 @@ module Api
             attrs.merge!(temporary: true, lifetime_kind: params[:lifetime_kind].to_s, lifetime_value: params[:lifetime_value].presence&.to_i, permissions: Array(params[:permissions]).map(&:to_s), created_by_membership_id: current_membership.id, **life)
           end
           invite = nil
+          rider_member = nil
           if ActiveModel::Type::Boolean.new.cast(params[:create_login]) && attrs[:membership_id].blank?
             refuse_support! # a rider login is a way in
             phone = User.normalize_phone(attrs[:phone])
-            raise Membership::PinTaken if params[:pin].present? && Membership.new(business: current_business).pin_taken?(params[:pin].to_s)
-            # Someone already on the team: said in words the Riders page can show, not "User has already been taken".
             holder = Staff::Linking.any_holder(phone: phone, email: nil)
-            member = holder && Membership.includes(:user).find_by(user_id: holder.id)
-            raise Api::Errors::Conflict.new("staff.exists", "#{member.user.name} is already on your staff with this phone. Put them on the Rider role in Staff and their rider profile is made, or add this rider without a login.") if member
-            # As adding staff: a login is linked only by a phone it proved, or that is its only way in; else the rider
-            # joins by proving the phone (QA of 6 Nov 2026, P1).
-            link = Staff::Linking.resolve(phone: phone, email: nil)
-            @linked_existing_user = link.user.present?
-            if link.invite
-              invite = { role: Role.find_by!(system_key: "rider"), name: attrs[:name], phone: phone, email: nil, staff_type: "rider", cashier_role: nil,
-                         all_branches: false, branch_ids: [ current_branch.id ], pin: params[:pin] }
+            member = holder && Membership.includes(:user, :role).find_by(user_id: holder.id)
+            raise Membership::PinTaken if params[:pin].present? && (member || Membership.new(business: current_business)).pin_taken?(params[:pin].to_s)
+            if member
+              # Already on the team. A member on the Rider role with no active rider profile (put on it from Staff before
+              # 7 Nov 2026, or deactivated) gets this one on the login they have, as the rider app asks the owner to do;
+              # anyone else is told why in words the page can show, not "User has already been taken".
+              has_profile = Rider.active.exists?(membership_id: member.id)
+              rider_member = member if member.active? && Riders::Profile.rider_role?(member.role) && !has_profile
+              unless rider_member
+                why = if !member.active? then "is a deactivated member of your staff with this phone. Reactivate them in Staff first, or add this rider without a login."
+                elsif has_profile then "already has a rider profile with this phone."
+                else "is already on your staff with this phone. Put them on the Rider role in Staff and their rider profile is made, or add this rider without a login."
+                end
+                raise Api::Errors::Conflict.new("staff.exists", "#{member.user.name} #{why}")
+              end
+              @linked_existing_user = true
             else
-              user = link.user || User.create!(name: attrs[:name], phone: attrs[:phone])
-              m = Membership.create!(user: user, role: Role.find_by!(system_key: "rider"), status: "active", all_branches: false, branch_ids: [ current_branch.id ])
-              m.set_pin!(params[:pin]) if params[:pin].present?
-              attrs[:membership_id] = m.id
+              # As adding staff: a login is linked only by a phone it proved, or that is its only way in; else the rider
+              # joins by proving the phone (QA of 6 Nov 2026, P1).
+              link = Staff::Linking.resolve(phone: phone, email: nil)
+              @linked_existing_user = link.user.present?
+              if link.invite
+                invite = { role: Role.find_by!(system_key: "rider"), name: attrs[:name], phone: phone, email: nil, staff_type: "rider", cashier_role: nil,
+                           all_branches: false, branch_ids: [ current_branch.id ], pin: params[:pin] }
+              else
+                user = link.user || User.create!(name: attrs[:name], phone: attrs[:phone])
+                m = Membership.create!(user: user, role: Role.find_by!(system_key: "rider"), status: "active", all_branches: false, branch_ids: [ current_branch.id ])
+                m.set_pin!(params[:pin]) if params[:pin].present?
+                attrs[:membership_id] = m.id
+              end
             end
           end
-          r = Rider.create!(attrs.merge(branch_id: params[:branch_id].presence || current_branch.id))
+          branch_id = params[:branch_id].presence || current_branch.id
+          if rider_member
+            rider_member.set_pin!(params[:pin]) if params[:pin].present?
+            r = Riders::Profile.ensure_for!(rider_member) # their deactivated profile, or one without a login on this phone, or a new one
+            r.update!(attrs.except(:membership_id).merge(branch_id: branch_id))
+          else
+            r = Rider.create!(attrs.merge(branch_id: branch_id))
+          end
           @invitation = StaffInvitation.invite!(**invite, rider_id: r.id) if invite
         end
         audit!("create", record: r, after: { name: r.name })

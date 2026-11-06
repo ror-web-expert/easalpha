@@ -1,4 +1,5 @@
 require "rails_helper"
+require Rails.root.join("db/migrate/20261107130000_rider_profiles_for_rider_members")
 
 # Screen walk of 7 Nov 2026 (L2): a member added from Staff on the Rider role got no rider profile, unlike one added
 # from Riders, so the rider app's GET /rider/deliveries and /rider/float answered 403 rider.none and it stayed on
@@ -105,6 +106,31 @@ RSpec.describe "Rider profiles and rider logins", type: :request do
       expect(json).not_to have_key(:linked_existing_user)
     end
 
+    it "gives a member on the Rider role without a profile this one, on the login they have, as the rider app asks" do
+      kashif = add_member!(biz, "rider", pin: "1357") # put on the role before Riders::Profile: no rider profile
+      within(biz) { kashif.user.update!(phone: "+923211230010") }
+      get "/api/v1/rider/deliveries", headers: auth_headers(kashif, app: "rider")
+      expect(json[:error]).to include(code: "rider.none")
+      users = User.count
+      api_post "/api/v1/riders", { name: "Kashif", phone: "+923211230010", vehicle: "bike", charge_per_delivery_minor: 6_000, create_login: true, pin: "2468" }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      expect(json).to include(membership_id: kashif.id, linked_existing_user: true, charge_per_delivery_minor: 6_000)
+      rider_id = json[:id]
+      expect(User.count).to eq(users)
+      opens_rider_app(member(kashif.id))
+      expect(member(kashif.id).pin_matches?("2468")).to be true
+
+      delete "/api/v1/riders/#{rider_id}", headers: headers # deactivated: the next add brings the same profile back
+      expect(response).to have_http_status(:no_content), response.body
+      api_post "/api/v1/riders", { name: "Kashif", phone: "+923211230010", vehicle: "scooter", create_login: true }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      expect(json).to include(id: rider_id, membership_id: kashif.id, vehicle: "scooter", active: true)
+      expect(within(biz) { Rider.where(membership_id: kashif.id).count }).to eq(1)
+      api_post "/api/v1/riders", { name: "Kashif", phone: "+923211230010", create_login: true }, headers: headers
+      expect(response).to have_http_status(:conflict)
+      expect(json[:error][:message]).to include("already has a rider profile")
+    end
+
     it "refuses a phone already on the staff in words the page can show, and adds nothing" do
       cashier = add_member!(biz, "cashier")
       within(biz) { cashier.user.update!(phone: "+923211230007") }
@@ -113,6 +139,35 @@ RSpec.describe "Rider profiles and rider logins", type: :request do
       expect(json[:error]).to include(code: "staff.exists")
       expect(json[:error][:message]).to include(cashier.user.name, "Rider role in Staff")
       expect(within(biz) { Rider.where(name: "Twice").count }).to eq(0)
+    end
+  end
+
+  describe "the members already on the Rider role without a profile (RiderProfilesForRiderMembers)" do
+    def migrate! = ActiveRecord::Migration.suppress_messages { RiderProfilesForRiderMembers.new.up }
+    def rider_member!(phone:, **attrs)
+      m = add_member!(biz, "rider") # as Staff made them before Riders::Profile: no rider profile
+      within(biz) { m.user.update!(phone: phone); m.update!(attrs) if attrs.any? }
+      m
+    end
+
+    it "gives each one a profile as Riders::Profile would, and touches nobody else" do
+      loose = within(biz) { Rider.create!(name: "Imran (no login)", phone: "+923211230020", float_minor: 10_000) }
+      owns_loose = rider_member!(phone: "+923211230020")
+      one_branch = rider_member!(phone: "+923211230021", all_branches: false, branch_ids: [ branch.id ])
+      everywhere = rider_member!(phone: "+923211230022")
+      gone = rider_member!(phone: "+923211230023", status: "deactivated")
+      archived = rider_member!(phone: "+923211230024")
+      archived_rider = within(biz) { Rider.create!(name: "Archived", membership_id: archived.id, active: false, archived_at: 1.day.ago) }
+      cashier = add_member!(biz, "cashier")
+      migrate!
+      expect(rider_of(owns_loose).id).to eq(loose.id)
+      expect(rider_of(one_branch)).to have_attributes(name: one_branch.user.name, phone: "+923211230021", branch_id: branch.id, active: true, status: "available")
+      expect(rider_of(everywhere)).to have_attributes(branch_id: nil, active: true)
+      expect(rider_of(gone)).to be_nil
+      expect(within(biz) { Rider.where(membership_id: archived.id).pluck(:id) }).to eq([ archived_rider.id ])
+      expect(rider_of(cashier)).to be_nil
+      opens_rider_app(member(one_branch.id))
+      expect { migrate! }.not_to(change { within(biz) { Rider.count } })
     end
   end
 end

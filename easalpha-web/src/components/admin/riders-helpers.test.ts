@@ -131,7 +131,7 @@ describe("rider logins", () => {
   it("tells the owner what an add became", () => {
     expect(riderAddOutcome({ ...added, invited: true, invitation }, true)).toMatchObject({ tone: "info", title: "Bilal added; the app login waits for them", body: expect.stringContaining("Until then they are under Waiting to join.") });
     expect(riderAddOutcome({ ...added, invited: true, invitation }, false).body).not.toContain("Waiting to join");
-    expect(riderAddOutcome({ ...added, linked_existing_user: true }, true).title).toBe("Rider added and linked to their EasAlpha login");
+    expect(riderAddOutcome({ ...added, linked_existing_user: true }, true).title).toBe("Rider added on their EasAlpha login");
     expect(riderAddOutcome({ ...added, linked_existing_user: false }, true)).toEqual({ tone: "success", title: "Rider saved" });
   });
 
