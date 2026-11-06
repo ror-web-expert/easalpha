@@ -46,7 +46,7 @@ class Branch < ApplicationRecord
   end
 
   # The branch form never receives the token back, so a blank or missing token keeps the saved one; a new token
-  # replaces it and token_clear removes it. Only the known keys are kept. Returns :changed or :removed for the audit.
+  # replaces it and token_clear removes it. Only the known keys are taken from the form. Returns :changed or :removed for the audit.
   def apply_tax_registration(incoming)
     incoming = incoming.to_h.stringify_keys
     merged = (tax_registration || {}).merge(incoming.slice(*PUBLIC_TAX_KEYS).transform_values { |v| v.to_s.strip.presence })
