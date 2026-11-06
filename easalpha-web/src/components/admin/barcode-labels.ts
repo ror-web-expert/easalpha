@@ -200,8 +200,11 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface TextItem { x: number; y: number; text: string; size: number; bold: boolean; align: "left" | "center" | "right"; mono: boolean }
 export interface Drawing { rects: Rect[]; texts: TextItem[] }
 
+/** The widest bar module a label uses (mm); short codes on big labels stop growing here. */
+export const MAX_MODULE_MM = 0.5;
+
 /** Bars (and the digits under them) fitted to a box, centred, a module at most maxModule mm wide. */
-export function barsDrawing(pattern: BarPattern, box: Box, digitsSize: number, maxModule = 0.5): Drawing {
+export function barsDrawing(pattern: BarPattern, box: Box, digitsSize: number, maxModule = MAX_MODULE_MM): Drawing {
   const total = pattern.quietLeft + pattern.modules + pattern.quietRight;
   const m = Math.min(box.w / total, maxModule);
   const left = box.x + (box.w - total * m) / 2 + pattern.quietLeft * m;
@@ -258,6 +261,27 @@ export function labelDrawing(data: LabelData, symbol: CodeSymbol, w: number, h: 
   return { rects: code.rects, texts };
 }
 
+/**
+ * The narrowest module a label printer prints reliably: two dots at 203 dpi (0.125 mm a dot). Below it bars merge or
+ * vanish, and many scanners give up (review 6 Nov 2026, R27: long codes on the 38 mm roll went under one dot).
+ */
+export const MIN_MODULE_MM = 0.25;
+
+/** How wide one bar module or QR square prints (mm) when the symbol is drawn on a label of this size, as labelDrawing draws it. */
+export function moduleWidth(symbol: CodeSymbol, w: number, h: number, opts: LabelOptions): number {
+  const box = labelBoxes(w, h, { ...opts, qr: symbol.kind === "qr" }).code;
+  if (symbol.kind === "qr") return Math.min(box.w, box.h) / (symbol.size + 2);
+  const p = symbol.pattern;
+  return Math.min(box.w / (p.quietLeft + p.modules + p.quietRight), MAX_MODULE_MM);
+}
+
+/** The codes whose modules would print narrower than MIN_MODULE_MM on this label, narrowest first, for the designer's warning. */
+export function narrowCodes(symbols: Map<string, CodeSymbol>, w: number, h: number, opts: LabelOptions): { code: string; module: number }[] {
+  return [...symbols].map(([code, symbol]) => ({ code, module: moduleWidth(symbol, w, h, opts) }))
+    .filter((c) => c.module < MIN_MODULE_MM - 1e-9)
+    .sort((a, b) => a.module - b.module);
+}
+
 // ---- SVG (preview and product form thumbnails) ----
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -290,7 +314,32 @@ export const svgDataUrl = (svg: string) => `data:image/svg+xml;charset=utf-8,${e
 // ---- Loading and output (not pure: imports jsbarcode, qrcode and jsPDF when first used) ----
 
 const JS_FORMATS: Record<Exclude<BarcodeFormat, "qr">, string> = { ean13: "EAN13", upca: "UPC", ean8: "EAN8", code128: "CODE128" };
-const symbols = new Map<string, Promise<CodeSymbol>>();
+
+/** A map that keeps only the `max` entries used last (a Map iterates in insertion order, so the first key is the oldest). */
+export class LruCache<K, V> {
+  private readonly map = new Map<K, V>();
+  constructor(readonly max: number) {}
+  get size() { return this.map.size; }
+  /** The value without making it the newest. */
+  peek(key: K): V | undefined { return this.map.get(key); }
+  get(key: K): V | undefined {
+    if (!this.map.has(key)) return undefined;
+    const v = this.map.get(key) as V;
+    this.map.delete(key);
+    this.map.set(key, v);
+    return v;
+  }
+  set(key: K, value: V): void {
+    this.map.delete(key);
+    this.map.set(key, value);
+    while (this.map.size > this.max) this.map.delete(this.map.keys().next().value as K);
+  }
+  delete(key: K): boolean { return this.map.delete(key); }
+}
+
+/** Every receipt draws its own number, so a till prints thousands of codes a week: keep the last 200 (review 6 Nov 2026, R27). */
+export const SYMBOL_CACHE_SIZE = 200;
+const symbols = new LruCache<string, Promise<CodeSymbol>>(SYMBOL_CACHE_SIZE);
 
 function interop<T>(mod: T): T {
   return (mod as unknown as { default?: T }).default ?? mod;
@@ -305,21 +354,21 @@ async function qrSymbol(code: string): Promise<CodeSymbol> {
 /** The bars of a code in its own format (EAN-13, UPC-A, EAN-8, Code 128), or a QR code when asked or when it only fits a QR. Cached. */
 export function loadSymbol(code: string, qr = false): Promise<CodeSymbol> {
   const key = `${qr ? "qr" : "bars"}:${code}`;
-  let p = symbols.get(key);
-  if (!p) {
-    p = (async (): Promise<CodeSymbol> => {
-      const format = barcodeFormat(code);
-      if (qr || format === "qr") return qrSymbol(code);
-      const JsBarcode = (await import("jsbarcode")).default;
-      const target: { encodings?: JsBarcodeEncoding[] } = {};
-      let valid = true;
-      JsBarcode(target, code, { format: JS_FORMATS[format], displayValue: true, valid: (v: boolean) => { valid = v; } });
-      if (!valid || !target.encodings?.length) return qrSymbol(code);
-      return { kind: "bars", format, pattern: patternFromEncodings(target.encodings, QUIET_ZONES[format]) };
-    })();
-    p.catch(() => symbols.delete(key));
-    symbols.set(key, p);
-  }
+  const cached = symbols.get(key);
+  if (cached) return cached;
+  const p = (async (): Promise<CodeSymbol> => {
+    const format = barcodeFormat(code);
+    if (qr || format === "qr") return qrSymbol(code);
+    const JsBarcode = (await import("jsbarcode")).default;
+    const target: { encodings?: JsBarcodeEncoding[] } = {};
+    let valid = true;
+    JsBarcode(target, code, { format: JS_FORMATS[format], displayValue: true, valid: (v: boolean) => { valid = v; } });
+    if (!valid || !target.encodings?.length) return qrSymbol(code);
+    return { kind: "bars", format, pattern: patternFromEncodings(target.encodings, QUIET_ZONES[format]) };
+  })();
+  // A failed code is tried again next time; only this attempt is dropped (the key may hold a newer one by then).
+  p.catch(() => { if (symbols.peek(key) === p) symbols.delete(key); });
+  symbols.set(key, p);
   return p;
 }
 

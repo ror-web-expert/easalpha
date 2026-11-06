@@ -12,7 +12,7 @@ import { toast } from "@/store/toast";
 import { FilterBar, LoadMore, PageHeader, SearchInput } from "@/components/admin/page";
 import { useList } from "@/components/admin/crud";
 import {
-  LABEL_PRESETS, clampSkip, downloadLabelsPdf, drawingSvg, expandCopies, labelDrawing, labelsPerPage, layoutLabels, loadSymbols, pageCount, presetById, slotPosition, svgDataUrl,
+  LABEL_PRESETS, MIN_MODULE_MM, clampSkip, downloadLabelsPdf, drawingSvg, expandCopies, labelDrawing, labelsPerPage, layoutLabels, loadSymbols, narrowCodes, pageCount, presetById, slotPosition, svgDataUrl,
   type CodeSymbol, type Drawing, type LabelData, type LabelOptions,
 } from "@/components/admin/barcode-labels";
 import { Button, Card, CardBody, CardHeader, CardTitle, Checkbox, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
@@ -114,6 +114,8 @@ export default function BarcodeLabelsPage() {
   }, [codesKey, opts.qr]);
 
   const pages = useMemo(() => layoutLabels(items, preset, skip), [items, preset, skip]);
+  // Bars under two printer dots may not scan (review 6 Nov 2026, R27): say so before the sheet is printed.
+  const narrow = useMemo(() => narrowCodes(symbols, preset.labelWidth, preset.labelHeight, opts), [symbols, preset, opts]);
   const shown = Math.min(pageIndex, Math.max(0, pages.length - 1));
   const preview = useMemo(() => {
     const page = pages[shown];
@@ -218,6 +220,11 @@ export default function BarcodeLabelsPage() {
                   <span>{withoutCode.length} picked product{withoutCode.length === 1 ? " has" : "s have"} no code yet.</span>
                   {canEdit ? <Button size="sm" variant="secondary" onClick={() => giveCodes(withoutCode)} loading={generating}><Sparkles className="h-4 w-4" /> Generate and save codes</Button> : null}
                 </div>
+              ) : null}
+              {narrow.length ? (
+                <p className="rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning-ink" role="status">
+                  {narrow.length === 1 ? <>The code <span className="font-mono">{narrow[0].code}</span> prints</> : <>{narrow.length} codes print</>} with bars {narrow[0].module.toFixed(2)} mm wide on this label, under the {MIN_MODULE_MM} mm a label printer prints reliably, so {narrow.length === 1 ? "it" : "they"} may not scan. Use a larger label, a shorter code or a QR code.
+                </p>
               ) : null}
               <p className="text-xs text-fg-muted">Print at actual size (100%, no scaling). Codes print as EAN-13, UPC-A, EAN-8 or Code 128 to match the code; long codes and links print as QR.</p>
             </CardBody>

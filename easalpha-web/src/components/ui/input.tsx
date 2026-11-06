@@ -1,6 +1,7 @@
 "use client";
-import { cloneElement, forwardRef, isValidElement, type InputHTMLAttributes, type LabelHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, useId, useLayoutEffect, useRef, useState } from "react";
+import { cloneElement, forwardRef, isValidElement, type InputHTMLAttributes, type KeyboardEvent, type LabelHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { MONEY_SCAN_GUARD, createScanGuard, keyTime, type ScanGuard } from "@/lib/barcode";
 
 // Material Design 3 outlined text field (dense 40px): outline border, extra-small (4px) corners,
 // Body Large input text, 2px primary outline on focus.
@@ -120,8 +121,35 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
   );
 }
 
-/** Money in major units; value/onChange in minor units. */
-export function MoneyInput({ value, onChange, className, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & { value: number; onChange: (minor: number) => void }) {
+/**
+ * Money in major units; value/onChange in minor units. A barcode scanned while the field has the focus is not an
+ * amount (review 6 Nov 2026, R27: an EAN-13 tendered Rs 40 billion): the field goes back to what it held before the
+ * scanner's burst and its Enter is swallowed. A person's typing is never that fast (MONEY_SCAN_GUARD).
+ */
+export function MoneyInput({ value, onChange, className, onKeyDown, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & { value: number; onChange: (minor: number) => void }) {
+  const live = useRef({ value, onChange });
+  useLayoutEffect(() => { live.current = { value, onChange }; });
+  const guard = useRef<ScanGuard | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const watch = (e: KeyboardEvent<HTMLInputElement>) => {
+    onKeyDown?.(e);
+    clearTimeout(timer.current);
+    // Shortcuts, held keys and IME input are a person (as the till scanner judges them).
+    if (e.nativeEvent.isComposing || e.repeat || e.metaKey || (e.ctrlKey && !e.altKey)) return;
+    const g = (guard.current ??= createScanGuard());
+    const r = g.key({ key: e.key, time: keyTime(e.nativeEvent) }, live.current.value);
+    if (r) {
+      live.current.onChange(r.restore);
+      if (r.swallow) { e.preventDefault(); e.stopPropagation(); }
+    }
+    if (g.pending) {
+      timer.current = setTimeout(() => {
+        const back = g.flush(performance.now());
+        if (back !== null) live.current.onChange(back);
+      }, MONEY_SCAN_GUARD.maxKeyIntervalMs + 20);
+    }
+  };
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-fg-muted">Rs</span>
@@ -132,6 +160,7 @@ export function MoneyInput({ value, onChange, className, ...props }: Omit<InputH
         className={cn("pl-9 tabular", className)}
         value={value === 0 ? "" : value / 100}
         onChange={(e) => onChange(Math.round(parseFloat(e.target.value || "0") * 100) || 0)}
+        onKeyDown={watch}
         {...props}
       />
     </div>

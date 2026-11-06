@@ -7,7 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
 import { billRows } from "@/lib/bill";
-import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel } from "@/lib/receipt-format";
+import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "@/lib/receipt-format";
 import { loadSymbol, svgDataUrl, symbolSvg } from "@/components/admin/barcode-labels";
 
 export type ReceiptBranding = { secondaryPhone?: string | null; footerQrUrl?: string | null; showLogo?: boolean; paper?: string | null; barcode?: boolean; policy?: string | null };
@@ -102,7 +102,7 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
             <span className="break-words">{l.name}</span>
             <span className="tabular whitespace-nowrap text-right">{m(l.line_subtotal_minor ?? l.line_total_minor)}</span>
           </div>
-          {Number(l.quantity) !== 1 && l.unit_price_minor ? <div className="pl-[2.9em] text-[0.9em]">@ {m(l.unit_price_minor)} each</div> : null}
+          {unitPriceNote(l, m) ? <div className="pl-[2.9em] text-[0.9em]">{unitPriceNote(l, m)}</div> : null}
           {l.modifiers?.map((mo, j) => <div key={j} className="flex justify-between pl-[2.9em] text-[0.9em]"><span>+ {mo.name}</span><span className="tabular">{mo.price_minor ? m(mo.price_minor) : ""}</span></div>)}
           {l.discount_minor ? <div className="flex justify-between pl-[2.9em] text-[0.9em]"><span>Discount</span><span className="tabular">-{m(l.discount_minor)}</span></div> : null}
           {l.notes ? <div className="pl-[2.9em] text-[0.9em] italic">&ldquo;{l.notes}&rdquo;</div> : null}

@@ -1,7 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { CartLine } from "@/lib/pricing";
+import { editLine, type CartLine } from "@/lib/pricing";
 import type { Address, OrderDiscount, OrderType, TaxChoice } from "@/lib/types";
 import { uuid } from "@/lib/utils";
 
@@ -108,13 +108,15 @@ export const useCartStore = create<CartState>()(
       patch: (p) => set({ cart: { ...get().cart, ...p } }),
       addLine: (line) => {
         const cart = get().cart;
-        // Merge with an identical unsent line (same product/variant, no notes, same modifiers)
-        const same = cart.lines.find((l) => !l.sent && !l.open_item && l.product_id && l.product_id === line.product_id && (l.variant_id ?? null) === (line.variant_id ?? null) && !l.notes && !line.notes && !l.price_override_minor && !line.price_override_minor && JSON.stringify(l.modifiers) === JSON.stringify(line.modifiers));
+        // Merge with an identical unsent line (same product/variant, no notes, same modifiers). A scale-label line stays
+        // its own line: each label is one pack at its printed price.
+        const same = !line.label_price_minor && cart.lines.find((l) => !l.sent && !l.open_item && !l.label_price_minor && l.product_id && l.product_id === line.product_id && (l.variant_id ?? null) === (line.variant_id ?? null) && !l.notes && !line.notes && !l.price_override_minor && !line.price_override_minor && JSON.stringify(l.modifiers) === JSON.stringify(line.modifiers));
         // Weighed items carry decimals (0.45 kg): keep the sum to 3 places so two scans never read 0.9330000000000001.
         if (same) return set({ cart: { ...cart, lines: cart.lines.map((l) => (l === same ? { ...l, quantity: Math.round((l.quantity + line.quantity) * 1000) / 1000 } : l)) } });
         set({ cart: { ...cart, lines: [...cart.lines, { ...line, key: uuid() }] } });
       },
-      updateLine: (key, p) => set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? { ...l, ...p } : l)) } }),
+      // editLine keeps a scale label only while the line still is what the label says.
+      updateLine: (key, p) => set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? editLine(l, p) : l)) } }),
       removeLine: (key) => set({ cart: { ...get().cart, lines: get().cart.lines.filter((l) => l.key !== key) } }),
       restoreLine: (line, index) => {
         const lines = get().cart.lines.filter((l) => l.key !== line.key);
@@ -123,7 +125,7 @@ export const useCartStore = create<CartState>()(
       },
       setQty: (key, qty) => {
         if (qty <= 0) return get().removeLine(key);
-        set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? { ...l, quantity: qty } : l)) } });
+        set({ cart: { ...get().cart, lines: get().cart.lines.map((l) => (l.key === key ? editLine(l, { quantity: qty }) : l)) } });
       },
     }),
     { name: "easalpha.cart", storage: createJSONStorage(() => localStorage), skipHydration: true },

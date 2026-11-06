@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  LABEL_PRESETS, PT, approxMeasure, barRuns, barsDrawing, clampSkip, drawingSvg, expandCopies, fitLines, labelBoxes, labelDrawing, labelsPerPage, layoutLabels,
-  lineHeight, loadSymbol, pageCount, patternFromEncodings, presetById, qrDrawing, slotPosition, symbolSvg, type Box, type CodeSymbol, type LabelOptions, type Measure,
+  LABEL_PRESETS, LruCache, MAX_MODULE_MM, MIN_MODULE_MM, PT, SYMBOL_CACHE_SIZE, approxMeasure, barRuns, barsDrawing, clampSkip, drawingSvg, expandCopies, fitLines, labelBoxes, labelDrawing, labelsPerPage, layoutLabels,
+  lineHeight, loadSymbol, moduleWidth, narrowCodes, pageCount, patternFromEncodings, presetById, qrDrawing, slotPosition, symbolSvg, type Box, type CodeSymbol, type LabelOptions, type Measure,
 } from "./barcode-labels";
 
 const near = (a: number, b: number) => expect(a).toBeCloseTo(b, 6);
@@ -292,5 +292,57 @@ describe("loadSymbol (jsbarcode and qrcode)", () => {
     expect(svg).toContain(">006381</text>");
     expect(svg).toContain(">333931</text>");
     expect(symbolSvg(await loadSymbol("x", true))).toContain('viewBox="0 0 20 20"');
+  });
+});
+
+// Review 6 Nov 2026, R27: the label designer warns when bars would print under two printer dots, and the symbol cache
+// that every receipt's barcode goes through keeps the last 200 codes instead of growing for as long as the till runs.
+describe("narrow modules", () => {
+  const opts: LabelOptions = { showName: true, showPrice: true, showBusiness: false, qr: false };
+  const bars = (modules: number): CodeSymbol => ({ kind: "bars", format: "code128", pattern: { modules, quietLeft: 10, quietRight: 10, segments: [] } });
+
+  it("measures a module as the label draws it", async () => {
+    // 38 x 25 mm roll: 1.5 mm padding each side leaves 35 mm for the bars and their quiet zones.
+    near(moduleWidth(bars(255), 38, 25, opts), 35 / 275);
+    near(moduleWidth(bars(30), 70, 37, opts), MAX_MODULE_MM); // a short code stops growing
+    const qr = await loadSymbol("4006381333931", true);
+    if (qr.kind !== "qr") throw new Error("expected a QR symbol");
+    near(moduleWidth(qr, 38, 25, opts), 19.25 / (qr.size + 2));
+    expect(moduleWidth(await loadSymbol("4006381333931"), 38, 25, opts)).toBeGreaterThan(MIN_MODULE_MM);
+  });
+
+  it("lists the codes under 0.25 mm on this label, narrowest first", async () => {
+    const symbols = new Map<string, CodeSymbol>([["4006381333931", await loadSymbol("4006381333931")], ["LONG", bars(255)], ["LONGER", bars(300)]]);
+    const narrow = narrowCodes(symbols, 38, 25, opts);
+    expect(narrow.map((n) => n.code)).toEqual(["LONGER", "LONG"]);
+    expect(narrow[0].module).toBeLessThan(MIN_MODULE_MM);
+    expect(narrowCodes(new Map([["LONG", bars(120)]]), 70, 37, opts)).toEqual([]); // 65.6 mm over 140 modules: 0.47 mm
+  });
+});
+
+describe("symbol cache", () => {
+  it("keeps the entries used last", () => {
+    const lru = new LruCache<string, number>(2);
+    lru.set("a", 1);
+    lru.set("b", 2);
+    expect(lru.get("a")).toBe(1); // a is now the newest
+    lru.set("c", 3);
+    expect([lru.peek("a"), lru.peek("b"), lru.peek("c")]).toEqual([1, undefined, 3]);
+    lru.set("d", 4); // peek did not refresh a
+    expect([lru.peek("a"), lru.size]).toEqual([undefined, 2]);
+  });
+
+  it("holds the last 200 codes", async () => {
+    const all: Promise<CodeSymbol>[] = [];
+    const first = loadSymbol("LRU-0");
+    const second = loadSymbol("LRU-1");
+    all.push(first, second);
+    for (let i = 2; i < SYMBOL_CACHE_SIZE; i++) all.push(loadSymbol(`LRU-${i}`));
+    expect(loadSymbol("LRU-0")).toBe(first); // used again: now the newest
+    all.push(loadSymbol(`LRU-${SYMBOL_CACHE_SIZE}`)); // one more pushes out the oldest, LRU-1
+    expect(loadSymbol("LRU-0")).toBe(first);
+    const again = loadSymbol("LRU-1");
+    expect(again).not.toBe(second);
+    await Promise.all([...all, again]);
   });
 });

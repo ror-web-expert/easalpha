@@ -226,6 +226,8 @@ export interface OrderItem {
   tax_rate: number; tax_inclusive: boolean; notes: string | null; station_id: ID | null; course: number; status: string; sent_at: string | null;
   bumped_at: string | null; cancelled_reason: string | null; open_item: boolean; price_overridden: boolean; deal_components: Record<string, unknown>[] | null;
   sort_order: number; modifiers: OrderItemModifier[];
+  /** The scale label that prices the line (absent before 6 Nov 2026). */
+  label_price_minor?: number | null;
 }
 export interface OrderSummary {
   id: ID; serial: number | null; label: string; till_serial: string | null; business_day: string; order_type: OrderType; source: string;
@@ -286,6 +288,8 @@ export interface OrderLineInput {
   id?: ID; product_id?: ID; variant_id?: ID | null; deal_id?: ID; quantity: number; notes?: string | null; course?: number;
   modifiers?: { modifier_id: ID; quantity?: number }[]; open_item?: { name: string; price_minor: number }; price_override_minor?: number | null;
   deal_choices?: { product_id: ID; variant_id?: ID | null; quantity?: number }[];
+  /** A scale label's printed price on a product sold by weight; null makes a label line an ordinary weighed line. */
+  label_price_minor?: number | null;
 }
 export interface OrderInput {
   id?: ID; order_type: OrderType; source?: string; table_id?: ID | null; guest_name?: string | null; covers?: number | null; customer_id?: ID | null;
@@ -338,7 +342,8 @@ export interface Receipt {
     /** Staff meal (complimentary): the bill shows a "Staff meal" row and the reason; receipts from before 6 Nov 2026 lack both. */
     is_staff_meal?: boolean; staff_meal_reason?: string | null };
   /** line_subtotal_minor (unit price with modifiers times quantity) is what a bill line shows; receipts from before 17 Oct 2026 lack it. */
-  lines: { name: string; quantity: string; unit_price_minor: number; modifiers: { name: string; price_minor: number }[]; line_subtotal_minor?: number; line_total_minor: number; discount_minor: number; notes: string | null }[];
+  /** unit ("kg") marks a weighed line and label_price_minor a scale label that set its amount (both absent before 6 Nov 2026). */
+  lines: { name: string; quantity: string; unit?: string | null; unit_price_minor: number; label_price_minor?: number | null; modifiers: { name: string; price_minor: number }[]; line_subtotal_minor?: number; line_total_minor: number; discount_minor: number; notes: string | null }[];
   totals: { subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; tax_lines: { rate: number; inclusive: boolean; taxable_minor: number; tax_minor: number }[];
     delivery_charge_minor: number; rounding_minor: number; tip_minor: number; total_minor: number; paid_minor: number; due_minor: number };
   payments: { method: string; amount_minor: number; tendered_minor: number | null; change_minor: number; reference: string | null }[];

@@ -23,6 +23,12 @@ export interface CartLine {
   /** SPEC: the discount set on the product itself (% or Rs), snapshotted onto the line so offline totals match the server. */
   discount_value?: number | string | null;
   discount_type?: DiscountType | null;
+  /**
+   * A price-embedded scale label on a product sold by weight (paisa): the line charges exactly this, and its quantity
+   * is the weight it buys at the unit price (labelWeight), as Orders::Builder records it. A new quantity from the
+   * cashier or a price override turns it into an ordinary line priced by weight (editLine).
+   */
+  label_price_minor?: number | null;
 }
 
 export interface LineTotals { modifiers_minor: number; line_subtotal_minor: number; line_discount_minor: number; line_tax_minor: number; line_total_minor: number }
@@ -54,6 +60,46 @@ export function effectiveUnit(line: CartLine) {
   return line.price_override_minor !== null && line.price_override_minor !== undefined ? line.price_override_minor : line.unit_price_minor;
 }
 
+/**
+ * The weight a price label stands for at a unit price (the price of one kg): label / unit to 3 decimals, halves up, in
+ * whole numbers so it is exactly Orders::Builder.label_weight on the server. 0 when either is not positive.
+ */
+export function labelWeight(label_minor: number, unit_minor: number): number {
+  const label = Math.round(label_minor);
+  const unit = Math.round(unit_minor);
+  if (!(label > 0) || !(unit > 0)) return 0;
+  const num = 2000 * label + unit;
+  const den = 2 * unit;
+  return (num - (num % den)) / den / 1000;
+}
+
+/** What a scale-label line charges for its product, or null when the line is priced by unit price times quantity. */
+export function labelPrice(line: Pick<CartLine, "label_price_minor" | "price_override_minor" | "open_item" | "deal_id">): number | null {
+  const v = Number(line.label_price_minor);
+  if (line.label_price_minor == null || !(v > 0) || line.open_item || line.deal_id) return null;
+  return line.price_override_minor != null ? null : Math.round(v);
+}
+
+/** The line at a scale label's price: its quantity becomes the weight that price buys at the line's unit price. */
+export function withLabel<T extends Pick<CartLine, "unit_price_minor" | "quantity" | "label_price_minor">>(line: T, label_minor: number): T {
+  const weight = labelWeight(label_minor, line.unit_price_minor);
+  return weight > 0 ? { ...line, label_price_minor: Math.round(label_minor), quantity: weight } : line;
+}
+
+/**
+ * A cart line after an edit, under the scale-label rule: a label's price holds for the weight it buys. A quantity the
+ * cashier changed, or a price override, makes it an ordinary line priced by weight; a new unit price (another size,
+ * another order type) keeps the price and works the weight out again, as the server does.
+ */
+export function editLine(prev: CartLine, patch: Partial<CartLine>): CartLine {
+  const next = { ...prev, ...patch };
+  if (next.label_price_minor == null) return next;
+  if (labelPrice(next) === null) return { ...next, label_price_minor: null };
+  const relabelled = "label_price_minor" in patch;
+  if (!relabelled && patch.quantity !== undefined && patch.quantity !== prev.quantity) return { ...next, label_price_minor: null };
+  return withLabel(next, next.label_price_minor);
+}
+
 /** Discount fields to copy from a product onto a cart line. */
 export function productDiscountFields(p: Pick<Product, "discount_value" | "discount_type"> | null | undefined): Pick<CartLine, "discount_value" | "discount_type"> {
   if (!p || p.discount_value == null || !(Number(p.discount_value) > 0)) return { discount_value: null, discount_type: null };
@@ -82,7 +128,9 @@ function taxOn(base: number, rate: number, inclusive: boolean) {
 
 export function lineTotals(line: CartLine): LineTotals {
   const modifiers_minor = Math.round(line.modifiers.reduce((s, m) => s + m.price_minor * (m.quantity || 1), 0));
-  const line_subtotal_minor = Math.round((effectiveUnit(line) + modifiers_minor) * line.quantity);
+  // A scale label charges its printed price exactly (the quantity is only the weight it buys), plus any modifiers.
+  const label = labelPrice(line);
+  const line_subtotal_minor = label !== null ? label + Math.round(modifiers_minor * line.quantity) : Math.round((effectiveUnit(line) + modifiers_minor) * line.quantity);
   const line_discount_minor = lineDiscount(line, line_subtotal_minor);
   const { tax, total } = taxOn(line_subtotal_minor - line_discount_minor, line.tax_rate, line.tax_inclusive);
   return { modifiers_minor, line_subtotal_minor, line_discount_minor, line_tax_minor: tax, line_total_minor: total };
@@ -177,7 +225,7 @@ export function attachDiscounts(lines: CartLine[], catalog: Catalog | null): Car
   });
 }
 
-/** Re-price product lines when the order type changes (open items and overrides keep their price). */
+/** Re-price product lines when the order type changes (open items and overrides keep their price; a scale label keeps its price and its weight follows). */
 export function repriceLines(lines: CartLine[], orderType: string, catalog: Catalog | null, branchId?: string | null): CartLine[] {
   if (!catalog) return lines;
   return lines.map((l) => {
@@ -185,7 +233,9 @@ export function repriceLines(lines: CartLine[], orderType: string, catalog: Cata
     const p = catalog.products.find((x) => x.id === l.product_id);
     if (!p) return l;
     const v = l.variant_id ? p.variants?.find((x) => x.id === l.variant_id) : null;
-    return { ...l, unit_price_minor: priceFor(p, orderType, v, branchId), ...productDiscountFields(p) };
+    const next = { ...l, unit_price_minor: priceFor(p, orderType, v, branchId), ...productDiscountFields(p) };
+    const label = labelPrice(next);
+    return label !== null ? withLabel(next, label) : next;
   });
 }
 
@@ -201,5 +251,7 @@ export function toLineInput(l: CartLine) {
     modifiers: l.modifiers.length ? l.modifiers.map((m) => ({ modifier_id: m.modifier_id, quantity: m.quantity })) : undefined,
     open_item: l.open_item,
     price_override_minor: l.price_override_minor ?? undefined,
+    // Always sent: null tells the server that a line it holds as a scale label is now priced by weight.
+    label_price_minor: labelPrice(l),
   };
 }

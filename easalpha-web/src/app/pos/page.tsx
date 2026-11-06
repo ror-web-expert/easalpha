@@ -8,7 +8,7 @@ import { useDeviceStore, usePosCan } from "@/store/device";
 import { ApiError, errorMessage } from "@/lib/api";
 import type { Deal, DiningTable, Order, PaymentInput, Product, QuickAddItem, Receipt, Variant } from "@/lib/types";
 import type { BarcodeMatch } from "@/lib/barcode";
-import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, type CartLine } from "@/lib/pricing";
+import { attachDiscounts, displaySettings, priceFor, productDiscountFields, repriceLines, taxFor, withLabel, type CartLine } from "@/lib/pricing";
 import { holdOrder, payOrder, payStep, saveOrder, loadOrderForEdit, completeUnpaid, applyTaxChoice, applyServerDiscount, syncForPayment, TotalChangedError, regularPricing } from "@/lib/pos-actions";
 import { useSyncStore } from "@/store/sync";
 import { useCustomerStore } from "@/store/customers";
@@ -58,6 +58,8 @@ function SellScreen() {
   const [quickVariant, setQuickVariant] = useState<string | null>(null);
   // A scanned pack (6 cans) or a scale label's weight opens the options sheet on that quantity instead of 1.
   const [quickQty, setQuickQty] = useState<number | null>(null);
+  // A scanned price label that still needs a size or an option: the line it makes charges this price (withLabel).
+  const [quickLabel, setQuickLabel] = useState<number | null>(null);
   const [editing, setEditing] = useState<CartLine | null>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [tableOpen, setTableOpen] = useState(false);
@@ -130,12 +132,13 @@ function SellScreen() {
     addLine({ product_id: p.id, variant_id: null, name: p.name, unit_price_minor: price, quantity: 1, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
   };
   /** Adds a product (and size) straight to the cart; only a required modifier group opens the sheet first. */
-  const addPicked = (p: Product, variant: Variant | null, quantity = 1) => {
+  const addPicked = (p: Product, variant: Variant | null, quantity = 1, labelPriceMinor: number | null = null) => {
     if (!catalog) return;
     const needsChoice = (p.modifier_group_ids ?? []).some((id) => { const g = catalog.modifier_groups.find((x) => x.id === id); return !!g && (g.required || g.min_select > 0); });
-    if (needsChoice) { setEditing(null); setQuickVariant(variant?.id ?? null); setQuickQty(quantity !== 1 ? quantity : null); setProduct(p); return; }
+    if (needsChoice) { setEditing(null); setQuickVariant(variant?.id ?? null); setQuickQty(quantity !== 1 ? quantity : null); setQuickLabel(labelPriceMinor); setProduct(p); return; }
     const tax = taxFor(p, catalog);
-    addLine({ product_id: p.id, variant_id: variant?.id ?? null, name: variant ? `${p.name} (${variant.name})` : p.name, unit_price_minor: priceFor(p, cart.order_type, variant, catalog.branch?.id), quantity, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) });
+    const line = { product_id: p.id, variant_id: variant?.id ?? null, name: variant ? `${p.name} (${variant.name})` : p.name, unit_price_minor: priceFor(p, cart.order_type, variant, catalog.branch?.id), quantity, modifiers: [], tax_rate: tax.rate, tax_inclusive: tax.inclusive, station_id: p.station_id, ...productDiscountFields(p) };
+    addLine(labelPriceMinor ? withLabel(line, labelPriceMinor) : line);
   };
   // SPEC "Quick Add Menu": one tap adds the pinned product/variant with quantity 1. Only a required modifier group opens the sheet.
   const quickAdd = (item: QuickAddItem) => {
@@ -148,8 +151,8 @@ function SellScreen() {
   const addScanned = (m: BarcodeMatch): boolean => {
     const p = m.product;
     if (!p.active || p.archived_at) { toast.error("Not on sale", `${p.name} is switched off on the menu.`); return false; }
-    if (!m.variant && p.variants?.length) { setEditing(null); setQuickVariant(null); setQuickQty(m.quantity !== 1 ? m.quantity : null); setProduct(p); return true; }
-    addPicked(p, m.variant, m.quantity);
+    if (!m.variant && p.variants?.length) { setEditing(null); setQuickVariant(null); setQuickQty(m.quantity !== 1 ? m.quantity : null); setQuickLabel(m.labelPriceMinor); setProduct(p); return true; }
+    addPicked(p, m.variant, m.quantity, m.labelPriceMinor);
     return true;
   };
   const editLine = (l: CartLine) => {
@@ -159,7 +162,8 @@ function SellScreen() {
     else { setNotes(l.notes ?? ""); setEditing(l); setNotesOpen(true); }
   };
   const onSheetAdd = (line: Omit<CartLine, "key">) => {
-    if (editing) { updateLine(editing.key, line); setEditing(null); } else addLine(line);
+    // A scanned price label charges its price on whichever size was picked; the weight follows that size's price.
+    if (editing) { updateLine(editing.key, line); setEditing(null); } else addLine(quickLabel && line.product_id ? withLabel(line, quickLabel) : line);
   };
   // A new type takes the charge defaults of that type again (SPEC Charges: the service charge is per order type).
   const changeType = (t: typeof cart.order_type) => patch({ order_type: t, lines: repriceLines(cart.lines, t, catalog, catalog?.branch?.id), table_id: t === "dine_in" ? cart.table_id : null, table_code: t === "dine_in" ? cart.table_code : null, service_charge_percent: undefined, service_charge_fixed_minor: undefined, delivery_charge_percent: undefined, delivery_charge_minor: t === "delivery" ? cart.delivery_charge_minor : undefined });
@@ -416,7 +420,7 @@ function SellScreen() {
           </div>
         </div>
       </div>
-      <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} initialVariantId={quickVariant} initialQuantity={quickQty} onClose={() => { setProduct(null); setDeal(null); setEditing(null); setQuickVariant(null); setQuickQty(null); }} onAdd={onSheetAdd} />
+      <ModifierSheet product={product} deal={deal} catalog={catalog} orderType={cart.order_type} editing={editing} initialVariantId={quickVariant} initialQuantity={quickQty} onClose={() => { setProduct(null); setDeal(null); setEditing(null); setQuickVariant(null); setQuickQty(null); setQuickLabel(null); }} onAdd={onSheetAdd} />
       <CustomerDialog open={customerOpen} onClose={() => setCustomerOpen(false)} onPick={(c) => patch({ customer: c })} onRepeat={repeatOrder} />
       <TablePicker open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} current={cart.table_id} onPick={pickTable} onRefresh={refreshTables} />
       <OpenItemDialog open={openItem} onClose={() => setOpenItem(false)} onAdd={(name, price) => { const tax = taxFor(null, catalog); addLine({ name, unit_price_minor: price, quantity: 1, modifiers: [], open_item: { name, price_minor: price }, tax_rate: tax.rate, tax_inclusive: tax.inclusive }); }} />
