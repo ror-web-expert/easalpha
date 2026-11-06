@@ -15,5 +15,12 @@ module SafeCsv
 
   def generate(**options, &block) = CSV.generate(**options, write_converters: [ CONVERTER ], &block)
 
-  def parse(data, **options, &block) = CSV.parse(data, **options, converters: [ UNESCAPE ], &block)
+  # A file that is not valid CSV (a quote left open, a quote inside a field) is the sender's to fix: 400 import.csv
+  # with the line the parser stopped at, where the customer, supplier and stock imports answered 500 (the menu
+  # import's preview lists it among its parse errors).
+  def parse(data, **options, &block)
+    CSV.parse(data, **options, converters: [ UNESCAPE ], &block)
+  rescue CSV::MalformedCSVError => e
+    raise Api::Errors::BadRequest.new("import.csv", "The file could not be read as CSV: #{e.message}", details: { line: e.line_number })
+  end
 end

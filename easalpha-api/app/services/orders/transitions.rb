@@ -161,12 +161,16 @@ module Orders
     end
 
     def void!(order, reason:, actor:, approver:, device: nil)
-      # Money the order still holds is refunded first; an open order whose part payment went back holds none (ledger#0).
-      raise Api::Errors::Conflict.new("order.paid", "A paid order is refunded, not voided") if order.status.in?(%w[paid closed]) || (order.paid_minor.positive? && Payments::Refunder.held_minor(order).positive?)
-      raise Api::Errors::Conflict.new("order.status", "Order is already #{order.status}") if order.status.in?(%w[voided refunded])
-      raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
-      stock_action = order.sent? ? (order.status.in?(%w[ready served dispatched]) ? "waste" : "returned") : "none"
+      stock_action = nil
       Order.transaction do
+        # Row lock first: a second void of the same order (another till, a request sent again, the sync queue) waits
+        # here, then finds it voided and is refused, so the vouchers, coupon uses and points it took go back once.
+        order.lock!
+        # Money the order still holds is refunded first; an open order whose part payment went back holds none (ledger#0).
+        raise Api::Errors::Conflict.new("order.paid", "A paid order is refunded, not voided") if order.status.in?(%w[paid closed]) || (order.paid_minor.positive? && Payments::Refunder.held_minor(order).positive?)
+        raise Api::Errors::Conflict.new("order.status", "Order is already #{order.status}") if order.status.in?(%w[voided refunded])
+        raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
+        stock_action = order.sent? ? (order.status.in?(%w[ready served dispatched]) ? "waste" : "returned") : "none"
         Void.create!(order: order, reason: reason, stock_action: stock_action, amount_minor: order.total_minor, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, voided_at: Time.current)
         order.voided_at = Time.current
         order.void_reason = reason

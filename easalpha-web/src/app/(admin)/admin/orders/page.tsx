@@ -87,7 +87,7 @@ export default function OrdersPage() {
       </>} />
       <Cards>
         <SummaryCard label="Orders" value={oneDay ? s?.orders ?? 0 : rows.length} sub={oneDay ? `${s?.open_orders ?? 0} open · ${s?.voided_orders ?? 0} cancelled` : "Loaded rows; pick one day for day totals"} tone="info" />
-        <SummaryCard label="Revenue" value={formatMoney(oneDay ? s?.revenue_minor : rows.filter((o) => o.spec_status === "completed").reduce((a, o) => a + o.total_minor, 0))} sub={oneDay ? `${formatMoney(s?.open_minor)} still open` : "Completed rows loaded"} tone="success" />
+        <SummaryCard label="Revenue" value={formatMoney(oneDay ? s?.revenue_minor : rows.filter((o) => o.spec_status === "completed").reduce((a, o) => a + o.total_minor, 0))} sub={oneDay ? `${s?.refunds_minor ? `${formatMoney(s.refunds_minor)} refunded · ` : ""}${formatMoney(s?.open_minor)} still open` : "Completed rows loaded"} tone="success" />
         <SummaryCard label="Average order value" value={formatMoney(oneDay ? s?.average_order_minor : avg(rows))} sub={oneDay && s?.discount_minor ? `Discounts ${formatMoney(s.discount_minor)}` : "Completed orders"} tone="neutral" />
         <SummaryCard label="Completed" value={oneDay ? s?.paid_orders ?? 0 : rows.filter((o) => o.spec_status === "completed").length} sub={oneDay ? `${s?.staff_meals ?? 0} complimentary` : "Rows loaded"} tone="primary" />
       </Cards>

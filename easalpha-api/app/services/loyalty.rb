@@ -1,4 +1,5 @@
-# Loyalty points: earned on paid orders, redeemed as a discount before payment, refunded when a redeemed order is voided.
+# Loyalty points: earned on paid orders, redeemed as a discount before payment, refunded when a redeemed order is voided
+# or its points discount is taken off.
 module Loyalty
   module_function
 
@@ -35,10 +36,10 @@ module Loyalty
     cap = (order.subtotal_minor * s["loyalty_max_redeem_percent"].to_i / 100)
     raise Api::Errors::Conflict.new("loyalty.cap", "At most Rs #{cap / 100} (#{s['loyalty_max_redeem_percent']}% of the bill) can be paid with points") if value_minor > cap
     Order.transaction do
-      order.discounts.create!(kind: "loyalty", value: BigDecimal(value_minor.to_s) / 100, reason: "#{points} loyalty points", applied_by_membership_id: actor&.id)
+      d = order.discounts.create!(kind: "loyalty", value: BigDecimal(value_minor.to_s) / 100, reason: "#{points} loyalty points", applied_by_membership_id: actor&.id)
       Orders::Pricing.recalculate!(order.reload)
       Orders::Pricing.save_all!(order)
-      post!(customer, points: -points, kind: "redeem", order: order, note: "Order #{order.label}", by: actor)
+      post!(customer, points: -points, kind: "redeem", order: order, note: "Order #{order.label}", by: actor, discount: d)
     end
     order
   end
@@ -59,10 +60,10 @@ module Loyalty
     raise Api::Errors::Conflict.new("loyalty.insufficient", "#{customer.name} has #{customer.loyalty_points} points; #{option.name} needs #{option.points}") if customer.loyalty_points < option.points
     raise Api::Errors::Conflict.new("loyalty.already", "Points were already redeemed on this order") if order.discounts.where(kind: "loyalty").exists?
     Order.transaction do
-      order.discounts.create!(kind: "loyalty", value: BigDecimal(value_minor.to_s) / 100, reason: "#{option.points} points: #{option.name}", applied_by_membership_id: actor&.id)
+      d = order.discounts.create!(kind: "loyalty", value: BigDecimal(value_minor.to_s) / 100, reason: "#{option.points} points: #{option.name}", applied_by_membership_id: actor&.id)
       Orders::Pricing.recalculate!(order.reload)
       Orders::Pricing.save_all!(order)
-      post!(customer, points: -option.points, kind: "redeem", order: order, note: "#{option.name} on #{order.label}", by: actor)
+      post!(customer, points: -option.points, kind: "redeem", order: order, note: "#{option.name} on #{order.label}", by: actor, discount: d)
     end
     order
   end
@@ -78,17 +79,38 @@ module Loyalty
     end
   end
 
+  # The points one loyalty discount spent go back to whoever spent them when it is taken off its order, once: what its
+  # redemption took less what was already given back for it, so taking it off, redeeming again and taking that off
+  # returns each redemption once, and a void afterwards finds nothing more (refund_on_void! nets the whole order). An
+  # order carries two after two tables merge; each gives back only its own. A redemption from before the two were
+  # linked (7 Nov 2026) counts as the discount's while it is the order's only loyalty discount. Returns the points.
+  def refund_on_remove!(discount, by: nil)
+    rows = LoyaltyTransaction.where(order_id: discount.order_id, kind: %w[redeem refund])
+    own = rows.where(discount_applied_id: discount.id)
+    unless own.where(kind: "redeem").exists?
+      return 0 if DiscountApplied.where(order_id: discount.order_id, kind: "loyalty").where.not(id: discount.id).exists?
+      own = rows.where(discount_applied_id: [ nil, discount.id ])
+    end
+    own.group(:customer_id).sum(:points).sum do |customer_id, net|
+      customer = net.negative? && Customer.find_by(id: customer_id)
+      next 0 unless customer
+      post!(customer, points: -net, kind: "refund", order: discount.order, note: "Removed from #{discount.order.label}", by: by, discount: discount)
+      -net
+    end
+  end
+
   def adjust!(customer, points:, note:, by:)
     raise Api::Errors::BadRequest.new("loyalty.points", "Points must not be zero") if points.to_i.zero?
     post!(customer, points: points.to_i, kind: "adjust", note: note, by: by)
   end
 
-  def post!(customer, points:, kind:, order: nil, note: nil, by: nil)
+  def post!(customer, points:, kind:, order: nil, note: nil, by: nil, discount: nil)
     Customer.transaction do
       customer.lock!
       balance = customer.loyalty_points + points
       customer.update!(loyalty_points: balance)
-      LoyaltyTransaction.create!(customer: customer, order: order, points: points, balance_after: balance, kind: kind, note: note, by_membership_id: by&.id, occurred_at: Time.current)
+      LoyaltyTransaction.create!(customer: customer, order: order, points: points, balance_after: balance, kind: kind, note: note, by_membership_id: by&.id, occurred_at: Time.current,
+                                 discount_applied_id: discount&.id)
     end
   end
 

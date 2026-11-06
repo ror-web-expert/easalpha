@@ -332,6 +332,9 @@ export type TaxChoice = "none" | "rate";
 export interface OrdersSummary {
   business_day: string; orders: number; paid_orders: number; open_orders: number; voided_orders: number; revenue_minor: number; open_minor: number;
   voided_minor: number; discount_minor: number; tax_minor: number; service_charge_minor: number; average_order_minor: number;
+  /** The money above follows the one revenue rule, as GET /reports/overview: sold_orders is its order count and
+   *  refunds_minor what the day's refunds took off the revenue. */
+  sold_orders: number; refunds_minor: number;
   by_type: Record<string, number>; by_status: Record<string, number>; by_source: Record<string, number>; staff_meals: number;
 }
 
@@ -391,7 +394,8 @@ export interface Shift {
   id: ID; branch_id: ID; device_id: ID | null; cashier_membership_id: ID; drawer_account_id: ID | null; business_day: string; status: string;
   settlement_status: string; opened_at: string; closed_at: string | null; opening_cash_minor: number; counted_cash_minor: number | null;
   approved_by_membership_id: ID | null; close_note: string | null; movements: CashMovement[]; expected_cash_minor?: number; over_short_minor?: number | null;
-  cashier?: string | null; net_sales_minor?: number | null;
+  /** On the shifts report: the shift's sales, the refunds it made (the revenue rule's) and its net sales after them. */
+  cashier?: string | null; sales_minor?: number | null; refunds_minor?: number | null; net_sales_minor?: number | null;
   /** Whose shift it is: on a till the shift open there may be another cashier's (GET /shifts/current). */
   cashier_name?: string | null;
 }
