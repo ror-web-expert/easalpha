@@ -76,6 +76,7 @@ class StaffInvitation < ApplicationRecord
         # The PIN chosen at invitation time, unless another member took it meanwhile: then the owner sets a new one.
         m.update!(pin_digest: pin_digest, pin_lookup: pin_lookup) if pin_digest && m.pin_digest.blank? && !(pin_lookup && Membership.active.where(pin_lookup: pin_lookup).where.not(id: m.id).exists?)
         Rider.where(id: rider_id).update_all(membership_id: m.id) if rider_id
+        Riders::Profile.ensure_for!(m) # the Rider role from Staff had no profile; one invited from Riders is the one linked above
         update!(status: "accepted", accepted_at: Time.current, accepted_by_user_id: user.id, membership_id: m.id)
         AuditLog.record(action: "create", record: m, after: { user_id: user.id, role: role.name, invitation_id: id, accepted: true })
         m

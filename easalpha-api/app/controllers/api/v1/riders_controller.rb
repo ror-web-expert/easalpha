@@ -39,9 +39,14 @@ module Api
             refuse_support! # a rider login is a way in
             phone = User.normalize_phone(attrs[:phone])
             raise Membership::PinTaken if params[:pin].present? && Membership.new(business: current_business).pin_taken?(params[:pin].to_s)
+            # Someone already on the team: said in words the Riders page can show, not "User has already been taken".
+            holder = Staff::Linking.any_holder(phone: phone, email: nil)
+            member = holder && Membership.includes(:user).find_by(user_id: holder.id)
+            raise Api::Errors::Conflict.new("staff.exists", "#{member.user.name} is already on your staff with this phone. Put them on the Rider role in Staff and their rider profile is made, or add this rider without a login.") if member
             # As adding staff: a login is linked only by a phone it proved, or that is its only way in; else the rider
             # joins by proving the phone (QA of 6 Nov 2026, P1).
             link = Staff::Linking.resolve(phone: phone, email: nil)
+            @linked_existing_user = link.user.present?
             if link.invite
               invite = { role: Role.find_by!(system_key: "rider"), name: attrs[:name], phone: phone, email: nil, staff_type: "rider", cashier_role: nil,
                          all_branches: false, branch_ids: [ current_branch.id ], pin: params[:pin] }
@@ -56,8 +61,11 @@ module Api
           @invitation = StaffInvitation.invite!(**invite, rider_id: r.id) if invite
         end
         audit!("create", record: r, after: { name: r.name })
+        # What the Riders page tells the owner: an invitation waiting for the rider to prove the phone, or a login of
+        # theirs that was linked, rather than a rider row whose login just says "none".
         body = DeliverySerializers.rider(r)
         body = body.merge(invited: true, invitation: Serializers.staff_invitation(@invitation)) if @invitation
+        body = body.merge(linked_existing_user: @linked_existing_user) unless @linked_existing_user.nil?
         render json: body, status: :created
       end
 

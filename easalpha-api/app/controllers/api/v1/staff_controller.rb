@@ -50,6 +50,7 @@ module Api
           created = Membership.create!(user: user, role: role, status: "active", all_branches: all_branches,
                                        branch_ids: Array(params[:branch_ids]), invited_via: phone ? "whatsapp" : "email", staff_type: staff_type, cashier_role: cashier_role)
           created.set_pin!(params[:pin]) if params[:pin].present?
+          Riders::Profile.ensure_for!(created) # on the Rider role: the rider app needs the profile POST /riders makes
           created
         end
         user = m.user
@@ -74,7 +75,11 @@ module Api
         m.branch_ids = Array(params[:branch_ids]) if params.key?(:branch_ids)
         m.staff_type = params[:staff_type] if params[:staff_type].present?
         m.cashier_role = params[:cashier_role] if params.key?(:cashier_role)
-        m.save!
+        role_changed = m.role_id_changed?
+        Membership.transaction do
+          m.save!
+          Riders::Profile.ensure_for!(m) if role_changed # moved onto the Rider role: their rider profile
+        end
         m.user.update!(name: params[:name]) if rename
         audit!("permission_change", record: m, before: before, after: Serializers.membership(m, include_user: false))
         render json: Serializers.membership(m)

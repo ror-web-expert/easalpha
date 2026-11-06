@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  addressLine, assignedVsCompleted, dayEndNeedsForce, groupDeliveries, isCashOrder, lifetimeLabel, lifetimeNeedsValue, lifetimeRemaining, methodChips,
-  riderActionPerms, riderExpired, riderNextSteps, tillNeedsSettlement, tillShiftsText,
+  addressLine, assignedVsCompleted, dayEndNeedsForce, groupDeliveries, isCashOrder, isNoRiderProfile, isRiderInvitation, lifetimeLabel, lifetimeNeedsValue, lifetimeRemaining, methodChips,
+  riderActionPerms, riderAddOutcome, riderExpired, riderNextSteps, tillNeedsSettlement, tillShiftsText, type RiderAddResult,
 } from "./riders-helpers";
 
 const now = new Date("2026-10-11T12:00:00");
@@ -120,5 +120,28 @@ describe("cashier till rows", () => {
     expect(dayEndNeedsForce("day_end.open_shifts")).toBe(true);
     expect(dayEndNeedsForce("permission.denied")).toBe(false);
     expect(dayEndNeedsForce(undefined)).toBe(false);
+  });
+});
+
+// L2, 7 Nov 2026: a rider add that became an invitation looked like nothing, and the rider app loaded for ever without a profile.
+describe("rider logins", () => {
+  const added = { id: "r1", name: "Bilal", phone: "+923211230009" } as RiderAddResult;
+  const invitation = { phone: "+923211230009", rider_id: "r1" } as NonNullable<RiderAddResult["invitation"]>;
+
+  it("tells the owner what an add became", () => {
+    expect(riderAddOutcome({ ...added, invited: true, invitation }, true)).toMatchObject({ tone: "info", title: "Bilal added; the app login waits for them", body: expect.stringContaining("Until then they are under Waiting to join.") });
+    expect(riderAddOutcome({ ...added, invited: true, invitation }, false).body).not.toContain("Waiting to join");
+    expect(riderAddOutcome({ ...added, linked_existing_user: true }, true).title).toBe("Rider added and linked to their EasAlpha login");
+    expect(riderAddOutcome({ ...added, linked_existing_user: false }, true)).toEqual({ tone: "success", title: "Rider saved" });
+  });
+
+  it("lists the invitations from Riders and to the Rider role, and knows rider.none", () => {
+    const role = (system_key: string) => ({ id: "x", name: system_key, system_key });
+    expect(isRiderInvitation({ rider_id: "r1", role: role("rider"), staff_type: "rider" })).toBe(true);
+    expect(isRiderInvitation({ rider_id: null, role: role("rider"), staff_type: "admin" })).toBe(true);
+    expect(isRiderInvitation({ rider_id: null, role: role("cashier"), staff_type: "cashier" })).toBe(false);
+    expect(isNoRiderProfile({ code: "rider.none" })).toBe(true);
+    expect(isNoRiderProfile({ code: "permission.denied" })).toBe(false);
+    expect(isNoRiderProfile(null)).toBe(false);
   });
 });
