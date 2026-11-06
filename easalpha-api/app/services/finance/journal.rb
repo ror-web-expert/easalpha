@@ -44,9 +44,15 @@ module Finance
     COUNTER = { "order_payment" => :sale, "refund" => :sale, "expense" => :expense, "supplier_payment" => "2010", "customer_payment" => "1100", "customer_refund" => "1100",
                 "deposit" => :movement, "withdrawal" => :movement, "opening" => "3010", "adjustment" => :adjustment, "rider_float" => "1030" }.freeze
 
-    # A drawer movement by its kind: a drop goes to the safe and cash in comes from it, a payout or cash out is a
-    # petty expense, a rider float is petty cash. Deposits and withdrawals on a company account stay the owner's.
-    MOVEMENT_COUNTER = { "drop" => "1050", "cash_in" => "1050", "cash_out" => "5190", "payout" => "5190", "float_issue" => "1030", "float_return" => "1030" }.freeze
+    # A drawer movement by its kind. A drop and cash in move money between the drawer and the branch's safe account,
+    # and a payout is an Expense with its own category: Shifts::Safe and Shifts::Manager post those, never this map.
+    # A cash out is money taken out for the owner (QA B7: it was booked as Other Expenses with no expense behind it);
+    # a payout here is one recorded before 7 Nov 2026; a rider float is petty cash. Deposits and withdrawals on a
+    # company account stay the owner's.
+    MOVEMENT_COUNTER = { "cash_out" => "3020", "payout" => "5190", "float_issue" => "1030", "float_return" => "1030" }.freeze
+
+    # What a count finds over or short at a till, or at a rider's settlement.
+    OVER_SHORT = "5195".freeze
 
     # One payment-account entry becomes one balanced journal: the account's ledger mirror against its counterpart.
     def from_account_entry!(entry)
@@ -62,7 +68,7 @@ module Finance
       end
       counter = case counter
       when :expense then expense_account_for(entry)
-      when :adjustment then entry.amount_minor.positive? ? "4100" : "5190"
+      when :adjustment then entry.ref_table == "rider_settlements" ? OVER_SHORT : (entry.amount_minor.positive? ? "4100" : "5190")
       when :movement then movement_account_for(entry)
       else counter
       end

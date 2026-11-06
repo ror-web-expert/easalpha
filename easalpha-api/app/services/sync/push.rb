@@ -127,7 +127,7 @@ module Sync
       if payload[:voided].present? || payload[:status].to_s == "voided"
         Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for("orders.void", actor), device: @device)
       elsif payload[:payments].present?
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.for_till(device: @device, membership: actor, branch: @branch)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
       end
       complete!(order, actor) if complete?(payload)
       "accepted"
@@ -142,7 +142,7 @@ module Sync
       changed = false
       if missing.any?
         tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: missing, tip_minor: tip, offline: true)
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.for_till(device: @device, membership: actor, branch: @branch)).call(payments: missing, tip_minor: tip, offline: true)
         changed = true
       end
       if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
@@ -201,7 +201,7 @@ module Sync
     def apply_payment(id, payload, actor)
       return "duplicate" if Payment.exists?(id: id)
       order = Order.includes(items: :modifiers).find(need(payload, :order_id))
-      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: [ payload.merge(id: id) ], tip_minor: payload[:tip_minor].to_i, offline: true)
+      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.for_till(device: @device, membership: actor, branch: @branch)).call(payments: [ payload.merge(id: id) ], tip_minor: payload[:tip_minor].to_i, offline: true)
       "accepted"
     end
 
@@ -209,7 +209,8 @@ module Sync
       return "duplicate" if Refund.exists?(id: id)
       order = Order.find(need(payload, :order_id))
       approver = approver_for("orders.refund", actor)
-      Payments::Refunder.call(order, amount_minor: payload[:amount_minor].to_i, method_code: payload[:method_code], reason: payload[:reason].to_s, actor: actor, approver: approver, device: @device, id: id)
+      Payments::Refunder.call(order, amount_minor: payload[:amount_minor].to_i, method_code: payload[:method_code], reason: payload[:reason].to_s, actor: actor, approver: approver, device: @device, id: id,
+                                     shift: Shift.for_till(device: @device, membership: actor, branch: @branch))
       "accepted"
     end
 
@@ -248,7 +249,8 @@ module Sync
     def apply_cash_movement(id, payload, actor)
       return "duplicate" if CashMovement.exists?(id: id)
       shift = Shift.find(need(payload, :shift_id))
-      Shifts::Manager.cash_movement!(shift, kind: payload[:kind].to_s, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, approver: @approvals["shifts.any"], reference: payload[:reference], id: id)
+      Shifts::Manager.cash_movement!(shift, kind: payload[:kind].to_s, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, approver: @approvals["shifts.any"], reference: payload[:reference], id: id,
+                                            category_id: payload[:category_id].presence, paid_to: payload[:paid_to])
       "accepted"
     end
 
@@ -265,7 +267,7 @@ module Sync
         raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
       end
       cp = Payments::Khata.receive!(customer, id: id, amount_minor: payload[:amount_minor].to_i, method_code: need(payload, :method_code), reference: payload[:reference].presence,
-                                    actor: actor, shift: Shift.open.find_by(cashier_membership_id: actor.id), branch: @branch, direction: payload[:direction].presence_in(%w[received paid]) || "received")
+                                    actor: actor, shift: Shift.for_till(device: @device, membership: actor, branch: @branch), branch: @branch, direction: payload[:direction].presence_in(%w[received paid]) || "received")
       AuditLog.record(action: "approve", record: cp, approved_by: approver.user, after: { permission: "khata.collect", amount_minor: cp.amount_minor }) if approver
       "accepted"
     end

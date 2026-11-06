@@ -152,10 +152,11 @@ module Payments
       p
     end
 
-    # The business day the money moved: the shift's, else the day of the sale on the till (an offline payment) or now.
+    # The business day the money moved: when the till took it (an offline payment, its clock kept within the client
+    # time window) or now. Never the shift's opening day, which misdated a sale on a shift past the cutoff and refused
+    # every payment on a shift opened on a day locked since (review ledger#2); the shift still chooses the drawer.
     def money_day(line)
-      return @shift.business_day if @shift
-      at = line[:client_created_at].present? ? (Time.iso8601(line[:client_created_at].to_s) rescue nil) : nil
+      at = line[:client_created_at].present? ? (Orders::ClientTime.clamp(line[:client_created_at], table_name: "payments", record_id: line[:id].presence) rescue nil) : nil
       @order.branch.business_day_for(at || Time.current)
     end
 
