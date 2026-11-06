@@ -17,10 +17,14 @@ describe("Bump order on the kitchen display", () => {
   });
 
   it("says a station is done while the order waits for another one", () => {
-    expect(doneAtStation("grill", "preparing", [{ status: "ready" }, { status: "ready" }])).toBe(true);
-    expect(doneAtStation("grill", "preparing", [{ status: "ready" }, { status: "sent" }])).toBe(false);
-    expect(doneAtStation("grill", "ready", [{ status: "ready" }])).toBe(false);
-    expect(doneAtStation("", "preparing", [{ status: "ready" }])).toBe(false);
+    const grill = (status: string) => ({ status, station_id: "grill" });
+    expect(doneAtStation("grill", "preparing", [grill("ready"), grill("ready")])).toBe(true);
+    expect(doneAtStation("grill", "preparing", [grill("ready"), grill("sent")])).toBe(false);
+    expect(doneAtStation("grill", "ready", [grill("ready")])).toBe(false);
+    expect(doneAtStation("", "preparing", [grill("ready")])).toBe(false);
     expect(doneAtStation("grill", "preparing", [])).toBe(false);
+    // A deal with a part at the grill belongs to the drinks station that makes its first part: it does not hold the grill.
+    expect(doneAtStation("grill", "preparing", [grill("ready"), { status: "sent", station_id: "drinks" }])).toBe(true);
+    expect(doneAtStation("grill", "preparing", [{ status: "sent", station_id: "drinks" }])).toBe(false);
   });
 });

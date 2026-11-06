@@ -12,7 +12,12 @@ export function bumpRequest(orderId: string, station: string | null | undefined)
   return { path: `/kitchen/orders/${orderId}/bump`, ...(station ? { body: { station_id: station } } : {}) };
 }
 
-/** Every line on this station's card is ready while the order still waits for another station. */
-export function doneAtStation(station: string | null | undefined, orderStatus: string, items: { status: string }[]): boolean {
-  return !!station && orderStatus !== "ready" && items.length > 0 && items.every((i) => i.status === "ready" || i.status === "served");
+/**
+ * Every line this station makes is ready while the order still waits for another station. A deal shows on each
+ * station with a part in it but belongs to the station of its first part, which bumps it; so only the station's own
+ * lines count here.
+ */
+export function doneAtStation(station: string | null | undefined, orderStatus: string, items: { status: string; station_id?: string | null }[]): boolean {
+  const own = items.filter((i) => i.station_id === station);
+  return !!station && orderStatus !== "ready" && own.length > 0 && own.every((i) => i.status === "ready" || i.status === "served");
 }
