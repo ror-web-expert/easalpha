@@ -82,6 +82,19 @@ RSpec.describe "Order edit guards", type: :request do
       within(biz) { expect(OrderItem.where(order_id: o[:id]).count).to eq(1) }
     end
 
+    it "answers a save of a finished order, and its tax choice, with order.closed too, so the till starts over from any save" do
+      o = order!
+      pay!(o)
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: o[:items].first[:id], quantity: 2 } ] }, headers: headers
+      expect(response).to have_http_status(:conflict)
+      expect(json[:error]).to include(code: "order.closed", message: "#{o[:label]} is already paid: start a new order")
+      expect(json[:error][:details][:order]).to include(id: o[:id], status: "paid")
+      api_post "/api/v1/orders/#{o[:id]}/tax_choice", { none: true }, headers: headers
+      expect(response).to have_http_status(:conflict)
+      expect(json[:error][:code]).to eq("order.closed")
+      within(biz) { expect(OrderItem.find(o[:items].first[:id]).quantity).to eq(1) }
+    end
+
     it "still answers a repeated create of an open order with that order" do
       id = SecureRandom.uuid
       2.times { api_post "/api/v1/orders", { id: id, order_type: "walk_in", lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers }

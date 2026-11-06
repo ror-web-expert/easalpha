@@ -160,11 +160,8 @@ module Api
       def create
         require_permission!("orders.create")
         if params[:id].present? && (existing = Order.find_by(id: params[:id]))
-          # A repeated create answers with the order it made. A finished one is not that: the till still holds a sale it
-          # completed (its receipt left on screen), and lines added to it would be dropped without a word (QA T9).
-          unless existing.open?
-            raise Api::Errors::Conflict.new("order.closed", "#{existing.label} is already #{existing.status}: start a new order", details: { order: OrderSerializers.full(existing) })
-          end
+          # A repeated create answers with the order it made; a finished one is not that (refuse_closed!).
+          refuse_closed!(existing)
           return render json: OrderSerializers.full(existing), status: :ok
         end
         approvals = collect_approvals
@@ -192,6 +189,7 @@ module Api
       def tax_choice
         require_permission!("orders.create")
         order = Order.includes(:items).find(params[:id])
+        refuse_closed!(order)
         if ActiveModel::Type::Boolean.new.cast(params[:none])
           Orders::Builder.apply_tax_choice!(order, none: true)
         else
@@ -204,6 +202,7 @@ module Api
       def update
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
+        refuse_closed!(order)
         approvals = collect_approvals
         require_order_update_pin!(order) if order.reopened?
         before_items = Orders::Story.snapshot(order)
@@ -324,6 +323,14 @@ module Api
       end
 
       private
+
+      # A paid, closed, voided or refunded order takes no more lines. The till may still hold it (its receipt left on
+      # screen, or paid on another till): answered order.closed with the order, from a create or a save alike, it
+      # starts a new order instead of dropping the lines added to the finished one (QA T9).
+      def refuse_closed!(order)
+        return if order.open?
+        raise Api::Errors::Conflict.new("order.closed", "#{order.label} is already #{order.status}: start a new order", details: { order: OrderSerializers.full(order) })
+      end
 
       # A coupon's own rules before it goes on (QA T2). One coupon per order: a promotion has no stacking field and the
       # SPEC names none. Its minimum order is weighed against what the order comes to now, before tax (as a voucher's
