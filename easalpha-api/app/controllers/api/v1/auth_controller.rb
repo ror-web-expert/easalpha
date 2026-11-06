@@ -33,14 +33,16 @@ module Api
         issue_for(user, app: params[:app].presence || "admin")
       end
 
-      # POST /auth/otp/request  phone, purpose (login|signup)
+      # POST /auth/otp/request  phone, purpose (login|signup|verify_phone)
+      # The answer is the same whether or not an account has the phone: a login code is only sent to a phone that has
+      # one, but the code is made (and the bcrypt paid) either way, so the request cannot tell anyone who has an
+      # account (review of 6 Nov 2026, R13). verify_phone confirms a new phone for PATCH /me.
       def otp_request
         phone = User.normalize_phone(params[:phone])
         raise Api::Errors::BadRequest.new("otp.phone_invalid", "Phone must be in international format") unless phone&.match?(/\A\+[1-9]\d{7,14}\z/)
-        purpose = params[:purpose].presence_in(%w[login signup]) || "login"
-        raise Api::Errors::NotFound.new("otp.no_account", "No account with this phone. Sign up first.") if purpose == "login" && !User.exists?(phone: phone)
+        purpose = params[:purpose].presence_in(%w[login signup verify_phone]) || "login"
         _record, code = OtpCode.issue!(phone: phone, purpose: purpose)
-        Whatsapp::Sender.send_otp(phone: phone, code: code)
+        Whatsapp::Sender.send_otp(phone: phone, code: code) unless purpose == "login" && !User.exists?(phone: phone)
         body = { sent: true, phone: phone, expires_in: OtpCode::TTL.to_i }
         body[:dev_code] = code unless Rails.env.production?
         render json: body

@@ -95,7 +95,8 @@ export default function LoginPage() {
             </form>
           ) : sent ? (
             <form onSubmit={verifyOtp} className="space-y-4">
-              <p className="text-sm text-fg-secondary">We sent a code by WhatsApp to {sent}.</p>
+              {/* The API answers the same with or without an account (R13), so the page cannot say more than this. */}
+              <p className="text-sm text-fg-secondary">If {sent} has an EasAlpha account, a code is on its way by WhatsApp.</p>
               <Field label="Code"><Input inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)} required autoFocus className="h-11 text-center text-lg tracking-[0.5em]" /></Field>
               {error ? <p className="rounded-[4px] bg-danger-soft px-4 py-3 text-sm text-danger-ink">{error}</p> : null}
               <Button type="submit" className="w-full" loading={busy}>Verify</Button>
