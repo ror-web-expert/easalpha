@@ -516,12 +516,13 @@ export function startSync(opts: { pull?: boolean } = {}) {
   if (!keepsTillData(useDeviceStore.getState().device?.kind)) return () => {};
   stopped = false;
   const pull = opts.pull !== false;
-  const onOnline = () => { lastFailureAt = 0; useSyncStore.getState().set({ status: "online" }); if (pull) pullChanges(); schedule(0); if (pull) void useCustomerStore.getState().downloadIfStale(); };
+  const onOnline = () => { lastFailureAt = 0; useSyncStore.getState().set({ status: "online" }); if (pull) pullChanges(); schedule(0); if (pull) void useCustomerStore.getState().downloadIfStale(); void settleResolvedAttention(); };
   const onOffline = () => useSyncStore.getState().set({ status: "offline" });
   window.addEventListener("online", onOnline);
   window.addEventListener("offline", onOffline);
   useSyncStore.getState().set({ status: isOnline() ? "online" : "offline" });
   refreshCounts();
+  void settleResolvedAttention();
   // Nothing is in flight on a fresh start: rows left "sending" by a crash go back to pending before the first push.
   recoverStuck(true).catch(() => {}).then(() => schedule(1000));
   // A push refused while the till was locked (session.required) goes again as soon as someone signs in.
@@ -532,8 +533,11 @@ export function startSync(opts: { pull?: boolean } = {}) {
   }, 15000);
   // Menu, settings and customers changed on the server or other tills (a balance paid at the counter, a new student)
   // reach this till every few minutes, so what it shows and searches offline is never far behind.
+  // So do the refusals a manager resolved on the admin's Needs attention: they leave the Attention page and its badge.
   const pullTimer = setInterval(() => {
-    if (!pull || !isOnline() || !useDeviceStore.getState().deviceToken) return;
+    if (!isOnline() || !useDeviceStore.getState().deviceToken) return;
+    void settleResolvedAttention();
+    if (!pull) return;
     pullChanges();
     void useCustomerStore.getState().downloadIfStale();
   }, 5 * 60_000);
@@ -631,6 +635,48 @@ export async function flushDismissals(ids: string[] = []): Promise<void> {
     }
     changePendingDismissals((pending) => pending.filter((x) => x !== id));
   }
+}
+
+/** What POST /sync/rejections/check answers for a refusal the server has resolved. */
+interface ResolvedRefusal { type: string; id: string; resolution: string | null; resolved_at: string }
+
+/**
+ * The refusals this till still lists that the server has resolved since: a manager's Dismiss or Mark fixed on the
+ * admin's Needs attention, or the record went through after all. They leave the Attention page as the till's own
+ * Dismiss takes them, with the records held back by them (which never reached the server); the local order keeps its
+ * Rejected mark unless the record went through. Before, the admin's resolution never reached the till (L3, 7 Nov
+ * 2026). A row listed after the question went out (refused again meanwhile) is a new refusal and stays. Returns how
+ * many rows left the list.
+ */
+export async function settleResolvedAttention(): Promise<number> {
+  if (!isOnline()) return 0;
+  const askedAt = new Date().toISOString();
+  // A held-back record ("blocked") never reached the server: it goes with the record that holds it.
+  const listed = ((await db.attention.toArray()) as AttentionItem[]).filter((a) => a.code !== "blocked");
+  if (!listed.length) return 0;
+  const resolved: ResolvedRefusal[] = [];
+  try {
+    for (let i = 0; i < listed.length; i += 200) {
+      const records = listed.slice(i, i + 200).map((a) => ({ type: a.type, id: a.id }));
+      const res = await api<{ resolved?: ResolvedRefusal[] }>("/sync/rejections/check", { method: "POST", auth: "pos", body: { records }, timeoutMs: 8000 });
+      resolved.push(...(res.resolved ?? []));
+    }
+  } catch (e) {
+    if (e instanceof ApiError && e.isNetwork) noteNetworkFailure();
+    return 0;
+  }
+  let dropped = 0;
+  for (const r of resolved) {
+    const a = (await db.attention.get(r.id)) as AttentionItem | undefined;
+    if (!a || a.type !== r.type || a.code === "blocked" || a.created_at > askedAt) continue;
+    const held = ((await db.attention.toArray()) as AttentionItem[]).filter((x) => x.blocked_by === a.id);
+    for (const x of [a, ...held]) await db.attention.delete(x.id);
+    dropped += 1 + held.length;
+    // The server holds it now: the order loses its Rejected mark once nothing else of it is listed (markSynced).
+    if (r.resolution === "accepted") await markSynced(a.type as SyncRecordType, a.id, a);
+  }
+  if (dropped) await refreshCounts();
+  return dropped;
 }
 
 /** A record whose dismissal loses money the server never recorded: a payment, refund, void, or an order paid offline. */

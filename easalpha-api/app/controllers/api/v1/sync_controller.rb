@@ -56,6 +56,22 @@ module Api
         head :no_content
       end
 
+      # POST /sync/rejections/check  records: [{ type, id }], the refusals the till still lists on its Attention page.
+      # Answers those resolved here since (a manager's Dismiss or Mark fixed on Needs attention, or the record went
+      # through after all), so the till drops them too: before, they stayed there after the admin had settled them
+      # (L3, 7 Nov 2026). Only this till's rows count, and a record refused again after a resolution is open again.
+      def check
+        asked = checked_records
+        rows = SyncRejection.where(device_id: current_device.id, record_type: asked.map(&:first).uniq, record_id: asked.map(&:last).uniq).group_by { |r| [ r.record_type, r.record_id ] }
+        resolved = asked.filter_map do |key|
+          found = rows[key]
+          next if found.blank? || found.any? { |r| r.resolved_at.nil? }
+          last = found.max_by(&:resolved_at)
+          { type: last.record_type, id: last.record_id, resolution: last.resolution, resolved_at: last.resolved_at }
+        end
+        render json: { resolved: resolved }
+      end
+
       def batches
         rows, cursor = Paginator.call(SyncBatch.where(branch_id: current_branch.id), cursor: params[:cursor], limit: params[:limit], order_column: :started_at)
         render_page(rows, cursor) { |b| { id: b.id, device_id: b.device_id, direction: b.direction, record_count: b.record_count, accepted: b.accepted, duplicates: b.duplicates, rejected: b.rejected, started_at: b.started_at, finished_at: b.finished_at } }
@@ -79,6 +95,9 @@ module Api
         when "resolve"
           # The till's Attention page dismisses what this till sent; the admin needs a manager's permission.
           require_permission!("settings.manage", "devices.manage", "reports.view_all", "reports.view_branch") unless till_dismissal?
+        when "check"
+          # About the till's own refusals only, so the till alone asks, locked or not: it learns nothing about anyone.
+          raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") unless till
         when "changes", "customers"
           return if till
           raise Api::Errors::Forbidden.new("device.required", "Sync needs a paired till") if current_device&.paired? # a kitchen screen or rider phone
@@ -96,6 +115,16 @@ module Api
           raw = raw.to_unsafe_h.values if raw.respond_to?(:to_unsafe_h)
           Array(raw).map { |r| r.respond_to?(:to_unsafe_h) ? r.to_unsafe_h : r.to_h }
         end
+      end
+
+      # The [type, id] pairs a check asks about (the records parameter, as a push reads it), at most 200; an id that is
+      # not a UUID was never kept under it.
+      def checked_records
+        raise Api::Errors::BadRequest.new("sync.too_many", "At most 200 records per check") if push_records.size > 200
+        push_records.filter_map do |r|
+          r = r.with_indifferent_access
+          [ r[:type].to_s, r[:id].to_s.downcase ] if r[:id].to_s.match?(Sync::Push::UUID)
+        end.uniq
       end
 
       # A Dismiss on a till, by the member signed in on it: only what this till sent is resolved.

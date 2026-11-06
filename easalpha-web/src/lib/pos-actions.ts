@@ -122,7 +122,7 @@ export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrd
     paid_minor: 0, payments: [], receipt_number: null, void_reason: null, membership_id: membershipId, cashier_name: cashier, business_day: businessDayFor(branch?.day_end_time),
     client_created_at: cart.client_created_at, created_at: now, updated_at: now, local_only: true, open: OPEN_STATUSES.includes(status as never) ? 1 : 0,
     delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null, address_text: cart.address_text ?? null, zone_name: cart.zone_name ?? null,
-    ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null,
+    ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null, regular_discount_removed_at: cart.regular_discount_removed_at ?? null,
     // Kept so the order opens again with its discount lines (the till's own regular discount among them) and not twice.
     order_discounts: cart.discounts?.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })),
     ...extra,
@@ -163,6 +163,9 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     order_discounts: o.discounts ? o.discounts.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })) : prev?.order_discounts,
     // The Orders cards read "? items" for every order known only from a summary row (roles QA, 6 Nov 2026).
     item_count: o.item_count ?? (full ? lines.filter((l) => l.status !== "cancelled").length : prev?.item_count) ?? null,
+    reopened_at: o.reopened_at ?? null, reopen_count: o.reopen_count ?? 0,
+    // Only the full order says it; a summary row keeps what the till knew (L3, item 9).
+    regular_discount_removed_at: (full ? o.regular_discount_removed_at : prev?.regular_discount_removed_at) ?? null,
   };
 }
 
@@ -210,7 +213,44 @@ export function localToCart(o: LocalOrder): Cart {
     paid_minor: o.paid_minor || undefined, rounding_minor: (o.cash_rounding_minor ?? o.rounding_minor) || undefined, tip_minor: o.tip_minor || undefined,
     service_charge_percent: o.service_charge_percent ?? undefined, service_charge_fixed_minor: o.service_charge_fixed_minor ?? undefined, delivery_charge_percent: o.delivery_charge_percent ?? undefined,
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
+    // As reopenFields reads the server's order: the till's copy opens reopened too (L3, 7 Nov 2026).
+    reopened: !!o.reopened_at && OPEN_STATUSES.includes(o.status as never), reopen_count: o.reopen_count ?? 0, payment_method_summary: o.payment_method_summary ?? null,
+    regular_discount_removed_at: o.regular_discount_removed_at ?? null,
   };
+}
+
+/** Orders::Pricing.payment_status_for, for the till's own copy of an order. */
+function paymentStatusFor(o: Pick<LocalOrder, "status" | "total_minor" | "paid_minor" | "is_staff_meal">): string {
+  if (o.status === "refunded") return "refunded";
+  if (o.total_minor === 0 && (o.is_staff_meal || (o.paid_minor === 0 && ["paid", "closed"].includes(o.status)))) return "paid";
+  if (o.paid_minor <= 0) return "unpaid";
+  return o.paid_minor >= o.total_minor ? "paid" : "partial";
+}
+
+/** An order's amounts and payment status as stored: what an edit that leaves the amount due as it was keeps. */
+const storedMoney = (o: LocalOrder): Partial<LocalOrder> => ({
+  subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor, rounding_minor: o.rounding_minor,
+  cash_rounding_minor: o.cash_rounding_minor, tip_minor: o.tip_minor, delivery_charge_minor: o.delivery_charge_minor, total_minor: o.total_minor, payment_status: o.payment_status,
+});
+
+/**
+ * The till's copy of an order edited offline (L3, 7 Nov 2026). cartToLocal makes a new order's copy (Unpaid, no
+ * receipt number, today's day, the cashier signed in now), and an edit stored just that: the Orders card read Unpaid
+ * for a paid order, a reprint offline had no receipt number or barcode, and a reopened order whose total went up was
+ * offered a refund of everything it was paid (refundOffer takes an open order without a receipt number for one never
+ * completed), which the server refuses. What the stored copy knew and an edit does not change stays: its numbers,
+ * day, taker, cashier, receipt, payments and reopen state. Its amounts and payment status stay while the edit leaves
+ * the total as it was (both priced by the till), and otherwise follow the edit by the server's rule: part-paid when
+ * the new total is above what was paid.
+ */
+function editedCopy(cart: Cart, status: string, prev: LocalOrder | undefined, local_only: boolean): LocalOrder {
+  const kept: Partial<LocalOrder> = prev
+    ? { serial: prev.serial, till_serial: prev.till_serial, label: prev.label, created_at: prev.created_at, business_day: prev.business_day, membership_id: prev.membership_id, cashier_name: prev.cashier_name,
+        receipt_number: prev.receipt_number, payments: prev.payments, paid_minor: prev.paid_minor, reopened_at: prev.reopened_at ?? null, reopen_count: prev.reopen_count ?? 0, payment_method_summary: prev.payment_method_summary ?? null }
+    : { payments: [], paid_minor: 0 };
+  const local = cartToLocal(cart, status, { ...kept, local_only });
+  if (prev && cartToLocal(localToCart(prev), prev.status, { ...kept, local_only }).total_minor === local.total_minor) return { ...local, ...storedMoney(prev) };
+  return { ...local, payment_status: paymentStatusFor(local) };
 }
 
 /**
@@ -278,9 +318,8 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
   if (cart.local_only && (await isQueued(cart.id))) {
     // A record that already carries the flag keeps it: its creator is the one the sync checks.
     if (cart.is_staff_meal && !(await db.queue.get(cart.id))?.payload.is_staff_meal) await refuseUnapprovedStaffMeal(cart);
-    const local = cartToLocal(cart, place || cart.status === "placed" ? "placed" : cart.status === "held" ? "held" : "draft");
-    const prev = await db.orders.get(cart.id);
-    await saveLocal({ ...local, till_serial: prev?.till_serial ?? local.till_serial, label: prev?.label ?? local.label, created_at: prev?.created_at ?? local.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0 });
+    const local = editedCopy(cart, place || cart.status === "placed" ? "placed" : cart.status === "held" ? "held" : "draft", await db.orders.get(cart.id), true);
+    await saveLocal(local);
     if (await patchQueued(cart.id, (p) => ({ ...p, ...orderInput(cart, place), status: place || p.status === "placed" ? "placed" : "draft", place: undefined, approver_pin: undefined }))) {
       return { cart: { ...cart, saved: true, local_only: true, status: local.status }, local, offline: true };
     }
@@ -315,8 +354,7 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
   await refuseUnapprovedStaffMeal(onServer ? { ...cart, local_only: false } : { ...cart, local_only: true });
   if (onServer) {
     // Exists on the server: queue an update; status changes wait for the connection.
-    const prev = await db.orders.get(cart.id);
-    const local = cartToLocal(cart, place ? "placed" : cart.status, { till_serial: prev?.till_serial ?? null, label: prev?.label ?? cart.label ?? "draft", serial: prev?.serial ?? null, created_at: prev?.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0, local_only: false });
+    const local = editedCopy(cart, place ? "placed" : cart.status, await db.orders.get(cart.id), false);
     await saveLocal(local);
     await enqueue({ type: "order_update", id: cart.id, membership_id: membershipId ?? undefined, payload: { order_type: cart.order_type, table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, notes: cart.notes || null, lines: cart.lines.map(toLineInput), client_seq: Date.now(), address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null, ...chargeFields(cart), ...staffMealFields(cart) } });
     return { cart: { ...cart, saved: true, local_only: false, status: local.status }, local, offline: true };

@@ -88,15 +88,43 @@ module Orders
     # it is, so a second press changes nothing.
     def bump!(order, station_id: nil, actor: nil, device: nil)
       cooking = order.items.where(status: %w[sent preparing])
-      cooking = cooking.where(station_id: station_id) if station_id.present?
+      parts = []
+      if station_id.present?
+        # A deal made at several stations is kept by the station of its first part, so that station's bump readied
+        # every part of it: those deals are bumped part by part instead (L3, 7 Nov 2026).
+        split = cooking.select { |i| split_deal?(i) }
+        parts = split.select { |i| i.deal_components.any? { |c| c["station_id"] == station_id } }
+        cooking = cooking.where(station_id: station_id).where.not(id: split.map(&:id))
+      end
       if order.status == "ready"
-        Realtime.kitchen_changed(order.branch_id, order.business_id) if cooking.update_all(status: "ready", bumped_at: Time.current).positive?
+        moved = cooking.update_all(status: "ready", bumped_at: Time.current).positive?
+        moved = parts.map { |i| bump_deal_parts!(i, station_id) }.any? || moved
+        Realtime.kitchen_changed(order.branch_id, order.business_id) if moved
         return order
       end
       return ready!(order, actor: actor, device: device) if station_id.blank?
       raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.status.in?(BUMPABLE)
       cooking.update_all(status: "ready", bumped_at: Time.current)
+      parts.each { |i| bump_deal_parts!(i, station_id) }
       ready_when_stations_done!(order, actor: actor, device: device)
+    end
+
+    # A deal line whose parts are made at more than one station (deal_components name each part's station).
+    def split_deal?(item) = item.deal_id.present? && Array(item.deal_components).filter_map { |c| c["station_id"] }.uniq.size > 1
+
+    # One station's parts of a split deal are ready: each keeps its own bumped_at in deal_components, and the line is
+    # ready once every part with a station is (a part with none goes with the last, as a line with none does). Under a
+    # row lock, so two stations bumping at once never write over each other's parts. True when a part moved.
+    def bump_deal_parts!(item, station_id)
+      item.with_lock do
+        next false unless item.status.in?(%w[sent preparing])
+        now = Time.current
+        parts = item.deal_components.map { |c| c["station_id"] == station_id && c["bumped_at"].blank? ? c.merge("bumped_at" => now.iso8601(6)) : c }
+        next false if parts == item.deal_components
+        done = parts.select { |c| c["station_id"] }.all? { |c| c["bumped_at"].present? }
+        item.update!(done ? { deal_components: parts, status: "ready", bumped_at: now } : { deal_components: parts })
+        true
+      end
     end
 
     # Ready once every line the kitchen has (sent, not waiting for a cashier's accept) is ready at its station; with

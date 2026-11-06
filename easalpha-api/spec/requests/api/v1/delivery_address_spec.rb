@@ -85,6 +85,42 @@ RSpec.describe "Delivery addresses and zones", type: :request do
     expect(row[:items]).to eq([ { name: "Zinger Burger", quantity: "2" } ]) # F13: 2, not 2.0
   end
 
+  # Leftovers of 7 Nov 2026 (L3): the order_update replay dropped address_id, so a delivery moved to another address
+  # while the till was offline kept the old one (and the old zone's charge). It now goes through the rule the online
+  # PATCH applies (Orders::Builder#validate_address!).
+  describe "an update queued offline" do
+    let(:device) { within(biz) { Device.create!(branch: Branch.first, name: "Till", kind: "till", paired_at: Time.current, code: "T7") } }
+    let(:cashier) { add_member!(biz, "cashier", pin: "1111") }
+    let(:pos) { auth_headers(cashier, app: "pos", device: device) }
+
+    def queued_update(order, address_id, seq:, **payload)
+      { type: "order_update", id: order[:id], membership_id: cashier.id,
+        payload: { order_type: "delivery", customer_id: order[:customer_id], address_id: address_id, lines: order[:items].map { |i| { id: i[:id], product_id: i[:product_id], quantity: 1 } }, client_seq: seq }.merge(payload) }
+    end
+
+    def push(record)
+      api_post "/api/v1/sync/push", { records: [ record ] }, headers: pos
+      expect(response).to have_http_status(:ok), response.body
+      json[:results].first
+    end
+
+    it "moves the delivery to the address it names, and refuses another customer's address as online" do
+      hira = customer!("Hira", "03005556677", { line1: "House 12", area: "Phase 5 DHA" })
+      omar = customer!("Omar", "03009998877", { line1: "Flat 3", area: "Gulberg" })
+      elsewhere = within(biz) { CustomerAddress.create!(customer_id: hira[:id], line1: "Shop 4", area: "Gulberg") }
+      api_post "/api/v1/orders", { order_type: "delivery", customer_id: hira[:id], address_id: hira[:addresses].first[:id], lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
+      order = json
+
+      expect(push(queued_update(order, elsewhere.id, seq: 1))).to include(status: "accepted")
+      expect(within(biz) { Order.find(order[:id]).address_id }).to eq(elsewhere.id)
+      get "/api/v1/orders/#{order[:id]}/delivery", headers: headers
+      expect(json).to include(address_text: "Shop 4, Gulberg") # the delivery follows, as after an online PATCH
+
+      expect(push(queued_update(order, omar[:addresses].first[:id], seq: 2))).to include(status: "rejected", code: "order.address")
+      expect(within(biz) { Order.find(order[:id]).address_id }).to eq(elsewhere.id)
+    end
+  end
+
   context "from the storefront" do
     before do
       within(biz) do

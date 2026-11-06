@@ -58,6 +58,8 @@ export interface Cart {
   /** SPEC Tax: the No Tax / linked-rate choice made on the payment page (server-side; never queued offline). */
   tax_choice?: TaxChoice | null;
   tax_rate_id?: string | null;
+  /** Set when a manager took the regular discount off on the server: the till then works none out itself (pos-regular). */
+  regular_discount_removed_at?: string | null;
 }
 
 // A new order starts as Dine-in unless the business chose another type (Settings, Point of Sale, Order Behavior).

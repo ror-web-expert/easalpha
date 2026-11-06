@@ -207,6 +207,7 @@ Rails.application.routes.draw do
       get "settings/version", to: "settings#version"
       get "sync/rejections", to: "sync#rejections"
       post "sync/rejections/:id/resolve", to: "sync#resolve"
+      post "sync/rejections/check", to: "sync#check"
       get "sync/batches", to: "sync#batches"
       resources :tax_invoices, only: %i[index show] do
         collection { get :summary }

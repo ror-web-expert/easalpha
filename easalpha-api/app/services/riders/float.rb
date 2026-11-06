@@ -58,7 +58,8 @@ module Riders
     # hands in. cash_collected_minor is that cash; collected_total_minor all the cash collected, paid_at_till_minor
     # the part already taken at the till.
     def preview(rider)
-      deliveries = rider.unsettled_deliveries.includes(:order).to_a
+      # What DeliverySerializers.delivery reads of each row, loaded once for them all (the rider is this one).
+      deliveries = rider.unsettled_deliveries.includes(:zone, :address, order: :customer).to_a
       collected = deliveries.sum { |d| d.cash_collected_minor.to_i }
       owed = deliveries.sum { |d| owed_for(d) }
       { rider: DeliverySerializers.rider(rider), deliveries_count: deliveries.size, cash_collected_minor: owed, collected_total_minor: collected, paid_at_till_minor: collected - owed,

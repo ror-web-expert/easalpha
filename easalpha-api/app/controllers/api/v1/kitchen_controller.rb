@@ -55,15 +55,21 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
-      # POST /kitchen/items/:id/bump   one line ready; the order becomes ready when every station's lines are (an order
-      # past the kitchen keeps its status); a line already bumped is left as it is, and a line added to a ready order
-      # goes ready with the order left ready
+      # POST /kitchen/items/:id/bump { station_id? }  one line ready; the order becomes ready when every station's lines
+      # are (an order past the kitchen keeps its status); a line already bumped is left as it is, and a line added to a
+      # ready order goes ready with the order left ready. From a station's screen a deal made at several stations has
+      # only that station's parts ready, and the line goes ready with its last part (L3, 7 Nov 2026).
       def bump_item
         item = OrderItem.includes(:order).find(params[:id])
         order = item.order
         return render json: OrderSerializers.full(order) if item.status.in?(%w[ready served])
         raise Api::Errors::Conflict.new("item.status", "Item is #{item.status}") unless item.status.in?(%w[sent preparing])
-        item.update!(status: "ready", bumped_at: Time.current)
+        station = params[:station_id].presence
+        if station && Orders::Transitions.split_deal?(item) && item.deal_components.any? { |c| c["station_id"] == station }
+          Orders::Transitions.bump_deal_parts!(item, station)
+        else
+          item.update!(status: "ready", bumped_at: Time.current)
+        end
         Orders::Transitions.ready_when_stations_done!(order, actor: current_membership, device: current_device)
         render json: OrderSerializers.full(order.reload)
       end

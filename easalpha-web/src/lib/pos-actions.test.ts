@@ -91,6 +91,7 @@ import { applyServerDiscount, buildLocalReceipt, cartToLocal, completeOrder, fin
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
+import { refundOffer } from "./refunds";
 
 type Discount = { id: string; kind: string; value: number; amount_minor: number; reason: string | null; order_item_id: string | null };
 interface ServerOrder {
@@ -483,6 +484,61 @@ describe("payOrder saves only what the server lacks", () => {
     expect(cart.lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
   });
 
+  // Leftovers of 7 Nov 2026 (L3): the till's copy carried no reopen state, so a reopened order edited offline opened
+  // again as an ordinary one: lines removable without DELETE_ORDER_ITEM, Place unpaid offered, no Save and pay.
+  it("opens a reopened order with a queued offline edit still reopened, on its original method", async () => {
+    server = fresh([["Karahi", 100000]], { status: "served", paid_minor: 100000, methods: { easypaisa: 100000 }, reopened_at: "2026-10-13T11:00:00Z", reopen_count: 2 });
+    await storeServerOrder(asOrder(server)); // as reopenOrder stores it
+    const reopened = opened();
+    h.online = false;
+    const saved = await saveOrder({ ...reopened, lines: [...reopened.lines, openLine("Naan", 30000)] });
+    expect(saved.offline).toBe(true);
+    expect(h.queued.map((q) => q.type)).toEqual(["order_update"]);
+    h.online = true;
+    const cart = await loadOrderForEdit(server.id); // from the till's copy: a GET would throw here
+    expect(cart.lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
+    expect(cart).toMatchObject({ reopened: true, reopen_count: 2, paid_minor: 100000, payment_method_summary: "easypaisa:100000" });
+    // Completed since, the same copy opens as a plain order: reopened means open again after a completion.
+    h.rows.set(server.id, { ...(h.rows.get(server.id) as LocalOrder), status: "closed", open: 0 });
+    expect(localToCart(h.rows.get(server.id) as LocalOrder).reopened).toBe(false);
+  });
+
+  // Leftovers of 7 Nov 2026 (L3, item 6): the copy an offline edit stored was a fresh order's: Unpaid, no receipt
+  // number, today's day, the cashier signed in now. The Orders card read Unpaid for a paid order, a reprint offline
+  // had no receipt number or barcode, and a reopened order whose total went up was offered a refund of all it was
+  // paid (refundOffer reads an open order without a receipt number as one never completed), which the server refuses.
+  describe("the till's copy after an offline edit", () => {
+    const reopenedPaid = () => {
+      server = fresh([["Karahi", 100000]], { status: "served", paid_minor: 100000, methods: { cash: 100000 }, reopened_at: "2026-10-13T11:00:00Z", reopen_count: 1 });
+      return { ...asOrder(server), receipt_number: "261013-MAIN-7", taken_by_membership_id: "m-taker" } as Order;
+    };
+
+    it("keeps a paid order paid, with its receipt, day and taker, when the edit leaves what is due as it was", async () => {
+      await storeServerOrder(reopenedPaid());
+      h.online = false;
+      const { local } = await saveOrder({ ...opened(), notes: "no onions" });
+      expect(local).toMatchObject({ payment_status: "paid", paid_minor: 100000, total_minor: 100000, receipt_number: "261013-MAIN-7", business_day: "2026-10-13", membership_id: "m-taker", reopened_at: "2026-10-13T11:00:00Z" });
+      expect(h.rows.get(server.id)).toMatchObject({ payment_status: "paid", receipt_number: "261013-MAIN-7", notes: "no onions" });
+      expect(refundOffer(local)).toBeNull();
+      expect(buildLocalReceipt(local, true).receipt_number).toBe("261013-MAIN-7");
+    });
+
+    it("follows an edit that changes what is due: part-paid above what was paid, as the server answers it", async () => {
+      await storeServerOrder(reopenedPaid());
+      h.online = false;
+      const cart = opened();
+      const { local, cart: next } = await saveOrder({ ...cart, lines: [...cart.lines, openLine("Naan", 30000)] });
+      expect(local).toMatchObject({ payment_status: "partial", paid_minor: 100000, total_minor: 130000, receipt_number: "261013-MAIN-7", business_day: "2026-10-13" });
+      expect(refundOffer(local)).toBeNull(); // nothing paid above the total: no refund while it is open
+      expect(screenDue(next, ["cash"])).toBe(30000);
+      // A part-paid order stays part-paid through an edit that leaves its total.
+      server = fresh([["Karahi", 100000]], { status: "served", paid_minor: 40000, methods: { cash: 40000 } });
+      await storeServerOrder(asOrder(server));
+      const again = await saveOrder({ ...opened(), notes: "less salt" });
+      expect(again.local).toMatchObject({ payment_status: "partial", paid_minor: 40000, total_minor: 100000 });
+    });
+  });
+
   it("still saves a changed note, and names the save as the step that failed", async () => {
     server = fresh([["Karahi", 100000]]);
     h.rows.set(server.id, serverToLocal(asOrder(server)));
@@ -826,6 +882,23 @@ describe("an offline khata sale for a regular customer", () => {
     // A cash sale for the same customer prints no account line.
     const byCash = await payOrder({ ...cart(), id: "khata-2" }, [{ method_code: "cash", amount_minor: due, tendered_minor: due }]);
     expect(byCash.receipt.khata).toBeNull();
+  });
+
+  // Leftovers of 7 Nov 2026 (L3, item 9): the server keeps a regular discount a manager took off off the order
+  // (regular_discount_removed_at), the till's copy did not know it, and offline the till priced the order 10% under.
+  it("keeps a regular discount a manager took off off the order offline, through an edit", async () => {
+    h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
+    const saved = toCachedCustomer({ id: "sadia", name: "Sadia Akhtar", phone: "+923001807130", khata_no: "32", status: "active", is_walk_in: false, balance_minor: 0, credit_limit_minor: null, orders_count: 4, last_order_at: yesterday } as never);
+    useCustomerStore.setState({ list: [saved], byId: new Map([["sadia", saved]]), loaded: true });
+    server = fresh([["Karahi", 100000]], { status: "served" });
+    await storeServerOrder({ ...asOrder(server), customer_id: "sadia", customer_name: "Sadia Akhtar", regular_discount_removed_at: "2026-10-13T10:30:00Z" } as Order);
+    h.online = false;
+    const open = localToCart(h.rows.get(server.id) as LocalOrder);
+    expect(open.regular_discount_removed_at).toBe("2026-10-13T10:30:00Z");
+    expect(payableTotals(regularPricing(open), { settings: h.settings, cash: false }).total_minor).toBe(100000); // the server's price
+    const { local } = await saveOrder({ ...open, lines: [...open.lines, openLine("Naan", 30000)] });
+    expect(local).toMatchObject({ total_minor: 130000, discount_minor: 0, regular_discount_removed_at: "2026-10-13T10:30:00Z" });
+    expect(localToCart(h.rows.get(server.id) as LocalOrder).regular_discount_removed_at).toBe("2026-10-13T10:30:00Z");
   });
 
   it("leaves the discount to the server while online", () => {

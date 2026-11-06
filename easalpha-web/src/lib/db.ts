@@ -69,6 +69,11 @@ export interface LocalOrder {
   order_discounts?: LocalDiscount[];
   /** The server's count of live lines (its summary rows carry no lines), for an order whose lines this till never fetched. */
   item_count?: number | null;
+  /** The server's reopen facts, so the till's own copy (an edit queued offline) opens as reopened while it is open. */
+  reopened_at?: string | null;
+  reopen_count?: number;
+  /** A manager took the regular discount off on the server: the till does not put its own back offline (pos-regular). */
+  regular_discount_removed_at?: string | null;
 }
 
 /** One applied discount as the server reports it; discount_minor on the order is the sum of these plus the product discounts. */

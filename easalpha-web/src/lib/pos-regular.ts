@@ -66,15 +66,16 @@ export function regularDiscountFor(input: RegularInput): { tier: RegularDiscount
 
 /**
  * The cart with the till's own regular discount line worked out again: the previous one (if any) is taken off first,
- * so calling this after any change is safe. Nothing is added when `apply` is false (the server prices the order) or
- * the server already put a regular discount on it.
+ * so calling this after any change is safe. Nothing is added when `apply` is false (the server prices the order), when
+ * the server already put a regular discount on it, or when a manager took it off there (regular_discount_removed_at):
+ * the server leaves it off from then on (Marketing::RegularDiscounts.apply!), so the till does too.
  */
 export function withRegularDiscount(cart: Cart, ctx: Omit<RegularInput, "lines" | "orderType"> & { apply: boolean }): Cart {
   const mine = cart.discounts?.find((d) => d.id === LOCAL_REGULAR_ID);
   const others = (cart.discounts ?? []).filter((d) => d.id !== LOCAL_REGULAR_ID);
   const rest = Math.max(0, (cart.discount_minor ?? 0) - (mine?.amount_minor ?? 0));
   const base: Cart = mine ? { ...cart, discounts: others, discount_minor: rest || undefined } : cart;
-  if (!ctx.apply || cart.is_staff_meal || others.some((d) => d.kind === "regular")) return base;
+  if (!ctx.apply || cart.is_staff_meal || cart.regular_discount_removed_at || others.some((d) => d.kind === "regular")) return base;
   const r = regularDiscountFor({ ...ctx, lines: cart.lines, orderType: cart.order_type });
   if (!r) return base;
   const line: CartDiscount = { id: LOCAL_REGULAR_ID, kind: "regular", value: r.amount_minor / 100, amount_minor: r.amount_minor, reason: `Regular discount: ${r.tier.name}`, order_item_id: null };

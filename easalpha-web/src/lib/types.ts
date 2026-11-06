@@ -306,6 +306,8 @@ export interface Order extends OrderSummary {
   service_charge_fixed_minor?: number; delivery_charge_percent?: number; tax_choice?: TaxChoice | null; tax_rate_id?: ID | null;
   /** Where a delivery goes: the customer's saved address, or what a storefront guest typed (with their phone). */
   address_text?: string | null; guest_phone?: string | null;
+  /** When a manager took the regular discount off this order: the server leaves it off from then on (since 7 Nov 2026). */
+  regular_discount_removed_at?: string | null;
   story?: OrderStory;
 }
 export interface KitchenOrder extends OrderSummary { items: OrderItem[]; elapsed_seconds: number }

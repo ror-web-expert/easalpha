@@ -6,7 +6,8 @@ import { api, errorMessage } from "@/lib/api";
 import { subscribe } from "@/lib/cable";
 import type { BusinessSettings, KitchenOrder, KitchenTicket, Station } from "@/lib/types";
 import { formatElapsed, formatTime } from "@/lib/dates";
-import { bumpRequest, doneAtStation, linesText } from "@/lib/kitchen-bump";
+import { bumpItemRequest, bumpRequest, dealParts, doneAtStation, doneHere, linesText } from "@/lib/kitchen-bump";
+import { formatQty } from "@/lib/money";
 import { cn, titleCase } from "@/lib/utils";
 import { kdsAlerts, kdsTone } from "@/lib/pos-rules";
 import { KitchenGate, useBeep, useKitchenToken } from "@/components/kitchen/auth";
@@ -83,8 +84,10 @@ function Board() {
   const act = async (path: string, body?: Record<string, unknown>) => {
     try { await api(path, { method: "POST", body }); refresh(); } catch (e) { toast.error("Could not update", errorMessage(e)); }
   };
-  // F10: on one station's screen, Bump order readies that station's lines only.
+  // F10: on one station's screen, Bump order readies that station's lines only, and a line's own bump a deal's parts there.
   const bump = (orderId: string) => { const r = bumpRequest(orderId, station); return act(r.path, r.body); };
+  const bumpItem = (itemId: string) => { const r = bumpItemRequest(itemId, station); return act(r.path, r.body); };
+  const stationName = (id: string | null) => (id ? stations.data?.find((s) => s.id === id)?.name ?? null : null);
   const list = useMemo(() => [...(orders.data?.data ?? [])].sort((a, b) => (a.placed_at ?? a.created_at) < (b.placed_at ?? b.created_at) ? -1 : 1), [orders.data]);
   // SPEC: a one-shot sound the first time a card turns red. Cards already red when the page opens do not sound.
   useEffect(() => {
@@ -139,16 +142,30 @@ function Board() {
               <Timer start={o.placed_at} elapsed={o.elapsed_seconds} timeout={alerts.timeoutMinutes} />
             </header>
             <ul className="flex-1 divide-y px-3">
-              {o.items.map((i) => (
-                <li key={i.id} className={cn("flex items-start justify-between gap-2 py-2", i.status === "ready" && "opacity-50")}>
-                  <div>
-                    <div className="text-lg font-semibold leading-tight"><span className="tabular">{Number(i.quantity)} ×</span> {i.name}</div>
-                    {i.modifiers?.length ? <div className="text-base text-fg-secondary">{i.modifiers.map((m) => m.name).join(", ")}</div> : null}
-                    {i.notes ? <div className="text-base font-medium text-warning">“{i.notes}”</div> : null}
-                  </div>
-                  {i.status !== "ready" ? <button onClick={() => act(`/kitchen/items/${i.id}/bump`)} className="grid h-12 w-12 shrink-0 place-items-center rounded-md border hover:bg-success-soft" aria-label="Bump item"><Check className="h-5 w-5" /></button> : <Check className="h-5 w-5 text-success" />}
-                </li>
-              ))}
+              {o.items.map((i) => {
+                // A deal's parts (L3): this station's on its screen, every one with its station on All stations.
+                const parts = dealParts(i, station);
+                const done = doneHere(i, station);
+                return (
+                  <li key={i.id} className={cn("flex items-start justify-between gap-2 py-2", done && "opacity-50")}>
+                    <div>
+                      <div className="text-lg font-semibold leading-tight"><span className="tabular">{Number(i.quantity)} ×</span> {i.name}</div>
+                      {parts.length ? (
+                        <ul className="text-base" aria-label={`Parts of ${i.name}`}>
+                          {parts.map((p, k) => (
+                            <li key={k} className={cn("leading-snug", p.ready && "text-fg-muted line-through")}>
+                              <span className="tabular">{formatQty(p.quantity)}</span> {p.name}{!station && stationName(p.station_id) ? <span className="text-sm text-fg-secondary"> · {stationName(p.station_id)}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {i.modifiers?.length ? <div className="text-base text-fg-secondary">{i.modifiers.map((m) => m.name).join(", ")}</div> : null}
+                      {i.notes ? <div className="text-base font-medium text-warning">“{i.notes}”</div> : null}
+                    </div>
+                    {!done ? <button onClick={() => bumpItem(i.id)} className="grid h-12 w-12 shrink-0 place-items-center rounded-md border hover:bg-success-soft" aria-label="Bump item"><Check className="h-5 w-5" /></button> : <Check className="h-5 w-5 text-success" />}
+                  </li>
+                );
+              })}
             </ul>
             {o.notes ? <div className="px-3 pb-2 text-sm italic text-fg-secondary">{o.notes}</div> : null}
             <footer className="grid grid-cols-[auto_1fr] gap-2 p-2">
