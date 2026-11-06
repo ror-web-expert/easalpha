@@ -35,11 +35,52 @@ export function discountedPriceMinor(basePriceMinor: number, value: string | nul
   return Math.max(0, basePriceMinor - off);
 }
 
-/** What PATCH /products receives: blank value clears the discount. */
+/** What PATCH /products receives: blank value clears the discount (the API keeps that as 0 percent, S2). */
 export function discountPayload(value: string, type: DiscountType): { discount_value: string | null; discount_type: DiscountType | null } {
   const t = value.trim();
   if (t === "" || Number(t) === 0) return { discount_value: null, discount_type: null };
   return { discount_value: t, discount_type: type };
+}
+
+/**
+ * What a barcode label prints: the size's price (or the base price) after the product's own discount, times the pack
+ * quantity. The full price printed while the till sold the item for less (S15: Rs 60 on the label, Rs 50 at the till).
+ */
+export function labelPriceMinor(p: { base_price_minor: number; discount_value?: string | null; discount_type?: DiscountType | null; variants?: { id: string; price_minor: number }[] }, variantId: string | null | undefined, pack = 1): number {
+  const unit = (variantId ? p.variants?.find((v) => v.id === variantId)?.price_minor : undefined) ?? p.base_price_minor;
+  return Math.round(discountedPriceMinor(unit, p.discount_value, p.discount_type) * (pack > 0 ? pack : 1));
+}
+
+// ---- Deal dates (S9) ----
+
+/** A deal's Valid from or to as the date box takes it. The API sends days ("2026-11-06"); an older one sent the day
+ *  as midnight UTC ("2026-11-06T00:00:00.000Z"), which the box showed as text. */
+export function dealDay(v: string | null | undefined): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(v ?? "");
+  return m ? m[1] : "";
+}
+
+/** Valid to before Valid from was accepted; the form now says so. Both are YYYY-MM-DD, so they compare as text. */
+export function dealDatesProblem(from: string, to: string): string | null {
+  return from && to && to < from ? "Valid to must be on or after Valid from." : null;
+}
+
+// ---- Why Save is greyed (S7: the product and category forms greyed Save and said nothing) ----
+
+/** The first thing stopping the product form from saving, as a sentence; null when it can save. */
+export function productSaveBlocker(f: { name: string; category_id: string; base_price_minor: number }, o: { categories: number; discountError?: string | null; codeProblems?: number }): string | null {
+  if (!f.name.trim()) return "Enter the product name to save.";
+  if (!o.categories) return "Add a category first: every product sits in one.";
+  if (!f.category_id) return "Choose a category to save.";
+  if (f.base_price_minor < 0) return "The price cannot be negative.";
+  if (o.discountError) return o.discountError;
+  if (o.codeProblems) return "Fix the barcodes marked below to save.";
+  return null;
+}
+
+/** The same for the category form. Without a menu the API files the category in a new Main menu, so that never blocks. */
+export function categorySaveBlocker(f: { name: string }): string | null {
+  return f.name.trim() ? null : "Enter a name to save.";
 }
 
 // ---- Order Inventory consumables ----

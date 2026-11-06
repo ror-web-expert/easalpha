@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billingCurrency, includedTills, planEstimate } from "./plan-price";
+import { YEARLY_TERMS, billingCurrency, includedTills, planEstimate, planLimitLabel, planMonthlyMinor } from "./plan-price";
 
 const pro = { price_pkr_minor: 4_999_00, price_usd_minor: 39_00, limits: { tills: 10, branches: 1 } };
 const business = { price_pkr_minor: 8_999_00, price_usd_minor: 69_00, limits: { tills: null, branches: 20 } };
@@ -22,5 +22,18 @@ describe("plan estimate (matches Billing::Issuer)", () => {
     expect(billingCurrency("AE")).toBe("USD");
     expect(planEstimate(pro, "monthly", 12, "USD")).toBe(39_00 + 2 * 9_00);
     expect(planEstimate(business, "yearly", 30, "USD")).toBe(69_00 * 10);
+  });
+});
+
+describe("the Plan page's words", () => {
+  it("says yearly the way the invoice charges it: twelve months for ten (S12)", () => {
+    expect(YEARLY_TERMS).toBe("Yearly: twelve months for the price of ten");
+    expect(planEstimate(pro, "yearly", 1)).toBe(planEstimate(pro, "monthly", 1) * 10);
+  });
+  it("shows a plan's price in the currency the business is billed in, and limits in plain words (S13)", () => {
+    expect(planMonthlyMinor(business, "PKR")).toBe(8_999_00);
+    expect(planMonthlyMinor(business, "USD")).toBe(69_00);
+    expect(planLimitLabel("whatsapp_utility_messages")).toBe("WhatsApp messages a month");
+    expect(planLimitLabel("kitchen_screens")).toBe("Kitchen screens");
   });
 });

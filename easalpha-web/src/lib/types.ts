@@ -50,7 +50,7 @@ export interface Branch {
 }
 
 // ---- Settings store (SPEC "Settings and multi-outlet"): typed keys grouped by screen, with a version tills compare. ----
-export type SettingType = "string" | "boolean" | "integer" | "number" | "json" | "pin";
+export type SettingType = "string" | "boolean" | "integer" | "number" | "money" | "json" | "pin";
 export interface SettingKey {
   key: string; group: string; screen: string; type: SettingType; label: string;
   /** Secrets (pins, tokens) come back as "set" or null, never the real value. */
@@ -109,13 +109,13 @@ export interface PairedDevice { device_token: string; device: Device; business: 
 export interface SetupStaff { id: ID; name: string | null; role: string; staff_type: StaffType; has_pin: boolean; pin_locked: boolean }
 
 export interface AuditLog {
-  id: ID; action: string; table_name: string | null; record_id: ID | null; user_id: ID | null; device_id: ID | null;
+  id: ID; action: string; table_name: string | null; /** the table as people read it, "Order items" */ entity?: string | null; record_id: ID | null; user_id: ID | null; device_id: ID | null;
   approved_by_user_id: ID | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null;
   ip: string | null; occurred_at: string;
   user_name?: string | null; approved_by_name?: string | null;
 }
 
-export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string> }
+export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string>; /** "Order items" for order_items (S13) */ entity_labels?: Record<string, string> }
 export interface AuditInsights {
   total: number; by_action: Record<string, number>; by_entity: Record<string, number>;
   by_actor: { user_id: ID | null; name: string; count: number }[]; by_day: Record<string, number>;

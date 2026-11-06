@@ -5,6 +5,7 @@ import type { ByDayRow, SalesDetailPage, SalesDetailRow } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime, daysAgo, isoDay } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
+import { paymentMethods } from "@/components/admin/order-helpers";
 import { usePagedList } from "@/lib/hooks";
 import { Cards, LoadMore, type DateRange } from "@/components/admin/page";
 import { ReportShell, useReport } from "@/components/admin/report-shell";
@@ -33,7 +34,7 @@ export default function SalesReportPage() {
       exportData={{
         name: "sales", landscape: true,
         columns: [{ header: "Order", key: "label" }, { header: "Day", key: "day" }, { header: "Placed", key: "placed" }, { header: "Type", key: "type" }, { header: "Source", key: "source" }, { header: "Status", key: "status" }, { header: "Payment", key: "payment" }, { header: "Customer", key: "customer" }, { header: "Taken by", key: "taken_by" }, { header: "Completed by", key: "completed_by" }, { header: "Items", key: "items", align: "right" }, { header: "Subtotal", key: "subtotal", align: "right" }, { header: "Discount", key: "discount", align: "right" }, { header: "Tax", key: "tax", align: "right" }, { header: "Charges", key: "charges", align: "right" }, { header: "Total", key: "total", align: "right" }, { header: "Paid by", key: "paid_by" }],
-        rows: rows.map((r) => ({ label: r.label, day: formatDate(r.business_day), placed: formatDateTime(r.placed_at), type: titleCase(r.order_type), source: titleCase(r.source), status: titleCase(r.status), payment: titleCase(r.payment_status), customer: r.customer ?? "", taken_by: r.taken_by ?? "", completed_by: r.completed_by ?? "", items: r.items, subtotal: formatMoney(r.subtotal_minor), discount: formatMoney(r.discount_minor), tax: formatMoney(r.tax_minor), charges: formatMoney(r.service_charge_minor + r.delivery_charge_minor), total: formatMoney(r.total_minor), paid_by: r.payment_method_summary ?? "" })),
+        rows: rows.map((r) => ({ label: r.label, day: formatDate(r.business_day), placed: formatDateTime(r.placed_at), type: titleCase(r.order_type), source: titleCase(r.source), status: titleCase(r.status), payment: titleCase(r.payment_status), customer: r.customer ?? "", taken_by: r.taken_by ?? "", completed_by: r.completed_by ?? "", items: r.items, subtotal: formatMoney(r.subtotal_minor), discount: formatMoney(r.discount_minor), tax: formatMoney(r.tax_minor), charges: formatMoney(r.service_charge_minor + r.delivery_charge_minor), total: formatMoney(r.total_minor), paid_by: paymentMethods(r.payment_method_summary) })),
         footer: totals ? [`${totals.orders} orders  |  Revenue ${formatMoney(totals.revenue_minor)}  |  Discounts ${formatMoney(totals.discount_minor)}  |  Tax ${formatMoney(totals.tax_minor)}${rows.length < totals.orders ? `  |  Showing the first ${rows.length} rows` : ""}`] : undefined,
       }}>
       <Cards>
@@ -62,7 +63,7 @@ export default function SalesReportPage() {
               <TD right>{r.items}</TD>
               <TD right className="text-fg-secondary">{r.discount_minor ? formatMoney(r.discount_minor) : "-"}</TD>
               <TD right className="font-medium">{formatMoney(r.total_minor)}</TD>
-              <TD className="text-xs text-fg-secondary">{r.payment_method_summary ?? "-"}</TD>
+              <TD className="text-xs text-fg-secondary">{paymentMethods(r.payment_method_summary) || "-"}</TD>
             </TR>
           )) : <EmptyRow colSpan={12}>No paid orders match this period and filters</EmptyRow>}
         </TBody>

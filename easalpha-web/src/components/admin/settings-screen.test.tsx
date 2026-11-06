@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { SettingKey, SettingsResponse } from "@/lib/types";
-import { changedValues, controlFor, editValue, payloadValue, SettingsGroupPage } from "./settings-screen";
+import { changedValues, controlFor, editValue, methodKindLabel, payloadValue, paymentMethodOptions, SettingsGroupPage } from "./settings-screen";
 
 const k = (key: string, type: SettingKey["type"], value: unknown = null, extra: Partial<SettingKey> = {}): SettingKey =>
   ({ key, group: "point_of_sale", screen: "Test", type, label: key, value, default: null, ...extra });
@@ -24,7 +24,35 @@ describe("controlFor", () => {
     expect(controlFor(k("charges.service_charge.mode", "string")).options?.map((o) => o.value)).toEqual(["percent", "fixed"]);
     expect(controlFor(k("tax.pra.environment", "string")).options?.map((o) => o.value)).toEqual(["sandbox", "production"]);
     expect(controlFor(k("pos.receipt.paper", "string")).options?.map((o) => o.value)).toEqual(["80", "58"]);
+    // S16: the business's own methods once loaded; these are only the fallback, with Khata named as everywhere else.
+    expect(controlFor(k("pos.order_behavior.default_payment_method", "string")).control).toBe("payment-method");
     expect(controlFor(k("pos.order_behavior.default_payment_method", "string")).options?.map((o) => o.value)).toEqual(["cash", "card", "easypaisa", "jazzcash", "bank", "khata"]);
+    expect(controlFor(k("pos.order_behavior.default_payment_method", "string")).options?.find((o) => o.value === "khata")?.label).toBe("Khata (account)");
+  });
+
+  it("lists the business's own payment methods for the default, Raast and catalogue additions included", () => {
+    const methods = [
+      { code: "cash", name: "Cash", active: true }, { code: "raast", name: "Raast", active: true }, { code: "sadapay", name: "SadaPay", active: true },
+      { code: "card", name: "Card", active: false }, { code: "canteen_subsidy", name: "Canteen subsidy", active: true, internal: true },
+    ];
+    expect(paymentMethodOptions(methods, "cash", [])).toEqual([{ value: "cash", label: "Cash" }, { value: "raast", label: "Raast" }, { value: "sadapay", label: "SadaPay" }]);
+    expect(paymentMethodOptions(methods, "card", []).map((o) => o.value)).toContain("card"); // the saved one stays visible
+    expect(paymentMethodOptions(undefined, "cash", [{ value: "cash", label: "Cash" }])).toEqual([{ value: "cash", label: "Cash" }]);
+  });
+
+  it("names payment kinds as people say them (S13: \"Qr\")", () => {
+    expect(methodKindLabel("qr")).toBe("QR");
+    expect(methodKindLabel("khata")).toBe("Khata (account)");
+    expect(methodKindLabel("wallet")).toBe("Mobile wallet");
+    expect(methodKindLabel("future")).toBe("Future");
+  });
+
+  it("edits money in rupees and stores paisa (S11)", () => {
+    const key = k("big_void_alert_minor", "money", 500_000);
+    expect(controlFor(key).control).toBe("money");
+    expect(editValue(key)).toBe(5000);
+    expect(payloadValue(key, 7500.5)).toBe(750_050);
+    expect(payloadValue(key, null)).toBeNull();
   });
 
   it("renders customer fields and order types as checkbox sets", () => {

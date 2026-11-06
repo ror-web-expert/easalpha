@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CreditCard, Plus, Pencil } from "lucide-react";
 import { api } from "@/lib/api";
 import type { PaymentAccount, PaymentMethod, PaymentMethodCatalogueEntry } from "@/lib/types";
-import { titleCase } from "@/lib/utils";
+import { methodKindLabel } from "@/components/admin/settings-screen";
 import { PageHeader } from "@/components/admin/page";
 import { useAction, useList, useSave } from "@/components/admin/crud";
 import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
@@ -40,7 +40,7 @@ function PaymentMethods() {
             {list.data?.length ? list.data.map((m) => (
               <TR key={m.id}>
                 <TD className="font-medium">{m.name} <span className="font-mono text-xs text-fg-muted">{m.code}</span></TD>
-                <TD>{titleCase(m.kind)}</TD>
+                <TD>{methodKindLabel(m.kind)}</TD>
                 <TD className="text-fg-secondary">{accounts.data?.find((a) => a.id === m.payment_account_id)?.name ?? "-"}</TD>
                 <TD>{m.works_offline ? <Badge variant="success">yes</Badge> : <Badge>no</Badge>}</TD>
                 <TD>{m.needs_reference ? <Badge variant="warning">required</Badge> : <Badge>optional</Badge>}</TD>
@@ -58,7 +58,7 @@ function PaymentMethods() {
         <CardBody className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {catalogue.isLoading ? <Loading /> : (catalogue.data ?? []).map((c) => (
             <div key={c.code} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
-              <span><span className="font-medium">{c.name}</span><span className="block text-xs text-fg-muted">{titleCase(c.kind)} · <span className="font-mono">{c.code}</span></span></span>
+              <span><span className="font-medium">{c.name}</span><span className="block text-xs text-fg-muted">{methodKindLabel(c.kind)} · <span className="font-mono">{c.code}</span></span></span>
               {c.added ? <Button variant="secondary" size="sm" disabled>Added</Button> : <Button variant="soft" size="sm" loading={addFromCatalogue.isPending && adding === c.code} onClick={() => { setAdding(c.code); addFromCatalogue.mutate(c.code, { onSettled: () => setAdding(null) }); }}><Plus className="h-4 w-4" /> Add</Button>}
             </div>
           ))}
@@ -71,7 +71,7 @@ function PaymentMethods() {
           <div className="space-y-3">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
             <Field label="Code" hint="Lowercase, no spaces; cannot change later"><Input className="font-mono" value={form.code} disabled={!!form.id} onChange={(e) => setForm({ ...form, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} /></Field>
-            <Field label="Kind"><Select value={form.kind} disabled={!!form.id} onChange={(e) => setForm({ ...form, kind: e.target.value })}>{["cash", "card", "wallet", "bank", "khata", "qr", "custom"].map((k) => <option key={k} value={k}>{titleCase(k)}</option>)}</Select></Field>
+            <Field label="Kind"><Select value={form.kind} disabled={!!form.id} onChange={(e) => setForm({ ...form, kind: e.target.value })}>{["cash", "card", "wallet", "bank", "khata", "qr", "custom"].map((k) => <option key={k} value={k}>{methodKindLabel(k)}</option>)}</Select></Field>
             <Field label="Posts to account"><Select value={form.payment_account_id} onChange={(e) => setForm({ ...form, payment_account_id: e.target.value })}><option value="">None</option>{accounts.data?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select></Field>
             <Field label="Sort order"><Input type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} /></Field>
             <Checkbox label="Active" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />

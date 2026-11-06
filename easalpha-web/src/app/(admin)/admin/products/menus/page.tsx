@@ -4,6 +4,7 @@ import { UtensilsCrossed, Plus, Pencil, Trash2 } from "lucide-react";
 import type { Menu } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useList, useRemove, useSave } from "@/components/admin/crud";
+import { SampleMenuButton } from "@/components/admin/menu-start";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 type Form = { id?: string; name: string; show_online: boolean; is_default: boolean };
@@ -32,12 +33,12 @@ export default function MenusPage() {
                   <Button variant="ghost" size="icon-sm" onClick={() => setDel(m)} aria-label="Delete"><Trash2 className="h-4 w-4 text-danger" /></Button>
                 </TD>
               </TR>
-            )) : <EmptyRow colSpan={4}>No menus yet. Create the first one.</EmptyRow>}
+            )) : <EmptyRow colSpan={4} icon={UtensilsCrossed} action={<span className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setForm(empty)}><Plus className="h-4 w-4" /> New menu</Button><SampleMenuButton size="sm" /></span>}>No menus yet. One menu is enough for most restaurants: create it here, add a category (which makes a Main menu for you), or start from the sample menu.</EmptyRow>}
           </TBody>
         </Table>
       )}
       <Dialog open={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit menu" : "New menu"} size="sm"
-        footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!form?.name} onClick={() => form && save.mutate(form)}>Save</Button></>}>
+        footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!form?.name} title={!form?.name ? "Enter a name to save" : undefined} onClick={() => form && save.mutate(form)}>Save</Button></>}>
         {form ? (
           <div className="space-y-3">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>

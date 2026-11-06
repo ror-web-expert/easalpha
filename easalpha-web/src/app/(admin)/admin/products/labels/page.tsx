@@ -11,6 +11,7 @@ import { useAuthStore, useCan } from "@/store/auth";
 import { toast } from "@/store/toast";
 import { FilterBar, LoadMore, PageHeader, SearchInput } from "@/components/admin/page";
 import { useList } from "@/components/admin/crud";
+import { labelPriceMinor } from "@/components/admin/catalog-helpers";
 import {
   LABEL_PRESETS, MIN_MODULE_MM, clampSkip, downloadLabelsPdf, drawingSvg, expandCopies, labelDrawing, labelsPerPage, layoutLabels, loadSymbols, narrowCodes, pageCount, presetById, slotPosition, svgDataUrl,
   type CodeSymbol, type Drawing, type LabelData, type LabelOptions,
@@ -28,11 +29,10 @@ function codeLabel(p: Product, b: ProductBarcode): string {
   return [b.code, size ?? (p.variants?.length ? "any size" : null), pack !== 1 ? `pack of ${pack}` : null].filter(Boolean).join(" · ");
 }
 
-/** Price printed on the label: the size's price (or the base price) times the pack quantity. */
+/** Price printed on the label: what the till charges for that code, after the product's own discount (S15). */
 function labelPrice(p: Product, code: string): number {
   const b = p.barcodes?.find((x) => x.code === code);
-  const v = b?.variant_id ? p.variants?.find((x) => x.id === b.variant_id) : null;
-  return Math.round((v?.price_minor ?? p.base_price_minor) * (b ? packQuantity(b) : 1));
+  return labelPriceMinor(p, b?.variant_id, b ? packQuantity(b) : 1);
 }
 
 function labelName(p: Product, code: string): string {

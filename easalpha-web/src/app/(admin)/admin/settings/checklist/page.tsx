@@ -8,7 +8,18 @@ import { PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, Loading } from "@/components/ui";
 
-const LINKS: Record<string, string> = { business_info: "/admin/settings/store", branch_hours: "/admin/settings/store-management", menu: "/admin/products/catalog", tax: "/admin/products/tax-rates", payment_methods: "/admin/settings/payment-methods", staff: "/admin/staff/admin-staff", tables: "/admin/tables", printer: "/admin/settings/devices", devices: "/admin/settings/devices" };
+// Where each step is done, and what ticks it. The hours step is the Business Hours screen (the business day window);
+// it pointed at Store Management, which has no opening hours, so it never completed (S10).
+const CHECKLIST_LINKS: Record<string, string> = {
+  business_info: "/admin/settings/store", branch_hours: "/admin/settings/business-hours", menu: "/admin/products/catalog", tax: "/admin/products/tax-rates",
+  payment_methods: "/admin/settings/payment-methods", staff: "/admin/staff/admin-staff", tables: "/admin/tables", printer: "/admin/settings/devices", devices: "/admin/settings/devices",
+  whatsapp: "/admin/settings/whatsapp",
+};
+const CHECKLIST_HINTS: Record<string, string> = {
+  business_info: "Name and phone on Store Profile, the logo on Branding. Ticks itself once all three are saved.",
+  branch_hours: "Save each branch's business day on Business Hours, even if the default 06:01 to 02:01 suits you.",
+  menu: "Add a category, then its products, or load the sample menu from the Catalog and change it.",
+};
 
 export default function ChecklistPage() {
   const q = useQuery({ queryKey: ["setup_checklist"], queryFn: () => api<{ data: ChecklistItem[]; done: number; total: number }>("/setup_checklist") });
@@ -23,14 +34,15 @@ export default function ChecklistPage() {
         <CardBody className="divide-y p-0">
           {q.data.data.map((i) => (
             <div key={i.id} className="flex items-center gap-3 px-4 py-3">
-              {i.done ? <CheckCircle2 className="h-5 w-5 text-success" /> : <Circle className="h-5 w-5 text-fg-muted" />}
+              {i.done ? <CheckCircle2 className="h-5 w-5 shrink-0 text-success" /> : <Circle className="h-5 w-5 shrink-0 text-fg-muted" />}
               <div className="flex-1">
                 <div className={`text-sm ${i.done ? "text-fg-secondary line-through" : "font-medium"}`}>{i.title}</div>
+                {!i.done && CHECKLIST_HINTS[i.key] ? <p className="mt-0.5 text-xs text-fg-muted">{CHECKLIST_HINTS[i.key]}</p> : null}
                 {i.plan_feature_off ? <Badge variant="outline">not in plan</Badge> : null}
               </div>
               {!i.done ? (
                 <div className="flex gap-2">
-                  {LINKS[i.key] ? <Link href={LINKS[i.key]}><Button size="sm">Go</Button></Link> : null}
+                  {CHECKLIST_LINKS[i.key] ? <Link href={CHECKLIST_LINKS[i.key]}><Button size="sm">Go</Button></Link> : null}
                   <Button size="sm" variant="ghost" onClick={() => complete.mutate(i.key)}>Mark done</Button>
                 </div>
               ) : null}

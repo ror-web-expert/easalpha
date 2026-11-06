@@ -185,6 +185,46 @@ export function detectCountry(locale: string | null | undefined): string {
   return region && COUNTRIES.some((c) => c.code === region) ? region : DEFAULT_COUNTRY;
 }
 
+// Zones a browser may report beyond the one each country lists, and older names for listed ones.
+const MORE_ZONES: Record<string, string> = {
+  "America/Chicago": "US", "America/Denver": "US", "America/Los_Angeles": "US", "America/Phoenix": "US", "America/Anchorage": "US", "Pacific/Honolulu": "US",
+  "America/Detroit": "US", "America/Indiana/Indianapolis": "US", "America/Boise": "US", "America/Vancouver": "CA", "America/Edmonton": "CA", "America/Winnipeg": "CA",
+  "America/Halifax": "CA", "America/St_Johns": "CA", "America/Regina": "CA", "Asia/Calcutta": "IN", "Asia/Katmandu": "NP", "Asia/Dacca": "BD",
+  "Asia/Makassar": "ID", "Asia/Jayapura": "ID", "Asia/Pontianak": "ID", "Asia/Kuching": "MY", "America/Monterrey": "MX", "America/Cancun": "MX", "America/Tijuana": "MX",
+  "America/Manaus": "BR", "America/Fortaleza": "BR", "America/Recife": "BR", "Europe/Belfast": "GB", "Africa/Abuja": "NG", "Pacific/Chatham": "NZ",
+};
+
+/** The listed country a time zone such as "Asia/Karachi" belongs to, or null. */
+export function countryForTimeZone(zone: string | null | undefined): string | null {
+  if (!zone) return null;
+  const listed = COUNTRIES.find((c) => c.timeZone === zone)?.code ?? MORE_ZONES[zone];
+  return listed ?? (zone.startsWith("Australia/") ? "AU" : null);
+}
+
+/** The listed country an international number such as "+92 300 1234567" dials, or null. +1 is shared by the US and
+ *  Canada, so it says nothing; a number without its code says nothing either. */
+export function countryForPhone(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").replace(/[\s\-()]/g, "");
+  const digits = s.startsWith("+") ? s.slice(1) : s.startsWith("00") ? s.slice(2) : null;
+  if (!digits || digits.length < 4 || !/^\d+$/.test(digits)) return null;
+  const match = COUNTRIES.filter((c) => digits.startsWith(c.dial.slice(1))).sort((a, b) => b.dial.length - a.dial.length)[0];
+  return match && match.dial !== "+1" ? match.code : null;
+}
+
+/**
+ * The country a new sign-up starts on (S3, 6 Nov 2026: Chrome in en-US with its clock on Asia/Karachi and a +92 phone
+ * made a US business, billed in dollars). In order: the phone's dialling code, the browser's time zone, the
+ * browser language's region, else Pakistan.
+ */
+export function detectSignupCountry(hints: { phone?: string | null; timeZone?: string | null; locale?: string | null }): string {
+  return countryForPhone(hints.phone) ?? countryForTimeZone(hints.timeZone) ?? detectCountry(hints.locale);
+}
+
+/** The browser's own time zone, or null where Intl cannot say. */
+export function browserTimeZone(): string | null {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
+}
+
 export type SignupErrors = Partial<Record<keyof SignupInput, string>>;
 
 export const PASSWORD_MIN = 8;

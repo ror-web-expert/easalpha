@@ -11,7 +11,7 @@ import { Cards, PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow, Field, Input, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR, type BadgeVariant } from "@/components/ui";
-import { EXTRA_TILL_MINOR, billingCurrency, includedTills, planEstimate } from "@/lib/plan-price";
+import { EXTRA_TILL_MINOR, YEARLY_TERMS, billingCurrency, includedTills, planEstimate, planLimitLabel, planMonthlyMinor } from "@/lib/plan-price";
 
 // SPEC Plan: the subscription tier (Business in the reviewed account), trial or subscription state, invoices, and
 // how to pay. Choosing a plan issues an invoice; the owner reports the payment and EasAlpha confirms it.
@@ -57,6 +57,7 @@ function PlanBody() {
   const current = b.plans.find((p) => p.code === (liveSub?.plan_code ?? biz.plan?.code));
   const unpaid = b.invoices.filter((i) => ["unpaid", "pending", "overdue", "issued"].includes(i.status));
   const pi = b.payment_instructions;
+  const cur = billingCurrency(biz.country);
   return (
     <>
       <PageHeader icon={BadgeDollarSign} title="Plan" description="Your subscription tier, what it allows, and the invoices behind it." actions={<Button onClick={() => setChoose({ plan_code: current?.code ?? b.plans[0]?.code ?? "", cycle: (sub?.billing_cycle as "monthly" | "yearly") ?? "monthly", tills: String(sub?.tills ?? 1) })}><CreditCard className="h-4 w-4" /> Choose plan</Button>} />
@@ -74,9 +75,9 @@ function PlanBody() {
             {b.plans.map((p) => (
               <div key={p.code} className={`rounded-md border p-3 ${p.code === current?.code ? "border-primary bg-primary-soft/40" : ""}`}>
                 <div className="flex items-center justify-between"><span className="font-medium">{p.name}</span>{p.code === current?.code ? <Badge variant="primary">current</Badge> : null}</div>
-                <div className="mt-1 text-2xl tabular">{formatMoney(p.price_pkr_minor)}<span className="text-xs text-fg-muted"> / month</span></div>
+                <div className="mt-1 text-2xl tabular">{formatMoney(planMonthlyMinor(p, cur), cur)}<span className="text-xs text-fg-muted"> / month</span></div>
                 <ul className="mt-2 space-y-0.5 text-xs text-fg-secondary">
-                  {Object.entries(p.limits ?? {}).map(([k, v]) => <li key={k}>{titleCase(k)}: {v ?? "unlimited"}</li>)}
+                  {Object.entries(p.limits ?? {}).map(([k, v]) => <li key={k}>{planLimitLabel(k)}: {v ?? "unlimited"}</li>)}
                 </ul>
               </div>
             ))}
@@ -87,7 +88,7 @@ function PlanBody() {
           <CardHeader><CardTitle>Usage</CardTitle></CardHeader>
           <CardBody className="space-y-2 text-sm">
             {Object.entries(b.usage ?? {}).map(([k, u]) => (
-              <div key={k} className="flex items-center justify-between"><span className="text-fg-secondary">{titleCase(k)}</span><span className={`font-medium tabular ${u.limit != null && u.used >= u.limit ? "text-danger" : ""}`}>{u.used}{u.limit != null ? ` / ${u.limit}` : ""}</span></div>
+              <div key={k} className="flex items-center justify-between"><span className="text-fg-secondary">{planLimitLabel(k)}</span><span className={`font-medium tabular ${u.limit != null && u.used >= u.limit ? "text-danger" : ""}`}>{u.used}{u.limit != null ? ` / ${u.limit}` : ""}</span></div>
             ))}
             {pi.provider === "paddle" ? <p className="pt-2 text-xs text-fg-muted">Card payments are handled by Paddle.</p> : (
               <div className="pt-2 text-xs text-fg-muted">
@@ -123,10 +124,10 @@ function PlanBody() {
         footer={<><Button variant="secondary" onClick={() => setChoose(null)}>Cancel</Button><Button loading={chooseM.isPending} disabled={!choose?.plan_code} onClick={() => choose && chooseM.mutate({ plan_code: choose.plan_code, cycle: choose.cycle, tills: Math.max(1, Number(choose.tills) || 1) }, { onSuccess: () => setChoose(null) })}>Issue invoice</Button></>}>
         {choose ? (
           <div className="space-y-3">
-            <Field label="Plan"><Select value={choose.plan_code} onChange={(e) => setChoose({ ...choose, plan_code: e.target.value })}>{b.plans.map((p) => <option key={p.code} value={p.code}>{p.name} - {formatMoney(p.price_pkr_minor)}/month</option>)}</Select></Field>
-            <Field label="Billing cycle" hint="Yearly is ten months for the price of twelve"><Select value={choose.cycle} onChange={(e) => setChoose({ ...choose, cycle: e.target.value as "monthly" | "yearly" })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></Select></Field>
+            <Field label="Plan"><Select value={choose.plan_code} onChange={(e) => setChoose({ ...choose, plan_code: e.target.value })}>{b.plans.map((p) => <option key={p.code} value={p.code}>{p.name} - {formatMoney(planMonthlyMinor(p, cur), cur)}/month</option>)}</Select></Field>
+            <Field label="Billing cycle" hint={YEARLY_TERMS}><Select value={choose.cycle} onChange={(e) => setChoose({ ...choose, cycle: e.target.value as "monthly" | "yearly" })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option></Select></Field>
             <Field label="Tills"><Input type="number" min={1} className="tabular" value={choose.tills} onChange={(e) => setChoose({ ...choose, tills: e.target.value })} /></Field>
-            {(() => { const p = b.plans.find((x) => x.code === choose.plan_code); if (!p) return null; const inc = includedTills(p); const cur = billingCurrency(biz.country); return <p className="rounded-md bg-muted px-3 py-2 text-sm">Invoice for about <span className="font-medium">{formatMoney(planEstimate(p, choose.cycle, Math.max(1, Number(choose.tills) || 1), cur), cur)}</span> per {choose.cycle === "yearly" ? "year" : "month"}. {inc === null ? `${p.name} includes unlimited tills.` : `${p.name} includes ${inc} till${inc === 1 ? "" : "s"}; each extra till is ${formatMoney(EXTRA_TILL_MINOR[cur], cur)} a month.`} The exact amount is on the invoice.</p>; })()}
+            {(() => { const p = b.plans.find((x) => x.code === choose.plan_code); if (!p) return null; const inc = includedTills(p); return <p className="rounded-md bg-muted px-3 py-2 text-sm">Invoice for about <span className="font-medium">{formatMoney(planEstimate(p, choose.cycle, Math.max(1, Number(choose.tills) || 1), cur), cur)}</span> per {choose.cycle === "yearly" ? "year" : "month"}. {inc === null ? `${p.name} includes unlimited tills.` : `${p.name} includes ${inc} till${inc === 1 ? "" : "s"}; each extra till is ${formatMoney(EXTRA_TILL_MINOR[cur], cur)} a month.`} The exact amount is on the invoice.</p>; })()}
           </div>
         ) : null}
       </Dialog>

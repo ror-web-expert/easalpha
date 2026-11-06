@@ -100,7 +100,7 @@ export function PermissionEditor({ membershipId }: { membershipId: string }) {
     setCurrent(out); if (reg) setSelection(baseline(out, reg.data));
     qc.setQueryData(["staff_permissions", membershipId], out);
     qc.invalidateQueries({ queryKey: ["staff"] });
-    toast.success(msg, `Mode: ${out.mode}. ${out.granted.length} permissions granted. Takes effect at the next sign-in.`);
+    toast.success(msg, `${out.mode === "custom" ? "Their own permissions" : "The role's permissions"}: ${out.granted.length} granted. Takes effect at the next sign-in.`); // S13: it said "Mode: custom."
   };
   const save = useMutation({
     mutationFn: (codes: string[]) => api<MembershipPermissions>(`/staff/${membershipId}/permissions`, { method: "PUT", body: { codes } }),

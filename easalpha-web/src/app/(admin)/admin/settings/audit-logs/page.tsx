@@ -8,7 +8,7 @@ import { usePagedList, useDebounced } from "@/lib/hooks";
 import { toast } from "@/store/toast";
 import { LoadMore, PageHeader } from "@/components/admin/page";
 import { downloadFile } from "@/components/admin/phase3";
-import { AuditFilterBar, actionLabel, actionVariant, auditQuery, useAuditOptions, type AuditFilters } from "@/components/admin/audit-filters";
+import { AuditFilterBar, actionLabel, actionVariant, auditQuery, entityLabel, useAuditOptions, type AuditFilters } from "@/components/admin/audit-filters";
 import { AuditInsightsPanel } from "@/components/admin/audit-insights";
 import { Badge, Button, Dialog, EmptyRow, Loading, Table, Tabs, TBody, TD, TH, THead, TR } from "@/components/ui";
 
@@ -51,7 +51,7 @@ function AuditLogTable({ filters }: { filters: AuditFilters }) {
             <TR key={a.id} onClick={() => setView(a)}>
               <TD className="whitespace-nowrap text-fg-secondary">{formatDateTime(a.occurred_at)}</TD>
               <TD><Badge variant={actionVariant(a.action)}>{actionLabel(a.action, labels)}</Badge></TD>
-              <TD className="font-mono text-xs">{a.table_name ?? "-"}{a.record_id ? ` · ${a.record_id.slice(0, 8)}` : ""}</TD>
+              <TD className="text-xs">{a.entity ?? (a.table_name ? entityLabel(a.table_name) : "-")}{a.record_id ? <span className="font-mono text-fg-muted">{` · ${a.record_id.slice(0, 8)}`}</span> : null}</TD>
               <TD>{a.user_name ?? (a.user_id ? a.user_id.slice(0, 8) : "System")}</TD>
               <TD className="text-fg-secondary">{a.approved_by_name ?? (a.approved_by_user_id ? a.approved_by_user_id.slice(0, 8) : "-")}</TD>
               <TD className="text-xs text-fg-muted">{a.ip ?? "-"}</TD>
@@ -60,7 +60,7 @@ function AuditLogTable({ filters }: { filters: AuditFilters }) {
         </TBody>
       </Table>
       <LoadMore cursor={list.nextCursor} onLoad={() => list.fetchNextPage()} loading={list.isFetchingNextPage} />
-      <Dialog open={!!view} onClose={() => setView(null)} title={`${view ? actionLabel(view.action, labels) : ""} · ${view?.table_name ?? ""}`} description={`${formatDateTime(view?.occurred_at)}${view?.user_name ? ` · ${view.user_name}` : ""}${view?.record_id ? ` · ${view.record_id}` : ""}`} size="lg">
+      <Dialog open={!!view} onClose={() => setView(null)} title={`${view ? actionLabel(view.action, labels) : ""} · ${view?.entity ?? (view?.table_name ? entityLabel(view.table_name) : "")}`} description={`${formatDateTime(view?.occurred_at)}${view?.user_name ? ` · ${view.user_name}` : ""}${view?.record_id ? ` · ${view.record_id}` : ""}`} size="lg">
         <div className="grid gap-3 sm:grid-cols-2">
           <div><div className="mb-1 text-xs font-semibold uppercase text-fg-secondary">Before</div><pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(view?.before ?? null, null, 2)}</pre></div>
           <div><div className="mb-1 text-xs font-semibold uppercase text-fg-secondary">After</div><pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(view?.after ?? null, null, 2)}</pre></div>

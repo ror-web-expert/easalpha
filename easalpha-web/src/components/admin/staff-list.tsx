@@ -25,6 +25,11 @@ export const DEFAULT_ROLE_KEY: Record<StaffType, string> = { admin: "manager", c
 
 const SINGULAR: Record<StaffType, string> = { admin: "admin staff member", cashier: "cashier", order_taker: "order taker", rider: "rider" };
 
+/** Whether a role opens the admin panel. Admin staff on a role without it were "added" and could never sign in (S16). */
+export function roleOpensAdmin(role: Pick<Role, "system_key" | "permissions"> | null | undefined): boolean {
+  return !!role && (role.system_key === "owner" || role.permissions.some((p) => p.code === "app.admin"));
+}
+
 interface Form { name: string; phone: string; email: string; password: string; role_id: string; pin: string; all_branches: boolean; branch_ids: string[]; cashier_role: CashierRole }
 const blank: Form = { name: "", phone: "+92", email: "", password: "", role_id: "", pin: "", all_branches: true, branch_ids: [], cashier_role: "cashier" };
 type CreateBody = Omit<Form, "phone" | "email" | "password" | "pin" | "cashier_role"> & { phone: string | null; email: string | null; password: string | null; pin: string | null; staff_type: StaffType; cashier_role?: CashierRole };
@@ -64,6 +69,7 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
     create.mutate(body);
   };
   const cols = 8 + (isCashier ? 1 : 0);
+  const noAdmin = staffType === "admin" && !!form?.role_id && !!roles.data && !roleOpensAdmin(roles.data.find((r) => r.id === form.role_id));
   return (
     <>
       <PageHeader icon={icon} title={title} description={description} actions={<><Link href="/admin/staff/roles"><Button variant="secondary">Roles</Button></Link><Button onClick={openAdd}><Plus className="h-4 w-4" /> Add {SINGULAR[staffType]}</Button></>} />
@@ -72,7 +78,7 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
         {isCashier ? <Select className="w-auto" value={cashierRole} onChange={(e) => setCashierRole(e.target.value)} aria-label="Cashier role"><option value="">All cashier roles</option>{CASHIER_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select> : null}
       </FilterBar>
       {list.isLoading ? <Loading /> : (
-        <Table>
+        <Table stickyLast>
           <THead><tr><TH>Name</TH><TH>Contact</TH><TH>Role</TH>{isCashier ? <TH>Cashier role</TH> : null}<TH>Access</TH><TH>PIN</TH><TH>Status</TH><TH>Last login</TH><TH right>Actions</TH></tr></THead>
           <TBody>
             {list.data?.length ? list.data.map((m) => (
@@ -110,7 +116,9 @@ export function StaffList({ staffType, title, description, icon }: { staffType: 
         {form ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
-            <Field label="Role"><Select value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>{roles.data?.filter((r) => r.system_key !== "owner").map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select></Field>
+            <Field label="Role" error={noAdmin ? "This role cannot open the admin panel, so they could not sign in here. Pick a role with admin access, or add them as a cashier." : undefined}>
+              <Select value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>{roles.data?.filter((r) => r.system_key !== "owner").map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select>
+            </Field>
             {isCashier ? <Field label="Cashier role" hint="Kitchen Display signs in to the kitchen screen only."><Select value={form.cashier_role} onChange={(e) => setForm({ ...form, cashier_role: e.target.value as CashierRole })}>{CASHIER_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}</Select></Field> : null}
             <Field label="Phone"><Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
             <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>

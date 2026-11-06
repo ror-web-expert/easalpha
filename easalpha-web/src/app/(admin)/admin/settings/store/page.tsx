@@ -8,14 +8,16 @@ import type { Business, SettingKey } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { useSettings } from "@/components/admin/settings-screen";
+import { COUNTRIES } from "@/components/site/site-helpers";
+import { currencyOptions, isTimeZone, timeZoneOptions, withCountry } from "@/components/admin/store-helpers";
 import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Select } from "@/components/ui";
 import { useAuthStore } from "@/store/auth";
 
-// SPEC Store Profile: the business name and phones that print on the receipt, plus currency and time zone.
+// SPEC Store Profile: the business name and phones that print on the receipt, plus country, currency and time zone.
 // Selling rules and receipt design moved to Point of Sale and Charges & Tax (the settings registry screens).
 
 const SECONDARY_PHONE = "store.secondary_phone";
-interface Profile { name: string; legal_name: string; phone: string; email: string; currency: string; time_zone: string }
+interface Profile { name: string; legal_name: string; phone: string; email: string; country: string; currency: string; time_zone: string }
 
 export default function StoreProfilePage() {
   const q = useQuery({ queryKey: ["business"], queryFn: () => api<Business>("/business") });
@@ -23,17 +25,17 @@ export default function StoreProfilePage() {
   const qc = useQueryClient();
   const setSession = useAuthStore((s) => s.setSession);
   const session = useAuthStore((s) => s.session);
-  const [b, setB] = useState<Profile>({ name: "", legal_name: "", phone: "", email: "", currency: "PKR", time_zone: "Asia/Karachi" });
+  const [b, setB] = useState<Profile>({ name: "", legal_name: "", phone: "", email: "", country: "PK", currency: "PKR", time_zone: "Asia/Karachi" });
   const [secondary, setSecondary] = useState("");
   useEffect(() => {
     if (!q.data) return;
-    setB({ name: q.data.name, legal_name: q.data.legal_name ?? "", phone: q.data.phone ?? "", email: q.data.email ?? "", currency: q.data.currency, time_zone: q.data.time_zone });
+    setB({ name: q.data.name, legal_name: q.data.legal_name ?? "", phone: q.data.phone ?? "", email: q.data.email ?? "", country: q.data.country ?? "PK", currency: q.data.currency, time_zone: q.data.time_zone });
   }, [q.data]);
   const secondaryKey: SettingKey | undefined = settings.data?.groups.store?.screens["Store Profile"]?.find((k) => k.key === SECONDARY_PHONE);
   const storedSecondary = typeof secondaryKey?.value === "string" ? secondaryKey.value : "";
   useEffect(() => { setSecondary(storedSecondary); }, [storedSecondary]);
 
-  const save = useAction<{ profile: Profile; secondary: string | null }, Business>(["business", "settings"], async ({ profile, secondary: phone }) => {
+  const save = useAction<{ profile: Profile; secondary: string | null }, Business>(["business", "settings", "branches"], async ({ profile, secondary: phone }) => {
     const biz = await api<Business>("/business", { method: "PATCH", body: profile });
     if (phone !== null) await api("/settings", { method: "PATCH", body: { values: { [SECONDARY_PHONE]: phone === "" ? null : phone } } });
     return biz;
@@ -42,11 +44,15 @@ export default function StoreProfilePage() {
     { profile: b, secondary: secondary !== storedSecondary ? secondary : null },
     { onSuccess: (biz) => { if (session) setSession({ ...session, business: biz }); qc.invalidateQueries({ queryKey: ["me"] }); } },
   );
+  const zoneError = isTimeZone(b.time_zone) ? undefined : "Pick a time zone from the list, such as Asia/Karachi";
+  const zoneChanged = !!q.data && b.time_zone !== q.data.time_zone;
+  const listed = COUNTRIES.some((c) => c.code === b.country);
 
   if (q.isLoading) return <Loading />;
   return (
     <>
-      <PageHeader icon={Store} title="Store Profile" description="The business name, phones and contact details that print on every receipt." actions={<Button onClick={onSave} loading={save.isPending}>Save</Button>} />
+      <PageHeader icon={Store} title="Store Profile" description="The business name, phones and contact details that print on every receipt, and the country, currency and clock the business runs on."
+        actions={<Button onClick={onSave} loading={save.isPending} disabled={!!zoneError} title={zoneError}>Save</Button>} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Business</CardTitle></CardHeader>
@@ -55,9 +61,20 @@ export default function StoreProfilePage() {
             <Field label="Legal name"><Input value={b.legal_name} onChange={(e) => setB({ ...b, legal_name: e.target.value })} /></Field>
             <Field label="Phone (WhatsApp)"><Input value={b.phone} onChange={(e) => setB({ ...b, phone: e.target.value })} /></Field>
             <Field label="Secondary phone" hint="Printed on the receipt under the primary number"><Input value={secondary} onChange={(e) => setSecondary(e.target.value)} disabled={settings.isLoading} /></Field>
-            <Field label="Email"><Input value={b.email} onChange={(e) => setB({ ...b, email: e.target.value })} /></Field>
-            <Field label="Currency"><Select value={b.currency} onChange={(e) => setB({ ...b, currency: e.target.value })}>{["PKR", "AED", "SAR", "USD", "GBP"].map((c) => <option key={c}>{c}</option>)}</Select></Field>
-            <Field label="Time zone"><Input value={b.time_zone} onChange={(e) => setB({ ...b, time_zone: e.target.value })} /></Field>
+            <Field label="Email" className="sm:col-span-2"><Input value={b.email} onChange={(e) => setB({ ...b, email: e.target.value })} /></Field>
+            <Field label="Country" hint="Pakistan is billed in rupees, every other country in dollars">
+              <Select value={b.country} onChange={(e) => setB(withCountry(b, e.target.value))}>
+                {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                {!listed ? <option value={b.country}>{b.country}</option> : null}
+              </Select>
+            </Field>
+            <Field label="Currency" hint="Prices, receipts and reports">
+              <Select value={b.currency} onChange={(e) => setB({ ...b, currency: e.target.value })}>{currencyOptions(b.currency).map((c) => <option key={c} value={c}>{c}</option>)}</Select>
+            </Field>
+            <Field label="Time zone" className="sm:col-span-2" error={zoneError}
+              hint={zoneError ? undefined : zoneChanged ? "Branches on the old time zone move with it; a branch set to its own zone keeps it." : "The business day, receipts and reports follow this clock"}>
+              <Select value={b.time_zone} onChange={(e) => setB({ ...b, time_zone: e.target.value })}>{timeZoneOptions(b.time_zone).map((z) => <option key={z} value={z}>{z}</option>)}</Select>
+            </Field>
             <p className="text-xs text-fg-muted sm:col-span-2">Plan: {q.data?.plan?.name ?? "trial"} · status {q.data?.status}{q.data?.trial_days_left ? ` · ${q.data.trial_days_left} trial days left` : ""}</p>
           </CardBody>
         </Card>

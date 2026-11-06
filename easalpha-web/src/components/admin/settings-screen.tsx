@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
-import type { SettingKey, SettingsResponse } from "@/lib/types";
+import type { PaymentMethod, SettingKey, SettingsResponse } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Field, Input, Label, Loading, Select, Switch, Textarea } from "@/components/ui";
@@ -13,7 +13,7 @@ import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Field, 
 // so a new key on the API shows up here without a screen change. Secrets (pins, tokens) never round-trip: the API
 // returns "set" or null and a blank field on save leaves the stored value alone.
 
-export type Control = "switch" | "number" | "text" | "select" | "json" | "checkbox-set" | "pin" | "secret";
+export type Control = "switch" | "number" | "money" | "text" | "select" | "payment-method" | "json" | "checkbox-set" | "pin" | "secret";
 export interface ControlSpec { control: Control; options?: { value: string; label: string }[] }
 
 const ORDER_TYPES = [
@@ -27,14 +27,16 @@ const SELECT_OPTIONS: [suffix: string, options: ControlSpec["options"]][] = [
   [".mode", [{ value: "percent", label: "Percent" }, { value: "fixed", label: "Fixed amount" }]],
   [".environment", [{ value: "sandbox", label: "Sandbox" }, { value: "production", label: "Production" }]],
   [".paper", [{ value: "80", label: "80 mm (48 chars)" }, { value: "58", label: "58 mm (32 chars)" }]],
-  [".default_payment_method", [
-    { value: "cash", label: "Cash" }, { value: "card", label: "Card" }, { value: "easypaisa", label: "Easypaisa" }, { value: "jazzcash", label: "JazzCash" }, { value: "bank", label: "Bank transfer" }, { value: "khata", label: "Khata (credit)" },
-  ]],
   ["default_order_type", ORDER_TYPES],
   [".terminator", [{ value: "enter", label: "Enter (most scanners)" }, { value: "tab", label: "Tab" }, { value: "none", label: "Nothing (timing only)" }]],
   [".unknown_code", [{ value: "ask", label: "Offer to attach it to a product" }, { value: "ignore", label: "Only show Not found" }]],
   [".scale_value", [{ value: "weight", label: "Weight" }, { value: "price", label: "Price" }]],
   [".tile_size", [{ value: "small", label: "Small: more items on the screen" }, { value: "large", label: "Large: a big picture of each item" }]],
+];
+/** The default payment method before the business's own list loads: the methods every business starts with. The
+ *  control lists the business's methods (Raast, or one added from the catalogue) once loaded (S16). */
+export const DEFAULT_METHODS: { value: string; label: string }[] = [
+  { value: "cash", label: "Cash" }, { value: "card", label: "Card" }, { value: "easypaisa", label: "Easypaisa" }, { value: "jazzcash", label: "JazzCash" }, { value: "bank", label: "Bank transfer" }, { value: "khata", label: "Khata (account)" },
 ];
 /** String keys whose value is a secret the API masks as "set"; shown as a password field like a pin, any length. */
 const SECRET_SUFFIXES = [".access_code", ".bearer_token", ".token"];
@@ -42,6 +44,7 @@ const SECRET_SUFFIXES = [".access_code", ".bearer_token", ".token"];
 /** Which control a key gets. Pure, so screens stay predictable and the mapping can be tested. */
 export function controlFor(key: Pick<SettingKey, "key" | "type">): ControlSpec {
   if (key.type === "boolean") return { control: "switch" };
+  if (key.type === "money") return { control: "money" };
   if (key.type === "integer" || key.type === "number") return { control: "number" };
   if (key.type === "pin") return { control: "pin" };
   if (key.type === "json") {
@@ -49,6 +52,7 @@ export function controlFor(key: Pick<SettingKey, "key" | "type">): ControlSpec {
     if (key.key.endsWith(".order_types")) return { control: "checkbox-set", options: ORDER_TYPES };
     return { control: "json" };
   }
+  if (key.key.endsWith(".default_payment_method")) return { control: "payment-method", options: DEFAULT_METHODS };
   const match = SELECT_OPTIONS.find(([suffix]) => key.key.endsWith(suffix));
   if (match) return { control: "select", options: match[1] };
   if (SECRET_SUFFIXES.some((s) => key.key.endsWith(s))) return { control: "secret" };
@@ -63,6 +67,8 @@ export function editValue(key: SettingKey): unknown {
   if (c === "checkbox-set") return Array.isArray(key.value) ? key.value : [];
   if (c === "switch") return key.value === true;
   if (c === "number") return typeof key.value === "number" ? key.value : key.value === null || key.value === undefined || key.value === "" ? null : Number(key.value);
+  // Stored in paisa like every amount, edited in rupees (S11: "above this amount, in paisa: 500000").
+  if (c === "money") return key.value === null || key.value === undefined || key.value === "" ? null : Number(key.value) / 100;
   return key.value === null || key.value === undefined ? "" : String(key.value);
 }
 
@@ -73,7 +79,8 @@ export function payloadValue(key: SettingKey, edited: unknown): unknown {
     const text = String(edited ?? "").trim();
     return text === "" ? null : JSON.parse(text);
   }
-  if (c === "text" || c === "select") return edited === "" ? null : edited;
+  if (c === "text" || c === "select" || c === "payment-method") return edited === "" ? null : edited;
+  if (c === "money") return edited === null || edited === undefined || edited === "" ? null : Math.round(Number(edited) * 100);
   return edited;
 }
 
@@ -162,6 +169,18 @@ function SettingControl({ setting, value, onChange, error }: { setting: SettingK
           <KeyName k={setting.key} />
         </div>
       );
+    case "money":
+      return (
+        <div>
+          <Field label={`${setting.label} (Rs)`} hint="In rupees">
+            <Input type="number" min={0} step="any" inputMode="decimal" value={value === null || value === undefined ? "" : String(value)}
+              onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} />
+          </Field>
+          <KeyName k={setting.key} />
+        </div>
+      );
+    case "payment-method":
+      return <PaymentMethodControl setting={setting} value={value} onChange={onChange} fallback={spec.options ?? []} />;
     case "select":
       return (
         <div>
@@ -224,6 +243,32 @@ function SettingControl({ setting, value, onChange, error }: { setting: SettingK
         </div>
       );
   }
+}
+
+/** A payment method's kind as people say it: "QR", not "Qr"; khata named as on the till (S13). */
+const METHOD_KINDS: Record<string, string> = { cash: "Cash", card: "Card", wallet: "Mobile wallet", bank: "Bank", khata: "Khata (account)", qr: "QR", custom: "Other" };
+export const methodKindLabel = (kind: string | null | undefined): string => (kind ? METHOD_KINDS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1) : "-");
+
+/** The business's own active payment methods (internal ones aside), the saved code kept even if it went inactive. */
+export function paymentMethodOptions(methods: Pick<PaymentMethod, "code" | "name" | "active" | "internal">[] | undefined, current: string, fallback: { value: string; label: string }[]) {
+  const live = (methods ?? []).filter((m) => m.active && !m.internal).map((m) => ({ value: m.code, label: m.name }));
+  const opts = live.length ? live : fallback;
+  return current && !opts.some((o) => o.value === current) ? [...opts, { value: current, label: current }] : opts;
+}
+
+function PaymentMethodControl({ setting, value, onChange, fallback }: { setting: SettingKey; value: unknown; onChange: (v: unknown) => void; fallback: { value: string; label: string }[] }) {
+  const methods = useQuery({ queryKey: ["payment_methods"], queryFn: () => api<{ data: PaymentMethod[] }>("/payment_methods"), select: (r) => r.data });
+  const current = String(value ?? "");
+  return (
+    <div>
+      <Field label={setting.label}>
+        <Select value={current} onChange={(e) => onChange(e.target.value)}>
+          {paymentMethodOptions(methods.data, current, fallback).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </Select>
+      </Field>
+      <KeyName k={setting.key} />
+    </div>
+  );
 }
 
 export function SettingsVersion({ version }: { version: number | undefined }) {

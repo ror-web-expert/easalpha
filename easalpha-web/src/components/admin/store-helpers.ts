@@ -1,6 +1,6 @@
 // Pure helpers for the Store Profile and branch screens: the country, currency and time zone pickers, and what the
 // branch form sends for its tax registration. The country list is the sign-up list, so both screens offer the same.
-import { COUNTRIES } from "@/components/site/site-helpers";
+import { COUNTRIES, countryByCode } from "@/components/site/site-helpers";
 
 /** Zones the API accepts (IANA names such as Asia/Karachi): what this browser knows, plus UTC. */
 const FALLBACK_ZONES = [...new Set(["UTC", ...COUNTRIES.map((c) => c.timeZone)])];
@@ -27,6 +27,13 @@ export const CURRENCIES: string[] = [...new Set(COUNTRIES.map((c) => c.currency)
 
 export function currencyOptions(current?: string | null): string[] {
   return current && !CURRENCIES.includes(current) ? [...CURRENCIES, current] : CURRENCIES;
+}
+
+/** A new country on Store Profile brings its currency and time zone along while those are still the old country's
+ *  own; a currency or zone the owner chose stays (S3: the Store page had no Country field at all). */
+export function withCountry<T extends { country: string; currency: string; time_zone: string }>(p: T, code: string): T {
+  const was = countryByCode(p.country), now = countryByCode(code);
+  return { ...p, country: code, currency: p.currency === was.currency ? now.currency : p.currency, time_zone: p.time_zone === was.timeZone ? now.timeZone : p.time_zone };
 }
 
 export interface TaxForm { authority: string; ntn: string; strn: string; pos_id: string; token: string; token_clear: boolean }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CURRENCIES, currencyOptions, isTimeZone, taxRegistrationPayload, timeZoneOptions } from "./store-helpers";
+import { CURRENCIES, currencyOptions, isTimeZone, taxRegistrationPayload, timeZoneOptions, withCountry } from "./store-helpers";
 
 describe("taxRegistrationPayload", () => {
   const f = { authority: "pra", ntn: " 1234567-8 ", strn: "", pos_id: "POS-77", token: "", token_clear: false };
@@ -9,6 +9,13 @@ describe("taxRegistrationPayload", () => {
   });
   it("asks the API to remove the saved token, and then sends no token at all", () => {
     expect(taxRegistrationPayload({ ...f, token: "typed", token_clear: true })).toEqual({ authority: "pra", ntn: "1234567-8", strn: "", pos_id: "POS-77", token_clear: true });
+  });
+});
+
+describe("withCountry (S3: the Store page had no Country field)", () => {
+  it("brings the new country's currency and zone along while they are still the old country's own", () => {
+    expect(withCountry({ country: "US", currency: "USD", time_zone: "America/New_York" }, "PK")).toEqual({ country: "PK", currency: "PKR", time_zone: "Asia/Karachi" });
+    expect(withCountry({ country: "PK", currency: "USD", time_zone: "Asia/Dubai" }, "AE")).toEqual({ country: "AE", currency: "USD", time_zone: "Asia/Dubai" });
   });
 });
 
