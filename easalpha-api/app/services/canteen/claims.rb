@@ -4,31 +4,43 @@ module Canteen
   class Claims
     SUBSIDY_CODE = "canteen_subsidy".freeze
     PAYROLL_CODE = "canteen_payroll".freeze
-    # How far outside a session's window the server still takes a claim: one queued just as the window closed, or a
-    # kiosk clock a little off. Anything older is stale and refused.
-    GRACE = 15.minutes
+    GRACE = Sessions::GRACE
+    # A meal a kiosk served offline is still recorded when its claim reaches the server this long after the scan: a
+    # weekend without internet is believable, a claim from last week is not (a manager records that one by hand).
+    REPLAY_WINDOW = 72.hours
 
-    def self.claim!(branch:, device: nil, actor: nil, id: nil, fingerprint_id: nil, employee_id: nil, meal_plan_item_id: nil, meal_session_id: nil, token_label: nil, source: nil, client_created_at: nil)
+    # replay: the claim was queued by a kiosk with no connection and arrives through Sync::Push. A live claim is judged
+    # by the server clock (the kiosk's clock only stamps it, within the grace). A replay is judged at the kiosk's scan
+    # time when that is not in the future and within REPLAY_WINDOW: the session must have held that moment and the
+    # meal goes on that session's day, so a lunch served during an outage is recorded and charged when the link
+    # returns (6 Nov 2026 review). A scan outside every session, or a second meal, is still refused.
+    def self.claim!(branch:, device: nil, actor: nil, id: nil, fingerprint_id: nil, employee_id: nil, meal_plan_item_id: nil, meal_session_id: nil, token_label: nil, source: nil, client_created_at: nil, replay: false)
       now = Time.current
-      # The kiosk's clock is kept on the claim but decides nothing: the day and the session come from the server clock.
       client_at = client_created_at.present? ? Time.iso8601(client_created_at.to_s) : nil
-      at = client_at && (client_at - now).abs <= GRACE ? client_at : now
+      at = client_at && client_at <= now + GRACE && (replay || client_at >= now - GRACE) ? client_at : now
+      judged = replay ? at : now
+      raise Api::Errors::Conflict.new("canteen.too_old", "Taken offline on #{local(at, branch).strftime('%-d %b at %H:%M')}, more than 72 hours ago: record it by hand") if at < now - REPLAY_WINDOW
+      # With manual lookup off a kiosk identifies by finger only; a meal it took by name before the switch still lands.
+      if employee_id.present? && actor.nil? && !replay && branch.business.setting("canteen.manual_lookup") == false
+        raise Api::Errors::Forbidden.new("canteen.manual_lookup", "Manual lookup is switched off: identify the worker by fingerprint")
+      end
       employee = employee_id.present? ? Employee.active.find_by(id: employee_id) : nil
       employee ||= Workers.find_by_fingerprint(fingerprint_id)
       raise Api::Errors::NotFound.new("canteen.unknown_worker", "No enrolled worker matches") unless employee
       if id.present? && (same = MealClaim.find_by(id: id, employee_id: employee.id))
         return same # the same claim arriving twice
       end
-      date = branch.business_day_for(now)
-      session = meal_session_id.present? ? MealSession.active.where(branch_id: branch.id).find(meal_session_id) : Sessions.current(branch, at: now, grace: GRACE)
-      raise Api::Errors::Conflict.new("canteen.no_session", "No meal is being served right now") unless session
-      raise Api::Errors::Conflict.new("canteen.session_closed", "#{session.name} is not being served now") unless session.covers?(now, branch.time_zone, grace: GRACE)
+      moment = replay ? "at #{local(judged, branch).strftime('%H:%M')}" : "now"
+      session = meal_session_id.present? ? MealSession.active.where(branch_id: branch.id).find(meal_session_id) : Sessions.current(branch, at: judged, grace: GRACE)
+      raise Api::Errors::Conflict.new("canteen.no_session", "No meal is being served #{moment}") unless session
+      # The day of the session's window, not of the clock: a night shift past the business-day end is one meal.
+      date = Sessions.day_for(branch, session, judged, grace: GRACE)
+      raise Api::Errors::Conflict.new("canteen.session_closed", "#{session.name} is not being served #{moment}") unless date
       plan = MealPlan.includes(items: :product).find_by(branch_id: branch.id, meal_session_id: session.id, plan_date: date, status: "published")
-      raise Api::Errors::Conflict.new("canteen.no_plan", "Today's #{session.name} menu is not published yet") unless plan
-      # The session's max_claims is the worker's helpings for the session; the one-per-session index holds it at one
-      # today, and a higher setting needs that index relaxed before it can take effect.
-      taken = MealClaim.live.includes(meal_plan_item: :product).where(employee_id: employee.id, plan_date: date, meal_session_id: session.id).order(:scanned_at).to_a
-      raise already_taken(taken.last) if taken.size >= session.max_claims
+      raise Api::Errors::Conflict.new("canteen.no_plan", "The #{session.name} menu for #{date.strftime('%-d %b')} is not published yet") unless plan
+      # One meal per worker per session (MealSession); the unique index holds it when two kiosks race.
+      existing = live_claim(employee, date, session)
+      raise already_taken(existing) if existing
       item = meal_plan_item_id.present? ? plan.items.detect { |i| i.id == meal_plan_item_id.to_s } : (plan.items.size == 1 ? plan.items.first : nil)
       raise Api::Errors::BadRequest.new("canteen.choose_dish", "Choose a dish") unless item
       raise Api::Errors::Conflict.new("canteen.sold_out", "#{item.product.name} is finished for #{session.name}") if item.sold_out?
@@ -46,7 +58,8 @@ module Canteen
                                     worker_price_minor: worker_price, company_share_minor: order.total_minor - worker_price, client_created_at: client_at)
           MealPlanItem.where(id: item.id).update_all("claims_count = claims_count + 1")
           pay!(order, claim, actor: actor, device: device)
-          AuditLog.record(action: "create", record: claim, after: { employee: employee.name, dish: item.product.name, token: claim.token_label, worker_minor: worker_price, company_minor: claim.company_share_minor })
+          AuditLog.record(action: "create", record: claim, after: { employee: employee.name, dish: item.product.name, token: claim.token_label, worker_minor: worker_price, company_minor: claim.company_share_minor,
+                                                                    **(replay ? { offline: true, taken_at: at.iso8601 } : {}) })
         end
       rescue ActiveRecord::RecordNotUnique
         # Two kiosks served the same worker in the same second: the database kept one; this one is the second helping.
@@ -55,6 +68,8 @@ module Canteen
       end
       claim
     end
+
+    def self.local(time, branch) = time.in_time_zone(branch.time_zone)
 
     def self.live_claim(employee, date, session)
       MealClaim.live.includes(meal_plan_item: :product).find_by(employee_id: employee.id, plan_date: date, meal_session_id: session.id)

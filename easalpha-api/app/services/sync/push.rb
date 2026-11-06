@@ -241,7 +241,7 @@ module Sync
     def apply_meal_claim(id, payload, actor)
       return "duplicate" if MealClaim.exists?(id: id)
       Canteen::Claims.claim!(branch: @branch, device: @device, actor: actor, id: id, fingerprint_id: payload[:fingerprint_id], employee_id: payload[:employee_id], meal_plan_item_id: payload[:meal_plan_item_id],
-                             meal_session_id: payload[:meal_session_id], token_label: payload[:token_label], source: payload[:source], client_created_at: payload[:client_created_at])
+                             meal_session_id: payload[:meal_session_id], token_label: payload[:token_label], source: payload[:source], client_created_at: payload[:client_created_at], replay: true)
       "accepted"
     end
 

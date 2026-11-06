@@ -123,10 +123,11 @@ module Api
       def today = current_branch ? current_branch.business_day_for(Time.current) : Date.current
       alias business_today today # for controllers whose own action is named today
 
-      # from..to from the query, defaulting to the current month (shared by the money and report controllers).
+      # from..to from the query, defaulting to the current month (shared by the money and report controllers). The
+      # alias, not today: in a controller whose action is named today (canteen) that ran the action and answered 500.
       def range
-        from = params[:from].present? ? Date.parse(params[:from]) : today.beginning_of_month
-        to = params[:to].present? ? Date.parse(params[:to]) : today
+        from = params[:from].present? ? Date.parse(params[:from]) : business_today.beginning_of_month
+        to = params[:to].present? ? Date.parse(params[:to]) : business_today
         from..to
       rescue Date::Error
         raise Api::Errors::BadRequest.new("report.range", "Dates must be YYYY-MM-DD")

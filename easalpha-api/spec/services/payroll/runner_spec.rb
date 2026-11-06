@@ -101,6 +101,65 @@ RSpec.describe Payroll::Runner, type: :request do
     within(biz) { expect(mine.payslips.find_by(employee_id: sana.id).tips_minor).to eq(5_000) }
   end
 
+  # canteen-payroll#4: a branch run paid Sana her branch's Rs 100 of tips; the all-branches run then shared the whole
+  # month's Rs 120 with Ali, and a later run for a late hire shared it again: Rs 340 on payslips for Rs 120 collected.
+  it "puts each tip of the month on one payslip only, however many runs the month has" do
+    two = within(biz) { Branch.create!(name: "Two") }
+    sana = employee!("Sana", branch_id: branch.id, shares_tips: true)
+    ali = employee!("Ali", branch_id: two.id, shares_tips: true)
+    within(biz) do
+      Order.create!(branch: branch, order_type: "walk_in", status: "paid", business_day: Date.new(2026, 9, 10), tip_minor: 10_000)
+      Order.create!(branch: two, order_type: "walk_in", status: "closed", business_day: Date.new(2026, 9, 11), tip_minor: 2_000)
+    end
+    mine = generate!(branch)
+    everyone = generate!
+    zara = employee!("Zara", branch_id: two.id, shares_tips: true) # joined the payroll late
+    late = generate!
+    tips = ->(run, e) { within(biz) { run.payslips.find_by(employee_id: e.id).tips_minor } }
+    expect([ tips.call(mine, sana), tips.call(everyone, ali), tips.call(late, zara) ]).to eq([ 10_000, 2_000, 0 ])
+    within(biz) { expect(Payslip.sum(:tips_minor)).to eq(12_000) }
+    # A cancelled run gives its share back to the run that replaces it.
+    within(biz) { everyone.update!(status: "cancelled") }
+    again = generate!
+    expect(tips.call(again, ali)).to eq(2_000)
+  end
+
+  # canteen-payroll#5, reports#5: the all-branches run (the only kind Admin > Run Payroll makes) read the main
+  # branch's orders only, so a cashier at a second branch earned no commission.
+  it "pays commission on every branch's orders in an all-branches run, and on its own branch's in a branch run" do
+    two = within(biz) { Branch.create!(name: "Two") }
+    cashier = add_member!(biz, "cashier")
+    kashif = employee!("Kashif")
+    within(biz) do
+      kashif.update!(membership_id: cashier.id)
+      CommissionRule.create!(name: "Rs 10 an order", applies_to: "cashier", basis: "per_order", value: 10)
+      [ branch, two, two ].each_with_index { |b, i| Order.create!(branch: b, order_type: "walk_in", status: "closed", business_day: Date.new(2026, 9, 10 + i), total_minor: 50_000, completed_by_membership_id: cashier.id) }
+    end
+    all = generate!
+    within(biz) do
+      expect(all.payslips.find_by(employee_id: kashif.id).commission_minor).to eq(3_000)
+      all.update!(status: "cancelled")
+    end
+    within(biz) { kashif.update!(branch_id: two.id) }
+    at_two = generate!(two)
+    within(biz) { expect(at_two.payslips.find_by(employee_id: kashif.id).commission_minor).to eq(2_000) }
+  end
+
+  # canteen-payroll#6: the second of two Pay requests for one run (a retry after the page timed out) waited on the
+  # first and then paid every salary again from the run it had loaded before.
+  it "pays a run once when two Pay requests hold the same run" do
+    employee!("Sana")
+    run = generate!
+    within(biz) do
+      first = PayrollRun.find(run.id)
+      second = PayrollRun.find(run.id) # loaded while the first is still paying
+      described_class.pay!(first, actor: owner, branch: branch)
+      expect { expect { described_class.pay!(second, actor: owner, branch: branch) }.to raise_error(Api::Errors::Conflict, "Payroll is paid") }
+        .not_to change { [ Expense.count, JournalEntry.count, AuditLog.where(action: "payroll_pay").count ] }
+      expect(AuditLog.where(action: "payroll_pay", record_id: run.id).count).to eq(1)
+    end
+  end
+
   describe "canteen" do
     let(:m) { build_menu!(biz) }
     let(:month) { today_for(biz).beginning_of_month }
@@ -110,10 +169,11 @@ RSpec.describe Payroll::Runner, type: :request do
       expect(response).to have_http_status(:ok), response.body
     end
 
-    # Every session is open all day, so a second session gives a worker a second meal today.
+    # Every session is open the whole business day (from the 02:01 day end), so a second session gives a worker a
+    # second meal today.
     def claim!(e, session: "Lunch")
       within(biz) do
-        s = MealSession.find_by(name: session) || MealSession.create!(branch: branch, name: session, starts_at: "00:00", ends_at: "23:59")
+        s = MealSession.find_by(name: session) || MealSession.create!(branch: branch, name: session, starts_at: "02:01", ends_at: "02:00")
         plan = Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: s, date: today_for(biz), items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
         Canteen::Claims.claim!(branch: branch, actor: owner, employee_id: e.id, meal_plan_item_id: plan.items.first.id, meal_session_id: s.id)
       end

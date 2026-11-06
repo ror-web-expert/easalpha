@@ -10,7 +10,7 @@ import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/dates";
 import { Cards, PageHeader } from "@/components/admin/page";
 import { Badge, Card, CardBody, CardHeader, CardTitle, EmptyRow, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
-import { CANTEEN_KIOSK_PERMS, sessionWindow } from "@/components/canteen/helpers";
+import { CANTEEN_KIOSK_PERMS, dishPrice, sessionWindow } from "@/components/canteen/helpers";
 import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
 import { RefusedClaimsCard } from "@/components/canteen/refused-claims";
 
@@ -50,7 +50,7 @@ function TodayBoard() {
                       <TBody>{p.items.map((i) => (
                         <TR key={i.id}>
                           <TD className="font-medium">{i.name}{i.sold_out ? <Badge variant="danger" className="ml-2">finished</Badge> : null}</TD>
-                          <TD right className="tabular">{formatMoney(i.worker_price_minor ?? i.price_minor)}{i.worker_price_minor != null && i.worker_price_minor < i.price_minor ? <div className="text-xs text-fg-muted">of {formatMoney(i.price_minor)}</div> : null}</TD>
+                          <TD right className="tabular">{formatMoney(dishPrice(i))}{dishPrice(i) < (i.full_price_minor ?? i.price_minor) ? <div className="text-xs text-fg-muted">of {formatMoney(i.full_price_minor ?? i.price_minor)}</div> : null}</TD>
                           <TD right className="tabular">{i.planned_qty ?? "open"}</TD>
                           <TD right className="tabular">{i.claims_count}</TD>
                           <TD><div className="h-2 w-32 overflow-hidden rounded bg-muted"><div className="h-full bg-primary" style={{ width: `${i.planned_qty ? Math.min(100, Math.round((i.claims_count / i.planned_qty) * 100)) : 0}%` }} /></div></TD>

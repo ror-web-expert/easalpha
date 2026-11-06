@@ -11,7 +11,9 @@ RSpec.describe "Canteen", type: :request do
   let(:branch) { within(biz) { Branch.first } }
   let(:kiosk) { within(biz) { Device.create!(branch: Branch.first, name: "Kiosk 1", kind: "kiosk", paired_at: Time.current, code: "Q1") } }
   let(:worker) { within(biz) { Employee.create!(name: "Akbar Ali", phone: "+923001112233", cnic: "35202-1234567-1", base_salary_minor: 3_000_000, pay_frequency: "monthly", fingerprint_id: "FP-001", fingerprint_enrolled: true, fingerprint_enrolled_at: Time.current) } }
-  let(:lunch) { within(biz) { MealSession.create!(branch: Branch.first, name: "Lunch", starts_at: "00:00", ends_at: "23:59") } }
+  # Open the whole business day: it opens at the day end (02:01), so a meal at any hour is on today_for(biz). (A window
+  # opening at midnight opens in the previous business day, and its meals are that day's.)
+  let(:lunch) { within(biz) { MealSession.create!(branch: Branch.first, name: "Lunch", starts_at: "02:01", ends_at: "02:00") } }
 
   before do
     within(biz) { PaymentMethod.seed_defaults!(biz) unless PaymentMethod.exists? }
@@ -137,11 +139,79 @@ RSpec.describe "Canteen", type: :request do
     expect(json[:results].first[:status]).to eq("duplicate")
     get "/api/v1/canteen/sync", headers: device_headers(kiosk)
     expect(json[:claims].map { |c| c[:token_label] }).to eq([ "Q1-007" ])
-    expect(json[:workers].first).to include(name: "Akbar Ali", fingerprint_id: "FP-001")
+    expect(json[:workers].first).to include(name: "Akbar Ali", fingerprint_hash: CanteenSerializers.fingerprint_hash("FP-001", biz.id))
     get "/api/v1/sync/changes", headers: device_headers(kiosk)
     expect(json[:canteen][:claims].map { |c| c[:token_label] }).to eq([ "Q1-007" ])
-    expect(json[:canteen][:workers].first).to include(name: "Akbar Ali", fingerprint_id: "FP-001")
+    expect(json[:canteen][:workers].first).to include(name: "Akbar Ali", fingerprint_hash: CanteenSerializers.fingerprint_hash("FP-001", biz.id))
     expect(json[:canteen][:plans].first[:items].size).to eq(2)
+  end
+
+  # contracts#0, deploy-upgrade#0: a kiosk offline through the end of Lunch pushed its queue at 15:40 and every meal
+  # came back canteen.session_closed: no order, nothing on the worker's account, nothing for payroll.
+  it "records through the sync push a lunch a kiosk served offline, after the session closed" do
+    tz = ActiveSupport::TimeZone[branch.time_zone]
+    real_lunch = within(biz) { MealSession.create!(branch: branch, name: "Lunch 12-15", starts_at: "12:00", ends_at: "15:00") }
+    item = travel_to(tz.parse("2026-11-06 11:00")) do
+      within(biz) { Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: real_lunch, date: Date.new(2026, 11, 6), items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ])).items.first }
+    end
+    worker
+    rec = { type: "meal_claim", id: SecureRandom.uuid, payload: { fingerprint_id: "FP-001", meal_plan_item_id: item.id, meal_session_id: real_lunch.id, token_label: "Q1-012", source: "fingerprint",
+                                                                  client_created_at: tz.parse("2026-11-06 12:31").iso8601 } }
+    travel_to tz.parse("2026-11-06 15:40") do
+      api_post "/api/v1/sync/push", { records: [ rec ] }, headers: device_headers(kiosk)
+      expect(response).to have_http_status(:ok), response.body
+      expect(json[:results].first).to include(status: "accepted")
+    end
+    within(biz) do
+      c = MealClaim.find(rec[:id])
+      expect(c).to have_attributes(plan_date: Date.new(2026, 11, 6), token_label: "Q1-012", worker_price_minor: 20_000, scanned_at: tz.parse("2026-11-06 12:31"))
+      expect(Customer.find(Employee.find(worker.id).customer_id).balance_minor).to eq(20_000)
+      expect(SyncRejection.where(record_id: rec[:id])).to be_empty
+    end
+  end
+
+  # F6: between the business-day end (02:01) and the next plan the kiosk said the Night menu was not published, and the
+  # counter lost the tokens issued before 02:01 because it listed the new day's claims only.
+  it "keeps a night session's plan on the kiosk and its tokens on the counter past the business-day end" do
+    tz = ActiveSupport::TimeZone[branch.time_zone]
+    night = within(biz) { MealSession.create!(branch: branch, name: "Night", starts_at: "23:00", ends_at: "06:00") }
+    monday = Date.new(2026, 11, 9)
+    item = within(biz) { Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: night, date: monday, items: [ { product_id: m[:chai].id } ])).items.first }
+    worker
+    travel_to(tz.parse("2026-11-09 23:40")) { api_post "/api/v1/canteen/claims", { fingerprint_id: "FP-001", meal_plan_item_id: item.id, token_label: "Q1-001" }, headers: device_headers(kiosk) }
+    expect(response).to have_http_status(:created), response.body
+    travel_to tz.parse("2026-11-10 03:00") do
+      get "/api/v1/canteen/today", headers: device_headers(kiosk)
+      expect(json).to include(date: monday.to_s, business_day: (monday + 1).to_s)
+      expect(json[:session][:name]).to eq("Night")
+      expect(json[:branch]).to include(time_zone: branch.time_zone, day_end: "02:01")
+      expect(json[:plans].map { |p| [ p[:session][:name], p[:plan_date], p[:status] ] }).to eq([ [ "Night", monday.to_s, "published" ] ])
+      expect(json[:counts][:claimed]).to eq(1)
+      get "/api/v1/canteen/claims", params: { status: "claimed" }, headers: device_headers(kiosk)
+      expect(json[:data].map { |c| c[:token_label] }).to eq([ "Q1-001" ])
+      expect(json[:dates]).to include(monday.to_s, (monday + 1).to_s)
+      get "/api/v1/canteen/sync", headers: device_headers(kiosk)
+      expect(json).to include(date: monday.to_s, time_zone: branch.time_zone, day_end: "02:01")
+      expect(json[:claims].map { |c| c[:token_label] }).to eq([ "Q1-001" ])
+      expect(json[:plans].map { |p| p[:plan_date] }).to include(monday.to_s)
+    end
+    travel_to tz.parse("2026-11-10 06:20") do # the night is over, grace included: the counter moves on to Tuesday
+      get "/api/v1/canteen/claims", params: { status: "claimed" }, headers: device_headers(kiosk)
+      expect(json[:data]).to eq([])
+    end
+  end
+
+  # F13: the kiosk showed the menu price before tax (Rs 80 for Chai) and the claim charged Rs 92.80.
+  it "gives every dish the price a kiosk order charges and what the worker pays" do
+    plan = publish_lunch!
+    get "/api/v1/canteen/today", headers: device_headers(kiosk)
+    items = json[:plans].first[:items].index_by { |i| i[:name] }
+    expect(items["Chai"]).to include(price_minor: 8_000, full_price_minor: 9_280, worker_pays_minor: 9_280, worker_price_minor: nil)
+    expect(items["Zinger Burger"]).to include(price_minor: 45_000, full_price_minor: 52_200, worker_pays_minor: 20_000)
+    worker
+    api_post "/api/v1/canteen/claims", { fingerprint_id: "FP-001", meal_plan_item_id: plan[:items].find { |i| i[:name] == "Chai" }[:id] }, headers: device_headers(kiosk)
+    expect(response).to have_http_status(:created), response.body
+    expect(json[:worker_price_minor]).to eq(items["Chai"][:worker_pays_minor])
   end
 
   # R19: a meal the kiosk took offline and the server refused at replay reached nobody: the kiosk kept counting it as
@@ -208,6 +278,23 @@ RSpec.describe "Canteen", type: :request do
       expect(Customer.find(Employee.find(worker.id).customer_id).balance_minor).to eq(0)
       expect(CustomerPayment.where(customer_id: Employee.find(worker.id).customer_id).sum(:amount_minor)).to eq(20_000)
     end
+  end
+
+  # Roles test, 6 Nov 2026: with no from/to both reports answered 500, because the default month called this
+  # controller's own Today action instead of the business day.
+  it "reports the month so far when no period is given" do
+    plan = publish_lunch!
+    worker
+    api_post "/api/v1/canteen/claims", { fingerprint_id: "FP-001", meal_plan_item_id: plan[:items].first[:id] }, headers: device_headers(kiosk)
+    expect(response).to have_http_status(:created), response.body
+    day = today_for(biz)
+    get "/api/v1/canteen/reports/summary", params: { group_by: "day" }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+    expect(json).to include(from: day.beginning_of_month.to_s, to: day.to_s)
+    expect(json[:totals][:meals]).to eq(1)
+    get "/api/v1/canteen/reports/workers", headers: headers
+    expect(response).to have_http_status(:ok), response.body
+    expect(json[:rows].first).to include(name: "Akbar Ali", meals: 1)
   end
 
   it "keeps the kiosk's endpoints away from kitchen screens and plans away from staff without canteen.manage" do
