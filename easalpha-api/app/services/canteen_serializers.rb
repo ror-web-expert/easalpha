@@ -24,7 +24,12 @@ module CanteenSerializers
   end
 
   def worker(e)
-    { id: e.id, name: e.name, phone: e.phone, cnic: e.cnic, department: e.department&.name, designation: e.designation, customer_id: e.customer_id,
+    kiosk_worker(e).merge(phone: e.phone, cnic: e.cnic)
+  end
+
+  # What a kiosk or counter screen holds for every worker: enough to name a finger, never a phone or CNIC.
+  def kiosk_worker(e)
+    { id: e.id, name: e.name, department: e.department&.name, designation: e.designation, customer_id: e.customer_id,
       fingerprint_enrolled: e.fingerprint_enrolled, fingerprint_id: e.fingerprint_id, branch_id: e.branch_id }
   end
 end

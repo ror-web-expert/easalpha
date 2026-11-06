@@ -899,8 +899,9 @@ export interface MealClaim {
   plan_date: string; token_no: number; token_label: string; status: "claimed" | "served" | "cancelled"; scanned_at: string; served_at: string | null; cancelled_at: string | null;
   cancel_reason: string | null; source: string; device_id: ID | null; worker_price_minor: number; company_share_minor: number;
 }
+// Phone and CNIC reach the admin's worker list only; a kiosk or counter payload never carries them.
 export interface CanteenWorker {
-  id: ID; name: string; phone: string | null; cnic: string | null; department: string | null; designation: string | null; customer_id: ID | null;
+  id: ID; name: string; phone?: string | null; cnic?: string | null; department: string | null; designation: string | null; customer_id: ID | null;
   fingerprint_enrolled: boolean; fingerprint_id: string | null; branch_id: ID | null;
 }
 export interface CanteenToday {

@@ -42,6 +42,23 @@ module Canteen
       plan
     end
 
+    # The daily roll (CanteenPlansRollJob): for every active session with no plan at all on `date`, copies the
+    # previous day's published plan and publishes it, so the kiosk is never empty because nobody copied the menu. A
+    # draft already started for the day is left alone (someone is planning it); a dish archived since is dropped.
+    # Returns how many plans were published.
+    def roll_forward!(branch:, date:)
+      rolled = 0
+      MealSession.active.where(branch_id: branch.id).find_each do |session|
+        next if MealPlan.exists?(branch_id: branch.id, meal_session_id: session.id, plan_date: date)
+        src = MealPlan.includes(:items).find_by(branch_id: branch.id, meal_session_id: session.id, plan_date: date - 1, status: "published") or next
+        items = src.items.select { |i| Product.active.exists?(id: i.product_id) }.map { |i| { product_id: i.product_id, planned_qty: i.planned_qty, worker_price_minor: i.worker_price_minor } }
+        next if items.empty?
+        publish!(save!(branch: branch, session: session, date: date, notes: src.notes, items: items, actor: nil))
+        rolled += 1
+      end
+      rolled
+    end
+
     # Copies every session's plan from one day onto another (as drafts), skipping sessions the target day already has.
     def copy!(branch:, from:, to:, actor: nil)
       copied = 0

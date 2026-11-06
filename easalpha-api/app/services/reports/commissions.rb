@@ -4,7 +4,9 @@ module Reports
     module_function
 
     def run(branch:, from:, to:)
-      orders = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed]).includes(:items)
+      # Sales by the one revenue rule (Reports::Revenue): paid and closed orders at their total minus their refunds;
+      # a fully refunded order is not a sale and earns nothing.
+      orders = Revenue.completed(Order.where(branch_id: branch.id, business_day: from..to)).select("orders.*, #{Revenue::NET_SQL} AS net_minor").includes(:items)
       rules = CommissionRule.active.to_a
       people = {}
       add = lambda do |membership_id, role, order|
@@ -12,7 +14,7 @@ module Reports
         p = people[[ membership_id, role ]] ||= { membership_id: membership_id, applies_to: role, orders: 0, items: 0, sales_minor: 0 }
         p[:orders] += 1
         p[:items] += order.items.count { |i| i.status != "cancelled" }
-        p[:sales_minor] += order.total_minor
+        p[:sales_minor] += order.net_minor.to_i
       end
       orders.each do |o|
         add.call(o.taken_by_membership_id, "order_taker", o)
