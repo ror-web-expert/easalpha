@@ -157,6 +157,10 @@ describe("validateSignup", () => {
       name: "Ali Raza", business_name: "Karachi Grill", email: "ali@karachigrill.pk", password: "spicy-biryani-1", phone: "+923001234567", country: "PK", currency: "PKR", time_zone: "Asia/Karachi",
     });
   });
+  it("sends the browser's own zone when it lies in the chosen country, else the country's", () => {
+    expect(signupPayload({ ...good, country: "US", phone: "+1 415 555 0132", timeZone: "America/Chicago" }).time_zone).toBe("America/Chicago");
+    expect(signupPayload({ ...good, country: "PK", timeZone: "America/Chicago" }).time_zone).toBe("Asia/Karachi");
+  });
 });
 
 describe("contact links", () => {

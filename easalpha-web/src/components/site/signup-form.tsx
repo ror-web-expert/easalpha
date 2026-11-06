@@ -35,8 +35,9 @@ export function SignupForm() {
   // The browser's time zone, then its language, picks the country on first paint (S3: the language alone turned a
   // Karachi owner with an en-US browser into a US business); the dialling code follows it until a number is typed.
   useEffect(() => {
-    const code = detectSignupCountry({ timeZone: browserTimeZone(), locale: typeof navigator === "undefined" ? null : navigator.language });
-    if (code !== DEFAULT_COUNTRY) setForm((f) => ({ ...f, country: code, phone: `${countryByCode(code).dial} ` }));
+    const zone = browserTimeZone();
+    const code = detectSignupCountry({ timeZone: zone, locale: typeof navigator === "undefined" ? null : navigator.language });
+    setForm((f) => ({ ...f, timeZone: zone, ...(code !== DEFAULT_COUNTRY ? { country: code, phone: `${countryByCode(code).dial} ` } : {}) }));
   }, []);
   // Once the owner picks a country it stays; until then a number typed with its code (+971 ...) moves the country.
   const picked = useRef(false);

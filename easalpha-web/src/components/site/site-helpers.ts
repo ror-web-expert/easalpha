@@ -130,6 +130,8 @@ export interface SignupInput {
   agree: boolean;
   /** ISO 3166 code from COUNTRIES; sets the dialling code, currency and time zone of the new business. */
   country: string;
+  /** The browser's own zone; used when it lies in the chosen country (Chicago rather than New York for the US). */
+  timeZone?: string | null;
 }
 
 export interface Country { code: string; name: string; dial: string; currency: string; timeZone: string }
@@ -299,7 +301,7 @@ export function signupPayload(input: SignupInput) {
     phone: normalizePhone(input.phone, c.dial),
     country: c.code,
     currency: c.currency,
-    time_zone: c.timeZone,
+    time_zone: input.timeZone && countryForTimeZone(input.timeZone) === c.code ? input.timeZone : c.timeZone,
   };
 }
 
