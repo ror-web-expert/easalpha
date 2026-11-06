@@ -98,11 +98,14 @@ RSpec.describe "Refunds and what an order still owes", type: :request do
 
   describe "a part payment on an open order (ledger#0, orders-money#2)" do
     it "goes back, the order stays open and owes it again, then it can be voided and the day closed" do
-      o = order!
+      cust = within(biz) { Customer.create!(name: "Hamza") }
+      api_post "/api/v1/orders", { order_type: "takeaway", customer_id: cust.id, lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
+      o = json
       expect(pay!(o, 20_000, method: "card")).to include(status: "placed", payment_status: "partial", paid_minor: 20_000)
       refund!(o, 20_000, method: "card")
       expect(response).to have_http_status(:created), response.body
       expect(json[:order]).to include(status: "placed", payment_status: "unpaid", paid_minor: 0, due_minor: 52_200)
+      expect(cust.reload).to have_attributes(orders_count: 0, net_spent_minor: 0) # never counted, so nothing comes off
       api_post "/api/v1/orders/#{o[:id]}/void", { reason: "Customer left" }, headers: headers
       expect(response).to have_http_status(:ok), response.body
       expect(json[:status]).to eq("voided")

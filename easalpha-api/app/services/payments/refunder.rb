@@ -90,7 +90,9 @@ module Payments
         # The same rule as pricing: a reopened order whose excess was refunded is paid, not stranded as partial.
         order.payment_status = Orders::Pricing.payment_status_for(order)
         order.save!
-        Customer.where(id: order.customer_id).update_all([ "net_spent_minor = net_spent_minor - ?", amount_minor ]) if order.customer_id
+        # The customer's spend counted the order when it was first paid in full (paid_at); a part payment going back on an
+        # order never completed was never counted.
+        Customer.where(id: order.customer_id).update_all([ "net_spent_minor = net_spent_minor - ?", amount_minor ]) if order.customer_id && order.paid_at
         AuditLog.record(action: "refund", record: order, after: { amount_minor: amount_minor, method: method.code, reason: reason, full: full }, approved_by: approver&.user)
       end
       Realtime.order_changed(order)
