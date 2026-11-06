@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useDeviceStore } from "@/store/device";
 import { useAuthStore } from "@/store/auth";
 import { api, errorMessage } from "@/lib/api";
@@ -9,23 +10,33 @@ import { Button, Keypad, Loading } from "@/components/ui";
 import { clearTillData } from "@/store/catalog";
 import { confirmDiscardUnsynced } from "@/lib/sync";
 
-/** The kitchen and token screens accept a paired device token or a logged-in admin user. */
-export function useKitchenToken(): { token: string | null; ready: boolean; kind: "device" | "user" | null } {
+/** Devices whose own token names nobody: there the kitchen display needs someone signed in; the queue and token lists do not. */
+export const TILL_DEVICE_KINDS = ["till", "tablet"];
+
+/**
+ * The kitchen and token screens accept a POS session, a paired device token or a logged-in admin user. A manager
+ * logged in on this browser comes before a till or tablet's own token, which the API takes for the queue and token
+ * lists only (final round, contracts#7); `tillOnly` says the screen holds nothing but that token.
+ */
+export function useKitchenToken(): { token: string | null; ready: boolean; kind: "device" | "user" | null; tillOnly: boolean } {
   const dh = useDeviceStore((s) => s.hydrated);
   const ah = useAuthStore((s) => s.hydrated);
   const posSession = useDeviceStore((s) => s.session);
   const deviceToken = useDeviceStore((s) => s.deviceToken);
+  const tillDevice = useDeviceStore((s) => TILL_DEVICE_KINDS.includes(s.device?.kind ?? ""));
   const admin = useAuthStore((s) => s.session);
   const ready = dh && ah;
-  if (!ready) return { token: null, ready: false, kind: null };
-  if (posSession?.access_token) return { token: posSession.access_token, ready, kind: "device" };
-  if (deviceToken) return { token: deviceToken, ready, kind: "device" };
-  if (admin?.access_token) return { token: admin.access_token, ready, kind: "user" };
-  return { token: null, ready, kind: null };
+  if (!ready) return { token: null, ready: false, kind: null, tillOnly: false };
+  if (posSession?.access_token) return { token: posSession.access_token, ready, kind: "device", tillOnly: false };
+  if (admin?.access_token && (tillDevice || !deviceToken)) return { token: admin.access_token, ready, kind: "user", tillOnly: false };
+  if (deviceToken) return { token: deviceToken, ready, kind: "device", tillOnly: tillDevice };
+  return { token: null, ready, kind: null, tillOnly: false };
 }
 
 export function KitchenGate({ children, title }: { children: React.ReactNode; title: string }) {
-  const { token, ready } = useKitchenToken();
+  const { token, ready, tillOnly } = useKitchenToken();
+  const pathname = usePathname();
+  const router = useRouter();
   const pair = useDeviceStore((s) => s.pair);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,6 +47,19 @@ export function KitchenGate({ children, title }: { children: React.ReactNode; ti
     return () => { if (prev) document.documentElement.setAttribute("data-theme", prev); else document.documentElement.removeAttribute("data-theme"); };
   }, []);
   if (!ready) return <Loading />;
+  // The kitchen display on a till or tablet with nobody signed in: the API answers session.required, so say who can
+  // open it rather than show a board that never loads (the queue and token screens work on the till's token).
+  if (token && tillOnly && pathname?.startsWith("/kitchen")) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-page px-4 text-fg">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <h1 className="text-2xl font-semibold">{title}</h1>
+          <p className="text-fg-secondary">This screen is a till. Sign in on the till with your PIN to open the kitchen display, or <Link href="/login" className="text-primary">log in</Link> as a manager.</p>
+          <Button size="xl" className="w-full" onClick={() => router.push("/pos/pin")}>Sign in with a PIN</Button>
+        </div>
+      </main>
+    );
+  }
   if (token) return <>{children}</>;
   const submit = async () => {
     if (!(await confirmDiscardUnsynced())) return;
