@@ -38,6 +38,27 @@ RSpec.describe "Query counts of the QR menu and the rider lists", type: :request
     expect(after).to eq(before)
   end
 
+  # Orders::Builder#build_deal_item read each deal by itself, then its business (Deal#available_at?'s time zone) and
+  # tax rate, and the category of each part (for its station): an order of three deals with twelve parts read twelve.
+  it "places an order of three deals with the catalogue reads of an order of one" do
+    family = within(biz) do
+      d = Deal.create!(name: "Family Box", price_minor: 200_000, tax_rate: m[:tax])
+      4.times { |i| d.deal_items.create!(product: Product.create!(category: m[:burger].category, name: "Part #{i}", base_price_minor: 10_000), quantity: 1) }
+      d.deal_items.create!(product: m[:chai], quantity: 2)
+      d
+    end
+    place = ->(lines) { selects { api_post "/api/v1/orders", { order_type: "walk_in", lines: lines, place: true }, headers: headers } }
+    place.call([ { deal_id: m[:deal].id } ])
+    one = place.call([ { deal_id: m[:deal].id } ])
+    three = place.call([ { deal_id: m[:deal].id }, { deal_id: family.id }, { deal_id: family.id } ])
+    expect(response).to have_http_status(:created), response.body
+    expect(json[:items].map { |i| i[:deal_components].size }).to eq([ 2, 5, 5 ])
+    catalogue = %w[deals deal_items products categories tax_rates]
+    expect(three.slice(*catalogue)).to eq(one.slice(*catalogue))
+    # Each order item saved reads its business (Tenanted's required belongs_to), the two added lines at most; a deal adds none.
+    expect(three["businesses"] - one["businesses"]).to be <= 2
+  end
+
   describe "a rider's deliveries" do
     before do
       api_post "/api/v1/delivery_zones", { name: "Gulberg", areas: [ "Gulberg" ], charge_minor: 10_000, min_order_minor: 0, eta_minutes: 30 }, headers: headers

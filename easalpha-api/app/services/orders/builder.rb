@@ -183,6 +183,7 @@ module Orders
 
     def apply_lines!(lines, amend: false)
       keep = []
+      @deals = deals_for(lines)
       Array(lines).each_with_index do |raw, idx|
         line = raw.to_h.with_indifferent_access
         existing = amend && line[:id].present? ? find_line(line[:id]) : nil
@@ -317,8 +318,17 @@ module Orders
       end
     end
 
+    # The deals the lines name, with what build_deal_item reads of them (each part's product and its category for the
+    # station, the deal's tax rate, and its business for the time zone of available_at?), loaded once for all the
+    # lines: read one at a time, an order with deals loaded the business and tax rate of every deal and the category of
+    # every part (L3, 7 Nov 2026).
+    def deals_for(lines)
+      ids = Array(lines).filter_map { |l| l.to_h.with_indifferent_access[:deal_id].presence&.to_s }.uniq
+      ids.empty? ? {} : Deal.active.includes(:business, :tax_rate, deal_items: { product: :category }).where(id: ids).index_by(&:id)
+    end
+
     def build_deal_item(line, idx)
-      deal = Deal.active.includes(deal_items: :product).find(line[:deal_id])
+      deal = @deals&.dig(line[:deal_id].to_s) || Deal.active.includes(deal_items: :product).find(line[:deal_id])
       raise Api::Errors::Unprocessable.new("deal.unavailable", "#{deal.name} is not available now") unless deal.available_at?(Time.current)
       components = deal.deal_items.map do |di|
         next if di.choice_group
