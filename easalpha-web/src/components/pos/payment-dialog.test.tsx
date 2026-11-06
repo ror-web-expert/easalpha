@@ -112,3 +112,103 @@ describe("PaymentDialog khata over the limit", () => {
     act(() => useSyncStore.setState({ status: "online" }));
   });
 });
+
+describe("PaymentDialog tendered and change (QA T1, K2)", () => {
+  // The screen pre-filled Tendered with the whole amount due and never lowered it: a split, a part payment or a coupon
+  // that lowered the total showed and stored change the customer never got (Rs 1,000 cash on Rs 1,736 showed Rs 736).
+  const amount = () => screen.getByLabelText("Amount") as HTMLInputElement;
+  const tendered = () => screen.getByLabelText("Tendered") as HTMLInputElement;
+  const type = (el: HTMLInputElement, rupees: number) => fireEvent.change(el, { target: { value: String(rupees) } });
+  const bill = (rupees: number, over: Partial<Cart> = {}) => order({ lines: [line("Karahi", rupees * 100)], ...over });
+
+  it("gives no change on the cash part of a split when no tender was typed", async () => {
+    const onPay = vi.fn(async () => {});
+    render(<PaymentDialog open onClose={() => {}} cart={bill(520)} onPay={onPay} busy={false} />);
+    expect(tendered().value).toBe("520");
+    type(amount(), 300);
+    expect(tendered().value).toBe("300");
+    expect(screen.queryByText("Change")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Add Rs 300 and split/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Card" }));
+    expect(screen.queryByText("Change")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Pay Rs 220/ }));
+    await waitFor(() => expect(onPay).toHaveBeenCalledWith([
+      { method_code: "cash", amount_minor: 30000, tendered_minor: 30000, reference: undefined },
+      { method_code: "card", amount_minor: 22000, tendered_minor: undefined, reference: undefined },
+    ], 0, 52000));
+  });
+
+  it("gives no change on a part payment when no tender was typed", async () => {
+    const onPay = vi.fn(async () => {});
+    render(<PaymentDialog open onClose={() => {}} cart={bill(730)} onPay={onPay} busy={false} />);
+    type(amount(), 300);
+    expect(screen.queryByText("Change")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Pay Rs 300 now/ }));
+    await waitFor(() => expect(onPay).toHaveBeenCalledWith([{ method_code: "cash", amount_minor: 30000, tendered_minor: 30000, reference: undefined }], 0, 73000));
+  });
+
+  it("follows a total that a coupon lowered, with nothing typed", async () => {
+    const onPay = vi.fn(async () => {});
+    const { rerender } = render(<PaymentDialog open onClose={() => {}} cart={bill(560)} onPay={onPay} busy={false} />);
+    expect(tendered().value).toBe("560");
+    rerender(<PaymentDialog open onClose={() => {}} cart={bill(560, { discount_minor: 27000 })} onPay={onPay} busy={false} />);
+    expect(figure("Total due")).toBe("Rs 290");
+    expect(tendered().value).toBe("290");
+    expect(screen.queryByText("Change")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Pay Rs 290/ }));
+    await waitFor(() => expect(onPay).toHaveBeenCalledWith([{ method_code: "cash", amount_minor: 29000, tendered_minor: 29000, reference: undefined }], 0, 29000));
+  });
+
+  it("keeps what the cashier typed: change on that part only, and the typed note after the total drops", async () => {
+    const onPay = vi.fn(async () => {});
+    const { rerender } = render(<PaymentDialog open onClose={() => {}} cart={bill(520)} onPay={onPay} busy={false} />);
+    type(amount(), 300);
+    type(tendered(), 500);
+    expect(figure("Change")).toBe("Rs 200");
+    fireEvent.click(screen.getByRole("button", { name: /Add Rs 300 and split/ }));
+    // The next part starts again from the amount: the Rs 500 was handed over for the first part.
+    expect(tendered().value).toBe("220");
+    expect(figure("Change")).toBe("Rs 200");
+    fireEvent.click(screen.getByRole("button", { name: /Pay Rs 220/ }));
+    await waitFor(() => expect(onPay).toHaveBeenCalledWith([
+      { method_code: "cash", amount_minor: 30000, tendered_minor: 50000, reference: undefined },
+      { method_code: "cash", amount_minor: 22000, tendered_minor: 22000, reference: undefined },
+    ], 0, 52000));
+    // A Rs 1,000 note typed for Rs 560 stays Rs 1,000 when a coupon takes the total to Rs 290.
+    rerender(<PaymentDialog open={false} onClose={() => {}} cart={bill(560)} onPay={onPay} busy={false} />);
+    rerender(<PaymentDialog open onClose={() => {}} cart={bill(560)} onPay={onPay} busy={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rs 1,000" }));
+    rerender(<PaymentDialog open onClose={() => {}} cart={bill(560, { discount_minor: 27000 })} onPay={onPay} busy={false} />);
+    expect(figure("Change")).toBe("Rs 710");
+  });
+});
+
+describe("PaymentDialog on a reopened order with nothing left to pay (QA T5)", () => {
+  it("offers Complete order, which hands the page no payments, the way a staff meal completes", async () => {
+    const onPay = vi.fn(async () => {});
+    render(<PaymentDialog open onClose={() => {}} cart={order({ lines: [line("Karahi", 80000)], paid_minor: 80000, reopened: true })} onPay={onPay} busy={false} />);
+    expect(figure("Amount due")).toBe("Rs 0");
+    expect(screen.getByText("Paid in full. Complete the order to close it.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Complete order/ }));
+    await waitFor(() => expect(onPay).toHaveBeenCalledWith([], 0, 0));
+  });
+
+  it("says what was paid above the new total goes back first", () => {
+    render(<PaymentDialog open onClose={() => {}} cart={order({ lines: [line("Karahi", 80000)], paid_minor: 100000, reopened: true })} onPay={vi.fn()} busy={false} />);
+    expect(screen.getByText(/Rs 200 was paid above the new total. Refund it first \(Orders, Refund overpaid\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Complete order/ })).toBeEnabled();
+  });
+});
+
+describe("PaymentDialog opened again on the same order (QA T13)", () => {
+  it("shows the amount due and the tender again, and Pay is enabled", () => {
+    const cart = order({ lines: [line("Karahi", 52000)] });
+    const { rerender } = render(<PaymentDialog open onClose={() => {}} cart={cart} onPay={vi.fn()} busy={false} />);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("520");
+    rerender(<PaymentDialog open={false} onClose={() => {}} cart={cart} onPay={vi.fn()} busy={false} />);
+    rerender(<PaymentDialog open onClose={() => {}} cart={cart} onPay={vi.fn()} busy={false} />);
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("520");
+    expect((screen.getByLabelText("Tendered") as HTMLInputElement).value).toBe("520");
+    expect(screen.getByRole("button", { name: /Pay Rs 520/ })).toBeEnabled();
+  });
+});

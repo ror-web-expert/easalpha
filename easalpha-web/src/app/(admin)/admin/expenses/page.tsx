@@ -58,7 +58,7 @@ export default function ExpensesPage() {
   const [exporting, setExporting] = useState(false);
   const { run, dialog } = useApproval();
   const save = useSave<Form>(["expenses", "expenses_summary", "accounts"], () => "/expenses", { onSuccess: () => setForm(null), success: "Expense recorded" });
-  const payMethods = useMemo(() => methods.data?.filter((m) => m.active && m.kind !== "khata") ?? [], [methods.data]);
+  const payMethods = useMemo(() => methods.data?.filter((m) => m.active && m.kind !== "khata" && !m.internal) ?? [], [methods.data]); // internal methods move no money
   const filterMethods = useMemo(() => (methods.data ?? []).filter((m) => m.kind !== "khata").sort((a, b) => a.sort_order - b.sort_order), [methods.data]);
   useEffect(() => { if (form && !form.method_code && payMethods.length) setForm({ ...form, method_code: payMethods.find((m) => m.kind === "cash")?.code ?? payMethods[0].code }); }, [form, payMethods]);
   const doVoid = async () => {

@@ -64,6 +64,8 @@ export interface LocalOrder {
   tax_rate_id?: string | null;
   /** SPEC discounts: the order-level discount lines the server holds (voucher, loyalty, regular, promotion, percent, fixed). */
   order_discounts?: LocalDiscount[];
+  /** The server's count of live lines (its summary rows carry no lines), for an order whose lines this till never fetched. */
+  item_count?: number | null;
 }
 
 /** One applied discount as the server reports it; discount_minor on the order is the sum of these plus the product discounts. */

@@ -6,7 +6,7 @@ import { dismissAttention, flushDismissals, isMoneyRecord, processQueue, retryAt
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { usePosCan } from "@/store/device";
+import { useDeviceStore, usePosCan } from "@/store/device";
 import { useCatalogStore } from "@/store/catalog";
 import { useApproval } from "@/components/approval";
 import { PosShell } from "@/components/pos/shell";
@@ -26,18 +26,38 @@ function describeRecord(a: AttentionItem, currency?: string): string {
   return a.type.replace("_", " ");
 }
 
+/**
+ * What a money record the server never recorded leaves behind. An account payment belongs to no order: its text said
+ * the order stays on the Orders screen, and there is none (QA K10).
+ */
+function moneyNote(a: AttentionItem): string {
+  return a.type === "customer_payment"
+    ? "Money received on a customer's account that the server has not recorded: the account does not show it until this is retried."
+    : "Money the server has not recorded. The order stays on the Orders screen marked Rejected until this is retried.";
+}
+function dismissNote(a: AttentionItem): string {
+  return a.type === "customer_payment"
+    ? "the customer's account on the server never gets this payment"
+    : "the order stays on the Orders screen marked Rejected, and the money stays off the server";
+}
+
 export default function AttentionPage() {
   const can = usePosCan();
   const currency = useCatalogStore((s) => s.catalog?.business.currency);
+  // SPEC "Offline behaviour": the whole queue needs OFFLINE_ORDERS (admins with settings.manage always see it). Anyone
+  // else sees the records they made, so a cashier whose offline sale was refused can see why and have it retried (QA K8).
+  const everyone = can("OFFLINE_ORDERS", "settings.manage");
+  const me = useDeviceStore((s) => s.session?.membership?.id ?? null);
   const { run, dialog } = useApproval();
   const [items, setItems] = useState<AttentionItem[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [tab, setTab] = useState<"attention" | "queue">("attention");
   const [dismissing, setDismissing] = useState<AttentionItem | null>(null);
   const reload = useCallback(async () => {
-    setItems(await db.attention.orderBy("created_at").reverse().toArray());
-    setQueue(await db.queue.orderBy("created_at").toArray());
-  }, []);
+    const mine = (id: unknown) => everyone || (!!me && id === me);
+    setItems((await db.attention.orderBy("created_at").reverse().toArray()).filter((a) => mine(a.payload.__membership_id)));
+    setQueue((await db.queue.orderBy("created_at").toArray()).filter((q) => mine(q.membership_id)));
+  }, [everyone, me]);
   useEffect(() => { reload(); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [reload]);
   // A Dismiss made without a connection reaches the server's Needs attention once there is one (K7).
   useEffect(() => { void flushDismissals(); const t = setInterval(() => void flushDismissals(), 30_000); return () => clearInterval(t); }, []);
@@ -70,17 +90,10 @@ export default function AttentionPage() {
     if (a) void dismissAttention(a.id).then(reload);
   };
 
-  // SPEC "Offline behaviour": the Offline Orders queue has its own permission to view it; admins (settings.manage) always may.
-  if (!can("OFFLINE_ORDERS", "settings.manage")) {
-    return (
-      <PosShell title="Needs attention">
-        <EmptyState icon={Lock} title="You need the OFFLINE_ORDERS permission" hint="The queue of orders punched without a connection is only shown to users with Offline orders (Dashboard module). Ask an admin to grant it; it applies at your next sign-in." className="m-6" />
-      </PosShell>
-    );
-  }
   return (
     <PosShell title="Needs attention">
       <div className="mx-auto max-w-3xl space-y-4 p-4">
+        {!everyone ? <p className="flex items-center gap-2 text-sm text-fg-secondary"><Lock className="h-4 w-4 shrink-0" /> Your own records only. The whole list needs the Offline orders permission (OFFLINE_ORDERS); ask an admin, or a manager can open it here.</p> : null}
         <Tabs size="lg" value={tab} onChange={setTab} items={[{ value: "attention", label: "Rejected", count: items.length }, { value: "queue", label: "Waiting to sync", count: queue.length }]} className="w-fit" />
         {tab === "attention" ? (
           top.length ? top.map((a) => {
@@ -92,7 +105,7 @@ export default function AttentionPage() {
                 <CardBody className="space-y-3">
                   <p className="text-base">{a.message}</p>
                   {withPin && a.permissions?.length ? <p className="text-sm text-fg-secondary">A manager approves: {a.permissions.map((c) => a.permission_labels?.[c] ?? c).join(", ")}</p> : null}
-                  {isMoneyRecord(a) ? <p className="text-sm text-warning-ink">Money the server has not recorded. The order stays on the Orders screen marked Rejected until this is retried.</p> : null}
+                  {isMoneyRecord(a) ? <p className="text-sm text-warning-ink">{moneyNote(a)}</p> : null}
                   {held.length ? (
                     <div className="rounded-lg bg-muted p-3 text-sm">
                       <div className="font-medium">Held back with it</div>
@@ -124,7 +137,7 @@ export default function AttentionPage() {
         )}
       </div>
       <ConfirmDialog open={!!dismissing} onClose={() => setDismissing(null)} onConfirm={confirmDismiss} title="Dismiss a money record?" destructive confirmLabel="Dismiss"
-        description={dismissing ? `The server never recorded this ${describeRecord(dismissing, currency)}${heldBy(dismissing.id).length ? ` or the ${heldBy(dismissing.id).length} record${heldBy(dismissing.id).length === 1 ? "" : "s"} held back with it` : ""}. Dismissing only removes it from this list: the order stays on the Orders screen marked Rejected, and the money stays off the server. Try again instead if it should be recorded.` : undefined} />
+        description={dismissing ? `The server never recorded this ${describeRecord(dismissing, currency)}${heldBy(dismissing.id).length ? ` or the ${heldBy(dismissing.id).length} record${heldBy(dismissing.id).length === 1 ? "" : "s"} held back with it` : ""}. Dismissing only removes it from this list: ${dismissNote(dismissing)}. Try again instead if it should be recorded.` : undefined} />
       {dialog}
     </PosShell>
   );

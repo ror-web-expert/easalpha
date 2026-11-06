@@ -5,6 +5,8 @@
 // offline; the pure helpers at the top are what the screens and the tests share.
 import { api, ApiError } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import type { CartLine } from "@/lib/pricing";
+import type { Cart } from "@/store/cart";
 import type { Customer, ID, LoyaltyRedemptionOption, Order, OrderDiscount, Page, Review, VoucherBatch, VoucherIssueResult } from "@/lib/types";
 
 type DiscountLike = Pick<OrderDiscount, "kind" | "reason" | "value">;
@@ -42,10 +44,12 @@ export interface DiscountRow { key: string; label: string; amount_minor: number;
  * Rows for the totals block: one per order-level discount line plus an "Item discounts" row for the product
  * discounts (what remains of the total once the lines are taken out). A total with no lines stays one plain row.
  */
-export function discountRows(discounts: Pick<OrderDiscount, "id" | "kind" | "value" | "amount_minor" | "reason">[] | null | undefined, total_discount_minor: number): DiscountRow[] {
+export function discountRows(discounts: (Pick<OrderDiscount, "id" | "kind" | "value" | "amount_minor" | "reason"> & { order_item_id?: string | null })[] | null | undefined, total_discount_minor: number, lineName?: (orderItemId: string) => string | undefined): DiscountRow[] {
   const lines = (discounts ?? []).filter((d) => d.amount_minor > 0);
   if (!lines.length) return total_discount_minor > 0 ? [{ key: "all", label: "Discount", amount_minor: total_discount_minor, kind: "item", locked: true, id: null }] : [];
-  const rows: DiscountRow[] = lines.map((d) => ({ key: d.id, label: discountLabel(d), amount_minor: d.amount_minor, kind: d.kind, locked: discountLocked(d), id: d.id }));
+  // A discount on one line says which: "10% discount (Birthday) on Karahi".
+  const on = (d: { order_item_id?: string | null }) => { const name = d.order_item_id ? lineName?.(d.order_item_id) : undefined; return name ? ` on ${name}` : ""; };
+  const rows: DiscountRow[] = lines.map((d) => ({ key: d.id, label: `${discountLabel(d)}${on(d)}`, amount_minor: d.amount_minor, kind: d.kind, locked: discountLocked(d), id: d.id }));
   const items = total_discount_minor - lines.reduce((s, d) => s + d.amount_minor, 0);
   if (items > 0) rows.unshift({ key: "items", label: "Item discounts", amount_minor: items, kind: "item", locked: true, id: null });
   return rows;
@@ -127,6 +131,36 @@ export function ratingWord(rating: number | null | undefined): string {
 export const applyVoucher = (orderId: ID, code: string) => api<Order>(`/orders/${orderId}/discounts`, { method: "POST", auth: "pos", body: { voucher_code: code.trim().toUpperCase() } });
 export const applyCoupon = (orderId: ID, code: string, approver_pin?: string) => api<Order>(`/orders/${orderId}/discounts`, { method: "POST", auth: "pos", body: { kind: "promotion", coupon_code: code.trim().toUpperCase(), approver_pin } });
 export const removeDiscount = (orderId: ID, discountId: ID) => api<Order>(`/orders/${orderId}/discounts/${discountId}`, { method: "DELETE", auth: "pos" });
+
+export interface ManualDiscount {
+  kind: "percent" | "fixed";
+  /** The percent, or the amount in paisa (sent as rupees: the server's fixed value is in rupees). */
+  value: number;
+  reason: string;
+  /** One line of the order (its server id), or null for the whole order. */
+  order_item_id: ID | null;
+}
+
+/**
+ * The cashier's own discount (QA T10): POST /orders/:id/discounts { kind, value, reason, order_item_id }. The server
+ * checks the role's limit (discounts.apply, 10% for a cashier) and answers above it with approval.required naming
+ * discounts.above_limit; the manager's PIN then comes with the same request.
+ */
+export const applyManualDiscount = (orderId: ID, d: ManualDiscount, approver_pin?: string) => api<Order>(`/orders/${orderId}/discounts`, {
+  method: "POST", auth: "pos",
+  body: { kind: d.kind, value: d.kind === "fixed" ? d.value / 100 : d.value, reason: d.reason.trim(), order_item_id: d.order_item_id ?? undefined, ...(approver_pin ? { approver_pin } : {}) },
+});
+
+/**
+ * The server id of a cart line once the cart is saved: its own id, or, for a line the server had not seen, the saved
+ * line in the same place (the server keeps the till's order of lines). Null when the saved cart has no such line.
+ */
+export function savedLineId(lines: readonly CartLine[], key: string, saved: Pick<Cart, "lines">): string | null {
+  const live = lines.filter((l) => l.status !== "cancelled");
+  const i = live.findIndex((l) => l.key === key);
+  if (i < 0) return null;
+  return live[i].id ?? saved.lines.filter((l) => l.status !== "cancelled")[i]?.id ?? null;
+}
 export const listRedemptionOptions = () => api<{ data: LoyaltyRedemptionOption[] }>("/loyalty/redemption_options", { auth: "pos" }).then((r) => r.data.filter((o) => o.active).sort((a, b) => a.sort_order - b.sort_order || a.points - b.points));
 export const redeemOption = (orderId: ID, option_id: ID) => api<Order>(`/orders/${orderId}/redeem_option`, { method: "POST", auth: "pos", body: { option_id } });
 export const listPersonalBatches = () => api<{ data: VoucherBatch[] }>("/voucher_batches", { auth: "pos", query: { kind: "personal" } }).then((r) => r.data);

@@ -1,5 +1,7 @@
 "use client";
 // Meal Sessions: the windows a worker may take one meal in (Breakfast 07:00 to 10:00, Lunch, Dinner), per branch.
+// One meal per session (docs/09-canteen.md): the "Meals per worker" field took 2 and changed nothing, so it is gone and
+// the form always sends 1, which also repairs a session saved with more (6 Nov 2026 review, canteen-payroll#8).
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Timer } from "lucide-react";
@@ -32,19 +34,19 @@ function MealSessions() {
   if (denied) return denied;
   return (
     <>
-      <PageHeader icon={Timer} title="Meal Sessions" description="A worker takes one meal per session. Times are the branch's clock; a window past midnight (22:00 to 02:00) is fine."
+      <PageHeader icon={Timer} title="Meal Sessions" description="A worker takes one meal per session; for a second meal in a shift, add another session. Times are the branch's clock; a window past midnight (23:00 to 06:00) is one meal, on the day it opens."
         actions={<><Button variant="secondary" onClick={seed}>Add Breakfast, Lunch, Dinner</Button><Button onClick={() => setForm({ name: "", starts_at: "12:00", ends_at: "15:00", max_claims: 1, active: true, sort_order: (list.data?.length ?? 0) })}><Plus className="h-4 w-4" /> New session</Button></>} />
       {list.isLoading ? <Loading /> : (
         <Table>
-          <THead><tr><TH>Session</TH><TH>From</TH><TH>To</TH><TH right>Meals per worker</TH><TH>Status</TH><TH right>Actions</TH></tr></THead>
+          <THead><tr><TH>Session</TH><TH>From</TH><TH>To</TH><TH>Status</TH><TH right>Actions</TH></tr></THead>
           <TBody>
             {list.data?.length ? list.data.map((s) => (
               <TR key={s.id}>
-                <TD className="font-medium">{s.name}</TD><TD className="tabular">{s.starts_at}</TD><TD className="tabular">{s.ends_at}</TD><TD right>{s.max_claims}</TD>
+                <TD className="font-medium">{s.name}</TD><TD className="tabular">{s.starts_at}</TD><TD className="tabular">{s.ends_at}</TD>
                 <TD>{s.active ? <Badge variant="success">on</Badge> : <Badge>off</Badge>}</TD>
-                <TD right><Button variant="ghost" size="sm" onClick={() => setForm({ ...s })}>Edit</Button><Button variant="ghost" size="sm" onClick={() => { if (confirm(`Remove ${s.name}?`)) remove.mutate(s.id); }}>Remove</Button></TD>
+                <TD right><Button variant="ghost" size="sm" onClick={() => setForm({ ...s, max_claims: 1 })}>Edit</Button><Button variant="ghost" size="sm" onClick={() => { if (confirm(`Remove ${s.name}?`)) remove.mutate(s.id); }}>Remove</Button></TD>
               </TR>
-            )) : <EmptyRow colSpan={6}>No sessions yet. Add the three usual ones, or your own.</EmptyRow>}
+            )) : <EmptyRow colSpan={5}>No sessions yet. Add the three usual ones, or your own.</EmptyRow>}
           </TBody>
         </Table>
       )}
@@ -57,7 +59,6 @@ function MealSessions() {
               <Field label="From"><Input type="time" value={form.starts_at} onChange={(e) => setForm({ ...form, starts_at: e.target.value })} /></Field>
               <Field label="To"><Input type="time" value={form.ends_at} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} /></Field>
             </div>
-            <Field label="Meals per worker in this session"><Input type="number" min={1} value={form.max_claims} onChange={(e) => setForm({ ...form, max_claims: Number(e.target.value) || 1 })} /></Field>
             <Field label="Order on the kiosk"><Input type="number" min={0} value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) || 0 })} /></Field>
             <label className="flex items-center justify-between text-sm"><span>Switched on</span><Switch checked={form.active} onChange={(v) => setForm({ ...form, active: v })} /></label>
           </div>

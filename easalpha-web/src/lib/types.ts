@@ -897,9 +897,11 @@ export interface PaymentMethodCatalogueEntry { code: string; name: string; kind:
 
 // ---- Canteen (factory mess), 29 Oct 2026 ----
 export interface MealSession { id: ID; branch_id: ID; name: string; starts_at: string; ends_at: string; max_claims: number; active: boolean; sort_order: number }
+/** price_minor is the menu price before tax; full_price_minor what a kiosk order of one charges, worker_pays_minor
+ *  what the worker is charged (the worker price, never above the full price). */
 export interface MealPlanItem {
   id: ID; product_id: ID; name: string; name_ur: string | null; image_key: string | null; price_minor: number; worker_price_minor: number | null;
-  planned_qty: number | null; claims_count: number; sold_out: boolean; sort_order: number;
+  full_price_minor?: number | null; worker_pays_minor?: number | null; planned_qty: number | null; claims_count: number; sold_out: boolean; sort_order: number;
 }
 export interface MealPlan {
   id: ID; branch_id: ID; meal_session_id: ID; session: MealSession | null; plan_date: string; status: "draft" | "published" | "closed"; notes: string | null;
@@ -910,13 +912,16 @@ export interface MealClaim {
   plan_date: string; token_no: number; token_label: string; status: "claimed" | "served" | "cancelled"; scanned_at: string; served_at: string | null; cancelled_at: string | null;
   cancel_reason: string | null; source: string; device_id: ID | null; worker_price_minor: number; company_share_minor: number;
 }
-// Phone and CNIC reach the admin's worker list only; a kiosk or counter payload never carries them.
+// Phone, CNIC and the reader's id reach the admin's worker list only; a kiosk or counter payload carries the reader id
+// as fingerprint_hash (SHA-256 of "<fingerprint_salt>:<id lower-cased>", components/canteen/fingerprint.ts).
 export interface CanteenWorker {
   id: ID; name: string; phone?: string | null; cnic?: string | null; department: string | null; designation: string | null; customer_id: ID | null;
-  fingerprint_enrolled: boolean; fingerprint_id: string | null; branch_id: ID | null;
+  fingerprint_enrolled: boolean; fingerprint_id?: string | null; fingerprint_hash?: string | null; branch_id: ID | null;
 }
+/** date: the day being served (a night session past the business-day end keeps the day it opened); business_day: the
+ *  branch's business day now. */
 export interface CanteenToday {
-  date: string; now: string; branch: { id: ID; name: string }; session: MealSession | null; sessions: MealSession[]; plans: MealPlan[];
+  date: string; business_day?: string; now: string; branch: { id: ID; name: string; time_zone?: string; day_end?: string }; session: MealSession | null; sessions: MealSession[]; plans: MealPlan[];
   /** refused: open meals refused at sync (staff sessions only; a kiosk keeps its own from the sync results). */
   counts: { claimed: number; served: number; workers: number; refused?: number }; settings: { manual_lookup: boolean; print_token: boolean };
   refused?: CanteenRefusedClaim[];
@@ -930,8 +935,12 @@ export interface CanteenSummaryRow { key: string; meals: number; served: number;
 export interface CanteenSummary { from: string; to: string; group_by: string; rows: CanteenSummaryRow[]; totals: { meals: number; served: number; worker_minor: number; company_minor: number; total_minor: number } }
 export interface CanteenWorkerRow { employee_id: ID; name: string; department: string | null; designation: string | null; customer_id: ID | null; meals: number; worker_minor: number; company_minor: number; last_meal_at: string | null }
 export interface CanteenWorkersReport { from: string; to: string; rows: CanteenWorkerRow[]; totals: { meals: number; worker_minor: number; company_minor: number } }
-/** What a kiosk keeps for the counter without internet (GET /sync/changes for a kiosk device). */
-export interface CanteenSync { date: string; sessions: MealSession[]; plans: MealPlan[]; workers: CanteenWorker[]; claims: MealClaim[] }
+/** What a kiosk keeps for the counter without internet (GET /sync/changes for a kiosk device): the branch's clock,
+ *  the plans of the days it may reach offline, every worker (hashed reader ids) and the claims of the open days. */
+export interface CanteenSync {
+  date: string; dates?: string[]; time_zone?: string; day_end?: string; fingerprint_salt?: string;
+  sessions: MealSession[]; plans: MealPlan[]; workers: CanteenWorker[]; claims: MealClaim[];
+}
 
 // ---- Purchasing and supplier screens (Phase 5: SPEC "Purchasing, suppliers and expenses") ----
 /** Direction of a supplier balance: positive = we owe them (To Pay), negative = they owe us (To Receive). */

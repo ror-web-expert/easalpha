@@ -33,7 +33,21 @@ export function ReceivePaymentDialog({ open, onClose, customer, onReceived }: { 
   // One payment id per opening of the dialog: pressing Receive again after an error re-sends the same payment, which the
   // server answers with the one it already recorded (QA 6 Nov 2026: a second press took the money twice).
   const paymentId = useRef(uuid());
-  useEffect(() => { if (open) { paymentId.current = uuid(); setAmount(0); setReference(""); setMethod(methods.find((m) => m.kind === "cash")?.code ?? methods[0]?.code ?? ""); } }, [open, methods]);
+  const methodsNow = useRef(methods);
+  methodsNow.current = methods;
+  // The form starts empty when the dialog opens, and only then (web-till#8: every refresh of the method list, which
+  // comes as a new array, or the till going offline cleared the amount and the reference and put the method back to
+  // cash, so a bank transfer typed again in a hurry was recorded as cash).
+  useEffect(() => {
+    if (!open) return;
+    paymentId.current = uuid(); setAmount(0); setReference("");
+    setMethod(methodsNow.current.find((m) => m.kind === "cash")?.code ?? methodsNow.current[0]?.code ?? "");
+  }, [open]);
+  // A method that leaves the list while the form is open (one that needs the internet, when the till goes offline) falls
+  // back to cash; the amount and the reference stay.
+  useEffect(() => {
+    if (open) setMethod((cur) => (methods.some((m) => m.code === cur) ? cur : methods.find((m) => m.kind === "cash")?.code ?? methods[0]?.code ?? ""));
+  }, [open, methods]);
   const chosen = methods.find((m) => m.code === method);
   const needsRef = !!chosen?.needs_reference && !reference.trim();
   const ok = amount > 0 && !!chosen && !needsRef && !busy;

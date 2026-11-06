@@ -7,6 +7,8 @@ module Purchasing
       supplier = Supplier.active.find(attrs[:supplier_id])
       grn = attrs[:goods_receipt_id].present? ? GoodsReceipt.find(attrs[:goods_receipt_id]) : nil
       settlement = attrs[:settlement].presence_in(PurchaseReturn::SETTLEMENTS) || "credit_note"
+      day = branch.business_day_for(Time.current)
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day) # QA B9
       PurchaseReturn.transaction do
         ret = PurchaseReturn.create!(branch: branch, supplier: supplier, goods_receipt: grn, stock_section: section, number: DocumentCounter.next!("purchase_return"), reason: attrs[:reason],
                                      settlement: settlement, returned_on: branch.business_day_for(Time.current), by_membership_id: actor&.id)
@@ -27,6 +29,7 @@ module Purchasing
         supplier.move_balance!(-amount)
         if settlement == "cash_refund"
           method = attrs[:method_code].present? ? PaymentMethod.active.find_by!(code: attrs[:method_code]) : PaymentMethod.active.find_by!(kind: "cash")
+          raise Api::Errors::BadRequest.new("purchase_return.method", "Choose a cash, card, wallet or bank method for the refund") if method.khata? || method.internal?
           account = method.cash? && shift&.drawer_account ? shift.drawer_account : method.payment_account
           ret.update!(payment_method: method, payment_account: account)
           account&.post!(kind: "supplier_payment", amount_minor: amount, business_day: doc.business_day, ref: ret, description: "Refund from #{supplier.name} for #{ret.label}", by: actor, shift_id: shift&.id, branch_id: branch.id)

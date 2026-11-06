@@ -7,6 +7,9 @@ module Purchasing
       supplier = Supplier.active.find(attrs[:supplier_id])
       po = attrs[:purchase_order_id].present? ? PurchaseOrder.find(attrs[:purchase_order_id]) : nil
       received_on = attrs[:received_on].present? ? Date.parse(attrs[:received_on].to_s) : branch.business_day_for(Time.current)
+      # The receipt posts today and is dated received_on (the supplier ledger and aging read it): a locked day takes
+      # neither (QA B9).
+      [ received_on, branch.business_day_for(Time.current) ].uniq.each { |day| raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day) }
       GoodsReceipt.transaction do
         grn = GoodsReceipt.create!(branch: branch, supplier: supplier, purchase_order: po, stock_section: section, number: DocumentCounter.next!("goods_receipt"), invoice_ref: attrs[:invoice_ref],
                                    invoice_key: attrs[:invoice_key], received_on: received_on, note: attrs[:note], by_membership_id: actor&.id)
@@ -41,6 +44,9 @@ module Purchasing
     def cancel!(grn, actor:, reason: nil)
       raise Api::Errors::Conflict.new("goods_receipt.status", "Already cancelled") unless grn.posted?
       raise Api::Errors::Conflict.new("goods_receipt.returned", "Cancel the purchase return first") if grn.purchase_returns.where(status: "posted").exists?
+      branch = grn.branch
+      day = branch.business_day_for(Time.current) # the reversal is posted today
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
       GoodsReceipt.transaction do
         Stock::Posting.cancel!(grn.stock_document, actor: actor, reason: reason || "cancelled #{grn.label}") if grn.stock_document&.posted?
         grn.supplier.move_balance!(-grn.total_minor)
