@@ -47,8 +47,9 @@ module Api
         head :no_content
       end
       # POST /voucher_batches/:id/issue { customer_ids: [], send: true }  personal codes, sent from the POS campaign screen
+      # The screen's own permissions: orders.create let every till user send vouchers by WhatsApp (QA of 6 Nov 2026, P2).
       def issue
-        require_permission!("settings.manage", "MARKETING", "MARKETING_CAMPAIGN", "orders.create")
+        require_permission!("settings.manage", "MARKETING", "MARKETING_CAMPAIGN")
         b = VoucherBatch.active.find(params[:id])
         issued = Marketing::Vouchers.issue!(b, customer_ids: Array(params[:customer_ids]), send: params[:send].nil? || ActiveModel::Type::Boolean.new.cast(params[:send]), actor: current_membership)
         render json: { issued: issued.size, data: issued.map { |v| MarketingSerializers.voucher(v) }, batch: MarketingSerializers.batch(b.reload) }, status: :created

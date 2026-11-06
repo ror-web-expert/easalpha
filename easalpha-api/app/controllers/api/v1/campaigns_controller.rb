@@ -2,7 +2,10 @@ module Api
   module V1
     class CampaignsController < BaseController
       before_action :authenticate!
-      before_action -> { require_permission!("customers.manage", "settings.manage") }
+      # SPEC Marketing codes, not customers.manage: the default Cashier holds that to add customers at the till, and sent a
+      # campaign to everyone with it (QA of 6 Nov 2026, P2).
+      before_action -> { require_permission!("MARKETING", "MARKETING_CAMPAIGN", "MARKETING_CAMPAIGN_LOG", "settings.manage") }, only: %i[index show stats]
+      before_action -> { require_permission!("MARKETING_CAMPAIGN", "settings.manage") }, except: %i[index show stats]
       before_action :read_only_guard!, except: %i[index show audience stats]
 
       def index
