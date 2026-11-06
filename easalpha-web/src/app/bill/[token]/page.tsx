@@ -38,7 +38,7 @@ export default function PublicBillPage() {
           <div className="rounded-2xl border bg-card px-6 py-10 text-center">
             <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-muted"><FileX2 className="h-7 w-7 text-fg-muted" /></span>
             <h1 className="mt-4 text-[22px] font-semibold leading-7 text-heading">This bill link is not working</h1>
-            <p className="mt-2 text-sm text-fg-secondary">The link has expired or is not complete. Bill links work for 120 days. Please ask the shop to send your bill again on WhatsApp.</p>
+            <p className="mt-2 text-sm text-fg-secondary">The link has expired or is not complete. Bill links work for 400 days. Please ask the shop to send your bill again on WhatsApp.</p>
           </div>
         ) : q.error || !bill ? (
           <div className="rounded-2xl border bg-card px-6 py-10 text-center">

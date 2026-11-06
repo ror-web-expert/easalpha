@@ -94,6 +94,11 @@ describe("composeSupportSession", () => {
     expect(s.businesses).toHaveLength(1);
     expect(s.pills?.low_stock_items).toBe(2);
   });
+  it("marks the session as EasAlpha support, from /me or else from the token's expiry (QA P3: the admin shows a banner)", () => {
+    const support = { session_id: "ss1", reason: "Printer", expires_at: "2026-10-11T11:00:00Z", by: { name: "Hina", email: "hina@easalpha.com" } };
+    expect(composeSupportSession(token, { ...me, support }, now).support).toEqual(support);
+    expect(composeSupportSession(token, me, now).support).toMatchObject({ expires_at: "2026-10-11T11:00:00Z" });
+  });
   it("falls back to the token's business and empty lists when /me is thin", () => {
     const thin = { user, membership } as unknown as MePayload;
     const s = composeSupportSession(token, thin, now);

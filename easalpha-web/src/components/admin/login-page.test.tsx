@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Session } from "@/lib/types";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import LoginPage from "@/app/login/page";
 
@@ -38,5 +38,35 @@ describe("Login", () => {
     expect(cachedWhenSet).toBe(0);
     expect(useAuthStore.getState().session?.business.id).toBe("biz-b");
     expect(qc.getQueryData(["modules", "biz-a"])).toBeUndefined();
+  });
+
+  it("links to the password reset, with the email typed so far (QA P8)", async () => {
+    useAuthStore.setState({ session: null, hydrated: true });
+    const user = userEvent.setup();
+    render(<QueryClientProvider client={new QueryClient()}><LoginPage /></QueryClientProvider>);
+    await user.type(screen.getByPlaceholderText("you@restaurant.pk"), "sara@cafe.pk");
+    expect(screen.getByRole("link", { name: "Forgot password?" }).getAttribute("href")).toBe("/forgot-password?email=sara%40cafe.pk");
+  });
+
+  // QA P1: a code to a phone proves the phone, not the login a stranger may have typed it on.
+  it("asks that login's password once, or joins an invitation with a new login, after a phone code", async () => {
+    useAuthStore.setState({ session: null, hydrated: true });
+    const next = { business: { id: "biz", name: "Victim Grill" }, branch: { id: "b1" } } as unknown as Session;
+    vi.mocked(api).mockReset();
+    vi.mocked(api).mockImplementation((async (path: string, opts?: { body?: Record<string, unknown> }) => {
+      if (path === "/auth/otp/request") return { sent: true, phone: "+923331234567", dev_code: "123456" };
+      if (opts?.body?.new_login) return next;
+      throw new ApiError("phone.password_required", "This number is not confirmed on its EasAlpha login yet.", 403, { invitations: ["Victim Grill"] });
+    }) as typeof api);
+    const user = userEvent.setup();
+    render(<QueryClientProvider client={new QueryClient()}><LoginPage /></QueryClientProvider>);
+    await user.click(screen.getByRole("tab", { name: "Phone (OTP)" }));
+    await user.click(screen.getByRole("button", { name: "Send code" }));
+    await user.click(await screen.findByRole("button", { name: "Verify" }));
+    expect(await screen.findByLabelText("Password of that login")).toBeTruthy();
+    expect(screen.getByText(/Victim Grill invited this number/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Join with a new login" }));
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/admin"));
+    expect(vi.mocked(api).mock.calls.at(-1)?.[1]).toMatchObject({ body: { phone: "+92", code: "123456", app: "admin", new_login: true } });
   });
 });

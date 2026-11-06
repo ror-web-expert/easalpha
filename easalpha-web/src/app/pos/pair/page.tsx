@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { api, errorMessage } from "@/lib/api";
 import { useDeviceStore } from "@/store/device";
 import type { Branch, Business, Device } from "@/lib/types";
@@ -33,7 +34,9 @@ export default function PairPage() {
       <div className="absolute right-4 top-4"><ThemeToggle /></div>
       <div className="w-full max-w-sm space-y-6 text-center">
         <div>
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-primary text-2xl font-bold text-primary-fg">S</span>
+          {/* The EasAlpha logo, not the old "S" tile (QA of 6 Nov 2026, P8). */}
+          <Image src="/brand/logo.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="mx-auto h-9 w-auto dark:hidden" />
+          <Image src="/brand/logo-white.svg" alt="EasAlpha" width={150} height={37} priority unoptimized className="mx-auto hidden h-9 w-auto dark:block" />
           <h1 className="mt-4 text-2xl font-semibold">Pair this till</h1>
           <p className="mt-1 text-fg-secondary">Enter the 6-digit code from Admin › Devices, or <Link href="/setup" className="text-primary">set it up with a manager login</Link>.</p>
           {device ? <p className="mt-1 text-xs text-fg-muted">This device was {device.name}; pairing again replaces it.</p> : null}

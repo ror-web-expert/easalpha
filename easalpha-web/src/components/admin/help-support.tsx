@@ -261,12 +261,13 @@ export function RequestList() {
 export function SupportAccess() {
   const q = useSupportSessions(true);
   const [confirm, setConfirm] = useState<SupportSession | null>(null);
-  const act = useAction<{ id: string; action: "approve" | "deny" }, SupportSession>(
+  const act = useAction<{ id: string; action: "approve" | "deny" | "end" }, SupportSession>(
     ["support_sessions"],
     ({ id, action }) => api<SupportSession>(`/support_sessions/${id}/${action}`, { method: "POST", auth: "admin" }),
   );
-  const run = (s: SupportSession, action: "approve" | "deny") =>
-    act.mutate({ id: s.id, action }, { onSuccess: () => { setConfirm(null); toast.success(action === "approve" ? "Access approved for one hour" : "Access denied"); } });
+  const DONE = { approve: "Access approved for one hour", deny: "Access denied", end: "Support access ended" } as const;
+  const run = (s: SupportSession, action: "approve" | "deny" | "end") =>
+    act.mutate({ id: s.id, action }, { onSuccess: () => { setConfirm(null); toast.success(DONE[action]); } });
   const rows = useMemo(() => sortNewestFirst(q.data ?? []), [q.data]);
   return (
     <div className="space-y-3">
@@ -289,6 +290,8 @@ export function SupportAccess() {
               </div>
               <p className="mt-2 text-sm leading-5 text-fg">{s.reason}</p>
               {s.status === "approved" && s.expires_at ? <p className="mt-2 text-xs text-fg-muted">Access until {formatDateTime(s.expires_at)}</p> : null}
+              {/* The owner can stop it before the hour is up; the support login stops working at once (QA of 6 Nov 2026, P3). */}
+              {s.active ? <div className="mt-3"><Button size="sm" variant="secondary" onClick={() => run(s, "end")} disabled={act.isPending}>End access now</Button></div> : null}
               {s.status === "requested" ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => setConfirm(s)} disabled={act.isPending}>Approve for 1 hour</Button>

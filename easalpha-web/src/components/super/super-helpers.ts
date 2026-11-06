@@ -1,6 +1,6 @@
 // Pure helpers for the owner panel (/super). No React, no fetch: these are unit-tested in super-helpers.test.ts.
 import type { BadgeVariant } from "@/components/ui/badge";
-import type { Branch, Business, BusinessRef, HeaderPills, Membership, PlatformInfo, Session, SuperHealth, User } from "@/lib/types";
+import type { Branch, Business, BusinessRef, HeaderPills, Membership, PlatformInfo, Session, SuperHealth, SupportInfo, User } from "@/lib/types";
 
 export const BUSINESS_STATUSES = ["trial", "active", "grace", "read_only", "deleted"] as const;
 export type BusinessStatus = (typeof BUSINESS_STATUSES)[number];
@@ -84,12 +84,12 @@ export function secondsUntil(expiresAt: string | null | undefined, now: number =
 }
 
 /** POST /super/support_sessions/:id/token */
-export interface SupportTokenResponse { access_token: string; expires_at: string | null; business: Business }
+export interface SupportTokenResponse { access_token: string; expires_at: string | null; business: Business; support?: SupportInfo }
 
 /** GET /me with the support access token (the fields the admin Session needs). */
 export interface MePayload {
   user: User; business: Business; branch: Branch | null; branches?: Branch[]; membership: Membership; permissions: string[];
-  businesses: BusinessRef[]; pills?: HeaderPills | null;
+  businesses: BusinessRef[]; pills?: HeaderPills | null; support?: SupportInfo | null;
 }
 
 /** Builds the admin Session that /admin expects (the same shape POST /auth/login returns) from the support token
@@ -108,6 +108,8 @@ export function composeSupportSession(token: SupportTokenResponse, me: MePayload
     permissions: me.permissions ?? [],
     businesses: me.businesses ?? [],
     pills: me.pills ?? null,
+    // Marks the tab as EasAlpha support: the admin shows the banner (QA of 6 Nov 2026, P3).
+    support: me.support ?? token.support ?? { session_id: "", reason: "", expires_at: token.expires_at, by: null },
   };
 }
 

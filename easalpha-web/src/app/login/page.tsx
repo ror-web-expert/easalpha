@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "@/lib/api";
+import { otpNext, type OtpNext } from "@/lib/account-flows";
 import { useAuthStore } from "@/store/auth";
 import type { Session } from "@/lib/types";
 import { Button, Field, Input, Tabs, ThemeToggle } from "@/components/ui";
@@ -23,6 +24,10 @@ export default function LoginPage() {
   const [sent, setSent] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The number is on a login that never confirmed it: that login's password once, or (when a business invited this
+  // number) a new login of one's own (QA of 6 Nov 2026, P1).
+  const [otpNeed, setOtpNeed] = useState<Extract<OtpNext, { kind: "password" }> | null>(null);
+  const [otpPassword, setOtpPassword] = useState("");
 
   useEffect(() => { if (hydrated && session) router.replace("/admin"); }, [hydrated, session, router]);
 
@@ -46,11 +51,14 @@ export default function LoginPage() {
     } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   };
-  const verifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const verifyOtp = async (e: React.FormEvent | null, extra: { password?: string; new_login?: boolean } = {}) => {
+    e?.preventDefault();
     setBusy(true); setError(null);
-    try { finish(await api<Session>("/auth/otp/verify", { method: "POST", body: { phone, code, app: "admin" }, auth: "none" })); }
-    catch (err) { setError(errorMessage(err)); }
+    try { finish(await api<Session>("/auth/otp/verify", { method: "POST", body: { phone, code, app: "admin", ...extra }, auth: "none" })); }
+    catch (err) {
+      const next = otpNext(err);
+      if (next.kind === "password") setOtpNeed(next); else setError(next.message);
+    }
     finally { setBusy(false); }
   };
 
@@ -90,8 +98,23 @@ export default function LoginPage() {
             <form onSubmit={login} className="space-y-4">
               <Field label="Email"><Input type="email" autoComplete="email" placeholder="you@restaurant.pk" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus className="h-12" /></Field>
               <Field label="Password"><Input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-12" /></Field>
+              <p className="-mt-2 text-right text-sm"><Link href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`} className="font-medium text-primary hover:underline">Forgot password?</Link></p>
               {error ? <p className="rounded-[4px] bg-danger-soft px-4 py-3 text-sm text-danger-ink">{error}</p> : null}
               <Button type="submit" className="w-full" loading={busy}>Log in</Button>
+            </form>
+          ) : sent && otpNeed ? (
+            <form onSubmit={(e) => verifyOtp(e, { password: otpPassword })} className="space-y-4">
+              <p className="text-sm text-fg-secondary">{sent} is on an EasAlpha login that has not confirmed this number yet. Enter that login&apos;s password once to confirm it.</p>
+              <Field label="Password of that login"><Input type="password" autoComplete="current-password" value={otpPassword} onChange={(e) => setOtpPassword(e.target.value)} required autoFocus className="h-12" /></Field>
+              {error ? <p className="rounded-[4px] bg-danger-soft px-4 py-3 text-sm text-danger-ink">{error}</p> : null}
+              <Button type="submit" className="w-full" loading={busy}>Confirm and log in</Button>
+              {otpNeed.invitations.length ? (
+                <div className="rounded-[4px] border px-4 py-3 text-sm">
+                  <p className="text-fg-secondary">Not your login? {otpNeed.invitations.join(", ")} invited this number. Join with a login of your own; the other login gives the number up.</p>
+                  <Button type="button" variant="secondary" className="mt-3 w-full" loading={busy} onClick={() => verifyOtp(null, { new_login: true })}>Join with a new login</Button>
+                </div>
+              ) : null}
+              <Button type="button" variant="link" className="w-full" onClick={() => { setOtpNeed(null); setSent(null); setOtpPassword(""); }}>Use a different number</Button>
             </form>
           ) : sent ? (
             <form onSubmit={verifyOtp} className="space-y-4">

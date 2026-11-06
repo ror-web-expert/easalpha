@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Membership, MembershipPermissions, Permission, PermissionPreset, PermissionRegistry } from "@/lib/types";
-import { PermissionEditor, applyPreset, baseline, impliedBy, moduleCounts, sameSelection, selectAll, toggle } from "./permission-editor";
+import { PermissionEditor, accessWarning, applyPreset, baseline, impliedBy, moduleCounts, sameSelection, selectAll, toggle } from "./permission-editor";
 
 vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 
@@ -65,6 +65,15 @@ describe("permission editor selection logic", () => {
     expect(baseline(access, registry.data)).toEqual(["DASHBOARD", "reports.view_own"]);
     expect(baseline({ ...access, mode: "custom", granted: ["SETTINGS"] }, registry.data)).toEqual(["SETTINGS"]);
     expect(baseline({ ...access, owner: true }, registry.data)).toHaveLength(registry.data.length);
+  });
+
+  it("accessWarning: says when the saved set no longer opens the app that person works in (QA S4)", () => {
+    expect(accessWarning("admin", null, ["pos"])).toBe("They can no longer open the admin panel.");
+    expect(accessWarning("admin", null, ["admin", "pos"])).toBeNull();
+    expect(accessWarning("cashier", "cashier", ["kitchen"])).toBe("They can no longer sign in on the till.");
+    expect(accessWarning("cashier", "kitchen_display", ["kitchen"])).toBeNull();
+    expect(accessWarning("rider", null, [])).toBe("They can no longer open the rider app.");
+    expect(accessWarning("admin", null, undefined)).toBeNull(); // an API from before apps was answered
   });
 });
 

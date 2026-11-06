@@ -14,6 +14,8 @@ export interface Page<T> {
 export interface User {
   id: ID; name: string; email: string | null; phone: string | null; locale: string | null;
   two_factor_enabled: boolean; last_login_at: string | null;
+  /** A code sent to it was used (QA of 6 Nov 2026, P1): only a proven phone or email links the login into a business. */
+  phone_verified?: boolean; email_verified?: boolean;
 }
 
 export interface BusinessSettings {
@@ -60,9 +62,16 @@ export type PermissionsMode = "role" | "custom";
 
 export interface Membership {
   id: ID; business_id: ID; user_id: ID; role: RoleRef; status: string; all_branches: boolean; branch_ids: ID[];
-  has_pin: boolean; pin_locked: boolean; invited_via: string | null; created_at: string; deactivated_at: string | null;
-  staff_type: StaffType; cashier_role: CashierRole | null; permissions_mode: PermissionsMode;
-  user?: User;
+  /** Missing for a session without staff.manage: GET /staff lists colleagues by name and role only (QA P7). */
+  has_pin?: boolean; pin_locked?: boolean; invited_via?: string | null; created_at?: string; deactivated_at?: string | null;
+  staff_type: StaffType; cashier_role: CashierRole | null; permissions_mode?: PermissionsMode;
+  user?: Pick<User, "id" | "name"> & Partial<User>;
+}
+
+/** GET /staff/invitations: someone added by a phone or email their login never proved, until they join (QA P1). */
+export interface StaffInvitation {
+  id: ID; name: string; phone: string | null; email: string | null; role: RoleRef; staff_type: StaffType; cashier_role: CashierRole | null;
+  has_pin: boolean; status: "pending" | "accepted" | "cancelled"; expires_at: string; created_at: string; url: string; rider_id: ID | null;
 }
 
 export interface Role {
@@ -82,6 +91,8 @@ export interface PermissionPreset { key: PermissionPresetKey; name: string; code
 export interface MembershipPermissions {
   membership_id: ID; mode: PermissionsMode; owner: boolean; granted: string[]; effective: string[];
   modules: { name: string; total: number; granted: number }[]; takes_effect: string;
+  /** The apps the effective set opens (admin, pos, kitchen, rider). */
+  apps?: string[];
 }
 /** GET /staff/sessions */
 export interface UserSession {
@@ -116,13 +127,19 @@ export interface AuditInsights {
 
 export interface ChecklistItem { id: ID; key: string; title: string; done: boolean; done_at: string | null; plan_feature_off: boolean; sort_order: number }
 
-export interface BusinessRef { id: ID; name: string; slug: string; role: string; membership_id?: ID }
+/** apps: what that membership opens; the switcher offers only businesses whose membership opens the admin (QA P4). */
+export interface BusinessRef { id: ID; name: string; slug: string; role: string; membership_id?: ID; apps?: string[] }
+
+/** EasAlpha support working in this business on an approved session (QA P3): GET /me says who and until when. */
+export interface SupportInfo { session_id: ID; reason: string; expires_at: string | null; by: { name: string; email: string } | null }
 
 export interface Session {
   access_token: string; refresh_token: string; token_type: string; expires_in: number; app: string;
   user: User; business: Business; branch: Branch | null; membership: Membership; permissions: string[]; businesses: BusinessRef[];
   /** GET /me only: the SPEC top-bar pills. */
   pills?: HeaderPills | null;
+  /** Set while EasAlpha support works in the business: the admin shows a banner and refuses nothing more itself. */
+  support?: SupportInfo | null;
   /** Modules the owner switches on (Settings, Modules). Missing on sessions saved before 12 Oct 2026: read through useModules. */
   modules?: BusinessModules;
 }
@@ -1206,6 +1223,8 @@ export interface SupportRequest {
 export interface SupportSession {
   id: ID; super_admin_id: ID; reason: string; status: "requested" | "approved" | "denied" | "ended" | "expired";
   approved_at: string | null; expires_at: string | null; ended_at: string | null; created_at: string;
+  /** Approved, within its hour and not ended: its support login works now. */
+  active?: boolean;
 }
 // Super panel (/super): a separate login (POST /super/login) whose token is a "super" token, never an admin session.
 export interface SuperAdmin { id: ID; name: string; email: string; last_login_at?: string | null }

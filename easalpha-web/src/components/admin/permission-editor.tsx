@@ -61,6 +61,23 @@ export function sameSelection(a: string[], b: string[]): boolean {
   return true;
 }
 
+/**
+ * What a saved set leaves this person unable to open, for the staff type they are (QA of 6 Nov 2026, S4: the Manager
+ * preset took admin access away, the toast said "Access saved", the next login said "You don't have access").
+ * Null when the set opens their app, or when the API did not say (apps missing).
+ */
+export function accessWarning(staffType: StaffType | undefined, cashierRole: string | null | undefined, apps: string[] | undefined): string | null {
+  if (!apps || !staffType) return null;
+  const needs: Record<StaffType, [string, string]> = {
+    admin: ["admin", "They can no longer open the admin panel."],
+    cashier: cashierRole === "kitchen_display" ? ["kitchen", "They can no longer open the kitchen display."] : ["pos", "They can no longer sign in on the till."],
+    order_taker: ["pos", "They can no longer sign in on the till."],
+    rider: ["rider", "They can no longer open the rider app."],
+  };
+  const [app, text] = needs[staffType];
+  return apps.includes(app) ? null : text;
+}
+
 /** What the editor shows ticked when it opens: owner holds everything, a role shows its effective set, a custom set shows what was granted. */
 export function baseline(access: Pick<MembershipPermissions, "owner" | "mode" | "granted" | "effective">, registry: Permission[]): string[] {
   if (access.owner) return registry.map((p) => p.code);
@@ -100,7 +117,9 @@ export function PermissionEditor({ membershipId }: { membershipId: string }) {
     setCurrent(out); if (reg) setSelection(baseline(out, reg.data));
     qc.setQueryData(["staff_permissions", membershipId], out);
     qc.invalidateQueries({ queryKey: ["staff"] });
-    toast.success(msg, `Mode: ${out.mode}. ${out.granted.length} permissions granted. Takes effect at the next sign-in.`);
+    const warning = accessWarning(member.data?.staff_type, member.data?.cashier_role, out.apps);
+    const detail = `${out.mode === "custom" ? "Their own set" : "Their role's set"}: ${out.granted.length} permissions. Takes effect at the next sign-in.`;
+    if (warning) toast.info(`${msg}, but check it`, `${warning} ${detail}`); else toast.success(msg, detail);
   };
   const save = useMutation({
     mutationFn: (codes: string[]) => api<MembershipPermissions>(`/staff/${membershipId}/permissions`, { method: "PUT", body: { codes } }),

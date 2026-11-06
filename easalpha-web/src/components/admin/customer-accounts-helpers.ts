@@ -215,14 +215,16 @@ export function billLines(b: { brought_forward_minor: number; totals: LedgerTota
 export function amountDue(closingMinor: number): number { return Math.max(0, closingMinor); }
 
 /** The sentence at the end of a bill. */
-export function closingMessage(b: { closing_balance_minor: number; due_on: string | null }, currency?: string): string {
+/** footer: the business's own closing line under it; when that already thanks the customer (the default is "Thank you"),
+ *  this one does not, or the bill says it twice (QA of 6 Nov 2026, P8). */
+export function closingMessage(b: { closing_balance_minor: number; due_on: string | null }, currency?: string, footer?: string | null): string {
   const c = b.closing_balance_minor;
   if (c > 0) {
     const due = parse(b.due_on ?? "");
     return due ? `Please pay ${formatMoney(c, currency)} by ${format(due, "d MMM yyyy")}.` : `Please pay ${formatMoney(c, currency)}.`;
   }
   if (c < 0) return `You have ${formatMoney(-c, currency)} in advance. Nothing to pay.`;
-  return "Nothing to pay. Thank you.";
+  return /thank/i.test(footer ?? "") ? "Nothing to pay." : "Nothing to pay. Thank you.";
 }
 
 export function billFileName(khataNo: string | number | null | undefined, to: string): string {

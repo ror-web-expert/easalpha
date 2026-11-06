@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Lock, ShoppingCart, ListOrdered, Wallet, AlertTriangle, LayoutDashboard, QrCode, Bike, Printer, Clock, Megaphone, Monitor, Moon, Sun } from "lucide-react";
@@ -83,7 +84,8 @@ export function PosShell({ children, title }: { children: React.ReactNode; title
           they still do not fit, and the pending-orders note shrinks to a count. A wider bar made tablets lay the whole
           till out wider than the screen, so it shrank and slid sideways under a finger. */}
       <header className="no-print flex h-16 min-w-0 shrink-0 items-center gap-2 overflow-hidden border-b border-white/10 bg-pos-bar px-3 text-white">
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-cta text-lg font-semibold text-cta-fg">S</span>
+        {/* The EasAlpha mark, not the old "S" (QA of 6 Nov 2026, P8). */}
+        <Image src="/brand/logo-mark.svg" alt="EasAlpha" width={40} height={40} priority unoptimized className="h-10 w-10 shrink-0 rounded-xl ring-1 ring-white/20" />
         <div className="hidden min-w-0 max-w-40 shrink xl:block">
           <div className="truncate text-base font-medium leading-tight text-white">{branch?.name}</div>
           <div className="truncate text-xs tracking-[0.4px] text-white/70">{session?.user?.name} · {session?.membership?.role?.name}</div>
