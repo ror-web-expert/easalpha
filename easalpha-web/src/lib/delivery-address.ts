@@ -36,6 +36,17 @@ export function addressFields(a: Address, quote: ZoneQuote | null, chargeMinor?:
 /** A new customer on the order: the previous customer's address goes with them. */
 export const NO_ADDRESS: Pick<Cart, "address_id" | "address_text" | "zone_name"> = { address_id: null, address_text: null, zone_name: null };
 
+/** An address a website guest typed: on the order, with no saved address behind it. */
+export const typedAddress = (cart: Pick<Cart, "address_id" | "address_text">) => !cart.address_id && !!cart.address_text;
+
+/**
+ * What putting a customer on the order takes off it: the previous customer's saved address. The address a website
+ * guest typed stays, since it is where this order goes whoever it is put on.
+ */
+export function afterCustomerChange(cart: Pick<Cart, "customer" | "address_id" | "address_text">, customerId: string): Partial<Cart> {
+  return cart.customer?.id === customerId || typedAddress(cart) ? {} : NO_ADDRESS;
+}
+
 /** Where a delivery goes, for the rider and the boards: the saved address, else what a storefront guest typed. */
 export function deliveryAddressLine(d: Pick<Delivery, "address" | "address_text">): string {
   return (d.address ? addressText(d.address) : "") || (d.address_text ?? "").trim();

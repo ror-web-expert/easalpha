@@ -600,6 +600,13 @@ describe("a delivery's address on the till's copy", () => {
     const older = serverToLocal(asOrder(server), prev); // no address_id key at all
     expect(older).toMatchObject({ address_id: "a1", address_text: "House 12", zone_name: "DHA" });
   });
+
+  it("shows the address a website guest typed, which has no saved address behind it (sync-auth#6)", () => {
+    server = fresh([["Karahi", 100000]]);
+    const guest = serverToLocal({ ...asOrder(server), address_id: null, address_text: "House 9, Lahore" } as Order);
+    expect(guest).toMatchObject({ address_id: null, address_text: "House 9, Lahore", zone_name: null });
+    expect(localToCart(guest).address_text).toBe("House 9, Lahore");
+  });
 });
 
 describe("offline labels (review R29)", () => {

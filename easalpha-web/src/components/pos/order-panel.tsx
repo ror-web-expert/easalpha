@@ -82,9 +82,10 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
       </div>
       {cart.order_type === "delivery" && onAddress ? (
         <div className="border-b px-2 pb-2">
-          <button onClick={onAddress} className={cn("flex min-h-11 w-full items-center gap-1.5 rounded-md border px-2 text-left text-sm", cart.address_id ? "border-primary bg-primary-soft" : "border-dashed hover:bg-muted")} title="Where this delivery goes">
+          <button onClick={onAddress} className={cn("flex min-h-11 w-full items-center gap-1.5 rounded-md border px-2 text-left text-sm", cart.address_id || cart.address_text ? "border-primary bg-primary-soft" : "border-dashed hover:bg-muted")} title="Where this delivery goes">
             <MapPin className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{cart.address_id ? cart.address_text || "Delivery address" : "Delivery address"}</span>
+            {/* A saved address, or the one a website guest typed (they have none saved). */}
+            <span className="min-w-0 flex-1 truncate">{cart.address_text || "Delivery address"}</span>
             {cart.address_id && cart.zone_name ? <Badge variant="info">{cart.zone_name}</Badge> : null}
           </button>
         </div>

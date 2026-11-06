@@ -28,7 +28,7 @@ import { PaymentDialog, type TaxChoiceInput } from "@/components/pos/payment-dia
 import { ReceiptDialog } from "@/components/pos/receipt-dialog";
 import { CustomerDialog, OpenItemDialog, PriceOverrideDialog, StaffMealDialog, TablePicker } from "@/components/pos/dialogs";
 import { useDeliveryAddress } from "@/components/pos/delivery-address";
-import { NO_ADDRESS } from "@/lib/delivery-address";
+import { afterCustomerChange, typedAddress } from "@/lib/delivery-address";
 import { Button, Dialog, EmptyState, Field, PinDialog, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 import { BillPreviewDialog } from "@/components/pos/bill-preview";
@@ -174,11 +174,12 @@ function SellScreen() {
     patch({ order_type: t, lines: repriceLines(cart.lines, t, catalog, catalog?.branch?.id), table_id: t === "dine_in" ? cart.table_id : null, table_code: t === "dine_in" ? cart.table_code : null, service_charge_percent: undefined, service_charge_fixed_minor: undefined, delivery_charge_percent: undefined, delivery_charge_minor: t === "delivery" ? cart.delivery_charge_minor : undefined });
     if (t === "delivery" && cart.customer && !cart.address_id) void deliveryAddress.forCustomer(cart.customer);
   };
-  // A different customer takes the previous one's address off; on a delivery their usual address goes on (T3/F3).
+  // A different customer takes the previous one's saved address off; on a delivery their usual address goes on
+  // (T3/F3). The address a website guest typed stays: it is where this order goes, whoever it is put on.
   const pickCustomer = (c: CartCustomer, addressId?: string) => {
     const same = cart.customer?.id === c.id;
-    patch({ customer: c, ...(same ? {} : NO_ADDRESS) });
-    if (cart.order_type === "delivery" && (!same || !cart.address_id || addressId)) void deliveryAddress.forCustomer(c, addressId ?? (same ? cart.address_id : null));
+    patch({ customer: c, ...afterCustomerChange(cart, c.id) });
+    if (cart.order_type === "delivery" && (addressId || (!typedAddress(cart) && (!same || !cart.address_id)))) void deliveryAddress.forCustomer(c, addressId ?? (same ? cart.address_id : null));
   };
   const repeatOrder = (o: Order) => {
     const lines: CartLine[] = (o.items ?? []).filter((i) => i.status !== "cancelled").map((i) => {
@@ -445,7 +446,7 @@ function SellScreen() {
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
       <BillPreviewDialog open={billOpen} onClose={() => setBillOpen(false)} cart={shownCart} />
-      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={shownCart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c, ...(cart.customer?.id === c.id ? {} : NO_ADDRESS) })} />
+      <PaymentDialog open={payOpen} onClose={() => setPayOpen(false)} cart={shownCart} onPay={pay} busy={busy} onCharges={canCharge ? updateCharges : undefined} onTaxChoice={chooseTax} onDiscount={canDiscount ? runDiscount : undefined} onCustomer={(c) => patch({ customer: c, ...afterCustomerChange(cart, c.id) })} />
       <ReceiptDialog receipt={receipt?.receipt ?? null} change={receipt?.change} offline={receipt?.offline} onClose={() => { setReceipt(null); reset(); }} onNew={newOrder} />
       {/* SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: the user's own 4-digit PIN before a reopened order is saved. */}
       <PinDialog open={!!pinAsk} title="Your PIN" what={`Save changes to ${cart.label ?? "the reopened order"}`} onClose={() => { pinAsk?.resolve(null); setPinAsk(null); }} onSubmit={(pin) => { pinAsk?.resolve(pin); setPinAsk(null); }} />

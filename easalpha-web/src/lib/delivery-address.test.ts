@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addressFields, addressText, deliveryAddressLine, deliveryPhone, preferredAddress, zoneText } from "./delivery-address";
+import { addressFields, addressText, afterCustomerChange, deliveryAddressLine, deliveryPhone, NO_ADDRESS, preferredAddress, typedAddress, zoneText } from "./delivery-address";
 import type { Address, ZoneQuote } from "./types";
 
 const addr = (over: Partial<Address> = {}): Address => ({ id: "a1", customer_id: "c1", label: null, line1: "House 12", line2: null, area: "Phase 5 DHA", city: "Lahore", lat: null, lng: null, is_default: false, text: "House 12, Phase 5 DHA, Lahore", ...over });
@@ -27,6 +27,15 @@ describe("the till's delivery address", () => {
     expect(outside.delivery_charge_minor).toBeUndefined();
     expect(outside.delivery_charge_percent).toBeUndefined();
     expect(addressFields(addr(), null).zone_name).toBeNull(); // no answer from the quote: the default applies
+  });
+
+  it("takes the previous customer's saved address off with a new customer, and keeps a website guest's typed one", () => {
+    const hira = { id: "hira", name: "Hira", phone: null };
+    expect(afterCustomerChange({ customer: hira, address_id: "a1", address_text: "House 12" }, "omar")).toEqual(NO_ADDRESS);
+    expect(afterCustomerChange({ customer: hira, address_id: "a1", address_text: "House 12" }, "hira")).toEqual({});
+    expect(afterCustomerChange({ customer: null, address_id: null, address_text: "House 9, Lahore" }, "hira")).toEqual({});
+    expect(typedAddress({ address_id: null, address_text: "House 9, Lahore" })).toBe(true);
+    expect(typedAddress({ address_id: "a1", address_text: "House 12" })).toBe(false);
   });
 
   it("gives the rider and the boards an address and a phone for a till customer and for a storefront guest", () => {

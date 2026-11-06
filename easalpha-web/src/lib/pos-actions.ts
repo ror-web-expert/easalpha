@@ -96,10 +96,12 @@ export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrd
  */
 export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
   const full = Array.isArray(o.items);
-  // T3/F3: the server names the delivery's address (an older one sends no key: the till's own stays). Its text and
-  // zone come from the full order, or stay from the till while the address is the same one.
+  // T3/F3: the server names the delivery's address (an older one sends no key: the till's own stays). Its text (a
+  // saved address, or what a website guest typed) comes from the full order, or stays from the till while the address
+  // is the same one; the zone the till quoted stays with its address.
   const addressId = "address_id" in o ? o.address_id ?? null : prev?.address_id ?? null;
-  const sameAddress = !!addressId && prev?.address_id === addressId;
+  const sameAddress = (prev?.address_id ?? null) === addressId;
+  const addressText = full && "address_text" in o ? o.address_text ?? null : sameAddress ? prev?.address_text ?? null : null;
   const lines: CartLine[] = full ? o.items.map((i) => ({
     key: i.id, id: i.id, product_id: i.product_id ?? undefined, variant_id: i.variant_id, deal_id: i.deal_id ?? undefined, name: i.name, unit_price_minor: i.unit_price_minor, quantity: Number(i.quantity),
     notes: i.notes, modifiers: (i.modifiers ?? []).map((m) => ({ modifier_id: m.modifier_id ?? "", name: m.name, price_minor: m.price_minor, quantity: Number(m.quantity) })),
@@ -114,7 +116,7 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     void_reason: o.void_reason, membership_id: o.taken_by_membership_id, cashier_name: prev?.cashier_name ?? null, business_day: o.business_day, client_created_at: o.client_created_at ?? o.created_at,
     created_at: o.created_at, updated_at: o.updated_at, local_only: false, open: OPEN_STATUSES.includes(o.status) ? 1 : 0,
     delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: addressId,
-    address_text: !addressId ? null : (full && o.address_text) || (sameAddress ? prev?.address_text ?? null : null), zone_name: sameAddress ? prev?.zone_name ?? null : null,
+    address_text: addressText, zone_name: addressId && sameAddress ? prev?.zone_name ?? null : null,
     service_charge_percent: (full ? o.service_charge_percent : prev?.service_charge_percent) ?? null, service_charge_fixed_minor: (full ? o.service_charge_fixed_minor : prev?.service_charge_fixed_minor) ?? 0,
     delivery_charge_percent: (full ? o.delivery_charge_percent : prev?.delivery_charge_percent) ?? 0,
     tax_choice: (full ? o.tax_choice : prev?.tax_choice) ?? null, tax_rate_id: (full ? o.tax_rate_id : prev?.tax_rate_id) ?? null,

@@ -88,7 +88,7 @@ export default function QrOrdersPage() {
               </div>
               {/* What waits for the cashier (a guest's round on a running order, or all of a new one), and for a website
                   delivery where it goes and whom to call (sync-auth#6). */}
-              {o.waiting_items?.length ? <div className="mt-2 text-sm"><span className="text-fg-secondary">{o.status === "draft" || o.status === "held" ? "Order: " : "New round: "}</span>{o.waiting_items.map((i) => `${formatQty(i.quantity)} × ${i.name}`).join(", ")}</div> : null}
+              {o.waiting_items?.length ? <div className="mt-2 text-sm"><span className="text-fg-secondary">Waiting: </span>{o.waiting_items.map((i) => `${formatQty(i.quantity)} × ${i.name}`).join(", ")}</div> : null}
               {o.address_text || o.guest_phone ? (
                 <div className="mt-1 space-y-0.5 text-sm text-fg-secondary">
                   {o.address_text ? <div className="flex items-start gap-1"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />{o.address_text}</div> : null}
