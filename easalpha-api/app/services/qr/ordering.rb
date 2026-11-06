@@ -40,50 +40,82 @@ module Qr
     # An add to the table's running order, recorded per table with the submit's key (AppliedSubmission).
     ADDED = "qr_add"
 
-    # Places a guest order. With cashier_accept it stays a draft marked pending until a cashier accepts; otherwise it goes straight to the kitchen.
+    # Places a guest order. With cashier_accept it stays a draft marked pending until a cashier accepts; otherwise it
+    # goes straight to the kitchen. A table with an open order, whoever opened it (a guest whose first round still
+    # waits for the cashier, or a waiter at the till), takes the round on that order (F4).
     def place!(table, lines:, guest_name: nil, notes: nil, client_id: nil)
       branch = table.branch
       cfg = branch.qr_config
       key = client_id.to_s.strip
       ref = key.match?(CLIENT_ID) ? "qr:#{key}" : nil
-      if ref && (again = Order.find_by(source: "qr", table_id: table.id, aggregator_ref: ref) || added_to(table, ref))
+      if ref && (again = submitted(table, ref))
         return again # a retry of the same submit: the first order stands
       end
       raise Api::Errors::Conflict.new("qr.disabled", "Ordering is not available right now") unless cfg["enabled"]
       raise Api::Errors::Unprocessable.new("qr.guest_name", "Please tell us your name") if cfg["guest_name"] && guest_name.blank?
       raise Api::Errors::Unprocessable.new("qr.empty", "Add at least one item") if Array(lines).empty?
-      existing = table.current_order_id && Order.open.find_by(id: table.current_order_id)
+      # The round's lines carry the submit's key, so a cashier who turns the round away takes off those lines only.
+      round = ref || "qr:#{SecureRandom.uuid}"
       order = nil
       repeat = false
-      Order.transaction do
-        if existing && existing.qr_status != "pending" && existing.source == "qr"
-          # The submit's key goes in with the lines: a retry whose answer was lost adds nothing twice and is answered
-          # with this order, even once it is paid and the table free. One still running holds the key until it commits.
-          if ref && !AppliedSubmission.record!(record_type: ADDED, record_id: table.id, client_seq: ref, order_id: existing.id)
+      begin
+        Order.transaction(requires_new: true) do
+          # One submit at a time per table (F5): a second one, the same submit retried or sent twice at once, waits here
+          # for the first to commit and then finds what it made. The keys' unique indexes back this up.
+          locked = DiningTable.lock.find(table.id)
+          if ref && (again = submitted(table, ref))
             repeat = true
-            order = existing.reload
+            order = again
             next
           end
-          builder = Orders::Builder.new(existing, actor: nil, branch: branch)
-          current = existing.active_items.map { |i| { id: i.id, product_id: i.product_id, variant_id: i.variant_id, deal_id: i.deal_id, quantity: i.quantity } }
-          builder.update!(lines: current + Array(lines), attrs: { guest_name: existing.guest_name.presence || guest_name })
-          Orders::Transitions.after_edit!(existing, added: builder.added, removed: builder.removed) unless cfg["cashier_accept"]
-          order = existing
-          if cfg["cashier_accept"]
-            order.update!(qr_status: "pending")
+          existing = locked.current_order_id && Order.open.find_by(id: locked.current_order_id)
+          if existing
+            # The key goes in with the lines: a retry whose answer was lost adds nothing twice and is answered with
+            # this order, even once it is paid and the table free.
+            if ref && !AppliedSubmission.record!(record_type: ADDED, record_id: table.id, client_seq: ref, order_id: existing.id)
+              repeat = true
+              order = existing.reload
+              next
+            end
+            order = add_round!(existing, lines: lines, guest_name: guest_name, round: round, cfg: cfg, branch: branch)
+          else
+            attrs = { order_type: "dine_in", source: "qr", table_id: table.id, guest_name: guest_name, notes: notes, aggregator_ref: ref, qr_status: cfg["cashier_accept"] ? "pending" : "accepted", qr_guest_token: SecureRandom.hex(8) }
+            builder = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch)
+            order = builder.order
+            OrderItem.where(order_id: order.id).update_all(qr_ref: round)
+            Orders::Transitions.place!(order, actor: nil) unless cfg["cashier_accept"]
           end
-        else
-          attrs = { order_type: "dine_in", source: "qr", table_id: table.id, guest_name: guest_name, notes: notes, aggregator_ref: ref, qr_status: cfg["cashier_accept"] ? "pending" : "accepted", qr_guest_token: SecureRandom.hex(8) }
-          builder = Orders::Builder.create!(attrs.compact, lines: lines, actor: nil, device: nil, branch: branch)
-          order = builder.order
-          Orders::Transitions.place!(order, actor: nil) unless cfg["cashier_accept"]
         end
+      rescue ActiveRecord::RecordNotUnique
+        again = ref && submitted(table, ref)
+        return again if again
+        raise
       end
       return order if repeat
-      Notification.create!(kind: "qr_order", title: "QR order from table #{table.code}#{guest_name.present? ? " (#{guest_name})" : ''}", body: cfg["cashier_accept"] ? "Waiting for a cashier to accept" : "Sent to the kitchen", link: "/orders/#{order.id}") if cfg["cashier_accept"]
+      if order.qr_status == "pending"
+        Notification.create!(kind: "qr_order", title: "QR order from table #{table.code}#{guest_name.present? ? " (#{guest_name})" : ''}", body: "Waiting for a cashier to accept", link: "/orders/#{order.id}")
+      end
       Realtime.order_changed(order)
       order
     end
+
+    # A guest's round on the table's open order. It waits for the cashier when orders are accepted first, and always
+    # on an order the till has not sent yet: a guest never sends a waiter's unfinished order to the kitchen.
+    def add_round!(existing, lines:, guest_name:, round:, cfg:, branch:)
+      builder = Orders::Builder.new(existing, actor: nil, branch: branch)
+      current = existing.active_items.map { |i| { id: i.id, product_id: i.product_id, variant_id: i.variant_id, deal_id: i.deal_id, quantity: i.quantity } }
+      builder.update!(lines: current + Array(lines), attrs: { guest_name: existing.guest_name.presence || guest_name })
+      OrderItem.where(id: builder.added.map(&:id)).update_all(qr_ref: round)
+      if cfg["cashier_accept"] || !existing.sent?
+        existing.update!(qr_status: "pending")
+      else
+        Orders::Transitions.after_edit!(existing, added: builder.added, removed: builder.removed)
+      end
+      existing
+    end
+
+    # The order a submit with this key made or was added to.
+    def submitted(table, ref) = Order.find_by(source: "qr", table_id: table.id, aggregator_ref: ref) || added_to(table, ref)
 
     # The order an earlier submit with this key was added to.
     def added_to(table, ref)
@@ -92,8 +124,8 @@ module Qr
     end
 
     def accept!(order, actor:, device: nil)
-      raise Api::Errors::Conflict.new("qr.not_pending", "Order is not waiting for acceptance") unless order.qr_status == "pending"
       Order.transaction do
+        hold!(order)
         order.update!(qr_status: "accepted")
         if order.sent?
           Kitchen::Tickets.create_for!(order, kind: "changed", items: order.items.where(status: "pending").to_a)
@@ -106,11 +138,42 @@ module Qr
       order
     end
 
+    # Turning away an order that is all the guests' rejects it whole, as before. A round on a running order (one the
+    # kitchen has, or a waiter's not yet sent) takes off that round's lines only; the rest of the bill stands.
     def reject!(order, actor:, reason:)
-      raise Api::Errors::Conflict.new("qr.not_pending", "Order is not waiting for acceptance") unless order.qr_status == "pending"
-      order.update!(qr_status: "rejected")
-      Orders::Transitions.void!(order, reason: "QR rejected: #{reason}", actor: actor, approver: nil) unless order.sent?
+      Order.transaction do
+        hold!(order)
+        round = waiting_round(order)
+        if (order.active_items - round).empty?
+          order.update!(qr_status: "rejected")
+          Orders::Transitions.void!(order, reason: "QR rejected: #{reason}", actor: actor, approver: nil) unless order.sent?
+        else
+          round.each { |i| i.update!(status: "cancelled", cancelled_reason: "QR rejected: #{reason}") }
+          order.items.reload
+          Orders::Pricing.recalculate!(order)
+          Orders::Pricing.save_all!(order)
+          order.update!(qr_status: order.source == "qr" ? "accepted" : nil)
+        end
+      end
+      Realtime.order_changed(order)
       order
+    end
+
+    # The guests' lines still waiting for the cashier, by the submit key on them. An order from before the keys were
+    # kept treats every unsent line of a running order as the round, and the whole of a guest's unsent order.
+    def waiting_round(order)
+      waiting = order.items.reload.select { |i| i.status == "pending" }
+      tagged = waiting.select(&:qr_ref)
+      return tagged if tagged.any?
+      order.sent? || order.source.in?(%w[qr online]) ? waiting : []
+    end
+
+    # The table, as a guest's submit takes it, then the order: a round on its way in, or a second cashier's tap, waits
+    # and then sees the order as it is now.
+    def hold!(order)
+      DiningTable.lock.find_by(id: order.table_id) if order.table_id
+      order.lock!
+      raise Api::Errors::Conflict.new("qr.not_pending", "Order is not waiting for acceptance") unless order.qr_status == "pending"
     end
 
     def request!(table, kind:, guest_name: nil, note: nil)

@@ -31,15 +31,19 @@ module DeliverySerializers
       expired: r.expired?, permissions: r.permissions, assigned_count: c ? c[:assigned] : r.assigned_count, completed_count: c ? c[:completed] : r.completed_count }
   end
 
+  # address_text, customer_name and phone come with every row, from the customer and their saved address or, for a
+  # storefront guest attached to nobody, from the order itself, so the board and the rider always have somewhere to
+  # go and someone to call (sync-auth#6, contracts#2).
   def delivery(d, full: false)
     o = d.order
     h = { id: d.id, order_id: d.order_id, order_label: o.label, order_status: o.status, order_total_minor: o.total_minor, payment_status: o.payment_status, customer_id: o.customer_id, guest_name: o.guest_name,
           rider_id: d.rider_id, rider_name: d.rider&.name, zone_id: d.zone_id, zone_name: d.zone&.name, address_id: d.address_id, charge_minor: d.charge_minor, status: d.status, failed_reason: d.failed_reason,
-          cash_collected_minor: d.cash_collected_minor, assigned_at: d.assigned_at, picked_up_at: d.picked_up_at, delivered_at: d.delivered_at, settled_at: d.settled_at, settlement_id: d.settlement_id, created_at: d.created_at }
+          cash_collected_minor: d.cash_collected_minor, assigned_at: d.assigned_at, picked_up_at: d.picked_up_at, delivered_at: d.delivered_at, settled_at: d.settled_at, settlement_id: d.settlement_id, created_at: d.created_at,
+          address_text: d.address&.to_s.presence || o.delivery_address, customer_name: o.customer&.name || o.guest_name, phone: o.customer&.phone || o.guest_phone }
     if full
-      h[:address] = d.address_id && (a = CustomerAddress.find_by(id: d.address_id)) && CustomerSerializers.address(a)
+      h[:address] = d.address && CustomerSerializers.address(d.address)
       h[:customer] = o.customer && { id: o.customer.id, name: o.customer.name, phone: o.customer.phone }
-      h[:items] = o.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F") } }
+      h[:items] = o.active_items.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, "") } } # 1, not 1.0 (F13)
       h[:events] = d.events.map { |e| { status: e.status, lat: e.lat&.to_f, lng: e.lng&.to_f, note: e.note, by_membership_id: e.by_membership_id, occurred_at: e.occurred_at } }
     end
     h

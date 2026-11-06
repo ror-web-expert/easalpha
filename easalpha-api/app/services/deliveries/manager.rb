@@ -5,12 +5,29 @@ module Deliveries
 
     def ensure_for!(order)
       return nil unless order.order_type == "delivery"
-      Delivery.find_by(order_id: order.id) || begin
-        address = order.address_id && CustomerAddress.find_by(id: order.address_id)
-        zone = address && DeliveryZone.for_address(branch_id: order.branch_id, text: [ address.area, address.city, address.line1 ].compact.join(" "))
-        Delivery.create!(branch_id: order.branch_id, order: order, rider_id: order.rider_id, zone: zone, address_id: order.address_id, charge_minor: order.delivery_charge_minor,
-                         status: order.rider_id ? "assigned" : "unassigned", assigned_at: order.rider_id && Time.current)
-      end
+      Delivery.find_by(order_id: order.id) || Delivery.create!(branch_id: order.branch_id, order: order, rider_id: order.rider_id, zone: zone_for(order), address_id: order.address_id,
+                                                               charge_minor: order.delivery_charge_minor, status: order.rider_id ? "assigned" : "unassigned", assigned_at: order.rider_id && Time.current)
+    end
+
+    # The zone an order's address falls in: the customer's saved address, or the address a storefront guest typed on
+    # the order (Order#delivery_address) when it is attached to nobody.
+    def zone_for(order)
+      text = zone_text(order)
+      text.present? ? DeliveryZone.for_address(branch_id: order.branch_id, text: text) : nil
+    end
+
+    def zone_text(order)
+      address = order.address_id && order.address
+      address ? [ address.area, address.city, address.line1 ].compact.join(" ") : order.delivery_address.to_s
+    end
+
+    # The delivery keeps its order's address, zone and charge while it is still on its way: the cashier fixes the
+    # address, or changes the charge at payment, after the order went to the kitchen.
+    def follow!(order)
+      d = order.order_type == "delivery" && Delivery.find_by(order_id: order.id)
+      return unless d && !d.status.in?(%w[delivered failed])
+      attrs = { "address_id" => order.address_id, "zone_id" => zone_for(order)&.id, "charge_minor" => order.delivery_charge_minor }
+      d.update!(attrs) if attrs.any? { |k, v| d[k] != v }
     end
 
     # Zone lookup for the till before placing: charge and minimum order for an address text.
