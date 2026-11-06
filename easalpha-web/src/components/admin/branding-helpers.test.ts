@@ -52,7 +52,8 @@ describe("receipt draft", () => {
   it("reads the pos.receipt.* keys and the store secondary phone from any screen", () => {
     const keys = flattenSettings(settings);
     expect(keys.map((k) => k.key)).toContain("store.secondary_phone");
-    expect(receiptDraftFrom(keys)).toEqual({ header: "Thank you!", footer: "", show_logo: false, footer_qr_url: "https://easalpha.com/store/karahi", paper: "58", language: "ur", secondary_phone: "042-111" });
+    expect(receiptDraftFrom(keys)).toEqual({ header: "Thank you!", footer: "", show_logo: false, footer_qr_url: "https://easalpha.com/store/karahi", paper: "58", language: "ur", secondary_phone: "042-111", barcode: true, policy: "" });
+    expect(receiptDraftFrom([key("pos.receipt.barcode", "boolean", false), key("pos.receipt.policy", "string", " No returns after 24 hours ")])).toMatchObject({ barcode: false, policy: " No returns after 24 hours " });
   });
   it("falls back to defaults when the registry has no such key", () => {
     expect(receiptDraftFrom([])).toEqual(EMPTY_RECEIPT_DRAFT);
@@ -67,7 +68,7 @@ describe("receipt draft", () => {
   });
   it("turns the draft into ReceiptView branding the way print.ts does at print time", () => {
     expect(brandingFor({ ...EMPTY_RECEIPT_DRAFT, paper: "58", show_logo: false, footer_qr_url: " https://x.y ", secondary_phone: " " }))
-      .toEqual({ paper: "58", showLogo: false, footerQrUrl: "https://x.y", secondaryPhone: null });
+      .toEqual({ paper: "58", showLogo: false, footerQrUrl: "https://x.y", secondaryPhone: null, barcode: true, policy: null });
   });
 });
 
@@ -76,7 +77,7 @@ describe("sampleReceipt", () => {
   const r = sampleReceipt({ name: "Karahi House", legal_name: "KH (Pvt) Ltd", phone: "0300-1234567", logo_key: UPLOAD, currency: "PKR" }, draft);
 
   it("carries the business block, header, footer, paper and language from the inputs", () => {
-    expect(r.business).toEqual({ name: "Karahi House", legal_name: "KH (Pvt) Ltd", phone: "0300-1234567", logo_key: UPLOAD, currency: "PKR" });
+    expect(r.business).toEqual({ name: "Karahi House", legal_name: "KH (Pvt) Ltd", phone: "0300-1234567", email: null, logo_key: UPLOAD, currency: "PKR" });
     expect(r.header).toBe("Welcome\nEnjoy");
     expect(r.footer).toBe("Come again");
     expect(r.paper).toBe("58");
@@ -100,7 +101,7 @@ describe("sampleReceipt", () => {
     const plain = sampleReceipt({ name: "" }, EMPTY_RECEIPT_DRAFT, null);
     expect(plain.header).toBeNull();
     expect(plain.footer).toBeNull();
-    expect(plain.business).toEqual({ name: "Your business", legal_name: null, phone: null, logo_key: null, currency: "PKR" });
+    expect(plain.business).toEqual({ name: "Your business", legal_name: null, phone: null, email: null, logo_key: null, currency: "PKR" });
     expect(plain.branch.name).toBe("Main branch");
   });
   it("uses the session branch when given", () => {

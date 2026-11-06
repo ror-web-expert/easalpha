@@ -1,6 +1,6 @@
 // Pure ESC/POS encoder: PrintLine[] -> Buffer. No Electron or Node I/O here so it
 // can be unit tested on its own.
-import type { PaperWidth, PrintLine } from "./types";
+import type { BarcodeMode, PaperWidth, PrintLine } from "./types";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -74,6 +74,57 @@ export function qrCode(data: string, moduleSize = 6): Buffer {
   ]);
 }
 
+/** Printable dots across the paper at 203 dpi: 72 mm of an 80 mm roll, 48 mm of a 58 mm roll. */
+export const PRINTABLE_DOTS: Record<PaperWidth, number> = { 58: 384, 80: 576 };
+/** White modules the Code 128 spec wants on each side; a bar at the paper edge does not scan. */
+const QUIET_ZONE_MODULES = 10;
+
+/** Only printable ASCII goes to the printer; anything else is dropped so a bad byte never swallows the rest of the job. */
+export function barcodeData(data: string): string {
+  return [...data].filter((ch) => { const c = ch.codePointAt(0) ?? 0; return c >= 0x20 && c <= 0x7e; }).join("");
+}
+
+/**
+ * Modules in a Code 128 symbol of `length` characters in code set B: start, the characters and the check digit at 11
+ * each, the stop pattern at 13. A printer may switch to code set C for a run of digits and print narrower; size for
+ * the worst case so the symbol never leaves the paper.
+ */
+export function code128Modules(length: number): number {
+  return 11 * (length + 2) + 13;
+}
+
+/** The GS w module width the symbol fits at with its quiet zones: 2 when it can, else 1, else 0 (print the value as text). */
+export function barcodeModuleWidth(length: number, width: PaperWidth): 0 | 1 | 2 {
+  const modules = code128Modules(length) + 2 * QUIET_ZONE_MODULES;
+  if (modules * 2 <= PRINTABLE_DOTS[width]) return 2;
+  if (modules <= PRINTABLE_DOTS[width]) return 1;
+  return 0;
+}
+
+/**
+ * Code 128 barcode via GS k 73 with HRI text below (GS H 2). The module width follows the paper (barcodeModuleWidth);
+ * 1-dot modules get taller bars (80 dots against 64) because a scanner needs more lines across thin bars. "code128"
+ * selects code set B with the "{B" prefix (Epson and most makes); "plain" sends the data alone for clones that print
+ * "{B" as part of the number. Returns an empty buffer when the value is empty or does not fit the paper even at 1-dot
+ * modules (Epson-class firmware prints nothing for a symbol wider than the print area); the caller then prints the
+ * value as text.
+ */
+export function barcode(data: string, width: PaperWidth, mode: Exclude<BarcodeMode, "off"> = "code128"): Buffer {
+  const clean = barcodeData(data);
+  if (!clean) return Buffer.alloc(0);
+  const moduleWidth = barcodeModuleWidth(clean.length, width);
+  if (!moduleWidth) return Buffer.alloc(0);
+  const payload = mode === "plain" ? Buffer.from(clean, "ascii") : Buffer.concat([Buffer.from("{B", "ascii"), Buffer.from(clean, "ascii")]);
+  return Buffer.concat([
+    Buffer.from([GS, 0x48, 0x02]), // GS H 2: HRI below the bars
+    Buffer.from([GS, 0x66, 0x00]), // GS f 0: HRI font A
+    Buffer.from([GS, 0x68, moduleWidth === 2 ? 64 : 80]), // GS h n: height in dots
+    Buffer.from([GS, 0x77, moduleWidth]), // GS w n: module width in dots
+    Buffer.from([GS, 0x6b, 0x49, payload.length]), // GS k 73 n: CODE128
+    payload,
+  ]);
+}
+
 export function divider(width: PaperWidth): Buffer {
   return Buffer.concat([encodeText("-".repeat(charsPerLine(width))), CMD.lf]);
 }
@@ -108,17 +159,30 @@ function textLine(
   return Buffer.concat(parts);
 }
 
+export type EncodeOptions = {
+  /** The printer's barcode mode; default "code128". */
+  barcode?: BarcodeMode;
+};
+
 /**
  * Encode a full job. Starts with ESC @ and the CP437 codepage. Does not add a
  * cut or feed on its own; the caller includes { feed } / { cut } lines.
  */
-export function encodeLines(lines: PrintLine[], width: PaperWidth): Buffer {
+export function encodeLines(lines: PrintLine[], width: PaperWidth, options: EncodeOptions = {}): Buffer {
   const parts: Buffer[] = [CMD.init, CMD.codepageCP437];
+  const mode = options.barcode ?? "code128";
   for (const line of lines) {
     if ("text" in line) {
       parts.push(textLine(line, width));
     } else if ("qr" in line) {
       parts.push(CMD.alignCenter, qrCode(line.qr), CMD.alignLeft);
+    } else if ("barcode" in line) {
+      const value = barcodeData(line.barcode);
+      if (!value) continue;
+      const code = mode === "off" ? Buffer.alloc(0) : barcode(value, width, mode);
+      // No bars (mode off, or too wide for the paper): the number still prints, as text, so it can be typed in.
+      if (code.length) parts.push(CMD.alignCenter, code, CMD.lf, CMD.alignLeft);
+      else parts.push(textLine({ text: value, align: "center" }, width));
     } else if ("feed" in line) {
       parts.push(feedLines(line.feed));
     } else if ("divider" in line) {
@@ -161,6 +225,8 @@ export function renderPlainText(lines: PrintLine[], width: PaperWidth): string[]
       }
     } else if ("qr" in line) {
       out.push(pad(`[QR] ${line.qr}`, "center", cols));
+    } else if ("barcode" in line) {
+      out.push(pad(`[BARCODE] ${line.barcode}`, "center", cols));
     } else if ("feed" in line) {
       for (let i = 0; i < Math.min(line.feed, 10); i++) out.push("");
     } else if ("divider" in line) {

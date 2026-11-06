@@ -31,6 +31,8 @@ export interface BillInput {
   tax_lines?: { rate: number; inclusive: boolean; tax_minor: number }[];
   tip_minor?: number;
   total_minor: number;
+  /** A staff meal (complimentary order): the total is zero and the gap is shown as a "Staff meal" row, never as Rounding. */
+  is_staff_meal?: boolean;
 }
 
 /** Rows from Subtotal to the last line before the total. sum(amount_minor of rows without info) === shown total. */
@@ -52,8 +54,11 @@ export function billRows(b: BillInput, currency = "PKR"): BillRow[] {
   }
   if (b.tip_minor) rows.push({ key: "tip", label: "Tip", amount_minor: show(b.tip_minor) });
   const shownTotal = show(b.total_minor);
-  const rounding = shownTotal - rows.reduce((s, r) => s + r.amount_minor, 0);
-  if (rounding) rows.push({ key: "rounding", label: "Rounding", amount_minor: rounding });
+  const gap = shownTotal - rows.reduce((s, r) => s + r.amount_minor, 0);
+  // A staff meal keeps the real figures above and writes the whole amount off on its own row, so the bill still adds up
+  // and nobody reads a zero total as a rounding fault (first client report, 30 Oct 2026).
+  if (b.is_staff_meal) { if (gap) rows.push({ key: "staff_meal", label: "Staff meal", amount_minor: gap }); }
+  else if (gap) rows.push({ key: "rounding", label: "Rounding", amount_minor: gap });
   if (byRate.length) {
     for (const t of byRate.filter((x) => x.inclusive)) rows.push({ key: `tax-included:${t.rate}`, label: `Includes tax ${t.rate}%`, amount_minor: show(t.tax_minor), info: true });
   } else if (inclusive) rows.push({ key: "tax-included", label: "Includes tax", amount_minor: show(inclusive), info: true });

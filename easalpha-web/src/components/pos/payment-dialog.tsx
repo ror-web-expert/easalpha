@@ -226,7 +226,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
             ))}
           </ul>
           <div className="space-y-1 text-sm text-fg-secondary">
-            {billRows({ ...base, discounts: discountLines, service_charge_label: `Service charge ${chargeDisplay(service, currency)}`.trim(), delivery_label: `Delivery ${delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}`.trim(), tax_label: cart.tax_choice === "none" ? "Tax (none)" : "Tax" }, currency).map((r) => (
+            {billRows({ ...base, is_staff_meal: cart.is_staff_meal, discounts: discountLines, service_charge_label: `Service charge ${chargeDisplay(service, currency)}`.trim(), delivery_label: `Delivery ${delivery?.mode === "percent" ? chargeDisplay(delivery, currency) : ""}`.trim(), tax_label: cart.tax_choice === "none" ? "Tax (none)" : "Tax" }, currency).map((r) => (
               <div key={r.key} className={cn("flex justify-between gap-2", r.info && "text-xs text-fg-muted")}><span className="truncate">{r.label}</span><span className="shrink-0 tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</span></div>
             ))}
             {paidBefore ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(total, currency)}</span></div> : null}

@@ -97,6 +97,14 @@
     <label>Role
       <select name="role"><option value="">None</option><option value="receipt">Receipt</option><option value="kitchen">Kitchen</option></select>
     </label>
+    <label class="span2">Receipt barcode
+      <select name="barcode">
+        <option value="code128">Code 128 (Epson and most makes)</option>
+        <option value="plain">Code 128, plain (clone printers)</option>
+        <option value="off">Off (print the number as text)</option>
+      </select>
+    </label>
+    <p class="note span2" style="margin-top:-4px">Do a test print and scan the barcode. If the scan starts with "{B", or the printer skips the barcode, choose plain. If the printer cannot print barcodes at all, choose off.</p>
     <div class="span2 row" style="justify-content:flex-end; margin-top:6px">
       <button type="button" id="cancel">Cancel</button>
       <button type="submit" class="primary">Save printer</button>
@@ -192,6 +200,7 @@
     f.productId.value = p && p.productId != null ? Number(p.productId).toString(16) : "";
     f.width.value = p ? String(p.width) : "80";
     f.role.value = p && p.role ? p.role : "";
+    f.barcode.value = p && p.barcode ? p.barcode : "code128";
     api.systemPrinters().then(function (list) {
       var sel = f.systemName; sel.innerHTML = '<option value="">Default printer</option>';
       list.forEach(function (sp) {
@@ -215,6 +224,7 @@
       kind: f.kind.value,
       width: Number(f.width.value),
       role: f.role.value || undefined,
+      barcode: f.barcode.value,
       host: f.host.value.trim(),
       port: Number(f.port.value) || 9100,
       vendorId: parseId(f.vendorId.value),

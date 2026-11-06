@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { hasPrinter, paperWidth, printJob, printServer, receiptLines, row, zReportLines, type PrintLine, printServerHeaders } from "./print";
+import { BROWSER_PRINT_HINT, hasPrinter, paperWidth, printDocument, printJob, printServer, receiptLines, row, textRows, withBarcodeBars, zReportLines, type PrintLine, printServerHeaders } from "./print";
 import type { Receipt, ZReport } from "./types";
 
 const receipt: Receipt = {
@@ -20,43 +20,88 @@ const receipt: Receipt = {
 const texts = (lines: PrintLine[]) => lines.filter((l): l is Extract<PrintLine, { text: string }> => "text" in l).map((l) => l.text);
 
 describe("receiptLines", () => {
-  it("starts with the store name, prints both phone numbers and ends with a cut", () => {
+  it("starts with the store block (name, phones, registrations), says RECEIPT, lists the order facts and ends with a cut", () => {
     const lines = receiptLines(receipt, { settings: { "store.secondary_phone": "021-2222222" } });
     expect(lines[0]).toEqual({ text: "Karachi Grill", align: "center", bold: true, size: 2 });
     const t = texts(lines);
-    expect(t).toContain("0300-1234567");
-    expect(t).toContain("021-2222222");
+    expect(t).toContain("0300-1234567 | 021-2222222");
     expect(t).toContain("NTN 1234567-8");
-    expect(t).toContain("Serial 42");
-    expect(t).toContain("Receipt R-0007");
-    expect(t).toContain("Table T4");
+    expect(lines).toContainEqual({ text: "RECEIPT", align: "center", bold: true });
+    expect(lines.find((l) => "text" in l && l.text.startsWith("Receipt "))).toMatchObject({ bold: true, text: expect.stringMatching(/R-0007$/) });
+    expect(t.find((x) => x.startsWith("Order"))).toMatch(/A-42  Dine In$/);
+    expect(t.find((x) => x.startsWith("Table"))).toMatch(/T4$/);
+    expect(t.find((x) => x.startsWith("Cashier"))).toMatch(/Ali$/);
     expect(lines.at(-1)).toEqual({ cut: true });
     expect(lines.at(-2)).toEqual({ feed: 3 });
   });
-  it("lists items with modifiers, line discounts and notes, then totals and the payment", () => {
-    const t = texts(receiptLines(receipt));
-    expect(t.find((x) => x.startsWith("2 x Chicken Biryani"))).toMatch(/Rs 990$/);
-    expect(t.find((x) => x.startsWith("  + Extra raita"))).toMatch(/Rs 50$/);
-    expect(t.find((x) => x.startsWith("  Discount"))).toMatch(/-Rs 110$/);
-    expect(t).toContain("  less spicy");
+  it("lists items as QTY / ITEM / AMOUNT with modifiers, line discounts and notes, then the bill, a double-size TOTAL and the payment", () => {
+    const lines = receiptLines(receipt);
+    const t = texts(lines);
+    expect(t.find((x) => x.startsWith("QTY  ITEM"))).toMatch(/AMOUNT$/);
+    expect(t.find((x) => x.startsWith("  2  Chicken Biryani"))).toMatch(/Rs 990$/);
+    expect(t).toContain("     @ Rs 500 each");
+    expect(t.find((x) => x.startsWith("     + Extra raita"))).toMatch(/Rs 50$/);
+    expect(t.find((x) => x.startsWith("     Discount"))).toMatch(/-Rs 110$/);
+    expect(t).toContain('     "less spicy"');
+    expect(t.find((x) => x.startsWith("Items"))).toMatch(/3 items$/);
     expect(t.find((x) => x.startsWith("Discount"))).toMatch(/-Rs 110$/);
     expect(t.find((x) => x.startsWith("Service charge"))).toMatch(/Rs 107$/);
-    expect(t.find((x) => x.startsWith("TOTAL"))).toMatch(/Rs 1,177$/);
-    expect(t.find((x) => /^Paid by Cash\s/.test(x))).toMatch(/Rs 1,177$/);
+    const total = lines.find((l) => "text" in l && l.text.startsWith("TOTAL")) as Extract<PrintLine, { text: string }>;
+    expect(total).toMatchObject({ bold: true, size: 2 });
+    expect(total.text).toMatch(/Rs 1,177$/);
+    expect(total.text.length).toBe(24);
+    expect(t.find((x) => /^Cash\s/.test(x))).toMatch(/Rs 1,177$/);
+    expect(t.find((x) => x.startsWith("  Cash tendered"))).toMatch(/Rs 1,200$/);
     expect(t.find((x) => x.startsWith("  Change"))).toMatch(/Rs 23$/);
-    expect(t).toContain("Thank you");
+    expect(lines).toContainEqual({ text: "PAID", align: "center", bold: true });
+    expect(t).toContain("You saved Rs 110");
+    expect(lines).toContainEqual({ text: "Thank you", align: "center", bold: true });
+  });
+  it("prints the receipt number as a barcode unless the setting turns it off, and never on a bill", () => {
+    expect(receiptLines(receipt)).toContainEqual({ barcode: "R-0007" });
+    expect(receiptLines(receipt, { settings: { "pos.receipt.barcode": false } })).not.toContainEqual({ barcode: "R-0007" });
+    const bill = receiptLines({ ...receipt, receipt_number: null, payments: [], totals: { ...receipt.totals, paid_minor: 0, due_minor: 117700 } });
+    expect(bill).toContainEqual({ text: "BILL", align: "center", bold: true });
+    expect(bill.some((l) => "barcode" in l)).toBe(false);
+    expect(texts(bill).find((x) => x.startsWith("BALANCE DUE"))).toMatch(/Rs 1,177$/);
+  });
+  it("prints the tax base, the till, the email, the policy and a TAX INVOICE title when the authority numbered it", () => {
+    const taxed: Receipt = { ...receipt, business: { ...receipt.business, email: "hello@karachigrill.pk" }, order: { ...receipt.order, till: "Front till" },
+      totals: { ...receipt.totals, tax_minor: 17120, tax_lines: [{ rate: 16, inclusive: false, taxable_minor: 107000, tax_minor: 17120 }], total_minor: 134820 },
+      tax_invoice: { number: "FBR-123", qr: "QR-PAYLOAD", status: "issued", authority: "fbr" } };
+    const lines = receiptLines(taxed, { settings: { "pos.receipt.policy": "Exchange within 24 hours with this receipt" } });
+    const t = texts(lines);
+    expect(lines).toContainEqual({ text: "TAX INVOICE", align: "center", bold: true });
+    expect(t.find((x) => x.startsWith("Tax 16% on Rs 1,070"))).toMatch(/Rs 171$/);
+    expect(t.find((x) => x.startsWith("Till"))).toMatch(/Front till$/);
+    expect(t).toContain("hello@karachigrill.pk");
+    expect(t).toContain("FBR invoice FBR-123");
+    expect(lines).toContainEqual({ qr: "QR-PAYLOAD" });
+    expect(t).toContain("Exchange within 24 hours with this receipt");
   });
   it("adds the footer QR from settings and sizes rows for 58 mm paper", () => {
     const lines = receiptLines(receipt, { settings: { "pos.receipt.footer_qr_url": "https://g.page/r/abc/review", "pos.receipt.paper": "58" } });
     expect(lines).toContainEqual({ qr: "https://g.page/r/abc/review" });
-    const total = texts(lines).find((x) => x.startsWith("TOTAL"))!;
-    expect(total.length).toBe(32);
-    const total80 = texts(receiptLines(receipt)).find((x) => x.startsWith("TOTAL"))!;
-    expect(total80.length).toBe(48);
+    expect(texts(lines)).toContain("Scan for our menu and reviews");
+    const items = texts(lines).find((x) => x.startsWith("QTY  ITEM"))!;
+    expect(items.length).toBe(32);
+    const items80 = texts(receiptLines(receipt)).find((x) => x.startsWith("QTY  ITEM"))!;
+    expect(items80.length).toBe(48);
     expect(receiptLines(receipt)).not.toContainEqual(expect.objectContaining({ qr: expect.any(String) }));
   });
+  it("prints a staff meal as a Staff meal row and a reason line, never as Rounding (first client report, 30 Oct 2026)", () => {
+    const staff: Receipt = { ...receipt, order: { ...receipt.order, is_staff_meal: true, staff_meal_reason: "Chef lunch" }, totals: { ...receipt.totals, total_minor: 0, rounding_minor: 0, paid_minor: 0, due_minor: 0 }, payments: [] };
+    const t = texts(receiptLines(staff));
+    expect(t.find((x) => x.startsWith("Staff meal"))).toMatch(/-Rs 1,177$/);
+    expect(t.find((x) => x.startsWith("TOTAL"))).toMatch(/Rs 0$/);
+    expect(receiptLines(staff)).toContainEqual({ text: "RECEIPT", align: "center", bold: true });
+    expect(t.some((x) => x.startsWith("Rounding"))).toBe(false);
+    expect(receiptLines(staff)).toContainEqual({ text: "STAFF MEAL - Chef lunch", align: "center", bold: true });
+  });
   it("marks duplicates", () => {
-    expect(receiptLines({ ...receipt, duplicate: true })[0]).toEqual({ text: "DUPLICATE", align: "center", bold: true });
+    const dup = receiptLines({ ...receipt, duplicate: true });
+    expect(dup[0]).toEqual({ text: "DUPLICATE", align: "center", bold: true });
+    expect(dup).toContainEqual({ text: "DUPLICATE RECEIPT", align: "center", bold: true });
   });
   it("wraps a long item name and right-aligns its amount", () => {
     const out = row("A very long product name that will not fit on one line of the roll", "Rs 1,000", 32);
@@ -106,6 +151,52 @@ describe("printServer", () => {
   });
 });
 
+describe("textRows and printDocument: the browser prints the printer's own layout", () => {
+  const lines: PrintLine[] = [
+    { text: "Karachi Grill", align: "center", bold: true, size: 2 }, { text: "DHA", align: "center" }, { divider: true },
+    { text: "Chai".padEnd(43) + "Rs 80" }, { text: "Rs 80", align: "right" }, { text: "" }, { qr: "https://g.page/r/abc" }, { feed: 2 }, { cut: true },
+  ];
+  it("pads for alignment, halves the columns for double size, and never leaves a row empty", () => {
+    const rows = textRows(lines, 48);
+    expect(rows[0]).toEqual({ text: " ".repeat(5) + "Karachi Grill", bold: true, size: 2 }); // 24 columns at double size
+    expect(rows[1]).toEqual({ text: " ".repeat(22) + "DHA", bold: undefined, size: undefined });
+    expect(rows[2]).toEqual({ text: "-".repeat(48) });
+    expect(rows[3]).toMatchObject({ text: "Chai".padEnd(43) + "Rs 80" });
+    expect(rows[4]).toMatchObject({ text: "Rs 80".padStart(48) });
+    expect(rows[5]).toEqual({ text: " " });
+    expect(rows[6]).toEqual({ qr: "https://g.page/r/abc" });
+    expect(rows.slice(7)).toEqual([{ text: " " }, { text: " " }]); // the feed; the cut has no row
+  });
+  it("keeps a barcode row and draws it as bars with the number under it", async () => {
+    expect(textRows([{ barcode: "261030-MAIN-42", bars: "1101" }, { barcode: "" }], 48)).toEqual([{ barcode: "261030-MAIN-42", bars: "1101" }]);
+    const doc = await printDocument([{ barcode: "261030-MAIN-42" }], "80");
+    expect(doc).toMatch(/<div class="bc"><svg [^>]*><rect /);
+    expect(doc).toContain(`<div class="l">${" ".repeat(17)}261030-MAIN-42</div>`);
+    const lines = await withBarcodeBars([{ text: "x" }, { barcode: "R-1" }]);
+    expect(lines[0]).toEqual({ text: "x" });
+    expect(lines[1]).toMatchObject({ barcode: "R-1", bars: expect.stringMatching(/^0{10}1[01]+0{10}$/) });
+    const same: PrintLine[] = [{ text: "x" }];
+    expect(await withBarcodeBars(same)).toBe(same);
+  });
+  it("wraps a row longer than the paper", () => {
+    const rows = textRows([{ text: "x".repeat(50) }], 48);
+    expect(rows.map((r) => ("text" in r ? r.text.length : 0))).toEqual([48, 2]);
+  });
+  it("writes one text run per row, sized for the roll, with no opacity and the QR as an image", async () => {
+    const doc = await printDocument(lines, "80");
+    expect(doc).toContain("@page { size: 80mm auto; margin: 0; }");
+    expect(doc).toContain("width: 72mm");
+    expect(doc).toContain('<div class="l b s2">     Karachi Grill</div>');
+    expect(doc).toContain(`<div class="l">${"Chai".padEnd(43)}Rs 80</div>`);
+    expect(doc).toContain("white-space: pre");
+    expect(doc).not.toContain("opacity");
+    expect(doc.includes('<img src="data:image/png') || doc.includes("https://g.page/r/abc")).toBe(true);
+    const narrow = await printDocument([{ text: "<b>&", align: "center" }], "58");
+    expect(narrow).toContain("@page { size: 58mm auto; margin: 0; }");
+    expect(narrow).toContain(`<div class="l">${" ".repeat(14)}&lt;b&gt;&amp;</div>`);
+  });
+});
+
 describe("printJob dispatch", () => {
   const job = { role: "receipt" as const, lines: [{ text: "hi" }] };
   afterEach(() => { delete window.easalphaDesktop; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -141,12 +232,27 @@ describe("printJob dispatch", () => {
     expect(r.via).toBe("server");
     expect(r.error).toMatch(/unreachable/);
   });
-  it("falls back to the browser print dialog", async () => {
-    const printSpy = vi.spyOn(window, "print").mockImplementation(() => {});
+  it("falls back to the browser print dialog from a private frame holding the fixed-width rows, not the page on screen", async () => {
+    const pagePrint = vi.spyOn(window, "print").mockImplementation(() => {});
     const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    const framePrint = vi.fn();
+    let frame: HTMLIFrameElement | null = null;
+    const append = document.body.appendChild.bind(document.body);
+    vi.spyOn(document.body, "appendChild").mockImplementation((node) => {
+      const r = append(node);
+      if (node instanceof HTMLIFrameElement) { frame = node; node.contentWindow!.print = framePrint; node.contentWindow!.focus = () => {}; }
+      return r;
+    });
     expect(hasPrinter({})).toBe(false);
-    expect(await printJob(job, { settings: {} })).toEqual({ ok: true, via: "browser" });
-    expect(printSpy).toHaveBeenCalledTimes(1);
+    expect(await printJob({ role: "receipt", lines: [{ text: "Karachi Grill", align: "center", bold: true }, { text: "Chai".padEnd(43) + "Rs 80" }, { feed: 3 }, { cut: true }] }, { settings: {} })).toEqual({ ok: true, via: "browser", hint: BROWSER_PRINT_HINT });
+    expect(framePrint).toHaveBeenCalledTimes(1);
+    expect(pagePrint).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+    const html = frame!.contentDocument!.documentElement.outerHTML;
+    expect(html).toContain(`<div class="l b">${" ".repeat(17)}Karachi Grill</div>`);
+    expect(html).toContain(`<div class="l">${"Chai".padEnd(43)}Rs 80</div>`);
+    expect(html).toContain("@page { size: 80mm auto; margin: 0; }");
+    frame!.contentWindow!.dispatchEvent(new Event("afterprint"));
+    expect(document.body.contains(frame!)).toBe(false);
   });
 });
