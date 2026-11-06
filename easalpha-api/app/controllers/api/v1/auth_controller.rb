@@ -16,8 +16,8 @@ module Api
         raise Api::Errors::Conflict.new("signup.exists", "An account with this email or phone already exists") if (email && User.exists?(email: email)) || (phone && User.exists?(phone: phone))
 
         result = Auth::Signup.call(name: params.require(:name), business_name: params.require(:business_name), email: email, phone: phone,
-                                   password: params[:password], country: params[:country].presence || "PK", currency: params[:currency].presence || "PKR",
-                                   time_zone: params[:time_zone].presence || "Asia/Karachi", locale: params[:locale].presence || "en")
+                                   password: params[:password], country: params[:country].presence, currency: params[:currency].presence, # S3: Signup.defaults fills the gaps
+                                   time_zone: params[:time_zone].presence, locale: params[:locale].presence || "en")
         Tenancy::Context.with(result.business, user: result.user) do
           render json: Auth::SessionIssuer.issue(user: result.user, membership: result.membership, app: "admin", request: request), status: :created
         end

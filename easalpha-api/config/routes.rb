@@ -81,6 +81,7 @@ Rails.application.routes.draw do
         end
         member do
           post :favourite
+          post :restore
           post :barcodes, action: :add_barcode
           delete "barcodes/:barcode_id", action: :remove_barcode
         end

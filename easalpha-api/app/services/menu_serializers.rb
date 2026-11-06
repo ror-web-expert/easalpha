@@ -61,7 +61,7 @@ module MenuSerializers
 
   def deal(d)
     { id: d.id, name: d.name, description: d.description, image_key: d.image_key, price_minor: d.price_minor, active: d.active, show_online: d.show_online, is_favourite: d.is_favourite,
-      valid_from: d.valid_from, valid_to: d.valid_to, tax_rate_id: d.tax_rate_id, sort_order: d.sort_order,
+      valid_from: d.valid_from_day&.iso8601, valid_to: d.valid_to_day&.iso8601, tax_rate_id: d.tax_rate_id, sort_order: d.sort_order, # days, as the date boxes take them (S9)
       items: d.deal_items.map { |i| { id: i.id, product_id: i.product_id, variant_id: i.variant_id, quantity: i.quantity, choice_group: i.choice_group } } }
   end
 

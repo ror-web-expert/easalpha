@@ -13,9 +13,21 @@ class Business < ApplicationRecord
   has_many :subscriptions, dependent: :destroy
   has_many :setup_checklist_items, dependent: :destroy
 
+  before_validation do
+    self.country = country.strip.upcase if country.is_a?(String)
+    self.currency = currency.strip.upcase if currency.is_a?(String)
+    self.time_zone = time_zone.strip if time_zone.is_a?(String)
+  end
   validates :name, :slug, :country, :currency, :time_zone, presence: true
+  # A time zone the business day, the reports and the browser can all read (S14: "Pakistan" was saved as typed).
+  validates :time_zone, inclusion: { in: ->(_) { TIME_ZONES }, message: "must be a time zone such as Asia/Karachi" }, if: :will_save_change_to_time_zone?
+  validates :country, format: { with: /\A[A-Z]{2}\z/, message: "must be a two-letter country code such as PK" }, if: :will_save_change_to_country?
+  validates :currency, format: { with: /\A[A-Z]{3}\z/, message: "must be a three-letter currency code such as PKR" }, if: :will_save_change_to_currency?
   validates :slug, uniqueness: true, format: { with: /\A[a-z0-9]+(?:-[a-z0-9]+)*\z/ }
   validates :status, inclusion: { in: STATUSES }
+
+  TIME_ZONES = TZInfo::Timezone.all_identifiers.to_set.freeze
+  def self.valid_time_zone?(zone) = TIME_ZONES.include?(zone.to_s)
 
   def read_only? = status.in?(%w[read_only deleted])
   def trial? = status == "trial"
