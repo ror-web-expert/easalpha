@@ -70,6 +70,19 @@ describe("a till open in two tabs", () => {
     expect(calls.filter((c) => c.url.endsWith("/auth/refresh"))).toHaveLength(1);
   });
 
+  it("refreshes again after a refresh that ended at once (the till locked while a request was out)", async () => {
+    useDeviceStore.setState({ deviceToken: "device", session: session("A") });
+    const fetchMock = vi.mocked(fetch);
+    const real = fetchMock.getMockImplementation()!;
+    // The first request's 401 arrives after the till was locked: nothing to refresh with, so that request fails.
+    fetchMock.mockImplementationOnce(async () => { useDeviceStore.setState({ session: null }); return new Response("{}", { status: 401 }); });
+    await expect(api("/orders", { auth: "pos" })).rejects.toMatchObject({ status: 401 });
+    fetchMock.mockImplementation(real);
+    useDeviceStore.setState({ session: session("C") }); // the cashier signs in again
+    await expect(api("/orders", { auth: "pos" })).resolves.toEqual({ ok: true });
+    expect(calls.filter((c) => c.url.endsWith("/auth/refresh")).map((c) => c.body)).toEqual([{ refresh_token: "C" }]);
+  });
+
   it("locks the till when the refresh is refused", async () => {
     refreshAnswer = () => null;
     useDeviceStore.setState({ deviceToken: "device", session: session("A") });

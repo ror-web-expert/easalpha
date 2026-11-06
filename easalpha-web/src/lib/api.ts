@@ -110,7 +110,7 @@ export function shareSessionAcrossTabs(): () => void {
 
 const refreshing: Partial<Record<SessionArea, Promise<boolean>>> = {};
 
-async function refreshSession(kind: SessionArea): Promise<boolean> {
+function refreshSession(kind: SessionArea): Promise<boolean> {
   const running = refreshing[kind];
   if (running) return running;
   const run = (async () => {
@@ -125,10 +125,10 @@ async function refreshSession(kind: SessionArea): Promise<boolean> {
       return true;
     } catch {
       return false;
-    } finally {
-      delete refreshing[kind];
     }
-  })();
+    // .finally runs after the promise is stored below, even when it settled at once (no token): a refresh that ended is
+    // never handed to the next caller.
+  })().finally(() => { delete refreshing[kind]; });
   refreshing[kind] = run;
   return run;
 }
