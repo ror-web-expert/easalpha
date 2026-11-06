@@ -70,11 +70,14 @@ module Api
         pin = params.require(:pin).to_s
         throttle = "device:#{current_device.id}"
         Auth::PinThrottle.check!(throttle)
-        candidates = Membership.active.includes(:role, :user).where.not(pin_digest: nil).select { |m| m.branch_allowed?(current_device.branch_id) }
         app = current_device.app # kitchen, rider (SPEC rider app: the rider's phone is a paired device) or pos
-        # Two people may share a PIN by accident; prefer the one who may use this device's app.
-        matches = candidates.select { |m| m.pin_digest && BCrypt::Password.new(m.pin_digest) == pin && !m.pin_locked? }
-        membership = matches.find { |m| m.can?("app.#{app}") } || matches.first
+        # Two people may share a PIN by accident; prefer the one who may use this device's app. Found by the PIN
+        # lookup; only members without one yet are bcrypt-checked (Auth::PinMatch).
+        may_use = ->(m) { m.can?("app.#{app}") }
+        matches = Auth::PinMatch.call(pin, among: Membership.active.includes(:role, :user),
+                                           keep: ->(m) { m.branch_allowed?(current_device.branch_id) && !m.pin_locked? },
+                                           enough: ->(found) { found.any?(&may_use) })
+        membership = matches.find(&may_use) || matches.first
         unless membership
           # Nobody is named by a wrong PIN, so the till that typed it takes the strike, not every member with a PIN.
           Auth::PinThrottle.failed!(throttle)

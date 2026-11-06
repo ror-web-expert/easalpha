@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_110300) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1245,6 +1245,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_000001) do
     t.string "permissions_mode", default: "role", null: false
     t.string "staff_type", null: false
     t.string "cashier_role"
+    t.string "pin_lookup"
+    t.index ["business_id", "pin_lookup"], name: "index_memberships_on_business_id_and_pin_lookup", where: "(pin_lookup IS NOT NULL)"
     t.index ["business_id", "staff_type"], name: "index_memberships_on_business_id_and_staff_type"
     t.index ["business_id", "user_id"], name: "index_memberships_on_business_id_and_user_id", unique: true
     t.index ["business_id"], name: "index_memberships_on_business_id"
