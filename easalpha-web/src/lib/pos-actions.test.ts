@@ -579,6 +579,16 @@ describe("an offline staff meal by a cashier without orders.staff_meal (QA K8)",
     await expect(saveOrder(draft(), { place: true })).rejects.toMatchObject({ code: "staff_meal.offline" });
   });
 
+  it("lets a line be added to a queued staff meal a manager marked: the sync checks the record's creator", async () => {
+    h.permissions = ["orders.create", "payments.take"];
+    h.online = false;
+    h.rows.set("sm-2", { ...cartToLocal(draft(), "placed"), till_serial: "T1-009", label: "T1-009" });
+    h.queued.push({ type: "order", id: "sm-2", payload: { is_staff_meal: true, lines: [] } });
+    const r = await saveOrder({ ...draft(), saved: true, local_only: true, lines: [...draft().lines, openLine("Naan", 5000)] });
+    expect(r.offline).toBe(true);
+    expect((h.queued[0].payload.lines as unknown[]).length).toBe(2);
+  });
+
   it("still closes offline an order the server already holds as a staff meal (a manager approved it online)", async () => {
     h.permissions = ["orders.create", "payments.take"];
     server = fresh([["Chai", 10000]]);
