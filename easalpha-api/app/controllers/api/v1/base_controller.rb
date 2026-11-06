@@ -143,12 +143,30 @@ module Api
         raise Api::Errors::Forbidden.new("permission.escalation", "You cannot grant permissions you do not hold: #{extra.first(5).join(', ')}") if extra.any?
       end
 
-      # Manager approval by PIN for a sensitive action. Returns the approving membership.
+      # Manager approval by PIN for a sensitive action. Returns the approving membership. A permission the till's
+      # dialog did not show the manager (not in approval_codes) is not approved by that PIN: the answer names it, and
+      # the dialog asks again with it listed.
       def require_approval!(permission, pin: params[:approver_pin])
         return current_membership if current_membership.can?(permission)
-        approver = Auth::PinApproval.find_approver(pin: pin, permission: permission, exclude_membership: current_membership)
-        raise Api::Errors::Forbidden.new("approval.required", "A manager PIN is required for this action") unless approver
+        codes = approval_codes
+        approver = Auth::PinApproval.find_approver(pin: pin, permission: permission, exclude_membership: current_membership) if codes.nil? || codes.include?(permission)
+        raise Api::Errors.approval_required([ permission ]) unless approver
+        log_legacy_approval("approves #{permission}") if codes.nil?
         approver
+      end
+
+      # The permission codes the manager approved in the till's PIN dialog (approval_codes), unknown codes dropped; nil
+      # when the request sent none (a till from before 6 Nov 2026, R6).
+      def approval_codes
+        return nil unless params.key?(:approval_codes)
+        Array(params[:approval_codes]).map(&:to_s) & Permission.codes
+      end
+
+      # Tills that send a PIN without approval_codes keep working for one release; this line shows when none are left.
+      def log_legacy_approval(what)
+        return if @legacy_approval_logged
+        @legacy_approval_logged = true
+        Rails.logger.warn("[approval.legacy] #{controller_path}##{action_name}: approver_pin without approval_codes #{what} (business #{current_business&.id}, device #{current_device&.id || '-'})")
       end
 
       # --- responses ----------------------------------------------------------------------

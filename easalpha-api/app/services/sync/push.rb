@@ -1,9 +1,9 @@
 module Sync
   # Applies a till's offline queue in order. Every record carries the UUID the device made; repeats are duplicates, never double writes.
-  # records: [{ type, id, membership_id?, approver_pin?, payload }]
+  # records: [{ type, id, membership_id?, approver_pin?, approval_codes?, payload }]
   # The pushing session (actor) is the cashier signed in on the till; a record may name another member who signed in
   # on this till before (A2). approver_pin is a manager PIN typed on the till for that record (A3): it is checked here
-  # and never stored.
+  # and never stored. approval_codes are the permissions the till's dialog showed with it (R6): the PIN grants those.
   class Push
     TYPES = %w[order order_update payment refund void shift_open shift_close cash_movement meal_claim customer_payment].freeze
     CHARGE_KEYS = %i[service_charge_percent service_charge_fixed_minor delivery_charge_percent].freeze
@@ -28,8 +28,10 @@ module Sync
     def apply(record, batch)
       # The PIN leaves the record first: a rejection keeps the payload, the audit log keeps what was approved, neither keeps the PIN.
       pin = record.delete(:approver_pin).to_s
+      codes = record.key?(:approval_codes) ? Array(record.delete(:approval_codes)).map(&:to_s) & Permission.codes : nil
       type, id, payload = record[:type].to_s, record[:id].to_s, (record[:payload] || {}).to_h.with_indifferent_access
       payload.delete(:approver_pin)
+      payload.delete(:approval_codes)
       record[:payload] = payload
       return reject(record, batch, "sync.type", "Unknown record type #{type}") unless TYPES.include?(type)
       return reject(record, batch, "sync.id", "Record id must be a UUID") unless id.match?(/\A[0-9a-f-]{36}\z/i)
@@ -38,11 +40,11 @@ module Sync
         return reject(record, batch, "actor.unknown", "That staff member has not signed in on this till") if record[:membership_id].present?
         return reject(record, batch, "sync.member", "Staff member is not active at this branch") unless type == "meal_claim" # a kiosk has no cashier
       end
-      @approvals = approvals_for(pin, actor)
+      @approvals = approvals_for(pin, actor, codes)
       status = send("apply_#{type}", id, payload, actor)
       { id: id, type: type, status: status }
     rescue Api::Errors::ApiError => e
-      reject(record, batch, e.code, e.message)
+      reject(record, batch, e.code, e.message, e.details)
     rescue ActiveRecord::RecordNotFound => e
       reject(record, batch, "not_found", e.message)
     rescue ActiveRecord::RecordNotUnique
@@ -72,25 +74,31 @@ module Sync
       RefreshToken.where(membership_id: membership.id, device_id: @device.id).where("created_at > ?", SIGNED_IN_WITHIN.ago).exists?
     end
 
-    # One manager PIN typed on the till covers every guarded step of that record, as approver_pin does online
-    # (OrdersController#collect_approvals). A wrong PIN counts against the cashier's PIN throttle, as online, and
-    # leaves the record with no approval: the guarded step then answers approval.required.
-    def approvals_for(pin, actor)
+    # A manager PIN typed on the till grants that record's guarded steps the till's dialog showed the manager
+    # (approval_codes, from the rejection's details.permissions) and the manager holds, as approver_pin does online
+    # (OrdersController#collect_approvals). A record from a till before 6 Nov 2026 has no codes: its PIN still covers
+    # every guarded step, for one release, and the log says so (R6). A wrong PIN counts against the cashier's PIN
+    # throttle, as online, and leaves the record with no approval: the guarded step then answers approval.required.
+    def approvals_for(pin, actor, codes)
       return {} if pin.blank? || actor.nil?
       approver = Auth::PinApproval.find_approver(pin: pin, permission: "app.pos", exclude_membership: actor)
-      approver ? approver.permission_codes.index_with { approver } : {}
+      return {} unless approver
+      return (codes & approver.permission_codes).index_with { approver } if codes
+      Rails.logger.warn("[approval.legacy] sync push: approver_pin without approval_codes grants every permission of membership #{approver.id} (device #{@device.id})")
+      approver.permission_codes.index_with { approver }
     end
 
     # The member whose PIN approved this step, nil when the cashier holds the permission themselves (as online).
+    # The refusal names the permission, so the till's Try again asks the manager for exactly that.
     def approver_for(permission, actor)
       return nil if actor.can?(permission)
-      @approvals[permission] || raise(Api::Errors::Forbidden.new("approval.required", "A manager with #{permission} must approve this"))
+      @approvals[permission] || raise(Api::Errors.approval_required([ permission ], "A manager with #{permission} must approve this"))
     end
 
-    def reject(record, batch, code, message)
+    def reject(record, batch, code, message, details = nil)
       SyncRejection.create!(branch_id: @branch.id, device_id: @device.id, sync_batch_id: batch.id, record_type: record[:type].to_s, record_id: (record[:id].to_s.presence || SecureRandom.uuid),
                             code: code, message: message, payload: record.to_h)
-      { id: record[:id], type: record[:type], status: "rejected", code: code, message: message }
+      { id: record[:id], type: record[:type], status: "rejected", code: code, message: message, details: details }.compact
     end
 
     def complete?(payload) = ActiveModel::Type::Boolean.new.cast(payload[:complete]) || payload[:status].to_s == "completed"

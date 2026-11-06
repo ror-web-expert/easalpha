@@ -439,7 +439,7 @@ export interface Floor { id: ID; branch_id: ID; name: string; sort_order: number
 // ---- Sync ----
 export type SyncRecordType = "order" | "order_update" | "payment" | "refund" | "void" | "shift_open" | "shift_close" | "cash_movement" | "meal_claim" | "customer_payment";
 export interface SyncRecord { type: SyncRecordType; id: ID; membership_id?: ID; payload: Record<string, unknown> }
-export interface SyncResult { id: ID; type: string; status: "accepted" | "duplicate" | "rejected"; code?: string; message?: string }
+export interface SyncResult { id: ID; type: string; status: "accepted" | "duplicate" | "rejected"; code?: string; message?: string; details?: { permissions?: string[]; labels?: Record<string, string> } }
 export interface SyncPushResponse { batch_id: ID; results: SyncResult[]; server_time: string }
 export interface SyncRejection {
   id: ID; device_id: ID | null; record_type: string; record_id: ID; code: string; message: string; payload: Record<string, unknown>;

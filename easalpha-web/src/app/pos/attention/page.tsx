@@ -47,8 +47,10 @@ export default function AttentionPage() {
   const retry = async (a: AttentionItem) => {
     try {
       if (APPROVAL_CODES.includes(a.code)) {
-        // The PIN dialog opens at once; the PIN rides with this one push and is forgotten after it (sync.ts approvals).
-        await run((pin) => (pin ? retryAttention(a.id, pin) : Promise.reject(new ApiError(a.code, a.message, 403))), `Retry ${a.type.replace("_", " ")} with a manager's approval`);
+        // The PIN dialog opens at once, listing what the record needs; the PIN rides with this one push, approving
+        // only those codes, and is forgotten after it (sync.ts approvals).
+        const asked = { permissions: a.permissions ?? [], labels: a.permission_labels ?? {} };
+        await run((pin, codes) => (pin ? retryAttention(a.id, pin, codes) : Promise.reject(new ApiError(a.code, a.message, 403, asked))), `Retry ${a.type.replace("_", " ")} with a manager's approval`);
       } else await retryAttention(a.id);
     } catch (e) {
       if (!(e instanceof ApiError && e.code === "approval.cancelled")) toast.error("Could not retry", errorMessage(e));
@@ -87,6 +89,7 @@ export default function AttentionPage() {
                 <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-danger" /> {a.type.replace("_", " ")} · <span className="font-mono text-xs">{a.code}</span></CardTitle><span className="text-xs text-fg-muted">{formatDateTime(a.created_at)}</span></CardHeader>
                 <CardBody className="space-y-3">
                   <p className="text-base">{a.message}</p>
+                  {withPin && a.permissions?.length ? <p className="text-sm text-fg-secondary">A manager approves: {a.permissions.map((c) => a.permission_labels?.[c] ?? c).join(", ")}</p> : null}
                   {isMoneyRecord(a) ? <p className="text-sm text-warning-ink">Money the server has not recorded. The order stays on the Orders screen marked Rejected until this is retried.</p> : null}
                   {held.length ? (
                     <div className="rounded-lg bg-muted p-3 text-sm">

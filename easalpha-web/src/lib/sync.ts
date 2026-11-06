@@ -2,6 +2,7 @@
 // Offline queue: every till action is saved locally first, then pushed to POST /sync/push in order with backoff.
 // Rejected records move to the Needs attention list; accepted or duplicate records are dropped from the queue.
 import { api, ApiError } from "@/lib/api";
+import { approvalAsk, mergeAsk, type ApprovalAsk } from "@/lib/approval-codes";
 import { db, type AttentionItem, type QueueItem } from "@/lib/db";
 import { useSyncStore } from "@/store/sync";
 import { useCatalogStore } from "@/store/catalog";
@@ -166,8 +167,17 @@ export function planBatch(pending: QueueItem[], opts: { now: number; queuedOrder
   return { send, held, blocked };
 }
 
-// Manager PINs for a "Try again" from the Attention page, kept in memory for one push only: never in IndexedDB.
-const approvals = new Map<string, string>();
+// Manager PINs for a "Try again" from the Attention page, with the permissions the dialog showed the manager, kept in
+// memory for one push only: never in IndexedDB.
+const approvals = new Map<string, { pin: string } & ApprovalAsk>();
+/** Refusals a manager's PIN resolves; their rejection keeps the permissions it named for the next Try again. */
+const APPROVAL_REFUSALS = ["approval.required", "permission.denied", "approval.invalid"];
+
+/** approver_pin with the codes it approves (R6); a PIN with no known codes goes alone, the form the server still takes. */
+function approvalFields(a: ({ pin: string } & ApprovalAsk) | undefined) {
+  if (!a) return {};
+  return a.codes.length ? { approver_pin: a.pin, approval_codes: a.codes } : { approver_pin: a.pin };
+}
 
 async function queueSnapshot() {
   const all = (await db.queue.toArray()) as QueueItem[];
@@ -208,9 +218,12 @@ export async function processQueue(): Promise<void> {
     if (!items.length) { store.set({ status: "online" }); await wake(now); return; }
     store.set({ status: "syncing" });
     await db.queue.bulkPut(items.map((i) => ({ ...i, status: "sending" as const, sending_at: now })));
+    // What each record's PIN approved, kept past the push so a rejection can list it again with anything new.
+    const approved = new Map<string, ApprovalAsk>();
+    for (const i of items) { const a = approvals.get(i.id); if (a) approved.set(i.id, { codes: a.codes, labels: a.labels }); }
     let res: SyncPushResponse;
     try {
-      const records = items.map((i) => ({ type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload, ...(approvals.has(i.id) ? { approver_pin: approvals.get(i.id) } : {}) }));
+      const records = items.map((i) => ({ type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload, ...approvalFields(approvals.get(i.id)) }));
       res = await api<SyncPushResponse>("/sync/push", { method: "POST", auth: "pos", timeoutMs: 60000, body: { records } });
     } catch (e) {
       const err = e instanceof ApiError ? e : null;
@@ -241,8 +254,11 @@ export async function processQueue(): Promise<void> {
         const parent = item ? parentOrderId(item) : null;
         const blockedBy = parent && (rejectedNow.has(parent) || snap.rejectedOrderIds.has(parent)) ? parent : undefined;
         await db.queue.delete(r.id);
+        // A refusal for approval keeps what the manager must approve: what the last PIN approved, then what the server named.
+        const ask = APPROVAL_REFUSALS.includes(r.code ?? "") ? mergeAsk(approved.get(r.id) ?? { codes: [], labels: {} }, approvalAsk(r)) : null;
         // __membership_id keeps the cashier who made the record, so Try again is attributed to them, not to whoever is signed in then.
-        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}) });
+        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}),
+          ...(ask?.codes.length ? { permissions: ask.codes, permission_labels: ask.labels } : {}) });
         await markRejected(r.type as SyncRecordType, r.id, item, r.message ?? "Rejected");
       }
     }
@@ -370,13 +386,15 @@ async function requeue(a: AttentionItem) {
 
 /**
  * Try again from the Attention page. `approverPin` is a manager's PIN for a record refused as approval.required or
- * permission.denied: it travels with that one push and is forgotten afterwards. Records held back by this one (a
- * payment waiting on its rejected order) go back to the queue with it, so they follow it in the same push.
+ * permission.denied: it travels with that one push and is forgotten afterwards, with `codes`, what the PIN dialog
+ * showed the manager (the record's permissions when not given), as approval_codes: the server grants only those.
+ * Records held back by this one (a payment waiting on its rejected order) go back to the queue with it, so they
+ * follow it in the same push.
  */
-export async function retryAttention(id: string, approverPin?: string) {
+export async function retryAttention(id: string, approverPin?: string, codes?: string[]) {
   const a = await db.attention.get(id);
   if (!a) return;
-  if (approverPin) approvals.set(id, approverPin);
+  if (approverPin) approvals.set(id, { pin: approverPin, codes: codes ?? a.permissions ?? [], labels: a.permission_labels ?? {} });
   await requeue(a);
   for (const child of ((await db.attention.toArray()) as AttentionItem[]).filter((x) => x.blocked_by === id)) await requeue(child);
   await refreshCounts();

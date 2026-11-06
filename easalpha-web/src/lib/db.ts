@@ -85,6 +85,8 @@ export interface AttentionItem {
   id: string; type: string; code: string; message: string; payload: Record<string, unknown>; created_at: string;
   /** The order whose rejection holds this record back (a payment for a rejected order): shown under it, retried and dismissed with it. */
   blocked_by?: string;
+  /** What a manager must approve for it (the server's details.permissions, after what the last Try again approved), with labels. */
+  permissions?: string[]; permission_labels?: Record<string, string>;
 }
 
 export interface KV { key: string; value: unknown }

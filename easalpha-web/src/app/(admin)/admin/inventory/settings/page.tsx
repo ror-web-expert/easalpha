@@ -48,7 +48,8 @@ export default function StockSettingsPage() {
     setResetting(true);
     setResetPinError(null);
     try {
-      const r = await api<StockResetResult>("/stock/reset", { method: "POST", body: { section_id: resetSection || undefined, reason: resetReason.trim() || undefined, approver_pin: pin } });
+      // The PIN approves the reset and nothing else (approval_codes, review of 6 Nov 2026 R6).
+      const r = await api<StockResetResult>("/stock/reset", { method: "POST", body: { section_id: resetSection || undefined, reason: resetReason.trim() || undefined, approver_pin: pin, approval_codes: ["settings.manage"] } });
       setResetDocs(r.documents);
       setResetPin(false);
       ["stock_levels", "stock_valuation", "stock_items", "stock_item", "stock_item_ledger", "stock_documents", "daily_sheet"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -142,7 +143,7 @@ export default function StockSettingsPage() {
         </Card>
       </div>
       <ConfirmDialog open={resetConfirm} onClose={() => setResetConfirm(false)} onConfirm={() => { setResetConfirm(false); setResetPinError(null); setResetPin(true); }} title={`Reset stock in ${resetTarget}?`} description="Every non-zero level is adjusted to zero in a posted document dated today. A manager PIN is asked for next." confirmLabel="Continue" destructive />
-      <PinDialog open={resetPin} onClose={() => setResetPin(false)} onSubmit={runReset} what={`Reset stock in ${resetTarget}`} error={resetPinError} loading={resetting} />
+      <PinDialog open={resetPin} onClose={() => setResetPin(false)} onSubmit={runReset} what={`Reset stock in ${resetTarget}`} approves={[{ code: "settings.manage", label: "Change business settings" }]} error={resetPinError} loading={resetting} />
     </>
   );
 }

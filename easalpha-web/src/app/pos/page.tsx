@@ -205,7 +205,8 @@ function SellScreen() {
       if (!(e instanceof ApiError && e.code === "pin.required")) throw e;
       setOrderPin(undefined);
       toast.error("PIN not accepted", "A manager with REOPEN_ORDER can approve instead.");
-      return run((approver) => (approver ? fn({ approver_pin: approver }) : Promise.reject(new ApiError("approval.required", e.message, 403))), label);
+      // e.details names REOPEN_ORDER, so the dialog shows it and the manager's PIN approves that (R6).
+      return run((approver) => (approver ? fn({ approver_pin: approver }) : Promise.reject(new ApiError("approval.required", e.message, 403, e.details))), label);
     }
   };
 
