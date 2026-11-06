@@ -81,7 +81,7 @@ module Canteen
         internal_method!(SUBSIDY_CODE, "Company subsidy")
         lines << { method_code: SUBSIDY_CODE, amount_minor: claim.company_share_minor }
       end
-      Payments::Processor.new(order, actor: actor, device: device).call(payments: lines)
+      Payments::Processor.new(order, actor: actor, device: device).call(payments: lines, internal: true) # the company share is on an internal method
     end
 
     # Methods the system pays with that the till never shows. They move no money, so they have no payment account.
@@ -113,7 +113,7 @@ module Canteen
         if (order = claim.order)
           if order.paid_minor.positive?
             Payments::Refunder.call(order, amount_minor: claim.worker_price_minor, method_code: "khata", reason: "canteen: #{reason}", actor: by) if claim.worker_price_minor.positive?
-            Payments::Refunder.call(order, amount_minor: claim.company_share_minor, method_code: SUBSIDY_CODE, reason: "canteen: #{reason}", actor: by) if claim.company_share_minor.positive?
+            Payments::Refunder.call(order, amount_minor: claim.company_share_minor, method_code: SUBSIDY_CODE, reason: "canteen: #{reason}", actor: by, internal: true) if claim.company_share_minor.positive?
           elsif order.status.in?(%w[draft held placed preparing ready served])
             Orders::Transitions.void!(order, reason: "canteen: #{reason}", actor: by, approver: nil)
           end

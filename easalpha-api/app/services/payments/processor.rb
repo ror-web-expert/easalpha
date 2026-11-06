@@ -14,7 +14,9 @@ module Payments
     # already happened, so a non-cash payment above what the server asks for is taken at the amount due instead of
     # refusing the whole order (a khata sale then puts the server's figure on the account), and one that finds nothing
     # left to pay is skipped. Either is written to the audit log with what the till sent.
-    def call(payments:, tip_minor: 0, offline: false)
+    # internal: the system paying with an internal method (the canteen claim's company share); a user's payment, online
+    # or from the sync queue, never may, since it moves no money (final round, item 14).
+    def call(payments:, tip_minor: 0, offline: false, internal: false)
       lines = Array(payments).map { |p| p.to_h.with_indifferent_access }
       existing = lines.map { |l| l[:id].presence && own_payment(l[:id]) }
       return Result.new(order: @order, payments: existing.compact, change_minor: 0) if lines.any? && existing.all?
@@ -43,6 +45,7 @@ module Payments
           day = money_day(l)
           raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@order.branch_id, day)
           method = PaymentMethod.active.find_by!(code: l[:method_code].to_s)
+          raise Api::Errors::Unprocessable.new("payment.method_internal", "#{method.name} is the system's own method, never a till's: choose cash, card, a wallet, bank or the account") if method.internal? && !internal
           amount = l[:amount_minor].to_i
           raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount.positive?
           raise Api::Errors::BadRequest.new("payment.reference_required", "#{method.name} needs a reference") if method.needs_reference && l[:reference].blank? && l[:card_terminal_ref].blank?

@@ -36,8 +36,11 @@ module Payments
       raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is still #{order.status}: only the Rs #{Customers::Notify.rupees(excess)} paid above its total can be refunded before it is completed.")
     end
 
-    def self.call(order, amount_minor:, method_code:, reason:, actor:, approver: nil, device: nil, shift: nil, id: nil)
+    # internal: the system refunding by an internal method (a cancelled canteen meal's company share); a user's refund,
+    # online or from the sync queue, never may (final round, item 14).
+    def self.call(order, amount_minor:, method_code:, reason:, actor:, approver: nil, device: nil, shift: nil, id: nil, internal: false)
       method = PaymentMethod.active.find_by!(code: method_code)
+      raise Api::Errors::Unprocessable.new("refund.method_internal", "#{method.name} is the system's own method: refund in cash, by card, wallet or bank, or to the account") if method.internal? && !internal
       refund = nil
       refunded = captured = full = nil
       Order.transaction do
