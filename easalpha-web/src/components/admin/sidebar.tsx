@@ -6,8 +6,8 @@ import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Building2, ChevronDown, ChevronRight, ChevronsUpDown, CornerDownLeft, LogOut, Menu as MenuIcon, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV, isNavActive as isActive, navItemFor, type NavGroup, type NavItem } from "./nav";
-import { useAuthStore, hasPermission } from "@/store/auth";
+import { NAV, guardItemFor, isNavActive as isActive, navAllows, navItemFor, pageAllows, type NavGroup, type NavItem } from "./nav";
+import { useAuthStore } from "@/store/auth";
 import { api } from "@/lib/api";
 import type { Session } from "@/lib/types";
 import { Badge, Button, ThemeToggle } from "@/components/ui";
@@ -24,7 +24,7 @@ export function useVisibleNav(): NavGroup[] {
   const perms = useAuthStore((s) => s.session?.permissions);
   const modules = useModules();
   return useMemo(
-    () => NAV.map((g) => ({ ...g, items: g.items.filter((it) => (!it.perms || hasPermission(perms, ...it.perms)) && (!it.module || modules[it.module])) })).filter((g) => g.items.length),
+    () => NAV.map((g) => ({ ...g, items: g.items.filter((it) => navAllows(it, perms) && (!it.module || modules[it.module])) })).filter((g) => g.items.length),
     [perms, modules],
   );
 }
@@ -320,6 +320,20 @@ function DayBar() {
   );
 }
 
+/**
+ * A page opened by URL (a bookmark, an old link, typing it) that the session cannot use: the standard no-access state
+ * instead of a page drawn around failing calls. The page's sidebar entry says what its calls need (nav.ts); a page that
+ * asks less (staff lists, settings forms) shows read-only instead (QA of 6 Nov 2026, P5, P6).
+ */
+function PageGuard({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const perms = useAuthStore((s) => s.session?.permissions);
+  const item = useMemo(() => guardItemFor(pathname ?? ""), [pathname]);
+  if (!item || pageAllows(item, perms)) return <>{children}</>;
+  const asks = [item.open && item.open !== true ? item.open : item.perms, ...(item.open ? [] : item.all ?? [])].filter((g): g is string[] => !!g?.length);
+  return <NoAccess kind="permission" detail={`Missing permission: ${asks.map((g) => g.join(" or ")).join(", and ")}`} />;
+}
+
 /** A page that belongs to a switched-off module (opened from a bookmark or an old link) explains where to switch it on
  *  instead of showing the API's module.disabled error. */
 function ModuleGate({ children }: { children: React.ReactNode }) {
@@ -411,7 +425,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <main className="mx-auto w-full min-w-0 max-w-[1800px] flex-1 px-4 pb-24 pt-4 sm:px-6">
           <AnnouncementBanner />
           <NeedHelpFab />
-          <ModuleGate>{children}</ModuleGate>
+          <ModuleGate><PageGuard>{children}</PageGuard></ModuleGate>
         </main>
       </div>
       <PageSearch groups={groups} open={searchOpen} onClose={() => setSearchOpen(false)} />

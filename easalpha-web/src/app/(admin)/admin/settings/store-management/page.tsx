@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/admin/page";
 import { useList, useRemove, useSave } from "@/components/admin/crud";
 import { branchCode } from "@/components/admin/branch-helpers";
 import { Badge, Button, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { ReadOnly } from "@/components/admin/read-only";
 
 interface Form { id?: string; name: string; code: string; address: string; city: string; phone: string; time_zone: string; business_day_start: string; day_end_time: string; tax_registration: { authority: string; ntn: string; strn: string; pos_id: string; token: string } }
 const blank: Form = { name: "", code: "", address: "", city: "", phone: "", time_zone: "Asia/Karachi", business_day_start: "06:01", day_end_time: "02:01", tax_registration: { authority: "none", ntn: "", strn: "", pos_id: "", token: "" } };
@@ -17,7 +18,7 @@ export default function BranchesPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [del, setDel] = useState<Branch | null>(null);
   return (
-    <>
+    <ReadOnly>
       <PageHeader icon={Building2} title="Store Management" description="Branches managed from this dashboard. Each has its own business-day window, tax registration and devices." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New branch</Button>} />
       {list.isLoading ? <Loading /> : (
         <Table>
@@ -64,6 +65,6 @@ export default function BranchesPage() {
         ) : null}
       </Dialog>
       <ConfirmDialog open={!!del} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.id, { onSuccess: () => setDel(null) })} title={`Archive ${del?.name}?`} confirmLabel="Archive" destructive loading={remove.isPending} />
-    </>
+    </ReadOnly>
   );
 }

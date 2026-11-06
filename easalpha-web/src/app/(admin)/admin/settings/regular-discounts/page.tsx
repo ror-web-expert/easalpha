@@ -10,6 +10,7 @@ import { useAction, useRemove, useSave } from "@/components/admin/crud";
 import { CustomerPicker, useCustomersById } from "@/components/admin/customers-picker";
 import { discountValueLabel, ORDER_TYPE_OPTIONS, sortTiers, withinDaysLabel } from "@/components/admin/marketing-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Label, Loading, MoneyInput, Select, Switch, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { ReadOnly } from "@/components/admin/read-only";
 
 // SPEC Regular discounts: recency tiers. If the customer's last order was within N days, take X off. The POS applies
 // the best match automatically and the smallest day window wins. Exclusions work per tier, plus a global blocked list.
@@ -42,7 +43,7 @@ export default function RegularDiscountsPage() {
   const nameOf = (ids: string[], source: { id: string; name: string }[]) => ids.map((id) => source.find((x) => x.id === id)?.name ?? "?");
   if (q.isLoading) return <Loading />;
   return (
-    <>
+    <ReadOnly perms={["settings.manage", "MARKETING"]}>
       <PageHeader icon={Percent} title="Regular Discounts" description="Recency tiers: if the customer's last order was within N days, take X off. The till applies the best match on its own." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New tier</Button>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -140,6 +141,6 @@ export default function RegularDiscountsPage() {
       </Dialog>
       <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title="Remove this tier?" description={removing ? `${removing.name} (${withinDaysLabel(removing.within_days)}) stops applying at the till. Past orders keep their discount.` : undefined} confirmLabel="Remove" destructive loading={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing.id, { onSuccess: () => setRemoving(null) })} />
-    </>
+    </ReadOnly>
   );
 }

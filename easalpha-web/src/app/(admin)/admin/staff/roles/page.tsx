@@ -9,6 +9,7 @@ import { useAction, useList, useRemove, useSave } from "@/components/admin/crud"
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, ConfirmDialog, Dialog, Field, Input, Loading, Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { permissionSections } from "@/components/admin/permission-sections";
+import { ReadOnly } from "@/components/admin/read-only";
 
 export default function RolesPage() {
   const roles = useList<Role>("roles", "/roles");
@@ -41,8 +42,9 @@ export default function RolesPage() {
   const isOn = (p: Permission) => (readOnly ? !p.restriction : !!map[p.code]?.on);
   const setMany = (list: Permission[], on: boolean) => setMap((m) => { const next = { ...m }; for (const p of list) next[p.code] = { on, limit: m[p.code]?.limit ?? "" }; return next; });
   const toggleOpen = (name: string) => setClosed((c) => { const n = new Set(c); if (n.has(name)) n.delete(name); else n.add(name); return n; });
+  // Without staff.manage the roles are for looking only (QA of 6 Nov 2026, P6): GET /roles answers, every save is refused.
   return (
-    <>
+    <ReadOnly perms={["staff.manage"]}>
       <PageHeader icon={Shield} title="Roles" description="System roles can change permissions but not names. Copy one to make a custom role." actions={<Button onClick={() => setCreate({ name: "", copy_from_role_id: sel })}><Plus className="h-4 w-4" /> New role</Button>} />
       {roles.isLoading || registry.isLoading ? <Loading /> : (
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
@@ -107,6 +109,6 @@ export default function RolesPage() {
         {create ? <div className="space-y-3"><Field label="Name"><Input value={create.name} onChange={(e) => setCreate({ ...create, name: e.target.value })} autoFocus /></Field><Field label="Copy permissions from"><Select value={create.copy_from_role_id} onChange={(e) => setCreate({ ...create, copy_from_role_id: e.target.value })}>{roles.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select></Field></div> : null}
       </Dialog>
       <ConfirmDialog open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate(sel, { onSuccess: () => { setDel(false); setSel(""); } })} title={`Delete role ${role?.name}?`} description="Members must be moved to another role first." confirmLabel="Delete" destructive loading={remove.isPending} />
-    </>
+    </ReadOnly>
   );
 }

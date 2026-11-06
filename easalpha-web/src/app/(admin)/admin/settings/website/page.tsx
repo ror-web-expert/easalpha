@@ -11,6 +11,7 @@ import { SectionForm, SectionList } from "@/components/admin/marketing-website";
 import { Badge, Button, Card, CardBody, Field, Input, Loading, Switch } from "@/components/ui";
 import { QrCode } from "@/components/qr-code";
 import { toast } from "@/store/toast";
+import { ReadOnly } from "@/components/admin/read-only";
 
 // SPEC Website Config: Store Identity, Pages, Menu Slider, Documents, Footer, Availability, Customer Sign-ups, Location,
 // Branches, Delivery, Pricing, Contact, Social Media, WhatsApp, Instagram, SEO, Mobile App and System. Each section
@@ -39,7 +40,7 @@ export default function WebsiteConfigPage() {
   const published = q.data?.published === true;
   if (q.isLoading || !q.data) return <Loading />;
   return (
-    <>
+    <ReadOnly>
       <PageHeader icon={Globe} title="Website Config" description="The storefront builder: one screen per section. Save each section as you go; Published controls whether the site answers at all." actions={<>
         {slug ? <a href={`/store/${slug}`} target="_blank" rel="noreferrer"><Button variant="secondary"><ExternalLink className="h-4 w-4" /> View storefront</Button></a> : null}
       </>} />
@@ -62,7 +63,7 @@ export default function WebsiteConfigPage() {
         <SectionList sections={sections} value={section} onChange={setSection} dirty={dirtySections} />
         <SectionForm section={section} values={values} onChange={setValue} onSave={onSave} saving={saveSection.isPending} dirty={dirtySections.has(section)} />
       </div>
-    </>
+    </ReadOnly>
   );
 }
 

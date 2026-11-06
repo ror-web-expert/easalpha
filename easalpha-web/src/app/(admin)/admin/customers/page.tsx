@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Plus, Upload, Check, UserX, UserCheck } from "lucide-react";
+import { useCan } from "@/store/auth";
 import { api } from "@/lib/api";
 import type { Customer, CustomerGroup, CustomerInsights } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
@@ -49,7 +50,10 @@ export default function CustomersPage() {
   const list = usePagedList<Customer>(["customers"], "/customers", { q: dq, group_id: group, status, with_balance: khata && withBalance ? "true" : "" });
   const summary = useQuery({ queryKey: ["ledger_summary"], queryFn: () => api<{ total_outstanding_minor: number; customers_with_due: number; credit_customers: number; total_customers: number; collected_this_month_minor: number }>("/customers/ledger_summary"), enabled: khata });
   // Status counts for the tabs come from the insights totals (one cheap call; rows are capped at 1).
-  const counts = useQuery({ queryKey: ["customer_status_counts"], queryFn: () => api<CustomerInsights>("/customers/insights", { query: { limit: 1 } }), select: (r) => r.totals.by_status });
+  // GET /customers/insights needs customers.manage; someone who may only look (an accountant) gets the list without the
+  // counts, not a failed call (QA of 6 Nov 2026, P5).
+  const canCount = useCan()("customers.manage");
+  const counts = useQuery({ queryKey: ["customer_status_counts"], queryFn: () => api<CustomerInsights>("/customers/insights", { query: { limit: 1 } }), select: (r) => r.totals.by_status, enabled: canCount });
   const [form, setForm] = useState<Form | null>(null);
   const { submit, busy, dialog } = usePinRetry();
   const approve = useAction<string>(["customers", "customer_status_counts"], (id) => api(`/customers/${id}/approve`, { method: "POST" }), "Customer approved");

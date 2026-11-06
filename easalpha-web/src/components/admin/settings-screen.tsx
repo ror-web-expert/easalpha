@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type { SettingKey, SettingsResponse } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
+import { ReadOnlyNotice, useCanEdit } from "@/components/admin/read-only";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Field, Input, Label, Loading, Select, Switch, Textarea } from "@/components/ui";
 
 // SPEC "Settings and multi-outlet": every key in the typed settings store is rendered by type, grouped by screen,
@@ -119,15 +120,20 @@ export function SettingsScreenCard({ screen, keys, className }: { screen: string
     if (Object.keys(errors).length) return;
     save.mutate(values);
   };
+  // PATCH /settings needs settings.manage: anyone else sees the values with every control off and no Save (QA of 6 Nov
+  // 2026, P6: a manager's Save failed on every settings screen).
+  const canEdit = useCanEdit();
   return (
     <Card className={className}>
       <CardHeader>
         <CardTitle>{screen}</CardTitle>
-        <Button size="sm" onClick={onSave} loading={save.isPending} disabled={!dirty}>Save</Button>
+        {canEdit ? <Button size="sm" onClick={onSave} loading={save.isPending} disabled={!dirty}>Save</Button> : <Badge variant="neutral">Read only</Badge>}
       </CardHeader>
-      <CardBody className="grid gap-4 sm:grid-cols-2">
-        {keys.map((k) => <SettingControl key={k.key} setting={k} value={edited[k.key]} onChange={(v) => set(k.key, v)} error={jsonErrors[k.key]} />)}
-      </CardBody>
+      <fieldset disabled={!canEdit} className="contents">
+        <CardBody className="grid gap-4 sm:grid-cols-2">
+          {keys.map((k) => <SettingControl key={k.key} setting={k} value={edited[k.key]} onChange={(v) => set(k.key, v)} error={jsonErrors[k.key]} />)}
+        </CardBody>
+      </fieldset>
     </Card>
   );
 }
@@ -241,9 +247,11 @@ export function SettingsVersion({ version }: { version: number | undefined }) {
 export function SettingsGroupPage({ group, title, description, icon, before, after }: { group: string; title: string; description?: string; icon?: LucideIcon; before?: React.ReactNode; after?: React.ReactNode }) {
   const q = useSettings();
   const g = q.data?.groups[group];
+  const canEdit = useCanEdit();
   return (
     <>
       <PageHeader icon={icon} title={title} description={description} />
+      {canEdit ? null : <ReadOnlyNotice />}
       <SettingsVersion version={q.data?.version} />
       {q.isLoading ? <Loading /> : (
         <div className="grid gap-4 lg:grid-cols-2">
