@@ -98,6 +98,7 @@ module Orders
         Story.record!(order, "cancelled", actor: actor, device: device, amount_before: order.total_minor, amount_after: 0, note: reason)
         Kitchen::Tickets.create_for!(order, kind: "cancelled", items: active) if order.sent?
         order.dining_table&.release! if order.table_id
+        release_consumed!(order)
         AuditLog.record(action: "void", record: order, after: { reason: reason, amount_minor: order.total_minor, stock_action: stock_action }, approved_by: approver&.user)
       end
       if order.stock_deducted_at
@@ -108,10 +109,19 @@ module Orders
         end
       end
       Deliveries::Manager.failed_by_void!(order)
-      Loyalty.refund_on_void!(order)
       Alerts.big_void(order, reason: reason, approver: approver)
       Realtime.order_changed(order)
       order
+    end
+
+    # A voided order consumed nothing: each voucher it redeemed is given back, each coupon use counted against a use
+    # limit (a one-use birthday offer) is returned, and the loyalty points spent on it go back to whoever spent them.
+    def release_consumed!(order)
+      order.discounts.each { |d| Marketing::Vouchers.release!(d) if d.kind == "voucher" }
+      DiscountApplied.where(order_id: order.id).where.not(promotion_id: nil).group(:promotion_id).count.each do |promotion_id, uses|
+        Promotion.where(id: promotion_id).update_all([ "units_sold = GREATEST(units_sold - ?, 0)", uses ])
+      end
+      Loyalty.refund_on_void!(order)
     end
 
     def mark_paid!(order, actor:, device: nil)

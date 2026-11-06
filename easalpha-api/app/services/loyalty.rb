@@ -67,11 +67,15 @@ module Loyalty
     order
   end
 
+  # The points a voided order took go back, per customer: what was redeemed on it less what was already refunded. The
+  # redemption rows say whose points they were (the order's customer may have changed since), and a second run finds
+  # nothing left to give back.
   def refund_on_void!(order)
-    redeemed = LoyaltyTransaction.where(order_id: order.id, kind: "redeem").sum(:points)
-    return if redeemed.zero? || LoyaltyTransaction.where(order_id: order.id, kind: "refund").exists?
-    customer = Customer.find_by(id: order.customer_id) or return
-    post!(customer, points: -redeemed, kind: "refund", order: order, note: "Void #{order.label}")
+    LoyaltyTransaction.where(order_id: order.id, kind: %w[redeem refund]).group(:customer_id).sum(:points).each do |customer_id, net|
+      next unless net.negative?
+      customer = Customer.find_by(id: customer_id) or next
+      post!(customer, points: -net, kind: "refund", order: order, note: "Void #{order.label}")
+    end
   end
 
   def adjust!(customer, points:, note:, by:)

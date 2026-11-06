@@ -94,6 +94,9 @@ module Api
           if from_order
             from_order.items.where.not(status: "cancelled").update_all(order_id: into_order.id)
             from_order.discounts.update_all(order_id: into_order.id)
+            # What those discounts consumed moves with them, so a void of the merged order gives it back.
+            LoyaltyTransaction.where(order_id: from_order.id).update_all(order_id: into_order.id)
+            Voucher.where(redeemed_order_id: from_order.id).update_all(redeemed_order_id: into_order.id)
             Orders::Transitions.change!(from_order, "voided", actor: current_membership, device: current_device, reason: "merged into #{into.code}")
             from_order.update!(void_reason: "merged into #{into.code}", voided_at: Time.current, table_id: nil)
             into_order.items.reset
