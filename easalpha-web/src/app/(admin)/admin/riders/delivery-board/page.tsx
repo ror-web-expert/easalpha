@@ -60,7 +60,8 @@ export default function DeliveryBoardPage() {
   const unassign = (d: Delivery) => post(`/deliveries/${d.id}/unassign`, {}, `${d.order_label} unassigned`);
   const rows = list.rows;
   const counts = Object.fromEntries(DELIVERY_STATUSES.map((s) => [s, rows.filter((r) => r.status === s).length])) as Record<DeliveryStatus, number>;
-  const cashOut = rows.filter((r) => r.status === "delivered").reduce((a, r) => a + (r.cash_collected_minor ?? 0), 0);
+  // Still with the riders: cash collected on delivered orders that are neither settled nor already paid at the till.
+  const cashOut = rows.filter((r) => r.status === "delivered" && !r.settled_at && r.payment_status !== "paid").reduce((a, r) => a + (r.cash_collected_minor ?? 0), 0);
   const actions = (d: Delivery) => (
     <div className="flex flex-wrap items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
       {d.status === "unassigned" || d.status === "failed" ? <Button size="sm" variant="soft" onClick={() => start({ kind: "assign", d })}><UserPlus className="h-3.5 w-3.5" /> Assign</Button> : null}
@@ -92,7 +93,7 @@ export default function DeliveryBoardPage() {
         <Select className="w-auto" value={rider} onChange={(e) => setRider(e.target.value)}><option value="">All riders</option>{riders.data?.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</Select>
         <Checkbox label="Open only" checked={open} onChange={(e) => setOpen(e.target.checked)} />
       </FilterBar>
-      <p className="mb-4 flex items-start gap-2 rounded-md border border-info/30 bg-info-soft/40 px-3 py-2 text-xs text-fg-secondary"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" /> Delivered never closes the order; the cashier closes it at the till once the rider hands in the cash. Cash collected here feeds the rider&apos;s settlement.</p>
+      <p className="mb-4 flex items-start gap-2 rounded-md border border-info/30 bg-info-soft/40 px-3 py-2 text-xs text-fg-secondary"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" /> Delivered never closes the order. When the rider hands in an order&apos;s cash, the cashier pays it at the till; the rider&apos;s settlement in the Rider Vault pays any delivered order still unpaid. The cash is counted once either way.</p>
       {list.isLoading ? <Loading /> : view === "board" ? (
         <div className="grid gap-3 overflow-x-auto md:grid-cols-2 xl:grid-cols-4">
           {BOARD_COLUMNS.filter((s) => !open || !["delivered", "failed"].includes(s) || counts[s] > 0).map((s) => (

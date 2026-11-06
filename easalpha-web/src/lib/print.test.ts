@@ -154,6 +154,15 @@ describe("zReportLines", () => {
     expect(t.find((x) => x.startsWith("Short"))).toMatch(/Rs 10$/);
     expect(lines.at(-1)).toEqual({ cut: true });
   });
+  it("prints every drawer row the shift had, so the slip adds up to Expected (QA B8)", () => {
+    const busy: ZReport = { ...z, cash: { ...z.cash, cash_sales_minor: 95000, cash_refunds_minor: 2000, khata_collected_minor: 5000, drops_minor: 20000, payouts_minor: 1500, expenses_minor: 3000, cash_in_minor: 500, expected_minor: 84000, counted_minor: 84000, over_short_minor: 0 } };
+    const t = texts(zReportLines(busy, { currency: "PKR" }));
+    const drawer = t.slice(t.indexOf("CASH DRAWER") + 1, t.findIndex((x) => x.startsWith("Expected")));
+    expect(drawer.map((x) => x.replace(/\s+Rs.*$|\s+-Rs.*$/, ""))).toEqual(["Opening", "Cash sales", "Cash refunds", "Khata collected", "Cash in", "Cash out", "Drops to safe", "Payouts", "Expenses"]);
+    expect(t.find((x) => x.startsWith("Drops to safe"))).toMatch(/-Rs 200$/);
+    expect(t.find((x) => x.startsWith("Expected"))).toMatch(/Rs 840$/);
+    expect(t.find((x) => x.startsWith("Over"))).toMatch(/Rs 0$/);
+  });
 });
 
 describe("printServer", () => {

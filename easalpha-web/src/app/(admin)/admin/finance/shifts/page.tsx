@@ -22,11 +22,12 @@ export default function ShiftsPage() {
       </FilterBar>
       {list.isLoading ? <Loading /> : (
         <Table>
-          <THead><tr><TH>Opened</TH><TH>Closed</TH><TH>Day</TH><TH>Status</TH><TH>Settlement</TH><TH right>Opening</TH><TH right>Counted</TH><TH right>Over / short</TH></tr></THead>
+          <THead><tr><TH>Opened</TH><TH>Cashier</TH><TH>Closed</TH><TH>Day</TH><TH>Status</TH><TH>Settlement</TH><TH right>Opening</TH><TH right>Counted</TH><TH right>Over / short</TH></tr></THead>
           <TBody>
             {list.rows.length ? list.rows.map((s) => (
               <TR key={s.id}>
                 <TD><Link href={`/admin/finance/shifts/${s.id}`} className="font-medium text-primary hover:underline">{formatDateTime(s.opened_at)}</Link></TD>
+                <TD>{s.cashier_name ?? "-"}</TD>
                 <TD className="text-fg-secondary">{s.closed_at ? formatDateTime(s.closed_at) : "-"}</TD>
                 <TD>{s.business_day}</TD>
                 <TD><Badge variant={s.status === "open" ? "info" : "primary"}>{s.status}</Badge></TD>
@@ -35,7 +36,7 @@ export default function ShiftsPage() {
                 <TD right>{s.counted_cash_minor !== null ? formatMoney(s.counted_cash_minor) : "-"}</TD>
                 <TD right className={(s.over_short_minor ?? 0) < 0 ? "text-danger" : (s.over_short_minor ?? 0) > 0 ? "text-success" : ""}>{s.over_short_minor !== null && s.over_short_minor !== undefined ? formatMoney(s.over_short_minor) : "-"}</TD>
               </TR>
-            )) : <EmptyRow colSpan={8}>No shifts.</EmptyRow>}
+            )) : <EmptyRow colSpan={9}>No shifts.</EmptyRow>}
           </TBody>
         </Table>
       )}

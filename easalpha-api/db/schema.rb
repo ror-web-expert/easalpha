@@ -1580,7 +1580,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_090000) do
     t.index ["business_id", "kind"], name: "index_payment_accounts_on_business_id_and_kind"
     t.index ["business_id"], name: "index_payment_accounts_on_business_id"
     t.check_constraint "active OR current_balance_minor = 0", name: "payment_accounts_inactive_zero_balance"
-    t.check_constraint "kind::text = ANY (ARRAY['cash'::character varying, 'wallet'::character varying, 'bank'::character varying, 'drawer'::character varying, 'custom'::character varying]::text[])", name: "payment_accounts_kind_check"
+    t.check_constraint "kind::text = ANY (ARRAY['cash'::character varying, 'wallet'::character varying, 'bank'::character varying, 'drawer'::character varying, 'custom'::character varying, 'safe'::character varying]::text[])", name: "payment_accounts_kind_check"
   end
 
   create_table "payment_methods", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

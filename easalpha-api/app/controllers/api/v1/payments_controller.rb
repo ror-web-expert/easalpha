@@ -40,8 +40,6 @@ module Api
         raw = raw.to_unsafe_h.values if raw.respond_to?(:to_unsafe_h)
         Array(raw).map { |p| p.respond_to?(:to_unsafe_h) ? p.to_unsafe_h : p.to_h }
       end
-
-      def current_shift = Shift.open.find_by(cashier_membership_id: current_membership.id)
     end
   end
 end

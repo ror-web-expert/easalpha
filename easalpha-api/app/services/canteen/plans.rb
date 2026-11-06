@@ -2,8 +2,22 @@ module Canteen
   module Plans
     module_function
 
+    # The plans of one day (or several), in kiosk order, with what the serializer prices the dishes from.
     def for_day(branch, date)
-      MealPlan.includes(:meal_session, items: :product).where(branch_id: branch.id, plan_date: date).sort_by { |p| [ p.meal_session.sort_order, p.meal_session.starts_at ] }
+      MealPlan.includes(:branch, :meal_session, items: { product: %i[product_prices tax_rate] }).where(branch_id: branch.id, plan_date: date)
+              .sort_by { |p| [ p.plan_date, p.meal_session.sort_order, p.meal_session.starts_at ] }
+    end
+
+    # What one of this dish comes to on a kiosk order (Claims makes a walk-in order of one): the menu price less the
+    # product's own discount, its tax, the walk-in service charge and the rounding, priced by Orders::Pricing on an
+    # order that is never saved. A plan with no worker price charges the worker this, so the kiosk shows it (F13).
+    def dish_price_minor(product, branch)
+      order = Order.new(business: branch.business, branch: branch, order_type: "walk_in", source: "kiosk")
+      Orders::Builder.apply_charge_defaults!(order, {}, branch.business)
+      tax = product.tax_rate || TaxRate.active.find_by(is_default: true)
+      order.items.build(business: branch.business, product: product, name_snapshot: product.name, quantity: 1, unit_price_minor: product.price_for(order_type: "walk_in", branch_id: branch.id),
+                        tax_rate_snapshot: tax&.rate || 0, tax_inclusive_snapshot: tax&.inclusive || false)
+      Orders::Pricing.recalculate!(order).total_minor
     end
 
     # Saves a session's plan for a day: the items sent replace the current ones; a dish that already has claims stays.
@@ -42,15 +56,18 @@ module Canteen
       plan
     end
 
+    # How far back the roll looks for a session's last published plan: past a weekly day off or a missed run.
+    ROLL_LOOKBACK = 7
+
     # The daily roll (CanteenPlansRollJob): for every active session with no plan at all on `date`, copies the
-    # previous day's published plan and publishes it, so the kiosk is never empty because nobody copied the menu. A
-    # draft already started for the day is left alone (someone is planning it); a dish archived since is dropped.
-    # Returns how many plans were published.
+    # session's latest published plan of the week before and publishes it, so the kiosk is never empty because nobody
+    # copied the menu (a day off in between no longer leaves the next day empty). A draft already started for the day
+    # is left alone (someone is planning it); a dish archived since is dropped. Returns how many plans were published.
     def roll_forward!(branch:, date:)
       rolled = 0
       MealSession.active.where(branch_id: branch.id).find_each do |session|
         next if MealPlan.exists?(branch_id: branch.id, meal_session_id: session.id, plan_date: date)
-        src = MealPlan.includes(:items).find_by(branch_id: branch.id, meal_session_id: session.id, plan_date: date - 1, status: "published") or next
+        src = MealPlan.includes(:items).where(branch_id: branch.id, meal_session_id: session.id, plan_date: (date - ROLL_LOOKBACK)...date, status: "published").order(plan_date: :desc).first or next
         items = src.items.select { |i| Product.active.exists?(id: i.product_id) }.map { |i| { product_id: i.product_id, planned_qty: i.planned_qty, worker_price_minor: i.worker_price_minor } }
         next if items.empty?
         publish!(save!(branch: branch, session: session, date: date, notes: src.notes, items: items, actor: nil))

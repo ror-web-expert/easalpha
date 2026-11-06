@@ -3,6 +3,7 @@ import type { ZReport } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
+import { zCashRows } from "@/lib/z-report-rows";
 import { Stat } from "@/components/ui";
 
 export function ZReportView({ z, currency, hideExpected }: { z: ZReport; currency?: string; hideExpected?: boolean }) {
@@ -46,11 +47,9 @@ export function ZReportView({ z, currency, hideExpected }: { z: ZReport; currenc
       </section>
       <section>
         <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-secondary">Cash drawer</h4>
-        <Stat label="Opening" value={m(z.cash?.opening_minor)} />
-        <Stat label="Cash sales" value={m(z.cash?.cash_sales_minor)} tone="success" />
-        <Stat label="Cash in" value={m(z.cash?.cash_in_minor)} tone="success" />
-        <Stat label="Cash out" value={`-${m(z.cash?.cash_out_minor)}`} tone="danger" />
-        {!hideExpected ? <Stat label="Expected" value={m(z.cash?.expected_minor)} /> : null}
+        {/* Every kind of money that moved through the drawer, so the rows add up to Expected (QA B8). */}
+        {zCashRows(z.cash).map((r) => <Stat key={r.key} label={r.label} value={r.minor < 0 ? `-${m(-r.minor)}` : m(r.minor)} tone={r.key === "opening_minor" || r.minor === 0 ? undefined : r.minor > 0 ? "success" : "danger"} />)}
+        {!hideExpected ? <Stat label="Expected" value={<b>{m(z.cash?.expected_minor)}</b>} /> : null}
         {z.cash?.counted_minor !== null && z.cash?.counted_minor !== undefined ? <Stat label="Counted" value={m(z.cash.counted_minor)} /> : null}
         {!hideExpected && os !== null && os !== undefined ? <Stat label={os >= 0 ? "Over" : "Short"} value={m(Math.abs(os))} tone={os >= 0 ? "success" : "danger"} /> : null}
       </section>

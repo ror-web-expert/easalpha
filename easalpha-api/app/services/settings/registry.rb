@@ -21,7 +21,7 @@ module Settings
       [ "canteen.payroll_deduction", "store", "Canteen", "boolean", true, "Take each worker's meals for the month off the payroll run and settle their account" ],
       [ "canteen.manual_lookup", "store", "Canteen", "boolean", true, "The kiosk may find a worker by name, phone or CNIC when the fingerprint reader fails" ],
       [ "canteen.print_token", "store", "Canteen", "boolean", true, "Print a token slip for every meal (the screen shows it either way)" ],
-      [ "canteen.plans.auto_copy", "store", "Canteen", "boolean", true, "Copy yesterday's published meal plans to today when none exist" ],
+      [ "canteen.plans.auto_copy", "store", "Canteen", "boolean", true, "Publish each session's latest meal plan again on a day that has none (a draft someone started is left alone)" ],
       [ "khata.notify_each_sale", "store", "Customer Accounts", "boolean", true, "WhatsApp the customer each time an order is put on their account" ],
       [ "khata.notify_adjustments", "store", "Customer Accounts", "boolean", true, "WhatsApp the customer when their balance is adjusted or an opening balance is entered" ],
       [ "khata.monthly_bills.enabled", "store", "Customer Accounts", "boolean", false, "Send every customer who owes money their bill for last month on WhatsApp" ],

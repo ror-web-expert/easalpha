@@ -11,7 +11,8 @@ module Api
         scope = scope.where(business_day: params[:business_day]) if params[:business_day].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
         rows, cursor = Paginator.call(scope, cursor: params[:cursor], limit: params[:limit], order_column: :opened_at)
-        render_page(rows, cursor) { |s| ShiftSerializers.shift(s) }
+        names = Membership.unscoped.where(id: rows.map(&:cashier_membership_id)).includes(:user).to_h { |m| [ m.id, m.user&.name ] }
+        render_page(rows, cursor) { |s| ShiftSerializers.shift(s, names: names) }
       end
 
       # GET /shifts/my_till  (SPEC MY_TILL: the cashier's own till)
@@ -34,8 +35,10 @@ module Api
         render json: ShiftSerializers.day_end_settlement(rec), status: :created
       end
 
+      # The shift this till's cash goes into (Shift.for_till), so a second cashier signed in on it sees that shift and
+      # not "No shift" while their sales land in it (QA T4).
       def current
-        shift = Shift.open.find_by(cashier_membership_id: current_membership.id)
+        shift = current_shift
         render json: { shift: shift && ShiftSerializers.shift(shift, with_expected: current_membership.can?("shifts.any")) }
       end
 
@@ -80,15 +83,22 @@ module Api
         render json: ShiftSerializers.shift(Shifts::Manager.settle!(find_shift, by: current_membership), with_expected: true)
       end
 
-      # POST /shifts/:id/cash_movements  kind (cash_in|cash_out|payout|drop), amount_minor, reason, reference, approver_pin, id?
+      # POST /shifts/:id/cash_movements  kind (cash_in|cash_out|payout|drop), amount_minor, reason, reference, approver_pin, id?,
+      # category_id? and paid_to? (a payout)
+      # A drop goes to the safe, a payout is an expense, a cash out is the owner's. Without cash.in_out, or above its
+      # limit, a manager's PIN approves it (Shifts::Manager.movement_needs_approval?); a PIN sent anyway is recorded.
       def cash_movement
-        require_permission!("cash.in_out", "shifts.any")
         shift = find_shift
-        raise Api::Errors::Forbidden.new("permission.denied", "Not your shift") unless shift.cashier_membership_id == current_membership.id || current_membership.can?("shifts.any")
+        raise Api::Errors::Forbidden.new("permission.denied", "Not your shift") unless Shifts::Manager.may_move?(shift, member: current_membership, device: current_device)
         kind = params.require(:kind).to_s
         raise Api::Errors::BadRequest.new("cash.kind", "kind must be cash_in, cash_out, payout or drop") unless kind.in?(%w[cash_in cash_out payout drop])
-        approver = kind == "cash_in" || current_membership.can?("shifts.any") ? nil : (params[:approver_pin].present? ? require_approval!("shifts.any") : nil)
-        mv = Shifts::Manager.cash_movement!(shift, kind: kind, amount_minor: params.require(:amount_minor).to_i, reason: params[:reason].to_s, by: current_membership, approver: approver, reference: params[:reference], id: params[:movement_id].presence)
+        amount = params.require(:amount_minor).to_i
+        approver = if current_membership.can?("shifts.any") then nil
+        elsif Shifts::Manager.movement_needs_approval?(current_membership, kind, amount) then require_approval!("shifts.any")
+        elsif kind != "cash_in" && params[:approver_pin].present? then require_approval!("shifts.any")
+        end
+        mv = Shifts::Manager.cash_movement!(shift, kind: kind, amount_minor: amount, reason: params[:reason].to_s, by: current_membership, approver: approver, reference: params[:reference],
+                                                   id: params[:movement_id].presence, category_id: params[:category_id].presence, paid_to: params[:paid_to])
         render json: { movement: ShiftSerializers.movement(mv), shift: ShiftSerializers.shift(shift.reload) }, status: :created
       end
 
