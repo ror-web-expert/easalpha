@@ -35,7 +35,13 @@ RSpec.describe "Request throttles", type: :request do
                                       "CONTENT_TYPE" => "application/json", "HTTP_ACCEPT" => "application/json", "REMOTE_ADDR" => "203.0.113.9")
       expect(key("login/email", Rack::Attack::Request.new(env))).to eq("kept@example.com")
       status, _headers, body = Rails.application.call(env)
-      expect(status).to eq(200), body.each.to_a.join
+      text = +""
+      begin
+        body.each { |chunk| text << chunk }
+      ensure
+        body.close if body.respond_to?(:close) # completes the request's executor, as a server does
+      end
+      expect(status).to eq(200), text
     end
   end
 
