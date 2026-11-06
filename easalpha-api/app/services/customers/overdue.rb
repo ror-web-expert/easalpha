@@ -41,6 +41,8 @@ module Customers
       return unless BusinessModules.on?(business, "customer_accounts") && Whatsapp::Account.master_enabled?(business)
       after = business.setting("khata.overdue.remind_after_days").to_i
       return unless after.positive?
+      # Like the bills: with no phone linked a message would only be stored and count as sent, so wait for tomorrow.
+      return unless Whatsapp::Provider.live?(business)
       min = [ business.setting("khata.monthly_bills.min_balance").to_i * 100, 1 ].max
       done = Set.new
       BillRun.where(status: "done").where(due_on: (today - after - WINDOW)..(today - after)).order(period_to: :desc, created_at: :desc).each do |run|

@@ -53,6 +53,10 @@ RSpec.describe "Customer bills overdue", type: :request do
     run = bill_run!([ [ a, 9_280 ], [ b, 9_280 ], [ c, 50 ] ], due_on: today - 3)
     bill_run!([ [ b, 9_280 ] ], due_on: today - 1, period_to: today - 2) # Bilal's newer bill is not yet 3 days overdue
 
+    # No phone linked: nothing goes out and nothing is recorded, so the next day tries again.
+    OverdueRemindersJob.perform_now
+    within(biz) { expect(reminders(a[:id]).count).to eq(0) }
+    allow(Whatsapp::Provider).to receive(:live?).and_return(true)
     OverdueRemindersJob.perform_now
     within(biz) do
       expect(reminders(a[:id]).pluck(:to_phone)).to contain_exactly("+923001112233", "+923009998877")

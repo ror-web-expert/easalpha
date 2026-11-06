@@ -132,7 +132,8 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
         api_post "/api/v1/orders", { order_type: "walk_in", customer_id: cust, client_created_at: when_.iso8601, lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
         oid = json[:id]
         api_post "/api/v1/orders/#{oid}/payments", { payments: [ { method_code: "khata", amount_minor: 9_280 } ] }, headers: headers
-        within(biz) { Payment.where(order_id: oid).update_all(received_at: when_) }
+        # A charge is dated to the day it is taken, so backdating the history means dating the payment too.
+        within(biz) { Payment.where(order_id: oid).update_all(received_at: when_, business_day: Branch.first.business_day_for(when_)) }
       end
       api_post "/api/v1/customers/#{cust}/payments", { amount_minor: 10_000, method_code: "cash" }, headers: headers
       get "/api/v1/customers/#{cust}/ledger", headers: headers
