@@ -12,6 +12,7 @@ import { settingValue } from "@/lib/pricing";
 import { formatQty } from "@/components/pos/receipt";
 import { billRows } from "./bill";
 import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "./receipt-format";
+import { zCashRows } from "./z-report-rows";
 import { loadSymbol, type CodeSymbol } from "@/components/admin/barcode-labels";
 
 export type PrintLine =
@@ -285,7 +286,9 @@ export function zReportLines(z: ZReport, opts: { currency?: string; settings?: B
   lines.push(...row("Paid", String(z.orders?.paid ?? 0), width), ...row("Voided", `${z.voids?.count ?? 0} / ${m(z.voids?.amount_minor)}`, width), ...row("Refunds", `${z.refunds?.count ?? 0} / ${m(z.refunds?.amount_minor)}`, width),
     ...row("Discounts", `${z.discounts?.count ?? 0} / ${m(z.discounts?.amount_minor)}`, width), ...row("Staff meals", String(z.orders?.staff_meals ?? 0), width), ...row("Still open", String(z.orders?.open ?? 0), width));
   lines.push({ divider: true }, text("CASH DRAWER", { bold: true }));
-  lines.push(...row("Opening", m(z.cash?.opening_minor), width), ...row("Cash sales", m(z.cash?.cash_sales_minor), width), ...row("Cash in", m(z.cash?.cash_in_minor), width), ...row("Cash out", `-${m(z.cash?.cash_out_minor)}`, width), ...row("Expected", m(z.cash?.expected_minor), width));
+  // The same rows as the screen, every kind of money the drawer moved, so the slip adds up to Expected (QA B8).
+  zCashRows(z.cash).forEach((r) => lines.push(...row(r.label, r.minor < 0 ? `-${m(-r.minor)}` : m(r.minor), width)));
+  lines.push(...row("Expected", m(z.cash?.expected_minor), width, true));
   if (z.cash?.counted_minor != null) lines.push(...row("Counted", m(z.cash.counted_minor), width));
   const os = z.cash?.over_short_minor;
   if (os != null) lines.push(...row(os >= 0 ? "Over" : "Short", m(Math.abs(os)), width, true));

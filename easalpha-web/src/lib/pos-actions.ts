@@ -608,19 +608,20 @@ export async function loadCurrentShift() {
   } catch { return useCatalogStore.getState().shift; }
 }
 
-export async function cashMovement(shift: Shift, kind: string, amount_minor: number, reason: string, approver_pin?: string): Promise<{ offline: boolean }> {
+/** extra: what a payout carries (the expense category and who was paid), online and in the queued record alike. */
+export async function cashMovement(shift: Shift, kind: string, amount_minor: number, reason: string, approver_pin?: string, extra: { category_id?: string; paid_to?: string } = {}): Promise<{ offline: boolean }> {
   const { membershipId } = ctx();
   const id = uuid();
   if (isOnline()) {
     try {
-      const r = await api<{ movement: CashMovement; shift: Shift }>(`/shifts/${shift.id}/cash_movements`, { method: "POST", auth: "pos", body: { kind, amount_minor, reason, approver_pin, movement_id: id } });
+      const r = await api<{ movement: CashMovement; shift: Shift }>(`/shifts/${shift.id}/cash_movements`, { method: "POST", auth: "pos", body: { kind, amount_minor, reason, approver_pin, movement_id: id, ...extra } });
       useCatalogStore.getState().setShift(r.shift);
       return { offline: false };
     } catch (e) { if (!isNetwork(e)) throw e; }
   }
   const signed = kind === "cash_in" ? amount_minor : -amount_minor;
   useCatalogStore.getState().setShift({ ...shift, movements: [...shift.movements, { id, shift_id: shift.id, kind, amount_minor: signed, reason, reference: null, by_membership_id: membershipId, approved_by_membership_id: null, occurred_at: new Date().toISOString() }] });
-  await enqueue({ type: "cash_movement", id, membership_id: membershipId ?? undefined, payload: { shift_id: shift.id, kind, amount_minor, reason } });
+  await enqueue({ type: "cash_movement", id, membership_id: membershipId ?? undefined, payload: { shift_id: shift.id, kind, amount_minor, reason, ...extra } });
   return { offline: true };
 }
 
