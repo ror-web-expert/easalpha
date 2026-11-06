@@ -30,7 +30,8 @@ RSpec.describe AppliedSubmission, ".record!" do
     end
   end
 
-  it "needs a business" do
+  it "needs a business, and is bookkeeping the audit log leaves out" do
     expect { described_class.record!(record_type: "order_update", record_id: order_id, client_seq: 1) }.to raise_error(Tenanted::NoTenantError)
+    expect(described_class.audited?).to be false
   end
 end

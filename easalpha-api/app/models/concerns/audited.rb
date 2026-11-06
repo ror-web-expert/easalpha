@@ -5,7 +5,7 @@ module Audited
   extend ActiveSupport::Concern
 
   SKIPPED_TABLES = %w[stock_levels push_subscriptions gl_accounts journal_entries journal_lines sync_batches sync_rejections notifications receipt_events deduction_audits settings
-                      import_jobs user_permissions role_permissions support_sessions aggregator_events].freeze
+                      import_jobs user_permissions role_permissions support_sessions aggregator_events applied_submissions].freeze
   # Updates that only touch these are housekeeping, not something a person did.
   IGNORED_ATTRIBUTES = %w[updated_at created_at last_seen_at last_sync_at last_login_at pin_failed_count pin_locked_until
                           current_balance_minor balance_minor loyalty_points units_sold stock_deducted_at printed_at notified_at
