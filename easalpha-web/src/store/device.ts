@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { Branch, Business, Device, Session } from "@/lib/types";
 import { useCartStore } from "@/store/cart";
 import { clearRecentCustomers } from "@/lib/pos-customers";
-import { clearStashes } from "@/lib/session-stash";
+import { clearStashes, forgetSessionKeys } from "@/lib/session-stash";
 
 interface DeviceState {
   deviceToken: string | null;
@@ -52,8 +52,9 @@ export const useDeviceStore = create<DeviceState>()(
       setTokens: (access_token, refresh_token) =>
         set((s) => (s.session ? { session: { ...s.session, access_token, refresh_token } } : {})),
       touch: () => set({ lastActivityAt: Date.now() }),
-      // A lock keeps the cart: the same cashier unlocks and carries on (signIn drops it for anyone else).
-      lock: () => set({ session: null }),
+      // A lock keeps the cart: the same cashier unlocks and carries on (signIn drops it for anyone else). The key from
+      // their PIN goes, so only the PIN opens their offline copy again (lib/session-stash.ts).
+      lock: () => { forgetSessionKeys(); set({ session: null }); },
     }),
     {
       name: "easalpha.device",

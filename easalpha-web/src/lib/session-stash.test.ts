@@ -26,7 +26,7 @@ const session = (member: string, refresh = "R1"): Session =>
     permissions: ["orders.create"], sync_key: `key-${member}-secret`, sync_key_id: `k-${member}` }) as unknown as Session;
 const file = () => JSON.parse(localStorage.getItem(STASH_STORAGE_KEY) ?? "{}") as Record<string, { salt: string; rounds: number; device_id: string; membership_id: string }>;
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
 afterEach(() => vi.restoreAllMocks());
 
 describe("the copy of a session", () => {
@@ -59,16 +59,28 @@ describe("the copy of a session", () => {
     expect(await unlockStash("4321", "d-1")).toBeNull();
   });
 
-  it("takes the new tokens at a refresh with no PIN typed, until the page is reloaded", async () => {
+  it("takes the new tokens at every refresh with no PIN typed, after a reload too, and at none once the till is locked", async () => {
     await stashSession("4321", session("m-1"), "d-1");
     expect(await restashSession(session("m-1", "R2"), "d-1")).toBe(true);
     expect(await unlockStash("4321", "d-1")).toMatchObject({ refresh_token: "refresh-m-1-R2" });
-    vi.resetModules(); // a reload: the key derived from the PIN lived in memory only
+    vi.resetModules(); // a reload while the cashier works: the key waits in this tab's sessionStorage
     const fresh = await import("./session-stash");
-    expect(await fresh.restashSession(session("m-1", "R3"), "d-1")).toBe(false);
-    expect(await fresh.unlockStash("4321", "d-1")).toMatchObject({ refresh_token: "refresh-m-1-R2" });
+    expect(await fresh.restashSession(session("m-1", "R3"), "d-1")).toBe(true);
+    expect(await fresh.restashSession(session("m-2", "R3"), "d-1")).toBe(false); // another member's: not with this key
+    fresh.forgetSessionKeys(); // the till locks
+    expect(sessionStorage.length).toBe(0);
+    expect(await fresh.restashSession(session("m-1", "R4"), "d-1")).toBe(false);
+    expect(await fresh.unlockStash("4321", "d-1")).toMatchObject({ refresh_token: "refresh-m-1-R3" });
     // Unlocked offline, the key is known again, so the next refresh is kept.
-    expect(await fresh.restashSession(session("m-1", "R4"), "d-1")).toBe(true);
+    expect(await fresh.restashSession(session("m-1", "R5"), "d-1")).toBe(true);
+  });
+
+  it("forgets the key from the PIN when the till locks", async () => {
+    await stashSession("4321", session("m-1"), "d-1");
+    useDeviceStore.setState({ session: session("m-1") });
+    useDeviceStore.getState().lock();
+    expect(sessionStorage.getItem("easalpha.stash-key")).toBeNull();
+    expect(await restashSession(session("m-1", "R2"), "d-1")).toBe(false);
   });
 });
 

@@ -37,6 +37,7 @@ const pinLogins = () => h.api.mock.calls.filter((c) => c[0] === "/devices/pin_lo
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   h.online = true; h.reachable = true; h.api.mockReset(); h.router.replace.mockReset();
   useDeviceStore.setState({ deviceToken: "device", device: { id: "d-1", name: "Till", code: "T1" } as never, branch: { name: "Gulberg" } as never, session: null });
   useSyncStore.setState({ status: "online", lastError: null, pending: 0, attention: 0 });

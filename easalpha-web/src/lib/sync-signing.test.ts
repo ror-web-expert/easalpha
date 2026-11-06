@@ -44,7 +44,7 @@ const macOf = (key: string, signed: string) => createHmac("sha256", Buffer.from(
 const pushAnswer = (results: Record<string, unknown>[]) => (path: string) => (path === "/sync/push" ? { batch_id: "b", server_time: "2026-11-06T10:02:00Z", results } : undefined);
 
 beforeEach(async () => {
-  h.queue.clear(); h.attention.clear(); h.orders.clear(); h.api.mockReset(); localStorage.clear();
+  h.queue.clear(); h.attention.clear(); h.orders.clear(); h.api.mockReset(); localStorage.clear(); sessionStorage.clear();
   // A network failure in one test leaves the till offline for 30 s: the server answers again, a moment later.
   await new Promise((r) => setTimeout(r, 2));
   noteReachable();

@@ -4,6 +4,9 @@
 // (tokens and sync key): AES-GCM under a key from their PIN (PBKDF2-SHA256, 150,000 rounds, a random salt per copy),
 // written at every online sign-in and rewritten at every refresh. Offline, the PIN page resumes the session whose copy
 // the PIN opens; online it signs in with the server as before. Five wrong PINs offline, then a minute's wait.
+// While the member works, the key from their PIN waits in memory and in this tab's sessionStorage, so a refresh after
+// a reload still rewrites their copy; the lock takes it away. It adds nothing while they are signed in (the session
+// itself is in localStorage then); once the till is locked, only the PIN opens the copy.
 // A four-digit PIN is ten thousand guesses for someone who copies the browser's storage: the rounds slow that, the
 // wait stops it at the till, and the server still judges every record that session signs by when it ended.
 import type { Session } from "@/lib/types";
@@ -11,6 +14,7 @@ import { subtleCrypto, toBase64Url, fromBase64Url } from "@/lib/sync-sign";
 
 export const STASH_STORAGE_KEY = "easalpha.session-stash";
 const TRIES_STORAGE_KEY = "easalpha.pin-offline-tries";
+const KEY_STORAGE_KEY = "easalpha.stash-key";
 export const PBKDF2_ROUNDS = 150_000;
 export const OFFLINE_TRIES = 5;
 export const OFFLINE_WAIT_MS = 60_000;
@@ -18,8 +22,9 @@ export const OFFLINE_WAIT_MS = 60_000;
 interface StashEntry { membership_id: string; device_id: string; salt: string; iv: string; data: string; rounds: number; saved_at: string }
 type StashFile = Record<string, StashEntry>;
 
-// The keys this page derived, by member, so a refresh (no PIN typed) can rewrite that member's copy. Never stored.
-const derived = new Map<string, { key: CryptoKey; salt: string; rounds: number; device_id: string }>();
+interface Derived { key: CryptoKey; salt: string; rounds: number; device_id: string }
+// The key of the member signed in now, so a refresh (no PIN typed) can rewrite their copy. Gone at the lock.
+const derived = new Map<string, Derived>();
 
 function readFile(): StashFile {
   try {
@@ -45,7 +50,42 @@ const boundTo = (deviceId: string, membershipId: string) => text.encode(`${devic
 async function deriveKey(pin: string, salt: Uint8Array, rounds: number): Promise<CryptoKey> {
   const subtle = subtleCrypto();
   const base = await subtle.importKey("raw", text.encode(pin) as BufferSource, "PBKDF2", false, ["deriveKey"]);
-  return subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations: rounds }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  return subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt: salt as BufferSource, iterations: rounds }, base, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+}
+
+async function remember(membershipId: string, k: Derived) {
+  derived.clear();
+  derived.set(membershipId, k);
+  try {
+    const raw = new Uint8Array(await subtleCrypto().exportKey("raw", k.key));
+    sessionStorage.setItem(KEY_STORAGE_KEY, JSON.stringify({ membership_id: membershipId, device_id: k.device_id, salt: k.salt, rounds: k.rounds, key: toBase64Url(raw) }));
+  } catch {}
+}
+
+/** The signed-in member's key: in memory, or after a reload in this tab's sessionStorage. */
+async function recall(membershipId: string): Promise<Derived | undefined> {
+  const known = derived.get(membershipId);
+  if (known) return known;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(KEY_STORAGE_KEY) ?? "null") as { membership_id: string; device_id: string; salt: string; rounds: number; key: string } | null;
+    if (saved?.membership_id !== membershipId) return undefined;
+    const key = await subtleCrypto().importKey("raw", fromBase64Url(saved.key) as BufferSource, "AES-GCM", true, ["encrypt", "decrypt"]);
+    const k = { key, salt: saved.salt, rounds: saved.rounds, device_id: saved.device_id };
+    derived.set(membershipId, k);
+    return k;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberedMember(): string | null {
+  try { return (JSON.parse(sessionStorage.getItem(KEY_STORAGE_KEY) ?? "null") as { membership_id?: string } | null)?.membership_id ?? null; } catch { return null; }
+}
+
+/** The till locks: no copy can be rewritten or opened again without a PIN. */
+export function forgetSessionKeys() {
+  derived.clear();
+  try { sessionStorage.removeItem(KEY_STORAGE_KEY); } catch {}
 }
 
 async function seal(session: Session, k: { key: CryptoKey; salt: string; rounds: number }, deviceId: string): Promise<StashEntry> {
@@ -70,14 +110,14 @@ export async function stashSession(pin: string, session: Session, deviceId: stri
   const salt = randomBytes(16);
   const k = { key: await deriveKey(pin, salt, PBKDF2_ROUNDS), salt: toBase64Url(salt), rounds: PBKDF2_ROUNDS };
   const entry = await seal(session, k, deviceId);
-  derived.set(session.membership.id, { ...k, device_id: deviceId });
+  await remember(session.membership.id, { ...k, device_id: deviceId });
   writeFile({ ...readFile(), [entry.membership_id]: entry });
 }
 
-/** After a refresh: the copy takes the new tokens, under the key this page derived when the member typed their PIN.
- *  False when it has none (the page was reloaded since): the copy keeps the older tokens until the next sign-in. */
+/** After a refresh: the copy takes the new tokens, under the key from the member's PIN at sign-in or unlock. False
+ *  when there is none (the till was locked since, or another tab signed in): the copy keeps the older tokens. */
 export async function restashSession(session: Session, deviceId: string | null | undefined): Promise<boolean> {
-  const k = session?.membership?.id ? derived.get(session.membership.id) : undefined;
+  const k = session?.membership?.id ? await recall(session.membership.id) : undefined;
   if (!k || !deviceId || k.device_id !== deviceId || !readFile()[session.membership.id]) return false;
   const entry = await seal(session, k, deviceId);
   writeFile({ ...readFile(), [entry.membership_id]: entry });
@@ -92,7 +132,7 @@ export async function unlockStash(pin: string, deviceId: string): Promise<Sessio
     const key = await deriveKey(pin, salt, e.rounds || PBKDF2_ROUNDS);
     const s = await unseal(e, key);
     if (s) {
-      derived.set(e.membership_id, { key, salt: e.salt, rounds: e.rounds || PBKDF2_ROUNDS, device_id: deviceId });
+      await remember(e.membership_id, { key, salt: e.salt, rounds: e.rounds || PBKDF2_ROUNDS, device_id: deviceId });
       return s;
     }
   }
@@ -112,7 +152,7 @@ export function forgetStashes(membershipIds: (string | null | undefined)[]) {
   let changed = false;
   for (const id of membershipIds) {
     if (!id) continue;
-    derived.delete(id);
+    if (derived.has(id) || rememberedMember() === id) forgetSessionKeys();
     if (f[id]) { delete f[id]; changed = true; }
   }
   if (changed) writeFile(f);
@@ -120,7 +160,7 @@ export function forgetStashes(membershipIds: (string | null | undefined)[]) {
 
 /** Unpair and a cleared till: no copy, no derived key, no count of wrong PINs is left behind. */
 export function clearStashes() {
-  derived.clear();
+  forgetSessionKeys();
   try {
     localStorage.removeItem(STASH_STORAGE_KEY);
     localStorage.removeItem(TRIES_STORAGE_KEY);

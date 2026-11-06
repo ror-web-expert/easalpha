@@ -42,7 +42,7 @@ module Sync
     # deactivation) or run out. A rotation revokes a token and issues the next one at the same moment, so the last
     # end of any of them is the session's. Still running: its live token's expiry, which is ahead.
     def session_end(root_id)
-      RefreshToken.session_of(root_id).pluck(:revoked_at, :expires_at).map { |revoked, expires| revoked && revoked < expires ? revoked : expires }.max
+      RefreshToken.session_of(root_id).maximum(Arel.sql("CASE WHEN revoked_at IS NOT NULL AND revoked_at < expires_at THEN revoked_at ELSE expires_at END"))
     end
 
     # True when that session was running at `at`. A record's time can be older than the sign-in that queued it (an

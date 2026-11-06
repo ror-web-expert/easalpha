@@ -17,6 +17,7 @@ let refreshAnswer: (token: string) => Session | null;
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   refreshAnswer = (token) => session(`${token}+1`);
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     const body = init.body ? JSON.parse(String(init.body)) : null;
