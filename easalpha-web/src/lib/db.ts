@@ -81,6 +81,10 @@ export interface QueueItem {
   status: "pending" | "sending";
   /** When the push carrying this row started; a row still "sending" long after that never came back (recoverStuck). */
   sending_at?: number;
+  /** The payload as changed (patchQueued) while a push carrying the row was out: applied once that push answers. */
+  patched_payload?: Record<string, unknown>;
+  /** Who was signed in when that change was made. */
+  patched_by?: string;
 }
 
 export interface AttentionItem {
