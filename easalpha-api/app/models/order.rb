@@ -43,7 +43,8 @@ class Order < ApplicationRecord
   # the order before it pays (Orders::Builder#update!), so a dispatched order takes a save like a served one does.
   def editable? = status.in?(%w[draft held placed preparing ready served dispatched])
   def active_items = items.reject { |i| i.status == "cancelled" }
-  def due_minor = [ total_minor - paid_minor, 0 ].max
+  # A refunded or voided order owes nothing: its reprint never reads BALANCE DUE (QA T8).
+  def due_minor = status.in?(%w[voided refunded]) ? 0 : [ total_minor - paid_minor, 0 ].max
   def label = serial ? "##{serial}" : (till_serial || "draft")
   def completed? = status.in?(%w[paid closed])
   def reopened? = reopened_at.present?

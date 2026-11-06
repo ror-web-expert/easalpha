@@ -22,6 +22,7 @@ module Payments
       raise Api::Errors::Conflict.new("order.empty", "Nothing to pay") if @order.active_items.empty?
       raise Api::Errors::BadRequest.new("payment.required", "At least one payment is required") if lines.empty?
       created = []
+      fresh = [] # the payments this call records, as opposed to repeats of ones it already has
       change_total = 0
       raise Api::Errors::Conflict.new("day.locked", "#{@order.business_day} is locked") if @order.business_day && DayClose.locked?(@order.branch_id, @order.business_day)
       Order.transaction do
@@ -67,9 +68,12 @@ module Payments
           payment.save!
           post_to_account!(payment)
           created << payment
+          fresh << payment
         end
-        @order.paid_minor += created.sum(&:amount_minor) - (created.select { |c| c.created_at < 1.second.ago }.sum(&:amount_minor))
-        @order.paid_minor = Payment.where(order_id: @order.id, status: "captured").sum(:amount_minor)
+        # Added to what the order was paid, never reset to the captured total: money given back on an open order is
+        # owed again, and a settled order's part refund is not (Payments::Refunder). Counting the captured total forgot
+        # the refund, so a part payment after one completed the order (review orders-money#3).
+        @order.paid_minor += fresh.sum(&:amount_minor)
         @order.payment_method_summary = Payment.where(order_id: @order.id, status: "captured").group(:method_code).sum(:amount_minor).map { |k, v| "#{k}:#{v}" }.join(",")
         Orders::Pricing.recalculate!(@order)
         @order.save!

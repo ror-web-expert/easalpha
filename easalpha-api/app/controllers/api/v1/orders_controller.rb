@@ -93,13 +93,16 @@ module Api
         render json: { synced: fixed }
       end
 
-      # POST /orders/:id/reopen  pin? approver_pin?  SPEC reopen flow
+      # POST /orders/:id/reopen  approver_pin?, approval_codes?  SPEC reopen flow
       def reopen
-        require_permission!("REOPEN_ORDER", "orders.refund")
+        require_permission!("REOPEN_ORDER", "orders.refund", "orders.create")
         order = Order.find(params[:id])
         day_lock_guard!(order.business_day)
+        # A till user who may not reopen asks a manager, whose PIN approves REOPEN_ORDER as the dialog names it (QA T11:
+        # the cashier was refused outright, PIN or not).
+        approver = current_membership.can?("orders.refund") ? current_membership : require_approval!("REOPEN_ORDER")
         order = Orders::Transitions.reopen!(order, actor: current_membership, device: current_device)
-        audit!("update", record: order, after: { reopened: true, reopen_count: order.reopen_count })
+        audit!("update", record: order, after: { reopened: true, reopen_count: order.reopen_count }, approved_by: approver == current_membership ? nil : approver.user)
         render json: OrderSerializers.full(order.reload)
       end
 

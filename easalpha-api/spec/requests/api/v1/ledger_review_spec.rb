@@ -274,15 +274,17 @@ RSpec.describe "Ledger review: money paths", type: :request do
   end
 
   describe "refund status (review item 13 and an open order)" do
-    it "refuses to refund a part payment on an order that is still open" do
+    # Final round (ledger#0): refused, the part payment could not go back at all, and the order could be neither
+    # voided nor completed. It goes back now and the order, still open, owes it again.
+    it "gives a part payment back on an order that is still open, which then owes it again" do
       api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
       o = json
       api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "easypaisa", amount_minor: 30_000, reference: "EP1" } ] }, headers: headers
       expect(json[:order][:payment_status]).to eq("partial")
       api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: 10_000, method_code: "easypaisa", reason: "Changed mind" }, headers: headers
-      expect(response).to have_http_status(:conflict)
-      expect(json[:error][:code]).to eq("refund.order_open")
-      within(biz) { expect(Refund.count).to eq(0) }
+      expect(response).to have_http_status(:created), response.body
+      expect(json[:order]).to include(status: "placed", payment_status: "partial", paid_minor: 20_000, due_minor: 32_200)
+      expect(balance("4000") + balance("2100")).to eq(20_000) # the sale side holds what the order still holds
     end
 
     it "leaves a reopened order paid once the excess is refunded, so it completes and takes no more money" do

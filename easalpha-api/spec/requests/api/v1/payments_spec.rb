@@ -114,8 +114,8 @@ RSpec.describe "Payments and receipts", type: :request do
     manager
     api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: 10_000, method_code: "cash", reason: "Cold food", approver_pin: "9999" }, headers: auth_headers(cashier)
     expect(response).to have_http_status(:created)
-    expect(json[:order][:payment_status]).to eq("partial")
-    expect(json[:order][:paid_minor]).to eq(42_200)
+    # A part refund corrects the sale: the order stays paid with nothing due (QA T8), the refund is its own line.
+    expect(json[:order]).to include(status: "paid", payment_status: "paid", paid_minor: 52_200, due_minor: 0)
     expect(json[:refund][:approved_by_membership_id]).to eq(manager.id)
     api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: 50_000, method_code: "cash", reason: "too much" }, headers: headers
     expect(response).to have_http_status(:conflict)

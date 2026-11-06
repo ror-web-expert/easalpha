@@ -83,7 +83,8 @@ module Orders
     end
 
     def void!(order, reason:, actor:, approver:, device: nil)
-      raise Api::Errors::Conflict.new("order.paid", "A paid order is refunded, not voided") if order.paid_minor.positive? || order.status.in?(%w[paid closed])
+      # Money the order still holds is refunded first; an open order whose part payment went back holds none (ledger#0).
+      raise Api::Errors::Conflict.new("order.paid", "A paid order is refunded, not voided") if order.status.in?(%w[paid closed]) || (order.paid_minor.positive? && Payments::Refunder.held_minor(order).positive?)
       raise Api::Errors::Conflict.new("order.status", "Order is already #{order.status}") if order.status.in?(%w[voided refunded])
       raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
       stock_action = order.sent? ? (order.status.in?(%w[ready served dispatched]) ? "waste" : "returned") : "none"
