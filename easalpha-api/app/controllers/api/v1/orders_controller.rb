@@ -269,7 +269,7 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
-      # POST /orders/:id/discounts  kind (percent|fixed|promotion), value, reason, order_item_id?, coupon_code?, voucher_code?, approver_pin?
+      # POST /orders/:id/discounts  kind (percent|fixed; promotion with coupon_code), value, reason, order_item_id?, coupon_code?, voucher_code?, approver_pin?
       def add_discount
         require_permission!("orders.create", "discounts.apply")
         order = Order.includes(items: :modifiers).find(params[:id])
@@ -293,6 +293,13 @@ module Api
           check_coupon!(order, promotion)
           kind = promotion.kind == "fixed" ? "fixed" : "promotion"
           value = promotion.value
+        end
+        # By hand a cashier gives a percent or an amount, weighed against their limit (or a manager's PIN) below. A
+        # coupon takes its kind from its promotion; points, vouchers and the regular discount have paths of their own
+        # (redeem_points and redeem_option, voucher_code, the recency tiers). A "promotion" with no coupon was priced as
+        # a percent but weighed as an amount, so a cashier with a 10% limit took 50% off any order over Rs 500.
+        unless promotion || %w[percent fixed].include?(kind)
+          raise Api::Errors::Unprocessable.new("discount.kind", "A discount given by hand is a percent or an amount. Coupons, vouchers and loyalty points are applied with their own codes.")
         end
         approver = nil
         if kind != "promotion" && kind != "fixed" || promotion.nil?
