@@ -40,26 +40,32 @@ class AuditLog < ApplicationRecord
 
   # Credentials that can sit inside a row's jsonb (a branch's tax registration, the business settings column) or in
   # what a controller logs. The row keeps the key, so the log still shows that it changed, but never the value (S1).
-  # The settings registry's own secrets (PRA access code and bearer token, the expense PIN digest) match by key too.
-  SECRET_KEYS = %w[token secret password api_key access_token bearer_token access_code client_secret webhook_secret private_key].freeze
+  # The settings registry's own secrets (PRA access code and bearer token, the expense PIN digest) and setting keys
+  # ending .token or .secret match by key too. A bare "token" is a secret only inside a tax registration: elsewhere it
+  # is a meal token label ("L-012") the canteen logs.
+  SECRET_KEYS = %w[secret password api_key access_token refresh_token bearer_token access_code client_secret webhook_secret private_key].freeze
+  NESTED_SECRETS = { "tax_registration" => %w[token] }.freeze
   REDACTED = "[redacted]".freeze
 
-  def self.redact(value)
+  def self.redact(value, parent = nil)
     case value
-    when Hash then value.to_h { |k, v| [ k, secret_key?(k) && v.is_a?(String) && v.present? ? REDACTED : redact(v) ] }
-    when Array then value.map { |v| redact(v) }
+    when Hash then value.to_h { |k, v| [ k, secret_key?(k, parent) && v.is_a?(String) && v.present? ? REDACTED : redact(v, k) ] }
+    when Array then value.map { |v| redact(v, parent) }
     else value
     end
   end
 
-  def self.secret_key?(key) = SECRET_KEYS.include?(key.to_s) || Settings::Registry.key(key)&.secret || false
+  def self.secret_key?(key, parent = nil)
+    k = key.to_s
+    SECRET_KEYS.include?(k) || k.end_with?(".token", ".secret") || NESTED_SECRETS.fetch(parent.to_s, []).include?(k) || Settings::Registry.key(k)&.secret || false
+  end
 
   # Rows written before redact existed: a branch's tax token in the branch form's before/after and in the automatic
   # change rows. The log is append-only, so its trigger is off only while those values are replaced, inside one
   # transaction. Returns the number of rows rewritten. Run by the migration of 7 Nov 2026 and by `rails audit:redact`.
   def self.redact_stored!
-    keys = SECRET_KEYS + Settings::Registry::KEYS.values.select(&:secret).map(&:key)
-    pattern = %("(#{keys.map { |k| Regexp.escape(k) }.join('|')})":)
+    keys = SECRET_KEYS + NESTED_SECRETS.values.flatten + Settings::Registry::KEYS.values.select(&:secret).map(&:key)
+    pattern = %("(#{keys.map { |k| Regexp.escape(k) }.join('|')}|[^"]*\\.token|[^"]*\\.secret)":)
     count = 0
     transaction do
       connection.execute("ALTER TABLE audit_logs DISABLE TRIGGER audit_logs_append_only")

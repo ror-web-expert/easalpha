@@ -98,4 +98,9 @@ RSpec.describe "Tax registration token", type: :request do
     # The log is append-only again afterwards.
     expect { AuditLog.where(id: old.id).update_all(action: "x") }.to raise_error(ActiveRecord::StatementInvalid, /append-only/)
   end
+
+  it "keeps what is not a secret: a meal token label, a switch named like one, and the registration numbers" do
+    expect(AuditLog.redact({ token: "L-012", "canteen.print_token" => true, "pos.print_server.token" => "PS-1", "tax_registration" => { "ntn" => "1", "token" => "T" } }))
+      .to eq(token: "L-012", "canteen.print_token" => true, "pos.print_server.token" => "[redacted]", "tax_registration" => { "ntn" => "1", "token" => "[redacted]" })
+  end
 end
