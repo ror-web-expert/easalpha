@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { PageHeader } from "@/components/admin/page";
 import { SettingsScreenCard, useSettings } from "@/components/admin/settings-screen";
 import { PayrollGuard } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { useCan } from "@/store/auth";
 import { formatMoneyExact, perDayMinor } from "@/components/admin/payroll-helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Switch } from "@/components/ui";
@@ -46,7 +47,13 @@ function MethodCard({ selected, onSelect, icon: Icon, title, children }: { selec
   );
 }
 
+// GET /payroll/settings answers payroll.manage or PAYROLL only; settings.manage alone used to pass this guard and wait
+// on a refused call for ever (review R5).
 export default function PayrollSettingsPage() {
+  return <PayrollGuard perms={["payroll.manage", "PAYROLL"]}><PayrollSettingsForm /></PayrollGuard>;
+}
+
+function PayrollSettingsForm() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["payroll_settings"], queryFn: () => api<PayrollSettings>("/payroll/settings") });
   const [form, setForm] = useState<Form | null>(null);
@@ -56,12 +63,14 @@ export default function PayrollSettingsPage() {
     onSuccess: (s) => { qc.setQueryData(["payroll_settings"], s); qc.invalidateQueries({ queryKey: ["attendance_rules"] }); toast.success("Payroll settings saved"); },
     onError: (e) => toast.error("Could not save", errorMessage(e)),
   });
-  if (!form || !q.data) return <PayrollGuard perms={["payroll.manage", "settings.manage"]}><Loading /></PayrollGuard>;
+  const denied = noAccessFor(q.error);
+  if (denied) return denied;
+  if (!form || !q.data) return <Loading />;
   const ex = q.data.example;
   const divisorOk = Number.isInteger(form.fixed_divisor) && form.fixed_divisor >= 1 && form.fixed_divisor <= 31;
   const fixedDay = perDayMinor(ex.salary_minor, form.fixed_divisor);
   return (
-    <PayrollGuard perms={["payroll.manage", "settings.manage"]}>
+    <>
       <PageHeader icon={Wallet2} title="Payroll settings" description="How a day of salary is priced, whether a cashier must scan a fingerprint before closing a shift, and which pay messages staff get on WhatsApp." actions={<Button onClick={() => save.mutate(form)} loading={save.isPending} disabled={!divisorOk}>Save</Button>} />
       <div className="space-y-4">
         <Card>
@@ -109,6 +118,6 @@ export default function PayrollSettingsPage() {
         <div className="flex justify-end"><Button onClick={() => save.mutate(form)} loading={save.isPending} disabled={!divisorOk}>Save</Button></div>
         <PayrollNotificationsCard />
       </div>
-    </PayrollGuard>
+    </>
   );
 }

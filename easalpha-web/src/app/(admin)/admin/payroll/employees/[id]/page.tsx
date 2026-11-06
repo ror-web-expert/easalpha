@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { PageHeader } from "@/components/admin/page";
 import { MonthPicker, PayrollGuard, RunBadge, useBusinessHours } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { EmployeeDialog, type EmployeeForm, employeeToForm, FingerprintBadge } from "@/components/admin/payroll-employees";
 import { EmployeeRulesForm } from "@/components/admin/payroll-rules-form";
 import { AttendanceLedgerView } from "@/components/admin/payroll-attendance";
@@ -22,6 +23,10 @@ import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Dialog, EmptyRow,
 type Tab = "profile" | "attendance" | "payslips" | "rules";
 
 export default function EmployeeDetailPage() {
+  return <PayrollGuard><EmployeeDetail /></PayrollGuard>;
+}
+
+function EmployeeDetail() {
   const { id } = useParams<{ id: string }>();
   const q = useQuery({ queryKey: ["employee", id], queryFn: () => api<EmployeeFull>(`/employees/${id}`) });
   const [tab, setTab] = useState<Tab>("profile");
@@ -32,8 +37,10 @@ export default function EmployeeDetailPage() {
   const ledger = useQuery({ queryKey: ["payroll_ledger", id], queryFn: () => api<PayrollLedger>("/payroll/ledger", { query: { employee_id: id } }), enabled: tab === "payslips" });
   const e = q.data;
   const selected = ledger.data?.data.find((p) => p.id === slip) ?? null;
+  const denied = noAccessFor(q.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard>
+    <>
       <Link href="/admin/payroll/employees" className="mb-3 inline-flex items-center gap-1 text-sm text-primary"><ArrowLeft className="h-4 w-4" /> Employees</Link>
       {q.isLoading || !e ? <Loading /> : (
         <>
@@ -76,6 +83,6 @@ export default function EmployeeDetailPage() {
           <Dialog open={!!selected} onClose={() => setSlip(null)} title={selected ? `${selected.run_label}: ${e.name}` : ""} description={selected ? `${monthLabel(selected.month)} payslip` : undefined} size="lg">{selected ? <PayslipDetailPanel payslip={selected} /> : null}</Dialog>
         </>
       )}
-    </PayrollGuard>
+    </>
   );
 }

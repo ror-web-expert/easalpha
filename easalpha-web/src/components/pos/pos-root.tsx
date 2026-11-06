@@ -5,7 +5,7 @@ import { useDeviceStore } from "@/store/device";
 import { useCartStore } from "@/store/cart";
 import { useCatalogStore } from "@/store/catalog";
 import { useCustomerStore } from "@/store/customers";
-import { startSync, pullChanges } from "@/lib/sync";
+import { keepsTillData, startSync, pullChanges } from "@/lib/sync";
 import { loadCurrentShift, pruneOldOrders } from "@/lib/pos-actions";
 import { settingValue } from "@/lib/pricing";
 import { Loading } from "@/components/ui";
@@ -47,9 +47,11 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
     else if (deviceToken && !session && pathname !== "/pos/pin" && pathname !== "/pos/pair") router.replace("/pos/pin");
   }, [hydrated, deviceToken, session, pathname, router]);
 
-  // Sync engine + catalog refresh once logged in
+  // Sync engine + catalog refresh once logged in, on a till, a tablet or a kiosk only: a kitchen display, rider phone or
+  // token screen signed in here has no queue and may not download the till's catalogue or customers (review R4).
+  const tillData = useDeviceStore((s) => keepsTillData(s.device?.kind));
   useEffect(() => {
-    if (!session) return;
+    if (!session || !tillData) return;
     const stop = startSync();
     const cs = useCatalogStore.getState();
     (cs.catalog ? pullChanges() : cs.refresh().catch(() => {})).then(() => loadCurrentShift());
@@ -57,7 +59,7 @@ export function PosRoot({ children }: { children: React.ReactNode }) {
     void useCustomerStore.getState().downloadIfStale();
     pruneOldOrders();
     return stop;
-  }, [session]);
+  }, [session, tillData]);
 
   // Inactivity lock
   useEffect(() => {

@@ -9,6 +9,8 @@ import type { MealPlan, MealSession, Product } from "@/lib/types";
 import { formatMoney, majorToMinor, minorToMajor } from "@/lib/money";
 import { isoDay } from "@/lib/dates";
 import { FilterBar, PageHeader } from "@/components/admin/page";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
+import { CANTEEN_MANAGE_PERMS } from "@/components/canteen/helpers";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { toast } from "@/store/toast";
 
@@ -17,6 +19,10 @@ interface Row { product_id: string; planned_qty: string; worker_price: string }
 function shift(day: string, n: number): string { const d = new Date(day + "T00:00:00"); d.setDate(d.getDate() + n); return isoDay(d); }
 
 export default function MealPlansPage() {
+  return <RequirePermission perms={CANTEEN_MANAGE_PERMS}><MealPlans /></RequirePermission>;
+}
+
+function MealPlans() {
   const qc = useQueryClient();
   const [date, setDate] = useState(isoDay());
   const sessions = useQuery({ queryKey: ["canteen_sessions"], queryFn: () => api<{ data: MealSession[] }>("/canteen/sessions"), select: (r) => r.data.filter((s) => s.active) });
@@ -27,6 +33,9 @@ export default function MealPlansPage() {
     try { const r = await api<{ copied: number }>("/canteen/plans/copy", { method: "POST", body: { from: shift(date, -1), to: date } }); toast.success(`${r.copied} plan${r.copied === 1 ? "" : "s"} copied from the day before`); refresh(); }
     catch (e) { toast.error("Could not copy", errorMessage(e)); }
   };
+  // Without canteen.manage the API refuses both lists; "No meal sessions yet" would be wrong (review R5).
+  const denied = noAccessFor(plans.error, sessions.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={CalendarDays} title="Meal Plans" description="For each session of the day: the dishes, how many are cooked and what the worker pays (blank means the menu price; less means the company pays the rest). Publish so the kiosk serves it."

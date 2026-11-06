@@ -7,10 +7,16 @@ import { Fingerprint, Link2, UserPlus } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { CanteenWorker } from "@/lib/types";
 import { Cards, FilterBar, PageHeader, SearchInput } from "@/components/admin/page";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
+import { CANTEEN_KIOSK_PERMS } from "@/components/canteen/helpers";
 import { Badge, Button, Dialog, EmptyRow, Field, Input, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { toast } from "@/store/toast";
 
 export default function CanteenWorkersPage() {
+  return <RequirePermission perms={CANTEEN_KIOSK_PERMS}><Workers /></RequirePermission>;
+}
+
+function Workers() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [enrol, setEnrol] = useState<CanteenWorker | null>(null);
@@ -36,6 +42,8 @@ export default function CanteenWorkersPage() {
     finally { setBusy(null); }
   };
   const total = list.data?.data.length ?? 0;
+  const denied = noAccessFor(list.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={Fingerprint} title="Workers" description="Workers are the employees under Payroll. Each needs a fingerprint id from the reader (the same one attendance uses) and an account for meals; the account is made on the first meal if it is missing."

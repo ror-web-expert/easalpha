@@ -317,8 +317,21 @@ export async function pullChanges() {
   } catch {}
 }
 
-/** pull: false for a screen that pushes its queue but keeps no till catalogue (the canteen kiosk has its own sync call). */
+/** The device kinds that push a queue and keep the till's catalogue and customers: the API's Sync TILL_KINDS. */
+export const TILL_SYNC_KINDS = ["till", "tablet", "kiosk"];
+
+/** True for a till, a tablet or a canteen kiosk; a device stored without a kind is taken for the till it was paired as. */
+export function keepsTillData(kind: string | null | undefined): boolean {
+  return !kind || TILL_SYNC_KINDS.includes(kind);
+}
+
+/**
+ * pull: false for a screen that pushes its queue but keeps no till catalogue (the canteen kiosk has its own sync call).
+ * A kitchen display, rider phone or token screen signed in on the till's PIN screen starts nothing: it has no queue,
+ * and the API refuses it the change pull and the customer list (403 device.required; review R4).
+ */
 export function startSync(opts: { pull?: boolean } = {}) {
+  if (!keepsTillData(useDeviceStore.getState().device?.kind)) return () => {};
   stopped = false;
   const pull = opts.pull !== false;
   const onOnline = () => { lastFailureAt = 0; useSyncStore.getState().set({ status: "online" }); if (pull) pullChanges(); schedule(0); if (pull) void useCustomerStore.getState().downloadIfStale(); };

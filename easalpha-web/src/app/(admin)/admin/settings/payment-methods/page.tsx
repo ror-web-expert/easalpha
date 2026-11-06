@@ -7,12 +7,19 @@ import type { PaymentAccount, PaymentMethod, PaymentMethodCatalogueEntry } from 
 import { titleCase } from "@/lib/utils";
 import { PageHeader } from "@/components/admin/page";
 import { useAction, useList, useSave } from "@/components/admin/crud";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, Dialog, EmptyRow, Field, Input, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 interface Form { id?: string; code: string; name: string; kind: string; payment_account_id: string; active: boolean; works_offline: boolean; needs_reference: boolean; sort_order: number }
 const blank: Form = { code: "", name: "", kind: "wallet", payment_account_id: "", active: true, works_offline: false, needs_reference: true, sort_order: 10 };
 
+// Every change here and the catalogue need settings.manage on the API (review R5: a manager opening this by URL got a
+// list they could not change, a dead New button and "Catalogue unavailable").
 export default function PaymentMethodsPage() {
+  return <RequirePermission perms={["settings.manage"]}><PaymentMethods /></RequirePermission>;
+}
+
+function PaymentMethods() {
   const list = useList<PaymentMethod>("payment_methods", "/payment_methods");
   const accounts = useQuery({ queryKey: ["payment_accounts"], queryFn: () => api<{ data: PaymentAccount[] }>("/payment_accounts"), select: (r) => r.data });
   const save = useSave<Form>(["payment_methods"], (f) => (f.id ? `/payment_methods/${f.id}` : "/payment_methods"), { onSuccess: () => setForm(null) });
@@ -21,6 +28,8 @@ export default function PaymentMethodsPage() {
   const catalogue = useQuery({ queryKey: ["payment_methods_catalogue"], queryFn: () => api<{ data: PaymentMethodCatalogueEntry[] }>("/payment_methods/catalogue"), select: (r) => r.data });
   const addFromCatalogue = useAction<string>(["payment_methods", "payment_methods_catalogue", "payment_accounts", "gl_accounts"], (catalogue_code) => api("/payment_methods", { method: "POST", body: { catalogue_code } }), "Method and finance account added");
   const [adding, setAdding] = useState<string | null>(null);
+  const denied = noAccessFor(catalogue.error, list.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={CreditCard} title="Payment methods" description="Cash, EasyPaisa, JazzCash and Bank ship with every account. Every method is also a finance account with a running balance; a method with transaction history cannot be deleted." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New method</Button>} />

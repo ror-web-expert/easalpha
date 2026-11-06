@@ -9,6 +9,8 @@ import type { CanteenSummary, CanteenWorkersReport, MealClaim } from "@/lib/type
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime, isoDay } from "@/lib/dates";
 import { Cards, DateRangePicker, FilterBar, PageHeader, type DateRange } from "@/components/admin/page";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
+import { CANTEEN_MANAGE_PERMS } from "@/components/canteen/helpers";
 import { Badge, Button, Dialog, EmptyRow, Loading, SummaryCard, Table, Tabs, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 type View = "day" | "session" | "dish" | "department" | "workers";
@@ -21,7 +23,7 @@ function csvDownload(name: string, header: string[], rows: (string | number | nu
 }
 
 export default function CanteenReportsPage() {
-  return <Suspense fallback={<Loading />}><Reports /></Suspense>;
+  return <RequirePermission perms={CANTEEN_MANAGE_PERMS}><Suspense fallback={<Loading />}><Reports /></Suspense></RequirePermission>;
 }
 
 function Reports() {
@@ -38,6 +40,8 @@ function Reports() {
     if (view === "workers" && workers.data) csvDownload(`canteen-workers-${range.from}-${range.to}.csv`, ["Worker", "Department", "Meals", "Worker share", "Company share", "Last meal"], workers.data.rows.map((r) => [r.name, r.department, r.meals, r.worker_minor / 100, r.company_minor / 100, r.last_meal_at]));
     else if (summary.data) csvDownload(`canteen-${view}-${range.from}-${range.to}.csv`, [view, "Meals", "Served", "Planned", "Workers", "Worker share", "Company share", "Total"], summary.data.rows.map((r) => [view === "day" ? formatDate(r.key) : r.key, r.meals, r.served, r.planned, r.workers, r.worker_minor / 100, r.company_minor / 100, r.total_minor / 100]));
   };
+  const denied = noAccessFor(summary.error, workers.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={BarChart3} title="Canteen reports" description="Meals and money over any range: a day, a week, a month. The worker share is what goes on accounts and comes off payroll; the company share is the subsidy." actions={<Button variant="secondary" onClick={exportCsv}><Download className="h-4 w-4" /> CSV</Button>} />

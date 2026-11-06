@@ -12,6 +12,7 @@ import { formatMoney } from "@/lib/money";
 import { formatDate } from "@/lib/dates";
 import { FilterBar, PageHeader } from "@/components/admin/page";
 import { MonthPicker, PayrollGuard, RunBadge, useEmployees } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { isWageStaff } from "@/components/admin/wages-helpers";
 import { monthKey, monthLabel } from "@/components/admin/payroll-helpers";
 import { RunDetailPanel } from "@/components/admin/payroll-run";
@@ -31,6 +32,10 @@ function WageStaffNote() {
 }
 
 export default function RunPayrollPage() {
+  return <PayrollGuard perms={["payroll.manage", "PAYROLL"]}><RunPayroll /></PayrollGuard>;
+}
+
+function RunPayroll() {
   const qc = useQueryClient();
   const [month, setMonth] = useState(monthKey());
   const [notes, setNotes] = useState("");
@@ -53,8 +58,10 @@ export default function RunPayrollPage() {
       } else toast.error("Could not generate payroll", errorMessage(e));
     } finally { setGenerating(false); }
   };
+  const denied = noAccessFor(runs.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
+    <>
       <PageHeader icon={BadgeDollarSign} title="Run Payroll" description="Generate a month, check every payslip, then Sync to Expenses to pay it. The run snapshots the divisor, fines and allowances it used, so later rule changes never move a paid month." />
       <WageStaffNote />
       <FilterBar>
@@ -86,6 +93,6 @@ export default function RunPayrollPage() {
           {selected ? <RunDetailPanel runId={selected} /> : <Card><div className="py-16 text-center text-sm text-fg-muted">Choose a run to see its payslips.</div></Card>}
         </div>
       </div>
-    </PayrollGuard>
+    </>
   );
 }

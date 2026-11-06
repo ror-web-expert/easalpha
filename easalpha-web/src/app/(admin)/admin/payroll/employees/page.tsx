@@ -12,11 +12,16 @@ import { useDebounced } from "@/lib/hooks";
 import { FilterBar, PageHeader, SearchInput } from "@/components/admin/page";
 import { useRemove } from "@/components/admin/crud";
 import { PayrollGuard, useEmployees } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { blankEmployee, ComponentsDialog, DepartmentsDialog, EmployeeDialog, type EmployeeForm, employeeToForm, FingerprintBadge, useDepartments } from "@/components/admin/payroll-employees";
 import { isWageStaff, payrollMix, payTypeLabel, rateLabel } from "@/components/admin/wages-helpers";
 import { Badge, Button, ConfirmDialog, EmptyRow, Loading, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 export default function EmployeesPage() {
+  return <PayrollGuard><Employees /></PayrollGuard>;
+}
+
+function Employees() {
   const [department, setDepartment] = useState("");
   const [q, setQ] = useState("");
   const dq = useDebounced(q);
@@ -30,8 +35,10 @@ export default function EmployeesPage() {
   const remove = useRemove(["employees", "payroll_overview", "attendance_enrolled"], (id) => `/employees/${id}`, "Employee archived");
   const rows = list.data ?? [];
   const mix = payrollMix(rows);
+  const denied = noAccessFor(list.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard>
+    <>
       <PageHeader icon={Contact} title="Employees" description="Everyone payroll pays: a monthly salary or a daily or weekly wage, department, components and the fingerprint that feeds attendance." actions={<>
         <Button variant="secondary" onClick={() => setDeps(true)}><Building2 className="h-4 w-4" /> Departments</Button>
         <Button variant="secondary" onClick={() => setComps(true)}><Layers className="h-4 w-4" /> Components</Button>
@@ -69,6 +76,6 @@ export default function EmployeesPage() {
       <DepartmentsDialog open={deps} onClose={() => setDeps(false)} />
       <ComponentsDialog open={comps} onClose={() => setComps(false)} />
       <ConfirmDialog open={!!archive} onClose={() => setArchive(null)} onConfirm={() => archive && remove.mutate(archive.id, { onSuccess: () => setArchive(null) })} title={`Archive ${archive?.name}?`} description="They leave today, drop out of attendance and future payroll, and their past payslips stay." confirmLabel="Archive" destructive loading={remove.isPending} />
-    </PayrollGuard>
+    </>
   );
 }

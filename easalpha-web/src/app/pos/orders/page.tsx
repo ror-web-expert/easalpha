@@ -3,7 +3,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw, Printer, Ban, RotateCcw, Play, Pencil, Unlock } from "lucide-react";
 import { type LocalOrder } from "@/lib/db";
-import { fetchReceipt, listLocalOrders, refreshOrdersFromServer, refundOrder, reopenOrder, resumeOrder, storeServerOrder, voidOrder } from "@/lib/pos-actions";
+import { fetchReceipt, listLocalOrders, refreshOrdersFromServer, refundOrder, reopenOrder, resumeOrder, serverToLocal, storeServerOrder, voidOrder } from "@/lib/pos-actions";
 import { isReceiptNumber } from "@/lib/receipt-format";
 import { defaultRefundMethod } from "@/lib/refund-method";
 import { scannerConfig } from "@/lib/barcode";
@@ -52,8 +52,14 @@ function OrdersScreen() {
   const [refund, setRefund] = useState<{ amount: number; method: string; reason: string } | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [busy, setBusy] = useState(false);
-  const reload = useCallback(async () => { setRows(await listLocalOrders(day)); }, [day]);
-  const refresh = useCallback(async () => { setBusy(true); await refreshOrdersFromServer(day); await reload(); setBusy(false); }, [day, reload]);
+  const [refreshing, setRefreshing] = useState(false);
+  // The local list cannot be read where IndexedDB is unavailable (some private windows): it stays as it was.
+  const reload = useCallback(async () => { try { setRows(await listLocalOrders(day)); } catch {} }, [day]);
+  // Review R31: whatever fails, the Refresh button stops spinning.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await refreshOrdersFromServer(day); await reload(); } finally { setRefreshing(false); }
+  }, [day, reload]);
   useEffect(() => { reload(); refresh(); }, [reload, refresh]);
   useEffect(() => { const t = setInterval(reload, 5000); return () => clearInterval(t); }, [reload]);
 
@@ -63,7 +69,7 @@ function OrdersScreen() {
    */
   const openByReceipt = useCallback(async (code: string) => {
     const wanted = code.trim().toLowerCase();
-    const local = (await listLocalOrders(day)).find((o) => (o.receipt_number ?? "").toLowerCase() === wanted || o.label.toLowerCase() === wanted);
+    const local = (await listLocalOrders(day).catch(() => [])).find((o) => (o.receipt_number ?? "").toLowerCase() === wanted || o.label.toLowerCase() === wanted);
     if (local) { setTab("all"); setSel(local); return; }
     if (!isOnline()) { toast.error("Not on this till", `${code} is not in today's orders and the till is offline.`); return; }
     try {
@@ -71,12 +77,16 @@ function OrdersScreen() {
       // Only the exact receipt number: GET /orders?q= also matches customers and labels, and a scan must never open someone else's order.
       const found = page.data.find((o) => (o.receipt_number ?? "").toLowerCase() === wanted);
       if (!found) { toast.error("No such receipt", `No order has the receipt number ${code}.`); return; }
+      // The search answers with summary rows, which carry no lines: the full order is what the dialog, a refund or a
+      // reopen need (review R2). Should that call fail, the summary is stored and the lines already cached are kept.
+      const full = await api<Order>(`/orders/${found.id}`, { auth: "pos" }).catch(() => found);
       setTab("all");
-      setSel(await storeServerOrder(found));
+      setSel(await storeServerOrder(full).catch(() => serverToLocal(full)));
     } catch (e) { toast.error("Could not look up the receipt", errorMessage(e)); }
   }, [day]);
   const scanConfig = useMemo(() => scannerConfig(settings), [settings]);
-  useBarcodeScanner({ config: scanConfig, enabled: scanConfig.enabled && !sel && !receipt && !busy, onScan: (code) => {
+  // Scans are taken while the list refreshes (review R31); an open order or receipt pauses them.
+  useBarcodeScanner({ config: scanConfig, enabled: scanConfig.enabled && !sel && !receipt, onScan: (code) => {
     if (!isReceiptNumber(code)) { if (scanConfig.beep) playScanTone("unknown"); toast.error("Not a receipt", `${code} is not a receipt number. Scan the barcode at the bottom of a receipt.`); return; }
     if (scanConfig.beep) playScanTone("ok");
     void openByReceipt(code);
@@ -143,7 +153,7 @@ function OrdersScreen() {
           <Tabs size="lg" value={tab} onChange={setTab} items={[{ value: "open", label: `Open · ${formatMoney(openTotal, currency)}`, count: rows.filter((o) => OPEN.includes(o.status)).length }, { value: "paid", label: `Paid · ${formatMoney(paidTotal, currency)}`, count: rows.filter((o) => ["paid", "closed", "refunded"].includes(o.status)).length }, { value: "all", label: "All", count: rows.length }]} />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search serial, table, customer" className="h-11 w-64" />
           <div className="flex-1" />
-          <Button variant="secondary" size="lg" onClick={refresh} loading={busy} disabled={status === "offline"}><RefreshCw className="h-4 w-4" /> Refresh</Button>
+          <Button variant="secondary" size="lg" onClick={refresh} loading={refreshing} disabled={status === "offline"}><RefreshCw className="h-4 w-4" /> Refresh</Button>
         </div>
         <div className="grid flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((o) => (

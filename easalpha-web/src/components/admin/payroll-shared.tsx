@@ -4,11 +4,12 @@
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { EmployeeFull, PaymentMethod, WageEmployeesResponse } from "@/lib/types";
 import { useList } from "@/components/admin/crud";
-import { Badge, Button, EmptyState, Input, Select } from "@/components/ui";
-import { useAuthStore, useCan } from "@/store/auth";
+import { Badge, Button, Input, Select } from "@/components/ui";
+import { RequirePermission } from "./no-access";
+import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/utils";
 import { advanceStatusVariant, attendanceStatusLabel, attendanceStatusVariant, leaveStatusVariant, monthKey, runStatusVariant, scanResultLabel, scanResultVariant, shiftMonth } from "./payroll-helpers";
 
@@ -19,11 +20,10 @@ export function useBusinessHours(): string | null {
   return useAuthStore((s) => s.session?.branch?.business_day_window ?? null);
 }
 
-/** The group is for payroll.manage / PAYROLL (staff.manage can see Employees and Fingerprint, as the sidebar does). */
+/** The group is for payroll.manage / PAYROLL (staff.manage can see Employees and Fingerprint, as the sidebar does).
+ *  Without them the page shows the admin's standard no-access state; a page's queries go inside it (review R5). */
 export function PayrollGuard({ children, perms = PAYROLL_PERMS }: { children: React.ReactNode; perms?: string[] }) {
-  const can = useCan();
-  if (!can(...perms)) return <EmptyState icon={Lock} title="Payroll permission needed" hint="Ask an owner to grant the Payroll permission to your role." />;
-  return <>{children}</>;
+  return <RequirePermission perms={perms}>{children}</RequirePermission>;
 }
 
 /** "YYYY-MM" picker with previous and next month buttons. */

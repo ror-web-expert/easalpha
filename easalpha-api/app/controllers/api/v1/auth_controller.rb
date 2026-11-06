@@ -55,14 +55,14 @@ module Api
       end
 
       # POST /auth/refresh  refresh_token
+      # Rotates the refresh token. The token spent in the last 30 seconds is answered with the same successor, so two
+      # tabs refreshing one session at once both carry on (RefreshToken::REPLAY_WINDOW, review R28).
       def refresh
-        rt = RefreshToken.find_valid(params.require(:refresh_token))
+        active = ->(rt) { raise Api::Errors::Unauthorized.new("session.invalid", "Session is no longer valid") unless rt.membership&.active? }
+        rt, successor = RefreshToken.rotate!(params.require(:refresh_token), user_agent: request.user_agent, ip: request.remote_ip, check: active)
         raise Api::Errors::Unauthorized.new("refresh.invalid", "Session expired, log in again") unless rt
-        membership = rt.membership
-        raise Api::Errors::Unauthorized.new("session.invalid", "Session is no longer valid") unless membership&.active?
-        rt.revoke!
-        Tenancy::Context.with(membership.business, user: rt.user) do
-          render json: Auth::SessionIssuer.issue(user: rt.user, membership: membership, app: rt.app, device: rt.device, request: request)
+        Tenancy::Context.with(rt.membership.business, user: rt.user) do
+          render json: Auth::SessionIssuer.issue(user: rt.user, membership: rt.membership, app: rt.app, device: rt.device, request: request, refresh_token: successor)
         end
       end
 
