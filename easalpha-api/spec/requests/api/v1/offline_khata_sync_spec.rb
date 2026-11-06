@@ -11,6 +11,8 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
   let(:headers) { auth_headers(owner) }
   let(:device) { within(biz) { Device.create!(branch: Branch.first, name: "Till", kind: "till", paired_at: Time.current, code: "T2") } }
   let(:cashier) { add_member!(biz, "cashier", pin: "1111") }
+  # The till pushes with the cashier's PIN session on the paired device (6 Nov 2026 review, A1).
+  let(:pos) { auth_headers(cashier, app: "pos", device: device) }
   let(:customer) { within(biz) { Customer.create!(name: "Sadia Akhtar", khata_no: 32, phone: "+923001807130", last_order_at: 1.day.ago) } }
 
   before do
@@ -31,7 +33,7 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
   it "records the sale as paid at the server's total and puts that on the customer's account" do
     order_id = SecureRandom.uuid
     pay_id = SecureRandom.uuid
-    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: [ { id: pay_id, method_code: "khata", amount_minor: full_price } ]) ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: [ { id: pay_id, method_code: "khata", amount_minor: full_price } ]) ] }, headers: pos
     expect(json[:results].first).to include(status: "accepted")
     within(biz) do
       o = Order.find(order_id)
@@ -50,11 +52,11 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
   it "takes the missing payment when an order that is already on the server is sent again (Try again)" do
     order_id = SecureRandom.uuid
     # The order reached the server, its payment did not: what the old code left behind.
-    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: []) ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: []) ] }, headers: pos
     within(biz) { expect(Order.find(order_id)).to have_attributes(status: "placed", payment_status: "unpaid") }
 
     record = order_record(order_id, payments: [ { id: SecureRandom.uuid, method_code: "khata", amount_minor: full_price } ])
-    api_post "/api/v1/sync/push", { records: [ record ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ record ] }, headers: pos
     expect(json[:results].first).to include(status: "accepted")
     within(biz) do
       o = Order.find(order_id)
@@ -62,7 +64,7 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
       expect(customer.reload.balance_minor).to eq(o.total_minor)
     end
 
-    api_post "/api/v1/sync/push", { records: [ record ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ record ] }, headers: pos
     expect(json[:results].first).to include(status: "duplicate")
     within(biz) { expect(Payment.where(order_id: order_id).count).to eq(1) }
   end
@@ -70,7 +72,7 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
   it "skips a payment that finds nothing left to pay instead of refusing the sale" do
     order_id = SecureRandom.uuid
     payments = [ { id: SecureRandom.uuid, method_code: "khata", amount_minor: full_price }, { id: SecureRandom.uuid, method_code: "khata", amount_minor: 5_000 } ]
-    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: payments) ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: payments) ] }, headers: pos
     expect(json[:results].first).to include(status: "accepted")
     within(biz) do
       o = Order.find(order_id)
@@ -91,7 +93,7 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
     within(biz) { customer.update!(last_order_at: 5.days.ago) }
     order_id = SecureRandom.uuid
     # Sold 4 days ago, one day after the last order: within the 3-day tier then, though not any more.
-    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: [], created_at: 4.days.ago) ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ order_record(order_id, payments: [], created_at: 4.days.ago) ] }, headers: pos
     within(biz) { expect(Order.find(order_id).discounts.map(&:kind)).to eq([ "regular" ]) }
   end
 
@@ -104,7 +106,7 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
     record = { type: "order", id: order_id, membership_id: manager.id,
                payload: { order_type: "dine_in", client_created_at: 5.minutes.ago.iso8601, status: "placed", customer_id: customer.id, service_charge_percent: 0, service_charge_fixed_minor: 0,
                           lines: [ { product_id: m[:burger].id, quantity: 2 } ], payments: [ { id: SecureRandom.uuid, method_code: "khata", amount_minor: 93_960 } ] } }
-    api_post "/api/v1/sync/push", { records: [ record ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ record ] }, headers: auth_headers(manager, app: "pos", device: device)
     expect(json[:results].first).to include(status: "accepted")
     within(biz) do
       o = Order.find(order_id)
@@ -121,26 +123,26 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
     stranger = within(other) { Customer.create!(name: "Sadia From Other Canteen", khata_no: 32, phone: "+923001807130", last_order_at: 1.day.ago) }
     within(other) { RegularDiscountTier.create!(name: "Other tier", within_days: 30, kind: "percent", value: 50) }
 
-    get "/api/v1/sync/customers", headers: device_headers(device)
+    get "/api/v1/sync/customers", headers: pos
     expect(json[:data].map { |c| c[:id] }).to eq([ customer.id ])
     get "/api/v1/sync/customers", headers: device_headers(other_device)
     expect(json[:data].map { |c| c[:id] }).to eq([ stranger.id ])
 
-    get "/api/v1/sync/changes", headers: device_headers(device)
+    get "/api/v1/sync/changes", headers: pos
     expect(json[:customers].map { |c| c[:id] }).not_to include(stranger.id)
     expect(json[:regular_discount_tiers].map { |t| t[:name] }).to eq([ "Back within 3 days" ])
     get "/api/v1/catalog", headers: device_headers(other_device)
     expect(json[:regular_discount_tiers].map { |t| t[:name] }).to eq([ "Other tier" ])
 
     # A till cannot page into another restaurant's list either: the cursor is only an id to start after.
-    get "/api/v1/sync/customers?after=00000000-0000-0000-0000-000000000000", headers: device_headers(device)
+    get "/api/v1/sync/customers?after=00000000-0000-0000-0000-000000000000", headers: pos
     expect(json[:data].map { |c| c[:id] }).to eq([ customer.id ])
 
     # An offline sale naming the other restaurant's customer is refused and nothing is charged to anyone.
     order_id = SecureRandom.uuid
     record = order_record(order_id, payments: [ { id: SecureRandom.uuid, method_code: "khata", amount_minor: full_price } ])
     record[:payload][:customer_id] = stranger.id
-    api_post "/api/v1/sync/push", { records: [ record ] }, headers: device_headers(device)
+    api_post "/api/v1/sync/push", { records: [ record ] }, headers: pos
     expect(json[:results].first).to include(status: "rejected")
     within(other) { expect(stranger.reload.balance_minor).to eq(0) }
     within(biz) { expect(Order.where(id: order_id)).to be_empty }
@@ -150,21 +152,21 @@ RSpec.describe "Offline khata sales reaching the server", type: :request do
     customer
     walk_in = within(biz) { Customer.walk_in }
     gone = within(biz) { Customer.create!(name: "Old Student") }
-    get "/api/v1/catalog", headers: device_headers(device)
+    get "/api/v1/catalog", headers: pos
     expect(json[:regular_discount_tiers].map { |t| t[:within_days] }).to eq([ 3 ])
-    get "/api/v1/sync/changes", headers: device_headers(device)
+    get "/api/v1/sync/changes", headers: pos
     expect(json[:regular_discount_tiers].first).to include(kind: "percent", value: 10.0)
     cursor = json[:cursor]
     within(biz) { gone.update!(archived_at: Time.current) }
-    get "/api/v1/sync/changes?since=#{cursor}", headers: device_headers(device)
+    get "/api/v1/sync/changes?since=#{cursor}", headers: pos
     expect(json[:archived_customer_ids]).to eq([ gone.id ])
 
-    get "/api/v1/sync/customers?limit=1", headers: device_headers(device)
+    get "/api/v1/sync/customers?limit=1", headers: pos
     first_page = json[:data].map { |c| c[:id] }
     expect(first_page.size).to eq(1)
-    get "/api/v1/sync/customers?limit=1&after=#{json[:next_after]}", headers: device_headers(device)
+    get "/api/v1/sync/customers?limit=1&after=#{json[:next_after]}", headers: pos
     ids = first_page + json[:data].map { |c| c[:id] }
-    get "/api/v1/sync/customers", headers: device_headers(device)
+    get "/api/v1/sync/customers", headers: pos
     expect(json[:data].map { |c| c[:id] }).to match_array([ customer.id ])
     expect(json[:next_after]).to be_nil
     expect(ids).not_to include(walk_in.id, gone.id)

@@ -8,6 +8,8 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
   let(:headers) { auth_headers(owner) }
   let(:device) { within(biz) { Device.create!(branch: Branch.first, name: "Till", kind: "till", paired_at: Time.current, code: "T1") } }
   let(:cashier) { add_member!(biz, "cashier", pin: "1111") }
+  # The till pushes with the cashier's PIN session on the paired device (6 Nov 2026 review, A1).
+  let(:pos) { auth_headers(cashier, app: "pos", device: device) }
 
   describe "tax invoices" do
     before { within(biz) { Branch.first.update!(tax_registration: { "authority" => "pra", "ntn" => "1234567-8", "pos_id" => "POS-1" }) } }
@@ -70,7 +72,7 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
         { type: "cash_movement", id: SecureRandom.uuid, membership_id: cashier.id, payload: { shift_id: shift_id, kind: "cash_out", amount_minor: 500, reason: "Tea" } },
         { type: "shift_close", id: shift_id, membership_id: cashier.id, payload: { counted_cash_minor: 154_020 } }
       ]
-      api_post "/api/v1/sync/push", { records: records }, headers: device_headers(device)
+      api_post "/api/v1/sync/push", { records: records }, headers: pos
       expect(response).to have_http_status(:ok)
       statuses = json[:results].map { |r| r[:status] }
       expect(statuses).to eq(%w[accepted accepted rejected accepted accepted])
@@ -88,7 +90,7 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
         expect(SyncRejection.open.count).to eq(1)
         expect(SyncBatch.last.attributes.slice("accepted", "duplicates", "rejected")).to eq("accepted" => 4, "duplicates" => 0, "rejected" => 1)
       end
-      api_post "/api/v1/sync/push", { records: records }, headers: device_headers(device)
+      api_post "/api/v1/sync/push", { records: records }, headers: pos
       expect(json[:results].map { |r| r[:status] }).to eq(%w[duplicate duplicate rejected duplicate duplicate])
       get "/api/v1/sync/rejections", headers: headers
       expect(json[:data].size).to eq(2)
@@ -116,11 +118,12 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
     end
 
     it "rejects records from a member who was deactivated before the action and locks a day" do
-      cashier
+      # The cashier signed in on this till once (a refresh token), then was deactivated; the owner pushes the queue.
+      within(biz) { RefreshToken.issue!(user: cashier.user, membership: cashier, device: device, app: "pos") }
       within(biz) { cashier.deactivate! }
       records = [ { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", client_created_at: 1.minute.from_now.iso8601, lines: [ { product_id: m[:chai].id } ] } } ]
-      api_post "/api/v1/sync/push", { records: records }, headers: device_headers(device)
-      expect(json[:results].first).to include(status: "rejected", code: "sync.member")
+      api_post "/api/v1/sync/push", { records: records }, headers: auth_headers(owner, app: "pos", device: device)
+      expect(json[:results].first).to include(status: "rejected", code: "actor.unknown")
     end
   end
 
@@ -132,7 +135,12 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
         api_post "/api/v1/orders", { order_type: "walk_in", customer_id: cust, client_created_at: when_.iso8601, lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
         oid = json[:id]
         api_post "/api/v1/orders/#{oid}/payments", { payments: [ { method_code: "khata", amount_minor: 9_280 } ] }, headers: headers
-        within(biz) { Payment.where(order_id: oid).update_all(received_at: when_) }
+        # Backdated in the rows: a client_created_at this old is clamped to a week (Orders::ClientTime), which is not what this test is about.
+        within(biz) do
+          day = Branch.first.business_day_for(when_)
+          Payment.where(order_id: oid).update_all(received_at: when_, business_day: day)
+          Order.where(id: oid).update_all(business_day: day, client_created_at: when_)
+        end
       end
       api_post "/api/v1/customers/#{cust}/payments", { amount_minor: 10_000, method_code: "cash" }, headers: headers
       get "/api/v1/customers/#{cust}/ledger", headers: headers

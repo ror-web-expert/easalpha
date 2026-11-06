@@ -3,7 +3,8 @@ module Payments
   module Khata
     module_function
 
-    def receive!(customer, amount_minor:, method_code:, reference: nil, actor:, shift: nil, branch:, direction: "received")
+    # id: the till's own UUID for a payment taken offline, so a replay of the same record is a duplicate, never a second receipt.
+    def receive!(customer, amount_minor:, method_code:, reference: nil, actor:, shift: nil, branch:, direction: "received", id: nil)
       raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount_minor.positive?
       raise Api::Errors::Conflict.new("khata.walk_in", "The walk-in customer has no account") if customer.is_walk_in
       method = PaymentMethod.active.find_by!(code: method_code)
@@ -14,7 +15,7 @@ module Payments
         customer.lock!
         delta = direction == "received" ? -amount_minor : amount_minor
         customer.update!(balance_minor: customer.balance_minor + delta)
-        cp = CustomerPayment.create!(customer: customer, branch_id: branch.id, direction: direction, amount_minor: amount_minor, payment_method: method, payment_account: method.payment_account,
+        cp = CustomerPayment.create!(id: id || SecureRandom.uuid, customer: customer, branch_id: branch.id, direction: direction, amount_minor: amount_minor, payment_method: method, payment_account: method.payment_account,
                                      reference: reference, collected_by_membership_id: actor&.id, shift_id: shift&.id, business_day: day, received_at: Time.current)
         account = method.cash? && shift&.drawer_account ? shift.drawer_account : method.payment_account
         cp.update_column(:payment_account_id, account.id) if account
