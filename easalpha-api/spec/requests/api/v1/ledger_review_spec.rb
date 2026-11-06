@@ -293,11 +293,13 @@ RSpec.describe "Ledger review: money paths", type: :request do
       api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: burger[:id], quantity: 1 } ] }, headers: headers
       expect(response).to have_http_status(:ok), response.body
       expect(json).to include(total_minor: 52_200, paid_minor: 61_480, payment_status: "paid")
-      api_post "/api/v1/orders/#{o[:id]}/complete", {}, headers: headers
-      expect(response).to have_http_status(:ok), response.body
+      # The excess goes back before the order completes (R23: completing it first answers order.overpaid).
       api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: 9_280, method_code: "cash", reason: "Chai removed" }, headers: headers
       expect(response).to have_http_status(:created), response.body
-      expect(json[:order]).to include(status: "closed", payment_status: "paid", paid_minor: 52_200)
+      expect(json[:order]).to include(status: "served", payment_status: "paid", paid_minor: 52_200)
+      api_post "/api/v1/orders/#{o[:id]}/complete", {}, headers: headers
+      expect(response).to have_http_status(:ok), response.body
+      expect(json).to include(status: "closed", payment_status: "paid", paid_minor: 52_200)
       api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 100 } ] }, headers: headers
       expect(response).to have_http_status(:conflict)
       expect(json[:error][:code]).to eq("order.status")

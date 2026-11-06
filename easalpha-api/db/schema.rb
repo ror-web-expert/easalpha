@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_110300) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_162417) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -121,6 +121,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_110300) do
     t.index ["business_id", "kind", "generated_at"], name: "index_ai_insights_on_business_id_and_kind_and_generated_at"
     t.index ["business_id"], name: "index_ai_insights_on_business_id"
     t.check_constraint "kind::text = ANY (ARRAY['pricing'::character varying, 'stock_forecast'::character varying]::text[])", name: "ai_insights_kind_check"
+  end
+
+  create_table "applied_submissions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "business_id", null: false
+    t.uuid "device_id"
+    t.string "record_type", null: false
+    t.uuid "record_id", null: false
+    t.string "client_seq", null: false
+    t.uuid "order_id"
+    t.datetime "created_at", null: false
+    t.index ["business_id", "record_type", "record_id", "client_seq", "device_id"], name: "index_applied_submissions_once", unique: true, nulls_not_distinct: true
   end
 
   create_table "attendance_rules", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -3091,6 +3102,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_110300) do
   add_foreign_key "aggregator_events", "branches"
   add_foreign_key "aggregator_events", "businesses"
   add_foreign_key "ai_insights", "businesses"
+  add_foreign_key "applied_submissions", "businesses"
   add_foreign_key "attendance_rules", "businesses"
   add_foreign_key "attendance_rules", "employees"
   add_foreign_key "attendance_scans", "businesses"

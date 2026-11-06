@@ -66,11 +66,19 @@ module Marketing
       order
     end
 
-    # When a voucher discount is removed or the order is voided, the code is usable again.
+    # When a voucher discount is removed or its order is voided, the voucher is given back: a personal code can be used
+    # again; a public code gets its use back and the code made for that one use is retired. A voided order keeps its
+    # discount rows, so a voucher given back by a void and redeemed since on another order belongs to that order now:
+    # only the latest discount that carries it can release it.
     def release!(discount)
-      v = discount.voucher_id && Voucher.find_by(id: discount.voucher_id)
+      v = discount.voucher_id && Voucher.lock.find_by(id: discount.voucher_id)
       return unless v && v.status == "redeemed"
-      v.update!(status: "issued", redeemed_order_id: nil, redeemed_at: nil)
+      return if DiscountApplied.where(voucher_id: v.id).where.not(id: discount.id).where("created_at > ?", discount.created_at).exists?
+      if v.voucher_batch.kind == "public"
+        v.update!(status: "void")
+      else
+        v.update!(status: "issued", redeemed_order_id: nil, redeemed_at: nil)
+      end
       VoucherBatch.where(id: v.voucher_batch_id).update_all("redeemed_count = GREATEST(redeemed_count - 1, 0)")
     end
 

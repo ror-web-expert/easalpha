@@ -6,6 +6,7 @@ import { type LocalOrder } from "@/lib/db";
 import { fetchReceipt, listLocalOrders, refreshOrdersFromServer, refundOrder, reopenOrder, resumeOrder, serverToLocal, storeServerOrder, voidOrder } from "@/lib/pos-actions";
 import { isReceiptNumber } from "@/lib/receipt-format";
 import { defaultRefundMethod } from "@/lib/refund-method";
+import { refundOffer } from "@/lib/refunds";
 import { scannerConfig } from "@/lib/barcode";
 import { useBarcodeScanner, playScanTone } from "@/components/pos/scanner";
 import { isOnline } from "@/lib/sync";
@@ -99,6 +100,8 @@ function OrdersScreen() {
   const openTotal = rows.filter((o) => OPEN.includes(o.status)).reduce((s, o) => s + o.total_minor, 0);
   // A paid order the server rejected (day locked, product archived) is not money the business has: it stays listed, flagged, but not counted.
   const paidTotal = rows.filter((o) => ["paid", "closed"].includes(o.status) && o.sync_status !== "rejected").reduce((s, o) => s + o.total_minor, 0);
+  // A paid order's money, or what an open (reopened) order was paid above its total: the server completes it only once that is back.
+  const refundable = sel ? refundOffer(sel) : null;
 
   const doVoid = async (reason: string) => {
     if (!sel) return;
@@ -176,7 +179,7 @@ function OrdersScreen() {
       <Dialog open={!!sel && !voidOpen && !refund} onClose={() => setSel(null)} title={sel ? `Order ${sel.label}` : ""} description={sel ? `${titleCase(sel.status)} · ${titleCase(sel.order_type)} · ${formatTime(sel.created_at)}${sel.void_reason ? ` · ${sel.void_reason}` : ""}${sel.sync_status === "rejected" ? ` · Rejected by the server: ${sel.sync_error ?? "no reason given"}. See Attention.` : ""}` : undefined} size="md"
         footer={sel ? <>
           {OPEN.includes(sel.status) ? <Button variant="destructive" onClick={() => setVoidOpen(true)}><Ban className="h-4 w-4" /> Void</Button> : null}
-          {["paid", "closed"].includes(sel.status) && can("orders.refund", "shifts.any") ? <Button variant="secondary" onClick={() => setRefund({ amount: sel.paid_minor, method: defaultRefundMethod(sel.payment_method_summary, methods, sel.payments), reason: "" })}><RotateCcw className="h-4 w-4" /> Refund</Button> : null}
+          {refundable && can("orders.refund", "shifts.any") ? <Button variant="secondary" onClick={() => setRefund({ amount: refundable.amount_minor, method: defaultRefundMethod(sel.payment_method_summary, methods, sel.payments), reason: "" })}><RotateCcw className="h-4 w-4" /> {refundable.excess ? "Refund overpaid" : "Refund"}</Button> : null}
           {["paid", "closed"].includes(sel.status) && !sel.local_only && can("REOPEN_ORDER") ? <Button variant="secondary" onClick={() => doReopen(sel)} loading={busy} title="Reopen this completed order for editing (REOPEN_ORDER)"><Unlock className="h-4 w-4" /> Reopen</Button> : null}
           {["paid", "closed", "refunded"].includes(sel.status) ? <Button variant="secondary" onClick={() => print(sel, true)}><Printer className="h-4 w-4" /> Reprint</Button> : null}
           {sel.status === "held" ? <Button onClick={() => openInSell(sel, true)}><Play className="h-4 w-4" /> Recall</Button> : OPEN.includes(sel.status) ? <Button onClick={() => openInSell(sel)}><Pencil className="h-4 w-4" /> Open</Button> : null}

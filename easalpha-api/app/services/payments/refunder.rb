@@ -27,7 +27,14 @@ module Payments
         return Refund.find(id) if id && Refund.exists?(id: id)
         raise Api::Errors::Conflict.new("refund.not_paid", "Only a paid order can be refunded") unless order.paid_minor.positive?
         # A part payment on an open order is not refunded from under the kitchen: the order is voided or completed first.
-        raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is still #{order.status}. Void or complete it before refunding.") unless order.status.in?(%w[paid closed refunded])
+        # The one exception is what an open order was paid beyond its total (reopened, then a line taken off): completing
+        # it waits for that refund (order.overpaid), and the payment that covers the total stands.
+        settled = order.status.in?(%w[paid closed refunded])
+        excess = order.paid_minor - order.total_minor
+        unless settled || (excess.positive? && amount_minor <= excess)
+          raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is still #{order.status}. Void or complete it before refunding.") unless excess.positive?
+          raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is still #{order.status}: only the Rs #{Customers::Notify.rupees(excess)} paid above its total can be refunded before it is completed.")
+        end
         # The refund is dated to the day the money goes back, not the day of the sale: the sale stays on its own day.
         day = shift&.business_day || order.branch.business_day_for(Time.current)
         raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(order.branch_id, day)
@@ -46,7 +53,8 @@ module Payments
           Finance::Journal.khata_refund!(refund) # khata has no payment account, so the journal is posted here
         end
         order.paid_minor -= amount_minor
-        full = refunded + amount_minor >= captured
+        # An open order handing back its excess stays open, even a zero-total one (a staff meal) refunded in full.
+        full = settled && refunded + amount_minor >= captured
         if full
           order.status = "refunded"
           OrderStatusEvent.create!(order: order, from_status: "paid", to_status: "refunded", membership_id: actor&.id, device_id: device&.id, reason: reason, occurred_at: Time.current)

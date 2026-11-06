@@ -98,6 +98,7 @@ module Orders
         Story.record!(order, "cancelled", actor: actor, device: device, amount_before: order.total_minor, amount_after: 0, note: reason)
         Kitchen::Tickets.create_for!(order, kind: "cancelled", items: active) if order.sent?
         order.dining_table&.release! if order.table_id
+        release_consumed!(order)
         AuditLog.record(action: "void", record: order, after: { reason: reason, amount_minor: order.total_minor, stock_action: stock_action }, approved_by: approver&.user)
       end
       if order.stock_deducted_at
@@ -108,10 +109,19 @@ module Orders
         end
       end
       Deliveries::Manager.failed_by_void!(order)
-      Loyalty.refund_on_void!(order)
       Alerts.big_void(order, reason: reason, approver: approver)
       Realtime.order_changed(order)
       order
+    end
+
+    # A voided order consumed nothing: each voucher it redeemed is given back, each coupon use counted against a use
+    # limit (a one-use birthday offer) is returned, and the loyalty points spent on it go back to whoever spent them.
+    def release_consumed!(order)
+      order.discounts.each { |d| Marketing::Vouchers.release!(d) if d.kind == "voucher" }
+      DiscountApplied.where(order_id: order.id).where.not(promotion_id: nil).group(:promotion_id).count.each do |promotion_id, uses|
+        Promotion.where(id: promotion_id).update_all([ "units_sold = GREATEST(units_sold - ?, 0)", uses ])
+      end
+      Loyalty.refund_on_void!(order)
     end
 
     def mark_paid!(order, actor:, device: nil)
@@ -131,6 +141,7 @@ module Orders
     def close!(order, actor:, device: nil, allow_unpaid: false)
       paid = order.payment_status == "paid" || order.total_minor.zero?
       raise Api::Errors::Conflict.new("order.unpaid", "Order must be paid before closing") unless paid || (allow_unpaid && !order.reopened_since_payment?)
+      refuse_overpaid!(order)
       was_completed = order.completed?
       order.closed_at = Time.current
       order.completed_by_membership_id = actor&.id
@@ -141,6 +152,16 @@ module Orders
       order.dining_table&.release! if order.table_id
       Realtime.order_changed(order)
       order
+    end
+
+    # More was taken than the order now costs (a reopened order whose total fell): completed like this, the difference
+    # would stay in the takings with nothing recorded against it. It is refunded first; the open order takes that refund.
+    def refuse_overpaid!(order)
+      excess = order.paid_minor - order.total_minor
+      return unless excess.positive?
+      rs = ->(minor) { "Rs #{Customers::Notify.rupees(minor)}" }
+      raise Api::Errors::Conflict.new("order.overpaid", "#{order.label} was paid #{rs.(order.paid_minor)} against a total of #{rs.(order.total_minor)}. Refund #{rs.(excess)} before completing it.",
+                                      details: { refund_minor: excess, paid_minor: order.paid_minor, total_minor: order.total_minor })
     end
 
     # SPEC reopen: a completed order comes back for editing. It stays open (served, a delivery too: its ride is over,

@@ -64,17 +64,19 @@ module Api
         require_permission!("COMPLETE_ORDER", "orders.create")
         day = params[:business_day].presence || current_branch.business_day_for(Time.current)
         scope = Order.open.where(branch_id: current_branch.id, business_day: day).where.not(status: %w[draft held])
-        done, skipped = 0, 0
+        done, skipped, overpaid = 0, 0, 0
         scope.find_each do |o|
-          if o.payment_status == "paid" || o.total_minor.zero?
+          if o.paid_minor > o.total_minor
+            overpaid += 1 # its excess is refunded first (order.overpaid), so it waits rather than stopping the rest
+          elsif o.payment_status == "paid" || o.total_minor.zero?
             Orders::Transitions.close!(o, actor: current_membership, device: current_device)
             done += 1
           else
             skipped += 1
           end
         end
-        audit!("bulk_update", table_name: "orders", after: { business_day: day, completed: done, skipped_unpaid: skipped })
-        render json: { completed: done, skipped_unpaid: skipped, business_day: day }
+        audit!("bulk_update", table_name: "orders", after: { business_day: day, completed: done, skipped_unpaid: skipped, skipped_overpaid: overpaid })
+        render json: { completed: done, skipped_unpaid: skipped, skipped_overpaid: overpaid, business_day: day }
       end
 
       # POST /orders/sync_complimentary  SPEC Sync Complimentary: complimentary orders left with a due amount are settled at zero

@@ -10,6 +10,7 @@ import { api, errorMessage } from "@/lib/api";
 import type { OrderSummary, OrdersPage, OrdersSummary, PaymentMethod, Rider } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { isoDay } from "@/lib/dates";
+import { bulkCompleteNote } from "@/lib/refunds";
 import { titleCase } from "@/lib/utils";
 import { usePagedList, useDebounced } from "@/lib/hooks";
 import { Cards, DateRangePicker, FilterBar, LoadMore, PageHeader, SearchInput, type DateRange } from "@/components/admin/page";
@@ -52,8 +53,8 @@ export default function OrdersPage() {
   const refreshAll = () => { qc.invalidateQueries({ queryKey: ["orders"] }); qc.invalidateQueries({ queryKey: ["orders_summary"] }); qc.invalidateQueries({ queryKey: ["pills"] }); };
 
   const bulk = useMutation({
-    mutationFn: () => api<{ completed: number; skipped_unpaid: number }>("/orders/bulk_complete", { method: "POST", body: oneDay ? { business_day: range.from } : {} }),
-    onSuccess: (r) => { toast.success(`${r.completed} ${r.completed === 1 ? "order" : "orders"} completed`, r.skipped_unpaid ? `${r.skipped_unpaid} unpaid left open; they complete through payment.` : undefined); setConfirmBulk(false); refreshAll(); },
+    mutationFn: () => api<{ completed: number; skipped_unpaid: number; skipped_overpaid?: number }>("/orders/bulk_complete", { method: "POST", body: oneDay ? { business_day: range.from } : {} }),
+    onSuccess: (r) => { toast.success(`${r.completed} ${r.completed === 1 ? "order" : "orders"} completed`, bulkCompleteNote(r)); setConfirmBulk(false); refreshAll(); },
     onError: (e) => toast.error("Could not complete orders", errorMessage(e)),
   });
   const sync = useMutation({
