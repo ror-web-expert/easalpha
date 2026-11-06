@@ -41,7 +41,8 @@ beforeEach(() => {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation((async (path: string) => {
     if (path === "/customers/c1") return ali;
-    if (path === "/payment_methods") return { data: [{ id: "m1", code: "cash", name: "Cash", kind: "cash", active: true }, { id: "m2", code: "bank", name: "Bank transfer", kind: "bank", active: true }] };
+    // The canteen's internal methods come first in the list on purpose: Record payment must never offer or pick them.
+    if (path === "/payment_methods") return { data: [{ id: "m0", code: "company_subsidy", name: "Company subsidy", kind: "internal", active: true, internal: true }, { id: "m9", code: "salary_deduction", name: "Salary deduction", kind: "internal", active: true, internal: true }, { id: "m1", code: "cash", name: "Cash", kind: "cash", active: true }, { id: "m2", code: "bank", name: "Bank transfer", kind: "bank", active: true }] };
     if (path === "/customer_payments") return { data: [], next_cursor: null, totals: { received_minor: 0, paid_minor: 0, count: 0 } };
     if (path === "/customers/c1/payments") return { payment: { id: "p1" }, customer: ali };
     return { data: [] };
@@ -57,6 +58,16 @@ describe("Customer Payments, Record payment", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Record payment" }));
     await waitFor(() => expect(posted()).toBeDefined());
     expect(posted()!.body).toMatchObject({ amount_minor: 9_280, method_code: "cash", direction: "received", received_on: "2026-10-31" });
+  }, 20_000);
+
+  // Item 12 (from the books package): the API refuses the internal methods for a collection (khata.method).
+  it("never offers the canteen's internal methods", async () => {
+    useAuthStore.setState({ session: session(["khata.collect", "customers.manage"]), branchId: "b-1" });
+    await recordPayment();
+    const offered = within(screen.getByRole("dialog")).getAllByRole("option").map((o) => o.textContent);
+    expect(offered).toContain("Cash");
+    expect(offered).not.toContain("Company subsidy");
+    expect(offered).not.toContain("Salary deduction");
   }, 20_000);
 
   it("records today's money without a date field for a user without khata.adjust", async () => {

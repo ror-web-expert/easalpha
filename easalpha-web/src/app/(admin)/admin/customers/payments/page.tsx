@@ -15,7 +15,7 @@ import { Cards, DateRangePicker, FilterBar, LoadMore, PageHeader } from "@/compo
 import { useList, useSave } from "@/components/admin/crud";
 import { CustomerPicker } from "@/components/admin/customers-picker";
 import { useBusinessToday } from "@/components/admin/customer-accounts";
-import { isFutureDay, recordPaymentBody } from "@/components/admin/customer-accounts-helpers";
+import { collectionMethods, defaultCollectionMethod, isFutureDay, recordPaymentBody } from "@/components/admin/customer-accounts-helpers";
 import { useCan } from "@/store/auth";
 import { Badge, Button, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
@@ -47,7 +47,8 @@ function PaymentsScreen() {
   const canDate = useCan()("khata.adjust");
   const today = useBusinessToday();
   const futureDay = !!pay && canDate && isFutureDay(pay.received_on, today);
-  useEffect(() => { if (pay && !pay.method_code && methods.data?.length) setPay({ ...pay, method_code: methods.data.find((m) => m.kind === "cash")?.code ?? methods.data[0].code }); }, [methods.data, pay]);
+  // The canteen's internal methods (company subsidy, salary deduction) are never offered: the API refuses them here.
+  useEffect(() => { if (pay && !pay.method_code && methods.data?.length) setPay({ ...pay, method_code: defaultCollectionMethod(methods.data) }); }, [methods.data, pay]);
   const methodName = (code: string | null) => methods.data?.find((m) => m.code === code)?.name ?? code ?? "-";
   const rows = list.rows.map((p) => ({ number: p.number, at: formatDateTime(p.received_at), day: formatDate(p.business_day), customer: p.customer_name, khata: p.khata_no ?? "", direction: p.direction === "paid" ? "Paid out" : "Received", method: methodName(p.method_code), reference: p.reference ?? "", amount: formatMoney(p.amount_minor) }));
   const subtitle = `${formatDate(range.from)} to ${formatDate(range.to)}${customer ? ` · ${customer.name}` : ""}`;
@@ -66,7 +67,7 @@ function PaymentsScreen() {
       </Cards>
       <FilterBar>
         <DateRangePicker value={range} onChange={setRange} />
-        <Select className="w-auto" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">Any method</option>{methods.data?.filter((m) => m.kind !== "khata").map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select>
+        <Select className="w-auto" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">Any method</option>{methods.data?.filter((m) => m.kind !== "khata" && !m.internal).map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select>
         <Select className="w-auto" value={direction} onChange={(e) => setDirection(e.target.value)}><option value="">Both directions</option><option value="received">Received</option><option value="paid">Paid out</option></Select>
         <CustomerPicker value={customer} onChange={setCustomer} placeholder="Any customer" className="w-full sm:w-80" />
       </FilterBar>
@@ -96,7 +97,7 @@ function PaymentsScreen() {
             <Field label="Customer"><CustomerPicker value={pay.customer} onChange={(c) => setPay({ ...pay, customer: c, amount_minor: c && c.balance_minor > 0 && !pay.amount_minor ? c.balance_minor : pay.amount_minor })} autoFocus={!pay.customer} /></Field>
             <Field label="Direction"><Select value={pay.direction} onChange={(e) => setPay({ ...pay, direction: e.target.value as "received" | "paid" })}><option value="received">Received from customer</option><option value="paid">Paid out to customer</option></Select></Field>
             <Field label="Amount"><MoneyInput value={pay.amount_minor} onChange={(v) => setPay({ ...pay, amount_minor: v })} /></Field>
-            <Field label="Method"><Select value={pay.method_code} onChange={(e) => setPay({ ...pay, method_code: e.target.value })}>{methods.data?.filter((m) => m.active && m.kind !== "khata").map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
+            <Field label="Method"><Select value={pay.method_code} onChange={(e) => setPay({ ...pay, method_code: e.target.value })}>{collectionMethods(methods.data).map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}</Select></Field>
             <Field label="Reference"><Input value={pay.reference} onChange={(e) => setPay({ ...pay, reference: e.target.value })} placeholder="Transaction id, cheque no" /></Field>
             {canDate ? (
               <Field label="Received on" hint="The day the money came, when it is not today: a bank transfer seen later." error={futureDay ? "The date cannot be in the future" : undefined}>
