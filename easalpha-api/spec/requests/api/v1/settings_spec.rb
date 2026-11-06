@@ -52,22 +52,4 @@ RSpec.describe "Settings store", type: :request do
     pin = json[:groups][:security_cash][:screens][:"Expense & Report PIN"].first
     expect(pin[:value]).to eq("set")
   end
-
-  # L2, 7 Nov 2026: the Cashier Drawer switch was read by no code (cash always follows the till's open shift), so an
-  # owner who turned it off saw nothing change. It is gone from the screen; a value a business saved stays harmless.
-  it "offers no Cashier Drawer switch and ignores one a business saved" do
-    biz = owner.business
-    within(biz) { Setting.new(business_id: biz.id, key: "security.cashier_drawer", value: false).save!(validate: false) }
-    get "/api/v1/settings", headers: headers
-    expect(response).to have_http_status(:ok)
-    expect(json[:groups][:security_cash][:screens][:"Cashier Drawer"].pluck(:key)).to eq(%w[cash_short_alert_minor])
-    expect(response.body).not_to include("security.cashier_drawer")
-    get "/api/v1/sync/changes", headers: auth_headers(owner, app: "pos")
-    expect(response).to have_http_status(:ok)
-    expect(json[:settings]).not_to have_key(:"security.cashier_drawer")
-    api_patch "/api/v1/settings", { values: { "security.cashier_drawer" => true } }, headers: headers
-    expect(json[:error]).to include(code: "settings.unknown_key")
-    api_patch "/api/v1/settings", { values: { "cash_short_alert_minor" => 200 } }, headers: headers # the screen's other key still saves
-    expect(response).to have_http_status(:ok), response.body
-  end
 end

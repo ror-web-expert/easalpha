@@ -8,8 +8,7 @@ import { SettingsGroupPage } from "@/components/admin/settings-screen";
 import { Button, Card, CardBody, CardHeader, CardTitle, Field, Input } from "@/components/ui";
 
 // SPEC Settings > Security & Cash: Change Password, Signed-In Devices, Expense & Report PIN, Cashier PIN, Cashier Drawer.
-// The three PIN/drawer screens come from the settings registry; the first two are this page's own cards. Cashier Drawer
-// holds the short-till alert only: cash always lands in the open shift's drawer, so its on/off switch went (L2).
+// The three PIN/drawer screens come from the settings registry; the first two are this page's own cards.
 
 function ChangePasswordCard() {
   const [f, setF] = useState({ current_password: "", password: "", confirm: "" });
@@ -53,7 +52,7 @@ function DevicesCard() {
 export default function SecurityCashSettingsPage() {
   return (
     <SettingsGroupPage group="security_cash" title="Security & Cash" icon={Lock}
-      description="Where the money controls live: your password, the paired devices, separate PINs for expenses, reports and cashier actions, and the alert when a cashier's drawer closes short. Cash taken at a till always lands in the drawer of the shift open on it."
+      description="Where the money controls live: your password, the paired devices, separate PINs for expenses, reports and cashier actions, and whether payments land in each cashier's own till."
       before={<><ChangePasswordCard /><DevicesCard /></>} />
   );
 }
