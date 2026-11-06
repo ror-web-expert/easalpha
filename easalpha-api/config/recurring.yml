@@ -51,6 +51,10 @@ production:
     class: OverdueRemindersJob
     queue: messages
     schedule: every day at 10:00 Asia/Karachi
+  canteen_plans_roll:
+    class: CanteenPlansRollJob
+    queue: default
+    schedule: every day at 04:00 Asia/Karachi
 development:
   stock_safety_net:
     class: StockSafetyNetJob

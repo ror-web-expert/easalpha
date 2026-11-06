@@ -4,21 +4,31 @@ module Canteen
   class Claims
     SUBSIDY_CODE = "canteen_subsidy".freeze
     PAYROLL_CODE = "canteen_payroll".freeze
+    # How far outside a session's window the server still takes a claim: one queued just as the window closed, or a
+    # kiosk clock a little off. Anything older is stale and refused.
+    GRACE = 15.minutes
 
     def self.claim!(branch:, device: nil, actor: nil, id: nil, fingerprint_id: nil, employee_id: nil, meal_plan_item_id: nil, meal_session_id: nil, token_label: nil, source: nil, client_created_at: nil)
-      at = client_created_at.present? ? Time.iso8601(client_created_at.to_s) : Time.current
+      now = Time.current
+      # The kiosk's clock is kept on the claim but decides nothing: the day and the session come from the server clock.
+      client_at = client_created_at.present? ? Time.iso8601(client_created_at.to_s) : nil
+      at = client_at && (client_at - now).abs <= GRACE ? client_at : now
       employee = employee_id.present? ? Employee.active.find_by(id: employee_id) : nil
       employee ||= Workers.find_by_fingerprint(fingerprint_id)
       raise Api::Errors::NotFound.new("canteen.unknown_worker", "No enrolled worker matches") unless employee
-      date = branch.business_day_for(at)
-      session = meal_session_id.present? ? MealSession.active.where(branch_id: branch.id).find(meal_session_id) : Sessions.current(branch, at: at)
+      if id.present? && (same = MealClaim.find_by(id: id, employee_id: employee.id))
+        return same # the same claim arriving twice
+      end
+      date = branch.business_day_for(now)
+      session = meal_session_id.present? ? MealSession.active.where(branch_id: branch.id).find(meal_session_id) : Sessions.current(branch, at: now, grace: GRACE)
       raise Api::Errors::Conflict.new("canteen.no_session", "No meal is being served right now") unless session
+      raise Api::Errors::Conflict.new("canteen.session_closed", "#{session.name} is not being served now") unless session.covers?(now, branch.time_zone, grace: GRACE)
       plan = MealPlan.includes(items: :product).find_by(branch_id: branch.id, meal_session_id: session.id, plan_date: date, status: "published")
       raise Api::Errors::Conflict.new("canteen.no_plan", "Today's #{session.name} menu is not published yet") unless plan
-      if (existing = live_claim(employee, date, session))
-        return existing if id.present? && existing.id == id # the same claim arriving twice
-        raise already_taken(existing)
-      end
+      # The session's max_claims is the worker's helpings for the session; the one-per-session index holds it at one
+      # today, and a higher setting needs that index relaxed before it can take effect.
+      taken = MealClaim.live.includes(meal_plan_item: :product).where(employee_id: employee.id, plan_date: date, meal_session_id: session.id).order(:scanned_at).to_a
+      raise already_taken(taken.last) if taken.size >= session.max_claims
       item = meal_plan_item_id.present? ? plan.items.detect { |i| i.id == meal_plan_item_id.to_s } : (plan.items.size == 1 ? plan.items.first : nil)
       raise Api::Errors::BadRequest.new("canteen.choose_dish", "Choose a dish") unless item
       raise Api::Errors::Conflict.new("canteen.sold_out", "#{item.product.name} is finished for #{session.name}") if item.sold_out?
@@ -33,7 +43,7 @@ module Canteen
           claim = MealClaim.create!(id: id.presence, branch: branch, meal_session: session, meal_plan: plan, meal_plan_item: item, employee: employee, customer: customer, order: order,
                                     plan_date: date, token_no: token_no, token_label: token_label.presence || "M-#{token_no}", scanned_at: at, device: device,
                                     source: source.to_s.presence_in(MealClaim::SOURCES) || (fingerprint_id.present? ? "fingerprint" : "manual"), fingerprint_id: fingerprint_id.presence,
-                                    worker_price_minor: worker_price, company_share_minor: order.total_minor - worker_price, client_created_at: (at if client_created_at.present?))
+                                    worker_price_minor: worker_price, company_share_minor: order.total_minor - worker_price, client_created_at: client_at)
           MealPlanItem.where(id: item.id).update_all("claims_count = claims_count + 1")
           pay!(order, claim, actor: actor, device: device)
           AuditLog.record(action: "create", record: claim, after: { employee: employee.name, dish: item.product.name, token: claim.token_label, worker_minor: worker_price, company_minor: claim.company_share_minor })

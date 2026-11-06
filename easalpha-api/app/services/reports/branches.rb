@@ -5,11 +5,12 @@ module Reports
 
     def compare(from:, to:)
       rows = Branch.active.order(is_main: :desc, name: :asc).map do |b|
-        paid = Order.where(branch_id: b.id, business_day: from..to, status: %w[paid closed refunded])
+        # Revenue by the one rule (Reports::Revenue): paid and closed totals minus their refunds; a refunded order is zero.
+        paid = Revenue.completed(Order.where(branch_id: b.id, business_day: from..to))
         voided = Order.where(branch_id: b.id, business_day: from..to, status: "voided")
         expenses = Expense.live.where(branch_id: b.id, spent_on: from..to).sum(:amount_minor)
         cogs = -StockLedgerEntry.where(branch_id: b.id, business_day: from..to, kind: %w[sale sale_return packaging]).sum(:value_minor)
-        revenue = paid.sum(:total_minor)
+        revenue = Revenue.sum(paid)
         { branch: Serializers.branch(b), orders: paid.count, revenue_minor: revenue, average_order_minor: paid.count.zero? ? 0 : revenue / paid.count, discounts_minor: paid.sum(:discount_minor),
           voided: voided.count, voided_minor: voided.sum(:total_minor), expenses_minor: expenses, cost_of_goods_minor: cogs, gross_profit_minor: revenue - paid.sum(:tax_minor) - cogs,
           khata_minor: Payment.where(branch_id: b.id, business_day: from..to, method_code: "khata", status: "captured").sum(:amount_minor), by_type: paid.group(:order_type).count }

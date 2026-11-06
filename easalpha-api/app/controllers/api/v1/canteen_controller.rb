@@ -57,16 +57,25 @@ module Api
         render json: CanteenSerializers.claim(Canteen::Claims.cancel!(c, by: current_membership, reason: params[:reason].to_s.strip))
       end
 
-      # GET /canteen/workers?q=  the kiosk's manual lookup (when allowed) and the admin's worker list
+      # GET /canteen/workers?q=  the kiosk's manual lookup (when allowed) and the admin's worker list. A paired kiosk
+      # gets a list only while canteen.manual_lookup is on, and a kiosk payload never carries a phone or CNIC.
       def workers
+        raise Api::Errors::Forbidden.new("canteen.manual_lookup", "Manual lookup is switched off") if current_membership.nil? && !manual_lookup?
         if params[:q].present?
-          raise Api::Errors::Forbidden.new("canteen.manual_lookup", "Manual lookup is switched off") if current_membership.nil? && current_business.setting("canteen.manual_lookup") == false
           rows = Canteen::Workers.search(params[:q])
-          render json: { data: rows.map { |e| CanteenSerializers.worker(e) } }
+          render json: { data: rows.map { |e| worker_json(e) } }
         else
           rows = Employee.active.includes(:department).order(:name)
-          render json: { data: rows.map { |e| CanteenSerializers.worker(e) }, linked: rows.count { |e| e.customer_id.present? }, enrolled: rows.count(&:fingerprint_enrolled) }
+          render json: { data: rows.map { |e| worker_json(e) }, linked: rows.count { |e| e.customer_id.present? }, enrolled: rows.count(&:fingerprint_enrolled) }
         end
+      end
+
+      # GET /canteen/lookup?fingerprint_id=|employee_id=  one worker by exact id, so a kiosk can name a finger it has
+      # no list for
+      def lookup
+        e = params[:employee_id].present? ? Employee.active.find_by(id: params[:employee_id]) : Canteen::Workers.find_by_fingerprint(params[:fingerprint_id])
+        raise Api::Errors::NotFound.new("canteen.unknown_worker", "No enrolled worker matches") unless e
+        render json: CanteenSerializers.kiosk_worker(e)
       end
 
       def worker
@@ -197,6 +206,10 @@ module Api
 
       def today_date = current_branch.business_day_for(Time.current)
       def csv? = params[:csv].present? || params[:format].to_s == "csv"
+      def manual_lookup? = current_business.setting("canteen.manual_lookup") != false
+
+      # Phone and CNIC are for the people who manage the canteen; a kiosk or counter screen gets the rest.
+      def worker_json(e) = current_membership&.can?("canteen.manage") ? CanteenSerializers.worker(e) : CanteenSerializers.kiosk_worker(e)
 
       def render_csv(filename, rows, columns)
         send_data Canteen::Reports.csv(rows, columns), filename: filename, type: "text/csv"

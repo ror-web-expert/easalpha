@@ -4,9 +4,12 @@ module Api
     class KitchenController < BaseController
       before_action :require_kitchen!
 
-      # GET /kitchen/orders?station_id=  active orders with their items for this station
+      # GET /kitchen/orders?station_id=&from=  active orders with their items for this station, from today's business
+      # day (or the given day) on; a pre-order keeps its place until it is due whatever day it was taken
       def orders
-        scope = Order.includes(items: :modifiers).where(branch_id: current_branch.id).in_kitchen.due_in_kitchen.order(:placed_at)
+        from = params[:from].present? ? Date.parse(params[:from].to_s) : current_branch.business_day_for(Time.current)
+        scope = Order.includes(:dining_table, items: :modifiers).where(branch_id: current_branch.id).in_kitchen.due_in_kitchen
+                     .where("orders.business_day >= :from OR orders.scheduled_for IS NOT NULL", from: from).order(:placed_at)
         orders = scope.map do |o|
           items = o.items.reject(&:cancelled?)
           items = items.select { |i| i.station_id == params[:station_id] || (i.deal_components.any? { |c| c["station_id"] == params[:station_id] }) } if params[:station_id].present?
@@ -14,6 +17,8 @@ module Api
           OrderSerializers.summary(o).merge(items: items.map { |i| OrderSerializers.item(i) }, elapsed_seconds: (Time.current - (o.placed_at || o.created_at)).to_i)
         end.compact
         render json: { data: orders, server_time: Time.current }
+      rescue Date::Error
+        raise Api::Errors::BadRequest.new("kitchen.from", "from must be YYYY-MM-DD")
       end
 
       # GET /kitchen/tickets?station_id=&unprinted=true  tickets for printing or the KDS log
@@ -37,19 +42,22 @@ module Api
         render json: OrderSerializers.full(order.reload)
       end
 
-      # POST /kitchen/orders/:id/bump   whole order ready
+      # POST /kitchen/orders/:id/bump   whole order ready; a second press on a ready order changes nothing (the screen
+      # keeps the button on ready cards)
       def bump
         order = Order.find(params[:id])
-        Orders::Transitions.ready!(order, actor: current_membership, device: current_device)
+        Orders::Transitions.ready!(order, actor: current_membership, device: current_device) unless order.status == "ready"
         render json: OrderSerializers.full(order.reload)
       end
 
-      # POST /kitchen/items/:id/bump   one line ready; the order becomes ready when every line is
+      # POST /kitchen/items/:id/bump   one line ready; the order becomes ready when every line is; a line already
+      # bumped, or on an order already ready, is left as it is
       def bump_item
         item = OrderItem.includes(:order).find(params[:id])
+        order = item.order
+        return render json: OrderSerializers.full(order) if item.status.in?(%w[ready served]) || order.status == "ready"
         raise Api::Errors::Conflict.new("item.status", "Item is #{item.status}") unless item.status.in?(%w[sent preparing])
         item.update!(status: "ready", bumped_at: Time.current)
-        order = item.order
         Orders::Transitions.start!(order, actor: current_membership, device: current_device) if order.status == "placed"
         Orders::Transitions.ready!(order.reload, actor: current_membership, device: current_device) if order.active_items.all? { |i| i.status.in?(%w[ready served]) }
         Realtime.kitchen_changed(order.branch_id, order.business_id)

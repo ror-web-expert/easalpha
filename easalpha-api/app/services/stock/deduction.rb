@@ -5,39 +5,49 @@ module Stock
 
     def enabled? = InventorySetting.current.deduct_stock_on_sale
 
+    # `packaging: false` (a re-deduct after an edit) leaves the order-level packaging rules alone, since the order was
+    # already charged for them; a line's own consumables always go with the line, at its current quantity.
     def deduct!(order, items: nil, actor: nil, packaging: true)
       return record!(order, "skipped", detail: { reason: "deduct_stock_on_sale is off" }) unless enabled?
-      if items
-        # Lines edited after sending (quantity raised) are reversed first, then deducted again at the new quantity.
-        already = StockLedgerEntry.where(ref_line_id: items.map(&:id), reversed_by_entry_id: nil, reverses_entry_id: nil).distinct.pluck(:ref_line_id)
-        return!(order, items: items.select { |i| already.include?(i.id) }, actor: actor, reason: "re-deduct", record: false) if already.any?
-      end
       items ||= order.active_items
       section_default = StockSection.default_for(order.branch)
       entries, missing = [], []
-      already = StockLedgerEntry.where(ref_table: "orders", ref_id: order.id, kind: %w[sale packaging], reversed_by_entry_id: nil, reverses_entry_id: nil)
-                                .pluck(:ref_line_id, :stock_item_id, :stock_section_id, :kind).to_set
+      # Live movements of this order, [line, item, section, kind] => quantity. A line whose movements no longer
+      # match what its quantity calls for (edited after the sale, or a re-deduct that failed half way) is reversed
+      # and done again; a line that matches is skipped, so a retry never doubles (SPEC: never twice).
+      live = Hash.new(BigDecimal("0"))
+      StockLedgerEntry.where(ref_table: "orders", ref_id: order.id, kind: %w[sale packaging], reversed_by_entry_id: nil, reverses_entry_id: nil)
+                      .pluck(:ref_line_id, :stock_item_id, :stock_section_id, :kind, :quantity).each { |l, i, s, k, q| live[[ l, i, s, k ]] += q }
       StockLedgerEntry.transaction do
         items.each do |item|
           # SPEC Order Inventory: consumables set per order type and variant on the product, charged with the sale.
-          if item.product_id && packaging
-            OrderTypeConsumable.for_line(product_id: item.product_id, variant_id: item.variant_id, order_type: order.order_type).each do |c|
-              next if already.include?([ item.id, c.stock_item_id, section_default.id, "packaging" ])
-              r = Ledger.apply!(section: section_default, item: c.stock_item, kind: "packaging", quantity: -(c.base_quantity * item.quantity), actor: actor, ref: order, ref_line_id: item.id,
-                                business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot} consumables")
-              entries << r.entry
-            end
-          end
+          consumables = item.product_id ? OrderTypeConsumable.for_line(product_id: item.product_id, variant_id: item.variant_id, order_type: order.order_type) : []
           moves = moves_for_item(item)
-          if moves.nil?
-            missing << item.name_snapshot
-            next
+          missing << item.name_snapshot if moves.nil?
+          merged = moves ? merge_moves(moves, section_default) : []
+          wanted = Hash.new(BigDecimal("0"))
+          consumables.each { |c| wanted[[ item.id, c.stock_item_id, section_default.id, "packaging" ]] += -(c.base_quantity * item.quantity) }
+          merged.each { |m| wanted[[ item.id, m[:stock_item].id, m[:section].id, "sale" ]] += -m[:quantity] }
+          have = live.select { |k, _| k[0] == item.id }
+          if have.any? && !same_moves?(have, wanted)
+            return!(order, items: [ item ], actor: actor, reason: "re-deduct", record: false)
+            have.each_key { |k| live.delete(k) }
           end
-          merge_moves(moves, section_default).each do |m|
-            next if already.include?([ item.id, m[:stock_item].id, m[:section].id, "sale" ]) # SPEC: never twice
+          consumables.each do |c|
+            key = [ item.id, c.stock_item_id, section_default.id, "packaging" ]
+            next if live.key?(key)
+            r = Ledger.apply!(section: section_default, item: c.stock_item, kind: "packaging", quantity: -(c.base_quantity * item.quantity), actor: actor, ref: order, ref_line_id: item.id,
+                              business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot} consumables")
+            entries << r.entry
+            live[key] += r.entry.quantity
+          end
+          merged.each do |m|
+            key = [ item.id, m[:stock_item].id, m[:section].id, "sale" ]
+            next if live.key?(key)
             r = Ledger.apply!(section: m[:section], item: m[:stock_item], kind: "sale", quantity: -m[:quantity], actor: actor, ref: order, ref_line_id: item.id,
                               business_day: order.business_day, allow_negative: true, reason: "#{order.label} #{item.name_snapshot}")
             entries << r.entry
+            live[key] += r.entry.quantity
           end
           if (rc = recipe_cost_for(item))
             item.update_columns(recipe_cost_minor_snapshot: rc)
@@ -45,20 +55,25 @@ module Stock
         end
         if packaging
           PackagingRule.for(branch_id: order.branch_id, order_type: order.order_type).each do |rule|
-            next if already.include?([ nil, rule.stock_item_id, section_default.id, "packaging" ])
+            key = [ nil, rule.stock_item_id, section_default.id, "packaging" ]
+            next if live.key?(key)
             r = Ledger.apply!(section: section_default, item: rule.stock_item, kind: "packaging", quantity: -rule.quantity, actor: actor, ref: order, business_day: order.business_day, allow_negative: true, reason: "#{order.label} packaging")
             entries << r.entry
+            live[key] += r.entry.quantity
           end
         end
-        if entries.any?
-          order.update_columns(stock_deducted_at: Time.current)
-          Finance::Journal.stock_entries!(entries, ref: order, description: "Cost of goods #{order.label}", business_day: order.business_day)
-        end
+        Finance::Journal.stock_entries!(entries, ref: order, description: "Cost of goods #{order.label}", business_day: order.business_day) if entries.any?
       end
+      # The stamp means "checked", not "moved": an order whose products have no recipe is done too, so the safety net
+      # stops picking it up. Only a failure (below) and deduction being off leave the stamp empty.
+      order.update_columns(stock_deducted_at: Time.current)
       status = missing.empty? ? "ok" : (entries.empty? ? "missing" : "partial")
       record!(order, status, entries: entries, detail: { missing: missing, entries: entries.size })
     rescue StandardError => e
       Rails.logger.error("[stock] deduction failed for order #{order.id}: #{e.class} #{e.message}")
+      # A failed re-deduct of an edited order must not keep the stamp from its first deduction: the safety net retries
+      # and deduct! skips whatever already moved.
+      order.update_columns(stock_deducted_at: nil) if order.stock_deducted_at
       record!(order, "error", detail: { error: e.message })
     end
 
@@ -116,6 +131,11 @@ module Stock
       moves
     end
 
+    # The ledger keeps nine decimals, so the comparison does too.
+    def same_moves?(have, wanted)
+      have.transform_values { |q| q.round(9) } == wanted.transform_values { |q| q.round(9) }
+    end
+
     # One movement per item and section, so a recipe that lists an ingredient twice still writes one unique row.
     def merge_moves(moves, section_default)
       moves.group_by { |m| [ m[:stock_item].id, (m[:section] || section_default).id ] }.map do |_, ms|
@@ -138,7 +158,11 @@ module Stock
       recipe && (recipe.unit_cost_minor * item.quantity).round
     end
 
+    # One audit row per outcome: a sweep that finds the same thing again (no recipe, the same error) returns the
+    # row it already wrote instead of adding one every ten minutes.
     def record!(order, status, entries: [], detail: {})
+      last = DeductionAudit.where(order_id: order.id).order(checked_at: :desc).first
+      return last if last && entries.empty? && last.status == status && last.ledger_entry_ids.empty? && last.detail == detail.as_json
       DeductionAudit.create!(order: order, status: status, ledger_entry_ids: entries.map(&:id), detail: detail, checked_at: Time.current)
     end
   end

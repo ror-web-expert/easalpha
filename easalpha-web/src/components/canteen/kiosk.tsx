@@ -155,8 +155,16 @@ export function CanteenKiosk() {
     if (w && data) { const dup = alreadyTaken([...serverClaims, ...localClaims], w.id, session.id, data.date); if (dup) { taken(dup); return; } }
     const itemId = selected ?? (items.length === 1 ? items[0].id : null);
     if (itemId) void claim({ fingerprint_id: fingerprintId }, itemId);
-    else setPending({ fingerprint_id: fingerprintId, name: w?.name });
-  }, [result, reset, session, items, selected, claim, workers, show, data, serverClaims, localClaims, taken]);
+    else {
+      setPending({ fingerprint_id: fingerprintId, name: w?.name });
+      // No local list (manual lookup off): the server names the finger while the worker picks a dish.
+      if (!w && online) {
+        api<CanteenWorker>("/canteen/lookup", { auth: "pos", query: { fingerprint_id: fingerprintId }, timeoutMs: 5000 })
+          .then((r) => setPending((p) => (p && p.fingerprint_id === fingerprintId ? { ...p, name: r.name } : p)))
+          .catch(() => undefined);
+      }
+    }
+  }, [result, reset, session, items, selected, claim, workers, show, data, serverClaims, localClaims, taken, online]);
 
   // The reader types the id and Enter. Keys typed into a search box are the search box's.
   useEffect(() => {
@@ -268,9 +276,10 @@ function ManualLookup({ workers, online, onClose, onPick }: { workers: CanteenWo
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setRows([]); return; }
+    // The local list carries no phone or CNIC (the server searches those while online), so offline it is by name.
     const local = () => {
-      const t = term.toLowerCase(); const digits = term.replace(/\D/g, "").replace(/^0/, "");
-      setRows(workers.filter((w) => w.name.toLowerCase().includes(t) || (digits.length >= 4 && ((w.phone ?? "").includes(digits) || (w.cnic ?? "").replace(/-/g, "").includes(digits)))).slice(0, 20));
+      const t = term.toLowerCase();
+      setRows(workers.filter((w) => w.name.toLowerCase().includes(t)).slice(0, 20));
     };
     if (!online) { local(); return; }
     const h = setTimeout(() => { api<{ data: CanteenWorker[] }>("/canteen/workers", { auth: "pos", query: { q: term }, timeoutMs: 5000 }).then((r) => setRows(r.data)).catch(local); }, 250);
@@ -284,7 +293,7 @@ function ManualLookup({ workers, online, onClose, onPick }: { workers: CanteenWo
         <div className="mt-3 max-h-[50vh] space-y-2 overflow-y-auto">
           {rows.map((w) => (
             <button key={w.id} type="button" onClick={() => onPick(w)} className="flex w-full items-center justify-between rounded-xl border bg-page px-4 py-3 text-left hover:border-primary">
-              <div><div className="text-lg font-semibold">{w.name}</div><div className="text-sm text-fg-muted">{[w.department, w.designation, w.phone].filter(Boolean).join(" · ")}</div></div>
+              <div><div className="text-lg font-semibold">{w.name}</div><div className="text-sm text-fg-muted">{[w.department, w.designation].filter(Boolean).join(" · ")}</div></div>
               <span className="text-sm text-primary">Choose</span>
             </button>
           ))}

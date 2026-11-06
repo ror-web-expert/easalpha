@@ -5,6 +5,9 @@ module Reports
 
     def fmt(x) = BigDecimal(x.to_s).to_s
 
+    # Every valuation is quantity times the item's average cost; the cached StockLevel#value_minor only mirrors it.
+    def value_of(levels) = levels.joins(:stock_item).sum(Arel.sql("round(stock_levels.quantity * stock_items.avg_cost_minor_per_base)")).to_i
+
     SHEET_COLUMNS = { "in" => %w[receive transfer_in production_in opening], "out" => %w[transfer_out production_out supplier_return], "waste" => %w[waste],
                       "sale" => %w[sale sale_return packaging], "adjusted" => %w[adjustment count] }.freeze
 
@@ -18,7 +21,7 @@ module Reports
         ls = by_item[i.id] || []
         qty = ls.sum(&:quantity)
         { item: StockSerializers.item(i), quantity: fmt(qty), value_minor: (qty * i.avg_cost_minor_per_base).round, below_minimum: i.minimum_qty.positive? && qty < i.minimum_qty,
-          negative: qty.negative?, sections: ls.map { |l| { section_id: l.stock_section_id, quantity: l.quantity.to_s, value_minor: l.value_minor } } }
+          negative: qty.negative?, sections: ls.map { |l| { section_id: l.stock_section_id, quantity: l.quantity.to_s, value_minor: (l.quantity * i.avg_cost_minor_per_base).round } } }
       end
       rows = rows.select { |r| r[:below_minimum] || r[:negative] } if low_only
       { rows: rows, total_value_minor: rows.sum { |r| r[:value_minor] }, negative_count: rows.count { |r| r[:negative] }, below_minimum_count: rows.count { |r| r[:below_minimum] } }
@@ -26,7 +29,7 @@ module Reports
 
     def valuation
       StockSection.active.includes(:branch).map do |s|
-        { section: StockSerializers.section(s), value_minor: StockLevel.where(stock_section_id: s.id).sum(:value_minor), items: StockLevel.where(stock_section_id: s.id).where.not(quantity: 0).count }
+        { section: StockSerializers.section(s), value_minor: value_of(StockLevel.where(stock_section_id: s.id)), items: StockLevel.where(stock_section_id: s.id).where.not(quantity: 0).count }
       end
     end
 
@@ -60,9 +63,12 @@ module Reports
       items = StockItem.where(id: cogs_by_item.keys).includes(:base_unit).index_by(&:id)
       by_item = cogs_by_item.map { |id, v| items[id] && { item: StockSerializers.item(items[id]), cogs_minor: v } }.compact.sort_by { |r| -r[:cogs_minor] }
       by_category = by_item.group_by { |r| r[:item][:category].presence || "Uncategorised" }.map { |c, rs| { category: c, cogs_minor: rs.sum { |r| r[:cogs_minor] } } }.sort_by { |r| -r[:cogs_minor] }
-      revenue = Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed]).sum(:total_minor) - Order.where(branch_id: branch.id, business_day: from..to, status: %w[paid closed]).sum(:tax_minor)
+      # Revenue by the one rule (Reports::Revenue): paid and closed totals minus their refunds, a refunded order is
+      # zero; here net of tax, which is not the restaurant's money.
+      completed = Revenue.completed(Order.where(branch_id: branch.id, business_day: from..to))
+      revenue = Revenue.sum(completed) - completed.sum(:tax_minor)
       cogs = by_item.sum { |r| r[:cogs_minor] }
-      { from: from, to: to, valuation: valuation, stock_value_minor: StockLevel.sum(:value_minor), cogs_minor: cogs, revenue_minor: revenue,
+      { from: from, to: to, valuation: valuation, stock_value_minor: value_of(StockLevel.all), cogs_minor: cogs, revenue_minor: revenue,
         gross_margin_percent: revenue.positive? ? ((revenue - cogs) * 100.0 / revenue).round(1) : nil, cogs_by_category: by_category, cogs_by_item: by_item.first(50) }
     end
 

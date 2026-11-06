@@ -23,7 +23,7 @@ module Reports
         khata_outstanding_minor: Customer.active.where("balance_minor > 0").sum(:balance_minor),
         stock: { negative_items: StockLevel.where("quantity < 0").distinct.count(:stock_item_id),
                  below_minimum_items: StockItem.active.where("minimum_qty > 0").select { |i| i.below_minimum? }.size,
-                 value_minor: StockLevel.sum(:value_minor) },
+                 value_minor: Stock.value_of(StockLevel.all) },
         top_items: Sales.new(branch: branch, from: day - 6, to: day).items(limit: 5),
         recent_orders: Order.where(branch_id: branch.id).order(created_at: :desc).limit(8).map { |o| OrderSerializers.summary(o) },
         trend_7_days: Sales.new(branch: branch, from: day - 6, to: day).by_day,
@@ -44,17 +44,18 @@ module Reports
       else [ today, today ]
       end
       orders = Order.where(branch_id: branch.id, business_day: from..to).where.not(status: %w[draft held])
-      completed = orders.where(status: %w[paid closed])
       open = orders.open
       sales = Sales.new(branch: branch, from: from, to: to)
       status_counts = orders.group(:status).count
+      # Revenue by the one rule (Reports::Revenue): paid and closed totals minus their refunds; a refunded order is zero.
+      revenue = Revenue.sum(orders)
       {
         period: period, from: from, to: to,
         cards: {
           total_products: Product.where(archived_at: nil, active: true).count,
-          total_revenue_minor: completed.sum(:total_minor),
+          total_revenue_minor: revenue,
           open_minor: open.sum(:total_minor),
-          incl_open_minor: completed.sum(:total_minor) + open.sum(:total_minor),
+          incl_open_minor: revenue + open.sum(:total_minor),
           total_orders: orders.count, cancelled_orders: orders.where(status: %w[voided refunded]).count,
           total_customers: Customer.active.where(is_walk_in: false).count,
           expenses_minor: Expense.live.where(branch_id: branch.id, business_day: from..to).sum(:amount_minor)

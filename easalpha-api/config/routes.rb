@@ -556,6 +556,7 @@ Rails.application.routes.draw do
       post "canteen/claims/:id/serve", to: "canteen#serve"
       post "canteen/claims/:id/cancel", to: "canteen#cancel"
       get "canteen/workers", to: "canteen#workers"
+      get "canteen/lookup", to: "canteen#lookup"
       post "canteen/workers/link", to: "canteen#link_workers"
       get "canteen/workers/:id", to: "canteen#worker"
       post "canteen/workers/:id/fingerprint", to: "canteen#enrol_worker"

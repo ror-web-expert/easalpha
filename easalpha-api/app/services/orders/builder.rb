@@ -203,8 +203,9 @@ module Orders
       return if changes.except(:sort_order).empty?
       raise Api::Errors::Forbidden.new("permission.denied", "Changing a sent item needs orders.edit_after_send") if item.sent_at && !can?("orders.edit_after_send") && changes.except(:sort_order, :notes).any?
       raise Api::Errors::Forbidden.new("permission.denied", "Lowering a quantity on a reopened order needs MODIFY_REOPEN_DECREASE_QTY") if order.reopened? && changes.key?(:quantity) && changes[:quantity] < item.quantity_was.to_d && !can?("MODIFY_REOPEN_DECREASE_QTY")
+      before = item.quantity.to_d # after update! the dirty tracking is reset, so quantity_was would equal the new value
       item.update!(changes)
-      @added << item if item.sent_at && changes.key?(:quantity) && changes[:quantity] > item.quantity_was.to_d
+      @added << item if item.sent_at && changes.key?(:quantity) && changes[:quantity] > before
     end
 
     def build_item(line, idx)

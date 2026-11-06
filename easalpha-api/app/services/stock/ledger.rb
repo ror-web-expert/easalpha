@@ -6,6 +6,10 @@ module Stock
 
     Result = Struct.new(:entry, :level, keyword_init: true)
 
+    # Entry kinds that carry a price of their own and so move the average; everything else is written at the average
+    # of its moment.
+    COSTED_KINDS = %w[receive production_in adjustment sale_return opening].freeze
+
     def apply!(section:, item:, kind:, quantity:, actor: nil, ref: nil, business_day: nil, occurred_at: Time.current,
                unit_cost: nil, reason: nil, allow_negative: true, completed_by: nil, reverses: nil, ref_table: nil, ref_id: nil, ref_line_id: nil)
       quantity = BigDecimal(quantity.to_s)
@@ -17,9 +21,8 @@ module Stock
           raise Api::Errors::Conflict.new("stock.below_zero", "#{item.name} would go to #{after.to_s('F')} #{item.base_unit.code} in #{section.name}. Manual moves below zero are off.")
         end
         cost = unit_cost.nil? ? item.avg_cost_minor_per_base : BigDecimal(unit_cost.to_s)
-        if quantity.positive? && unit_cost
-          item.update_columns(avg_cost_minor_per_base: weighted_average(item, before, cost, quantity))
-        end
+        repriced = quantity.positive? && unit_cost
+        item.update_columns(avg_cost_minor_per_base: weighted_average(item, before, cost, quantity)) if repriced
         value = (quantity * cost).round
         entry = StockLedgerEntry.create!(
           branch_id: section.branch_id, stock_section: section, stock_item: item, kind: kind, quantity: quantity,
@@ -29,6 +32,8 @@ module Stock
           completed_by_membership_id: completed_by&.id || actor&.id, reverses_entry_id: reverses&.id
         )
         level.update!(quantity: after, value_minor: (after * item.avg_cost_minor_per_base).round)
+        # A new average changes what every section's stock of this item is worth, not only the section that received.
+        revalue!(item) if repriced
         Alerts.negative_stock(item, section, after) if after.negative? && !before.negative?
         Alerts.low_stock(item, item.total_quantity) if item.minimum_qty.positive? && after <= item.minimum_qty && before > item.minimum_qty
         Result.new(entry: entry, level: level)
@@ -42,13 +47,37 @@ module Stock
       ((total_qty * item.avg_cost_minor_per_base) + (quantity * cost)) / (total_qty + quantity)
     end
 
-    # Inserts a reversing row for an entry and links the two.
+    # Inserts a reversing row for an entry and links the two, then takes the undone entry out of the item's average.
     def reverse!(entry, actor:, reason: nil)
       r = apply!(section: entry.stock_section, item: entry.stock_item, kind: entry.kind, quantity: -entry.quantity, actor: actor, reason: reason || "reversal",
                  ref_table: entry.ref_table, ref_id: entry.ref_id, ref_line_id: entry.ref_line_id, unit_cost: entry.unit_cost_minor, reverses: entry, business_day: entry.stock_section.branch.business_day_for(Time.current))
       entry.reversed_by_entry_id = r.entry.id
       entry.save!
+      recompute_average!(entry.stock_item)
       r
+    end
+
+    # A moving average depends on the order receipts and sales came in, so once a receipt is cancelled the only
+    # faithful figure is a replay: the live entries (neither reversed nor reversing) in order, the priced kinds folded
+    # in at their stored cost, exactly as apply! did the first time. A positive adjustment entered without a cost was
+    # stored at the average of its moment and is folded in at that figure, which can leave a small drift; the
+    # alternative, a full repricing of history, would change ledger rows that are insert-only.
+    def recompute_average!(item)
+      on_hand, avg = BigDecimal("0"), nil
+      StockLedgerEntry.where(stock_item_id: item.id, reversed_by_entry_id: nil, reverses_entry_id: nil).order(:occurred_at, :created_at).pluck(:quantity, :unit_cost_minor, :kind).each do |qty, cost, kind|
+        if qty.positive? && COSTED_KINDS.include?(kind)
+          base = [ on_hand, 0 ].max
+          avg = avg.nil? || base.zero? ? cost : ((base * avg) + (qty * cost)) / (base + qty)
+        end
+        on_hand += qty
+      end
+      item.update_columns(avg_cost_minor_per_base: avg) if avg # nothing priced left: the last known average stands
+      revalue!(item)
+    end
+
+    # Every level of the item is worth quantity times the one average cost; the cached value_minor follows it.
+    def revalue!(item)
+      StockLevel.where(stock_item_id: item.id).update_all([ "value_minor = round(quantity * ?)", item.avg_cost_minor_per_base ])
     end
   end
 end
