@@ -23,15 +23,16 @@ module Payments
       Payment.where(order_id: order.id, status: "captured").sum(:amount_minor) - Refund.where(order_id: order.id).sum(:amount_minor)
     end
 
-    # On an open order, money goes back as money, not as a correction of the sale. One paid in full or more (reopened)
-    # gives back only what it was paid beyond its total, and completing it waits for that (order.overpaid); the payment
-    # that covers the total stands until it is completed. A part payment can go back, whole or in part: the order stays
-    # open and owes it again, and once it holds nothing it can be voided (the customer left; ledger#0).
+    # On an open order, money goes back as money, not as a correction of the sale. A part payment on an order never
+    # completed (no paid_at) can go back, whole or in part: the order stays open and owes it again, and once it holds
+    # nothing it can be voided (the customer left; ledger#0). A reopened order keeps a paid order's rules: only what it
+    # was paid beyond its total goes back while it is open (completing it waits for that, order.overpaid); the rest is
+    # refunded once it is completed again.
     def self.check_open!(order, amount_minor)
-      return if order.paid_minor < order.total_minor
+      return if order.paid_minor < order.total_minor && order.paid_at.nil?
       excess = order.paid_minor - order.total_minor
       return if excess.positive? && amount_minor <= excess
-      raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is open and paid in full: complete it before refunding.") unless excess.positive?
+      raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is open: complete it before refunding.") unless excess.positive?
       raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is still #{order.status}: only the Rs #{Customers::Notify.rupees(excess)} paid above its total can be refunded before it is completed.")
     end
 

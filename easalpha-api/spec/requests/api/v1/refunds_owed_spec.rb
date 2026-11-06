@@ -125,12 +125,19 @@ RSpec.describe "Refunds and what an order still owes", type: :request do
       expect(pay!(o, 30_000)).to include(status: "placed", payment_status: "partial", paid_minor: 45_000, due_minor: 7_200)
     end
 
-    it "takes only the excess back while an open order is paid in full, as before" do
+    it "keeps a reopened order to a paid order's rules: nothing back while it is open, even once a line added makes it part paid" do
       o = pay!(order!, 52_200)
       api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: headers
       refund!(o, 100)
       expect(response).to have_http_status(:conflict)
-      expect(json[:error]).to include(code: "refund.order_open", message: "Order #{o[:label]} is open and paid in full: complete it before refunding.")
+      expect(json[:error]).to include(code: "refund.order_open", message: "Order #{o[:label]} is open: complete it before refunding.")
+      burger = within(biz) { OrderItem.find_by!(order_id: o[:id]) }
+      api_patch "/api/v1/orders/#{o[:id]}", { lines: [ { id: burger.id, quantity: 1 }, { product_id: m[:chai].id, quantity: 1 } ] }, headers: headers
+      expect(json).to include(paid_minor: 52_200, total_minor: 61_480)
+      refund!(o, 52_200)
+      expect(json[:error][:code]).to eq("refund.order_open")
+      api_post "/api/v1/orders/#{o[:id]}/void", { reason: "Changed mind" }, headers: headers
+      expect(json[:error][:code]).to eq("order.paid")
     end
   end
 
