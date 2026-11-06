@@ -836,7 +836,9 @@ export interface SalaryComponent { id: ID; name: string; kind: SalaryComponentKi
 export interface EmployeeComponent { id?: ID; salary_component_id: ID; name?: string; kind?: SalaryComponentKind; amount_minor: number | null; percent: number | null }
 export interface Employee {
   id: ID; branch_id: ID | null; membership_id: ID | null; department_id: ID | null; department: string | null; name: string; phone: string | null; cnic: string | null; designation: string | null;
-  base_salary_minor: number; pay_frequency: string; joined_on: string | null; left_on: string | null; fingerprint_enrolled: boolean; shares_tips: boolean; notes: string | null; archived_at: string | null; components: EmployeeComponent[];
+  pay_frequency: string; joined_on: string | null; left_on: string | null; fingerprint_enrolled: boolean; shares_tips: boolean; notes: string | null; archived_at: string | null;
+  /** The pay figures: sent only to payroll.manage or PAYROLL, never to staff.manage alone (L2, 7 Nov 2026). */
+  base_salary_minor?: number; components?: EmployeeComponent[];
   /** Messages to this employee on WhatsApp (advance, wage, salary paid). */
   whatsapp_notify?: boolean;
 }

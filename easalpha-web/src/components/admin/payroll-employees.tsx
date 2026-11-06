@@ -10,6 +10,7 @@ import type { Branch, Department, EmployeeComponent, EmployeeFull, Membership, P
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { useAction, useList, useRemove, useSave } from "@/components/admin/crud";
+import { useCan } from "@/store/auth";
 import { Badge, Button, Checkbox, Dialog, EmptyRow, Field, Input, MoneyInput, Select, Switch, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 import { asPayFrequency, isWageStaff, PAY_TYPES, payAmountLabel } from "./wages-helpers";
 
@@ -20,30 +21,42 @@ export interface EmployeeForm {
 /** The "Pay" choices: base_salary_minor is the pay for one period of the chosen frequency. */
 export const PAY_FREQUENCIES = PAY_TYPES.map((p) => ({ value: p.value, label: p.label }));
 
+/** Pay (the salary or wage, the pay type, tips sharing and the salary components) is for payroll.manage or PAYROLL: the
+ *  API leaves it out for staff.manage alone and refuses it from them (L2, 7 Nov 2026: a Manager read and set salaries). */
+export const PAY_PERMS = ["payroll.manage", "PAYROLL"];
+export const useSeesPay = () => useCan()(...PAY_PERMS);
+
 export const blankEmployee = (): EmployeeForm => ({ name: "", phone: "+92", cnic: "", designation: "", department_id: "", branch_id: "", membership_id: "", base_salary_minor: 0, pay_frequency: "monthly", joined_on: "", left_on: "", shares_tips: false, whatsapp_notify: true, notes: "", components: [] });
 export function employeeToForm(e: EmployeeFull): EmployeeForm {
   return {
     id: e.id, name: e.name, phone: e.phone ?? "", cnic: e.cnic ?? "", designation: e.designation ?? "", department_id: e.department_id ?? "", branch_id: e.branch_id ?? "", membership_id: e.membership_id ?? "",
-    base_salary_minor: e.base_salary_minor, pay_frequency: asPayFrequency(e.pay_frequency), joined_on: e.joined_on ?? "", left_on: e.left_on ?? "", shares_tips: e.shares_tips, whatsapp_notify: e.whatsapp_notify ?? true, notes: e.notes ?? "",
+    base_salary_minor: e.base_salary_minor ?? 0, pay_frequency: asPayFrequency(e.pay_frequency), joined_on: e.joined_on ?? "", left_on: e.left_on ?? "", shares_tips: e.shares_tips, whatsapp_notify: e.whatsapp_notify ?? true, notes: e.notes ?? "",
     components: (e.components ?? []).map((c: EmployeeComponent) => ({ salary_component_id: c.salary_component_id, amount_minor: c.amount_minor ?? 0, percent: c.percent == null ? "" : String(c.percent) })),
   };
 }
-export function employeePayload(f: EmployeeForm) {
-  return {
+/** What a save sends. pay false (no payroll permission) leaves every pay key out: the API refuses them, and the form
+ *  never had the real values to send back. */
+export function employeePayload(f: EmployeeForm, pay = true) {
+  const profile = {
     id: f.id, name: f.name.trim(), phone: f.phone.length > 4 ? f.phone : null, cnic: f.cnic || null, designation: f.designation || null, department_id: f.department_id || null, branch_id: f.branch_id || null, membership_id: f.membership_id || null,
-    base_salary_minor: f.base_salary_minor, pay_frequency: f.pay_frequency, joined_on: f.joined_on || null, left_on: f.left_on || null, shares_tips: f.shares_tips, whatsapp_notify: f.whatsapp_notify, notes: f.notes || null,
+    joined_on: f.joined_on || null, left_on: f.left_on || null, whatsapp_notify: f.whatsapp_notify, notes: f.notes || null,
+  };
+  if (!pay) return profile;
+  return {
+    ...profile, base_salary_minor: f.base_salary_minor, pay_frequency: f.pay_frequency, shares_tips: f.shares_tips,
     components: f.components.filter((c) => c.salary_component_id).map((c) => ({ salary_component_id: c.salary_component_id, amount_minor: c.percent ? null : c.amount_minor, percent: c.percent ? Number(c.percent) : null })),
   };
 }
 
 export const useDepartments = () => useList<Department>("departments", "/employees/departments");
-export const useSalaryComponents = () => useList<SalaryComponent>("salary_components", "/employees/components");
+export const useSalaryComponents = (enabled = true) => useList<SalaryComponent>("salary_components", "/employees/components", {}, enabled);
 
 export function EmployeeDialog({ form, onClose, employee, onSaved }: { form: EmployeeForm | null; onClose: () => void; employee?: EmployeeFull | null; onSaved?: (e: EmployeeFull) => void }) {
   const [f, setF] = useState<EmployeeForm | null>(form);
   useEffect(() => setF(form), [form]);
   const departments = useDepartments();
-  const components = useSalaryComponents();
+  const pay = useSeesPay();
+  const components = useSalaryComponents(pay);
   const branches = useList<Branch>("branches", "/branches");
   const staff = useList<Membership>("staff", "/staff", { status: "active" });
   const save = useSave<ReturnType<typeof employeePayload>, EmployeeFull>(["employees", "employee", "payroll_overview", "attendance_enrolled", "wages_due", "employee_statement"], (i) => (i.id ? `/employees/${i.id}` : "/employees"), { onSuccess: (e) => { onClose(); onSaved?.(e); }, success: form?.id ? "Employee updated" : "Employee added" });
@@ -55,8 +68,8 @@ export function EmployeeDialog({ form, onClose, employee, onSaved }: { form: Emp
   const wageStaff = isWageStaff(f.pay_frequency);
   const hasPhone = f.phone.replace(/\D/g, "").length > 4;
   return (
-    <Dialog open={!!form} onClose={onClose} title={f.id ? `Edit ${f.name || "employee"}` : "Add employee"} description="Pay, department and components feed payroll; the fingerprint is enrolled from Fingerprint > Enrolled." size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={save.isPending} disabled={!f.name.trim()} onClick={() => save.mutate(employeePayload(f))}>{f.id ? "Save" : "Add"}</Button></>}>
+    <Dialog open={!!form} onClose={onClose} title={f.id ? `Edit ${f.name || "employee"}` : "Add employee"} description={pay ? "Pay, department and components feed payroll; the fingerprint is enrolled from Fingerprint > Enrolled." : "Contact, department and branch; the fingerprint is enrolled from Fingerprint > Enrolled."} size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={save.isPending} disabled={!f.name.trim()} onClick={() => save.mutate(employeePayload(f, pay))}>{f.id ? "Save" : "Add"}</Button></>}>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Name"><Input value={f.name} onChange={(e) => set("name", e.target.value)} autoFocus /></Field>
         <Field label="Designation"><Input value={f.designation} onChange={(e) => set("designation", e.target.value)} placeholder="Cook, Waiter, Cashier" /></Field>
@@ -64,21 +77,25 @@ export function EmployeeDialog({ form, onClose, employee, onSaved }: { form: Emp
         <Field label="CNIC"><Input value={f.cnic} onChange={(e) => set("cnic", e.target.value)} placeholder="35202-1234567-1" /></Field>
         <Field label="Department"><Select value={f.department_id} onChange={(e) => set("department_id", e.target.value)}><option value="">No department</option>{departments.data?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select></Field>
         <Field label="Branch"><Select value={f.branch_id} onChange={(e) => set("branch_id", e.target.value)}><option value="">All branches</option>{branches.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
-        <Field label="Pay" hint={wageStaff ? "Paid from Pay Wages, not in the monthly payroll run" : "Paid in the monthly payroll run"}>
-          <Select value={f.pay_frequency} onChange={(e) => set("pay_frequency", asPayFrequency(e.target.value))}>{PAY_FREQUENCIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select>
-        </Field>
-        <Field label={payAmountLabel(f.pay_frequency)} hint={f.pay_frequency === "weekly" ? "For a full week, Monday to Sunday. Fewer days pay wage x days / 7" : undefined}><MoneyInput value={f.base_salary_minor} onChange={(m) => set("base_salary_minor", m)} /></Field>
+        {pay ? (
+          <>
+            <Field label="Pay" hint={wageStaff ? "Paid from Pay Wages, not in the monthly payroll run" : "Paid in the monthly payroll run"}>
+              <Select value={f.pay_frequency} onChange={(e) => set("pay_frequency", asPayFrequency(e.target.value))}>{PAY_FREQUENCIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</Select>
+            </Field>
+            <Field label={payAmountLabel(f.pay_frequency)} hint={f.pay_frequency === "weekly" ? "For a full week, Monday to Sunday. Fewer days pay wage x days / 7" : undefined}><MoneyInput value={f.base_salary_minor} onChange={(m) => set("base_salary_minor", m)} /></Field>
+          </>
+        ) : null}
         <Field label="Joined on"><Input type="date" value={f.joined_on} onChange={(e) => set("joined_on", e.target.value)} /></Field>
         <Field label="Left on" hint={wageStaff ? "Wages are due only from joining to leaving" : "Salary is pro-rated for joiners and leavers"}><Input type="date" value={f.left_on} onChange={(e) => set("left_on", e.target.value)} /></Field>
         <Field label="Staff login" hint="Links the employee to a till or admin login for commissions and PIN check-in" className="sm:col-span-2">
           <Select value={f.membership_id} onChange={(e) => set("membership_id", e.target.value)}><option value="">Not linked</option>{staff.data?.map((m) => <option key={m.id} value={m.id}>{m.user?.name ?? m.id} ({m.role.name})</option>)}</Select>
         </Field>
-        <div className="sm:col-span-2"><Checkbox label="Shares tips (the month's tips are split equally among sharers)" checked={f.shares_tips} onChange={(e) => set("shares_tips", e.target.checked)} /></div>
+        {pay ? <div className="sm:col-span-2"><Checkbox label="Shares tips (the month's tips are split equally among sharers)" checked={f.shares_tips} onChange={(e) => set("shares_tips", e.target.checked)} /></div> : null}
         <div className="sm:col-span-2">
           <Switch checked={f.whatsapp_notify} onChange={(v) => set("whatsapp_notify", v)} label="Send WhatsApp messages about pay" />
           <p className="mt-1 text-xs text-fg-muted">{f.whatsapp_notify && !hasPhone ? "Add a phone number above, or no messages can be sent. " : ""}Advance paid, wage paid and salary paid messages go to this phone when they are switched on in Payroll settings.</p>
         </div>
-        <div className="sm:col-span-2">
+        {pay ? <div className="sm:col-span-2">
           <div className="mb-1 flex items-center justify-between"><span className="text-xs font-medium tracking-[0.4px] text-fg-secondary">Salary components</span><Button variant="ghost" size="sm" onClick={() => set("components", [...f.components, { salary_component_id: components.data?.[0]?.id ?? "", amount_minor: 0, percent: "" }])} disabled={!components.data?.length}><Plus className="h-4 w-4" /> Add component</Button></div>
           {f.components.length ? (
             <div className="space-y-2">
@@ -98,7 +115,7 @@ export function EmployeeDialog({ form, onClose, employee, onSaved }: { form: Emp
             </div>
           ) : <p className="text-sm text-fg-muted">No components. {components.data?.length ? "Add an allowance or a deduction." : "Create components from the Components button on the Employees screen first."}</p>}
           {wageStaff && f.components.length ? <p className="mt-1 text-xs text-fg-muted">Components are used by the monthly payroll run only; add a bonus or deduction when paying a wage instead.</p> : null}
-        </div>
+        </div> : <p role="note" className="rounded-xl bg-muted px-3 py-2 text-sm text-fg-secondary sm:col-span-2">The salary or wage, tips sharing and salary components are set by someone with the payroll permission.</p>}
         <Field label="Notes" className="sm:col-span-2"><Textarea value={f.notes} onChange={(e) => set("notes", e.target.value)} /></Field>
         {employee ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm sm:col-span-2">
