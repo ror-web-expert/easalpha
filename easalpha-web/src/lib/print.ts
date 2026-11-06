@@ -346,7 +346,7 @@ body { width: ${narrow ? 48 : 72}mm; padding: 2mm 0 0 ${narrow ? 2 : 3}mm; font-
 .s2 { font-size: 19px; }
 img { display: block; margin: 2mm auto; }
 .bc { text-align: center; padding: 1mm 0 0; }
-.bc svg { display: inline-block; }
+.bc svg { display: inline-block; max-width: 100%; height: auto; }
 </style></head><body>${body.join("")}</body></html>`;
 }
 

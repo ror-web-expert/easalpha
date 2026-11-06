@@ -107,7 +107,19 @@ module Sync
       order = Order.includes(items: :modifiers).find(id)
       return "duplicate" if payload[:client_seq].present? && order.notes.to_s.include?("seq:#{payload[:client_seq]}")
       builder = Orders::Builder.new(order, actor: actor, device: @device, branch: @branch)
-      builder.update!(attrs: payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, *CHARGE_KEYS).to_h.symbolize_keys, lines: Array(payload[:lines]).map(&:to_h), approvals: {})
+      attrs = payload.slice(:order_type, :table_id, :guest_name, :covers, :customer_id, :notes, :delivery_charge_minor, :is_staff_meal, :staff_meal_reason, *CHARGE_KEYS).to_h.symbolize_keys
+      # The staff-meal flag changed offline: on needs orders.staff_meal (the actor's own or the recorded approver), off charges normally.
+      if attrs.key?(:is_staff_meal)
+        attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal])
+        if attrs[:is_staff_meal]
+          attrs[:staff_meal_approved_by_id] = (approver_for(payload, "orders.staff_meal", actor) || actor).id unless order.is_staff_meal
+          attrs[:staff_meal_reason] = order.staff_meal_reason if attrs[:staff_meal_reason].blank?
+        else
+          attrs[:staff_meal_reason] = nil
+          attrs[:staff_meal_approved_by_id] = nil
+        end
+      end
+      builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: {})
       Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
       "accepted"
     end

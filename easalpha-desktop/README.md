@@ -61,7 +61,7 @@ ui/offline.html          "Cannot reach the server" page
 ```ts
 type PrintLine =
   | { text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: 1 | 2 }
-  | { qr: string } | { feed: number } | { divider: true } | { cut: true } | { drawer: true };
+  | { qr: string } | { barcode: string; bars?: string } | { feed: number } | { divider: true } | { cut: true } | { drawer: true };
 type PrintJob = { role: "receipt" | "kitchen" | "report"; printerId?: string; lines: PrintLine[]; copies?: number };
 
 interface EasAlphaDesktop {
@@ -77,15 +77,25 @@ interface EasAlphaDesktop {
 
 ## Printers
 
-Open EasAlpha > Printers (Ctrl+Shift+P) or call `openPrinterSettings()`. Each printer has a name, kind, paper width (58 mm = 32 characters, 80 mm = 48 characters) and an optional role (receipt or kitchen).
+Open EasAlpha > Printers (Ctrl+Shift+P) or call `openPrinterSettings()`. Each printer has a name, kind, paper width (58 mm = 32 characters, 80 mm = 48 characters), an optional role (receipt or kitchen) and a receipt barcode mode.
 
 | Kind | What to fill in | How it prints |
 | --- | --- | --- |
-| Network | IP address and port (default 9100) | Raw ESC/POS over TCP, 5 second timeout. Works with any Ethernet or Wi-Fi thermal printer. |
-| System | An OS printer from the list | The lines are rendered as monospace HTML and sent through the operating system driver with Electron's `webContents.print`. Use this when the printer only has a Windows or CUPS driver, or for USB printers until the native USB module is bundled. |
-| USB | Vendor ID and product ID (hex) | Raw ESC/POS write through the optional `usb` native module. If the module is not installed the job fails with "USB support not installed". |
+| Network | IP address and port (default 9100) | Raw ESC/POS over TCP, 5 second timeout. Works with any Ethernet or Wi-Fi thermal printer. Barcodes as `GS k 73`, sized to the paper. |
+| System | An OS printer from the list | The lines are rendered as monospace HTML and sent through the operating system driver with Electron's `webContents.print`. Use this when the printer only has a Windows or CUPS driver, or for USB printers until the native USB module is bundled. Barcodes are drawn as an SVG from the `bars` the web app sends, scaled to the printable width. |
+| USB | Vendor ID and product ID (hex) | Raw ESC/POS write through the optional `usb` native module. If the module is not installed the job fails with "USB support not installed". Barcodes as for Network. |
 
-"Test print" sends a page with alignment, bold, double size, a QR code and a cut so you can check the width setting.
+| Receipt barcode | Bytes | When |
+| --- | --- | --- |
+| Code 128 (default) | `GS k 73 n {B` + the number | Epson and most makes: the `{B` prefix selects code set B. |
+| Code 128, plain | `GS k 73 n` + the number | Clone printers that print `{B` as part of the number, or skip the barcode. |
+| Off | the number as a centred text row | Printers with no barcode support (a System printer in text mode, a kitchen printer). |
+
+"Test print" sends a page with alignment, bold, double size, a QR code, a barcode (`261106-TEST-1`) and a cut so you can check the width setting and scan the barcode: if the scan starts with `{B`, switch the printer to plain.
+
+### Half-printed, glued or uncut receipts
+
+A receipt whose rows run together ("ChaiRs 80"), with labels missing, no cut, and the end of one receipt at the top of the next, was printed through the browser's print dialog (no desktop app, no print server) into a Windows driver in text mode, such as "Generic / Text Only". That is what the first client saw on 30 Oct 2026. The browser cannot cut paper or open the drawer; since 6 Nov 2026 the web till at least prints the same fixed-width rows the printer would, so the words stay apart and the last rows feed out. For a cut, install this app on the till PC and add the printer as Network (TCP 9100) or USB for raw ESC/POS. A printer that only has a Windows driver works as System when the driver is the maker's graphics driver with the paper set to 80 mm and the cut on "end of document"; Generic / Text Only prints text only and never cuts.
 
 Printers are stored in `settings.json`:
 
@@ -95,16 +105,16 @@ Printers are stored in `settings.json`:
   "printServerPort": 9977,
   "updateUrl": "",
   "printers": [
-    { "id": "p_1", "name": "Counter", "kind": "network", "host": "192.168.1.50", "port": 9100, "width": 80, "role": "receipt" },
-    { "id": "p_2", "name": "Kitchen", "kind": "network", "host": "192.168.1.51", "port": 9100, "width": 80, "role": "kitchen" },
-    { "id": "p_3", "name": "Office", "kind": "system", "systemName": "HP_LaserJet", "width": 80 }
+    { "id": "p_1", "name": "Counter", "kind": "network", "host": "192.168.1.50", "port": 9100, "width": 80, "role": "receipt", "barcode": "code128" },
+    { "id": "p_2", "name": "Kitchen", "kind": "network", "host": "192.168.1.51", "port": 9100, "width": 80, "role": "kitchen", "barcode": "off" },
+    { "id": "p_3", "name": "Office", "kind": "system", "systemName": "HP_LaserJet", "width": 80, "barcode": "code128" }
   ]
 }
 ```
 
 ### ESC/POS encoder
 
-`src/escpos.ts` is a small, dependency-free encoder: `ESC @` init, codepage CP437 (`ESC t 0`), `ESC a` alignment, `ESC E` bold, `GS !` double size, `ESC d` feed, `GS V 1` partial cut, `ESC p 0` drawer kick and the `GS ( k` QR sequence (model 2, module size 6, error correction M). Dividers are dashes across the full line width and long text wraps at the paper width. Only ASCII is encoded; any other character prints as `?` for now (see "Not done yet").
+`src/escpos.ts` is a small, dependency-free encoder: `ESC @` init, codepage CP437 (`ESC t 0`), `ESC a` alignment, `ESC E` bold, `GS !` double size, `ESC d` feed, `GS V 1` partial cut, `ESC p 0` drawer kick, the `GS ( k` QR sequence (model 2, module size 6, error correction M) and `GS k 73` Code 128 barcodes (HRI below; since 0.5.0, used for the receipt number). `encodeLines(lines, width, { barcode })` takes the printer's paper width and barcode mode. The barcode is sized for the paper: a Code 128 of n characters is 11 (n + 2) + 13 modules in code set B, plus a 10-module quiet zone each side; the encoder sends 2-dot modules (`GS w 2`, 64 dots high) when that fits the printable dots (576 on 80 mm, 384 on 58 mm), else 1-dot modules (`GS w 1`, 80 dots high so thin bars still scan), else no barcode at all, the number printed as a centred text row, because Epson-class firmware prints nothing for a symbol wider than the paper. A 14-character receipt number is therefore 2-dot on 80 mm and 1-dot on 58 mm; the limits are 21 and 47 characters on 80 mm, 12 and 29 on 58 mm. The System transport draws the barcode from the `bars` the web app sends with the line, at 0.33 mm a module or smaller so the symbol and its quiet zones fit the 72 mm or 48 mm body. Dividers are dashes across the full line width and long text wraps at the paper width. Only ASCII is encoded; any other character prints as `?` for now (see "Not done yet").
 
 ## Print server for tablets
 
