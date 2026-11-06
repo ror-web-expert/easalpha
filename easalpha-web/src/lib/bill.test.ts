@@ -80,3 +80,23 @@ describe("quick cash buttons (review 0.3)", () => {
     expect(cashSuggestions(0)).toEqual([]);
   });
 });
+
+describe("a staff meal shows a Staff meal row, never Rounding (first client report, 30 Oct 2026)", () => {
+  const lines = [line({ key: "a", unit_price_minor: 8000 })]; // Rs 80 at 16% exclusive tax, 5% service charge on walk-in
+  it("keeps the figures and writes the whole amount off on one row, so the bill adds up to zero", () => {
+    const t = payableTotals({ lines, order_type: "walk_in", is_staff_meal: true }, { settings, cash: false });
+    expect(t.total_minor).toBe(0);
+    const rows = billRows({ ...t, is_staff_meal: true });
+    expect(rows.map((r) => r.label)).toEqual(["Subtotal", "Service charge", "Tax", "Staff meal"]);
+    // Whole rupees as the bill shows them: Rs 80, Rs 4 and Rs 13 (tax 1,280 paisa displays as Rs 13), written off as -Rs 97.
+    expect(rows.find((r) => r.key === "staff_meal")!.amount_minor).toBe(-(8000 + 400 + 1300));
+    expect(rows.some((r) => r.key === "rounding")).toBe(false);
+    expect(sum(rows)).toBe(0);
+  });
+  it("the same order charged normally has no Staff meal row", () => {
+    const t = payableTotals({ lines, order_type: "walk_in", is_staff_meal: false }, { settings, cash: false });
+    const rows = billRows({ ...t, is_staff_meal: false });
+    expect(rows.map((r) => r.label)).toEqual(["Subtotal", "Service charge", "Tax"]);
+    expect(sum(rows)).toBe(t.total_minor);
+  });
+});

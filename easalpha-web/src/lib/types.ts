@@ -329,11 +329,14 @@ export interface CustomerPayment {
 
 export interface Receipt {
   receipt_number: string | null; duplicate: boolean; printed_at: string;
-  business: { name: string; legal_name: string | null; phone: string | null; logo_key: string | null; currency: string };
+  business: { name: string; legal_name: string | null; phone: string | null; email?: string | null; logo_key: string | null; currency: string };
   branch: { name: string; address: string | null; city: string | null; phone: string | null; tax_registration: Record<string, string> | null };
   header: string | null; footer: string | null; language: string; paper: string;
   order: { id: ID; serial: number | null; label: string; order_type: OrderType; table: string | null; business_day: string; placed_at: string | null; paid_at: string | null;
-    cashier: string | null; customer: { name: string; phone: string | null; khata_no: string | null } | null; guest_name: string | null; notes: string | null };
+    cashier: string | null; /** The till (device) the order was taken on; receipts from before 6 Nov 2026 lack it. */ till?: string | null;
+    customer: { name: string; phone: string | null; khata_no: string | null } | null; guest_name: string | null; notes: string | null;
+    /** Staff meal (complimentary): the bill shows a "Staff meal" row and the reason; receipts from before 6 Nov 2026 lack both. */
+    is_staff_meal?: boolean; staff_meal_reason?: string | null };
   /** line_subtotal_minor (unit price with modifiers times quantity) is what a bill line shows; receipts from before 17 Oct 2026 lack it. */
   lines: { name: string; quantity: string; unit_price_minor: number; modifiers: { name: string; price_minor: number }[]; line_subtotal_minor?: number; line_total_minor: number; discount_minor: number; notes: string | null }[];
   totals: { subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; tax_lines: { rate: number; inclusive: boolean; taxable_minor: number; tax_minor: number }[];

@@ -141,7 +141,7 @@ export function StaffMealDialog({ open, onClose, onConfirm }: { open: boolean; o
   const [reason, setReason] = useState("");
   useEffect(() => { if (open) setReason(""); }, [open]);
   return (
-    <Dialog open={open} onClose={onClose} title="Staff meal" description="The order total becomes zero; the cost is tracked. A manager PIN is asked for if required." size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={() => { onConfirm(reason.trim()); onClose(); }} disabled={!reason.trim()}>Mark as staff meal</Button></>}>
+    <Dialog open={open} onClose={onClose} title="Staff meal" description="The bill keeps its figures and writes the whole amount off on a Staff meal line, so the total is zero and the cost is tracked. A manager PIN is asked for when your role cannot mark staff meals. Tap Staff again to charge the order normally." size="sm" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button onClick={() => { onConfirm(reason.trim()); onClose(); }} disabled={!reason.trim()}>Mark as staff meal</Button></>}>
       <Field label="Who and why"><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ali, lunch" className="h-12 text-base" autoFocus /></Field>
     </Dialog>
   );

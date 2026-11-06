@@ -264,6 +264,28 @@ function SellScreen() {
       return true;
     } finally { setBusy(false); }
   };
+  /**
+   * Staff meal on or off. The cart changes at once; an order that already exists (on the server or in the offline queue)
+   * is saved straight away, so the server agrees with the till and a manager PIN, when the role needs one, is asked for
+   * here rather than at payment. A cancelled PIN or a refusal puts the cart back as it was. An unsaved cart with lines is
+   * saved too (as a draft) for the same reason; an empty cart just keeps the flag for the first save.
+   */
+  const setStaffMeal = async (on: boolean, reason = "") => {
+    const before = { is_staff_meal: cart.is_staff_meal, staff_meal_reason: cart.staff_meal_reason };
+    const next: Cart = { ...cart, is_staff_meal: on, staff_meal_reason: on ? reason : "" };
+    patch({ is_staff_meal: on, staff_meal_reason: on ? reason : "" });
+    if (!cart.saved && !cart.lines.length) return;
+    setBusy(true);
+    try {
+      const r = await withOrderPin((o) => saveOrder(next, o), on ? "Mark as staff meal" : "Charge this order normally");
+      if (!r) { patch(before); return; }
+      loadCart({ ...r.cart, customer: cart.customer ?? r.cart.customer, address_text: cart.address_text, zone_name: cart.zone_name });
+      if (r.cart.is_staff_meal !== on) toast.error("Staff meal not changed", "The server kept the order as it was.");
+    } catch (e) {
+      patch(before);
+      if (!(e instanceof ApiError && e.code === "approval.cancelled")) toast.error(on ? "Could not mark as staff meal" : "Could not change the staff meal", errorMessage(e));
+    } finally { setBusy(false); }
+  };
   const printReceipt = async (r: Receipt) => {
     const res = await printJob({ role: "receipt", lines: receiptLines(r, { settings }) }, { settings });
     if (!res.ok) toast.error("Could not print", res.error);
@@ -358,7 +380,7 @@ function SellScreen() {
   // taken, while a save runs (it sends the cart it started with, then clears it; a manager PIN waits inside it) and
   // while any dialog or sheet is open, so a scan never lands behind one or resets a half-built line.
   const sheetOrDialog = !!product || !!deal || customerOpen || tableOpen || openItem || notesOpen || staffOpen || !!override || payOpen || billOpen || !!receipt || !!pinAsk || approvalOpen;
-  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned });
+  const scanner = useTillScanner({ catalog, orderType: cart.order_type, paused: busy || sheetOrDialog, onMatch: addScanned, onReceipt: (code) => router.push(`/pos/orders?receipt=${encodeURIComponent(code)}`) });
 
   if (!catalog) {
     return (
@@ -380,7 +402,7 @@ function SellScreen() {
           <QuickAddBar items={catalog.quick_add_items} currency={currency} showPrices={display.showPrices} onPick={quickAdd} />
           <div className="min-h-0 flex-1">
             <OrderPanel cart={shownCart} currency={currency} settings={settings} onQty={qtyWithUndo} onEditLine={editLine} onOverride={setOverride} onRemove={removeWithUndo}
-              onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? patch({ is_staff_meal: false, staff_meal_reason: "" }) : setStaffOpen(true))}
+              onCustomer={() => setCustomerOpen(true)} onTable={() => setTableOpen(true)} onNotes={() => { setEditing(null); setNotes(cart.notes); setNotesOpen(true); }} onStaffMeal={() => (cart.is_staff_meal ? void setStaffMeal(false) : setStaffOpen(true))}
               onHold={hold} onSend={send} onPay={openPay} onNew={newOrder} busy={busy} canOverride={true} overrideNeedsPin={!can("prices.override")} onPreview={() => setBillOpen(true)}
               canRemove={canRemove} canDecrease={canDecrease} onPlaceUnpaid={unpaidOk ? placeUnpaid : undefined} unpaidLabel={unpaidLabel} />
           </div>
@@ -391,7 +413,7 @@ function SellScreen() {
       <TablePicker open={tableOpen} onClose={() => setTableOpen(false)} tables={tables} current={cart.table_id} onPick={pickTable} onRefresh={refreshTables} />
       <OpenItemDialog open={openItem} onClose={() => setOpenItem(false)} onAdd={(name, price) => { const tax = taxFor(null, catalog); addLine({ name, unit_price_minor: price, quantity: 1, modifiers: [], open_item: { name, price_minor: price }, tax_rate: tax.rate, tax_inclusive: tax.inclusive }); }} />
       <PriceOverrideDialog open={!!override} onClose={() => setOverride(null)} current={override?.price_override_minor ?? override?.unit_price_minor ?? 0} onSet={(p) => override && updateLine(override.key, { price_override_minor: p })} />
-      <StaffMealDialog open={staffOpen} onClose={() => setStaffOpen(false)} onConfirm={(reason) => patch({ is_staff_meal: true, staff_meal_reason: reason })} />
+      <StaffMealDialog open={staffOpen} onClose={() => setStaffOpen(false)} onConfirm={(reason) => void setStaffMeal(true, reason)} />
       <Dialog open={notesOpen} onClose={() => setNotesOpen(false)} title={editing ? `Notes for ${editing.name}` : "Order notes"} size="sm" footer={<><Button variant="secondary" onClick={() => setNotesOpen(false)}>Cancel</Button><Button onClick={() => { if (editing) updateLine(editing.key, { notes: notes || null }); else patch({ notes }); setNotesOpen(false); setEditing(null); }}>Save</Button></>}>
         <Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="text-base" autoFocus /></Field>
       </Dialog>
