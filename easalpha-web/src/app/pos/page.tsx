@@ -264,9 +264,10 @@ function SellScreen() {
   const openPay = async () => {
     if (!cart.lines.length || !ensureCustomer()) return;
     if (reopened) { const c = await saveReopened(); if (!c) return; }
-    else if (cart.customer) {
+    else if (cart.customer && can("payments.take")) {
       // SPEC regular discounts: the server applies the best recency tier for this customer; sync once so the payment
-      // page shows it before money is taken. Offline (or on a failure) the page opens with the local total.
+      // page shows it before money is taken. Offline (or on a failure) the page opens with the local total. Not for a
+      // role that pays with a manager's PIN: nothing is saved before that PIN, and Pay stops once if the total moved.
       setBusy(true);
       try { const c = await withOrderPin((o) => syncForPayment(cart, o), what("Take payment")); if (c) loadCart(c); }
       catch (e) { if (startOverIfClosed(e)) return; toast.error("Could not check discounts", errorMessage(e)); }
@@ -346,7 +347,13 @@ function SellScreen() {
     setBusy(true);
     try {
       const seen = seenDue.current?.id === cart.id ? seenDue.current.due : undefined;
-      const r = await withOrderPin((o) => payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin, shownDue, seenDue: seen }), what(payments.length ? "Take payment" : "Complete the order"));
+      // A role without payments.take (a waiter) pays with a manager's PIN, asked before anything is saved: the dialog
+      // opened only once the save had created the order, so a cancelled PIN left it unpaid on the server (roles QA,
+      // 6 Nov 2026). The PIN then goes with the save and the payment.
+      const managerPays = payments.length > 0 && !can("payments.take");
+      const r = await withOrderPin((o) => (managerPays && !o.approver_pin
+        ? Promise.reject(new ApiError("approval.required", "A manager's PIN approves taking this payment", 403, { permissions: ["payments.take"], labels: { "payments.take": "Take payment" } }))
+        : payOrder(cart, payments, tip, o.approver_pin, { pin: o.pin, shownDue, seenDue: seen })), what(payments.length ? "Take payment" : "Complete the order"));
       if (!r) return;
       seenDue.current = null;
       setPayOpen(false);
@@ -370,7 +377,7 @@ function SellScreen() {
         toast.success(`${r.receipt.order.label} paid${r.change_minor ? ` · change ${formatMoney(r.change_minor, currency)}` : ""}`);
       }
     } catch (e) {
-      if (startOverIfClosed(e)) return;
+      if (startOverIfClosed(e) || (e instanceof ApiError && e.code === "approval.cancelled")) return;
       if (e instanceof TotalChangedError) {
         // Nothing was paid: show the order as the server prices it and leave the payment screen open on the new total.
         seenDue.current = { id: e.cart.id, due: e.toMinor };

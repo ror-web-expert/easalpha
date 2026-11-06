@@ -153,6 +153,8 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     delivery_charge_percent: (full ? o.delivery_charge_percent : prev?.delivery_charge_percent) ?? 0,
     tax_choice: (full ? o.tax_choice : prev?.tax_choice) ?? null, tax_rate_id: (full ? o.tax_rate_id : prev?.tax_rate_id) ?? null,
     order_discounts: o.discounts ? o.discounts.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })) : prev?.order_discounts,
+    // The Orders cards read "? items" for every order known only from a summary row (roles QA, 6 Nov 2026).
+    item_count: o.item_count ?? (full ? lines.filter((l) => l.status !== "cancelled").length : prev?.item_count) ?? null,
   };
 }
 
@@ -388,7 +390,8 @@ export async function payOrder(cart: Cart, payments: PaymentInput[], tip_minor =
         const toSend = reconcilePayments(pays, shownDue, serverDue, opts.seenDue);
         if (!toSend) throw new TotalChangedError({ ...current, customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name }, shownDue, serverDue);
         pays = toSend;
-        const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: pays, tip_minor } });
+        // A manager's PIN (a role without payments.take) goes with the payment it approves, not only the save before it.
+        const res = await api<PaymentResult>(`/orders/${current.id}/payments`, { method: "POST", auth: "pos", body: { payments: pays, tip_minor, ...(approver_pin ? { approver_pin } : {}) } });
         const prev = await db.orders.get(current.id);
         const local = await saveLocal({ ...serverToLocal(res.order, prev), payments: [...(prev?.payments ?? []), ...res.payments.map((p) => ({ id: p.id, method_code: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? undefined, change_minor: p.change_minor, reference: p.reference ?? undefined, client_created_at: p.received_at }))] });
         const receipt = res.receipt ?? buildLocalReceipt(local);

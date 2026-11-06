@@ -41,6 +41,12 @@ const settledRow = (o: LocalOrder) => ["paid", "closed", "refunded"].includes(o.
  * is "draft" there), its state and time, so held orders can be told apart (QA T13).
  */
 const orderName = (o: Pick<LocalOrder, "label" | "status" | "created_at">) => (o.label && o.label !== "draft" ? o.label : `${o.status === "held" ? "Held" : "Draft"} ${formatTime(o.created_at)}`);
+/** "3 items": the till's own lines when it holds them, else the count the server's order row carries ("?" was every server order). */
+function itemsText(o: LocalOrder): string {
+  const live = o.lines.filter((l) => l.status !== "cancelled").length;
+  const n = live || o.item_count;
+  return n == null ? "? items" : `${n} ${n === 1 ? "item" : "items"}`;
+}
 /** Open, sent, on the server and paid exactly its total: nothing is left to take, so it completes from here (QA T5). */
 const finishable = (o: LocalOrder) => OPEN.includes(o.status) && !["draft", "held"].includes(o.status) && !o.local_only && !rejected(o) && o.paid_minor > 0 && o.paid_minor === o.total_minor;
 
@@ -199,7 +205,8 @@ function OrdersScreen() {
           <div className="flex-1" />
           <Button variant="secondary" size="lg" onClick={refresh} loading={refreshing} disabled={status === "offline"}><RefreshCw className="h-4 w-4" /> Refresh</Button>
         </div>
-        <div className="grid flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {/* content-start: a few cards keep their own height instead of stretching to share the whole screen. */}
+        <div className="grid flex-1 grid-cols-1 content-start gap-2 overflow-y-auto p-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((o) => (
             <button key={o.id} onClick={() => setSel(o)} className={cn("flex min-h-28 overflow-hidden rounded-lg border bg-card text-left shadow-sm", sel?.id === o.id && "border-primary")}>
               <div className={cn("w-2 shrink-0", o.order_type === "dine_in" ? "bg-primary" : o.order_type === "takeaway" ? "bg-accent" : o.order_type === "delivery" ? "bg-info" : "bg-inverse")} />
@@ -209,7 +216,7 @@ function OrdersScreen() {
                   <Badge variant={rejected(o) ? "danger" : orderStatusVariant(o.status)}>{rejected(o) ? "Rejected" : titleCase(o.status)}</Badge>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1 text-xs"><Badge variant={orderTypeVariant(o.order_type)}>{titleCase(o.order_type)}</Badge>{rejected(o) ? <><Badge variant="danger" title={o.sync_error ?? undefined}>{o.sync_error ?? "The server refused it"}</Badge>{o.paid_minor > 0 ? <Badge variant="warning">Paid on this till only</Badge> : null}</> : <Badge variant={paymentStatusVariant(o.payment_status)}>{titleCase(o.payment_status)}</Badge>}{!rejected(o) && o.local_only ? <Badge variant="warning">not synced</Badge> : null}{o.table_code ? <Badge>Table {o.table_code}</Badge> : null}</div>
-                <div className="mt-1 truncate text-sm text-fg-secondary">{o.customer_name ?? o.guest_name ?? "Walk-in"} · {o.lines.filter((l) => l.status !== "cancelled").length || "?"} items · {formatTime(o.created_at)}</div>
+                <div className="mt-1 truncate text-sm text-fg-secondary">{o.customer_name ?? o.guest_name ?? "Walk-in"} · {itemsText(o)} · {formatTime(o.created_at)}</div>
                 <div className="mt-auto pt-1 text-right text-lg font-semibold tabular">{formatMoney(o.total_minor, currency)}</div>
               </div>
             </button>

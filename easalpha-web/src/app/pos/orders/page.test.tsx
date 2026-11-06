@@ -238,6 +238,19 @@ describe("a sale the server rejected (QA K10)", () => {
   });
 });
 
+describe("the order cards (roles QA, 6 Nov 2026)", () => {
+  // Every order known only from the server's summary row read "? items", and two cards stretched to fill the screen.
+  it("count the items the server's row reports, and keep their own height", async () => {
+    h.listLocal = async () => [row({ lines: [], item_count: 3 }), row({ id: "o-2", label: "#6", item_count: 1 })];
+    render(<OrdersPage />);
+    fireEvent.click(screen.getByRole("tab", { name: /All/ }));
+    const card = (await screen.findByText("#42")).closest("button")!;
+    expect(card).toHaveTextContent("3 items");
+    expect((await screen.findByText("#6")).closest("button")).toHaveTextContent("2 items"); // its own two lines
+    expect(card.parentElement).toHaveClass("content-start");
+  });
+});
+
 describe("held orders (QA T13)", () => {
   it("are named by state and time, not all \"draft\"", async () => {
     h.listLocal = async () => [row({ label: "draft", status: "held", created_at: "2026-11-05T13:00:00Z" })];

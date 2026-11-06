@@ -12,6 +12,8 @@ const h = vi.hoisted(() => ({
   labels: [] as (string | undefined)[],
   /** Permission codes the signed-in cashier lacks. */
   lacks: [] as string[],
+  /** The PIN a manager types when the approval dialog opens; null cancels it. */
+  managerPin: null as string | null,
   router: { replace: () => {}, push: vi.fn() },
   params: new URLSearchParams(),
   catalog: { business: { name: "Cafe", currency: "PKR", settings: {} }, branch: null, products: [], modifier_groups: [], deals: [], tax_rates: [], quick_add_items: [] },
@@ -50,7 +52,19 @@ vi.mock("@/components/pos/payment-dialog", () => ({
   PaymentDialog: ({ open, onPay }: { open: boolean; onPay: (p: unknown[], tip: number, due: number) => Promise<void> }) => (open ? <button onClick={() => void onPay([{ method_code: "cash", amount_minor: 10000, tendered_minor: 10000 }], 0, 10000)}>Pay now</button> : null),
 }));
 vi.mock("@/components/pos/receipt-dialog", () => ({ ReceiptDialog: ({ receipt }: { receipt: unknown }) => (receipt ? <div>Receipt on screen</div> : null) }));
-vi.mock("@/components/approval", () => ({ useApproval: () => ({ run: (fn: (pin?: string) => Promise<unknown>, label?: string) => { h.labels.push(label); return fn(); }, dialog: null, open: h.approvalOpen }) }));
+// Like the real dialog: a refusal a PIN can lift is retried with the manager's PIN, or cancelled when none is typed.
+vi.mock("@/components/approval", async () => {
+  const { ApiError: Err, needsApproval } = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+  const run = async (fn: (pin?: string) => Promise<unknown>, label?: string) => {
+    h.labels.push(label);
+    try { return await fn(); } catch (e) {
+      if (!needsApproval(e)) throw e;
+      if (!h.managerPin) throw new Err("approval.cancelled", "Approval cancelled", 0);
+      return fn(h.managerPin);
+    }
+  };
+  return { useApproval: () => ({ run, dialog: null, open: h.approvalOpen }) };
+});
 vi.mock("@/lib/pos-actions", () => ({
   holdOrder: () => h.hold(), payOrder: vi.fn(), saveOrder: vi.fn(), loadOrderForEdit: vi.fn(), completeUnpaid: vi.fn(), applyTaxChoice: vi.fn(),
   applyServerDiscount: vi.fn(), syncForPayment: vi.fn(), TotalChangedError: class extends Error {}, regularPricing: (c: unknown) => c, payStep: () => "payment",
@@ -60,7 +74,7 @@ import PosPage from "./page";
 import { useCartStore } from "@/store/cart";
 import { useSyncStore } from "@/store/sync";
 import { ApiError } from "@/lib/api";
-import { payOrder, saveOrder } from "@/lib/pos-actions";
+import { payOrder, saveOrder, syncForPayment } from "@/lib/pos-actions";
 
 const paused = () => h.paused[h.paused.length - 1];
 
@@ -69,10 +83,12 @@ beforeEach(() => {
   h.approvalOpen = false;
   h.labels.length = 0;
   h.lacks = [];
+  h.managerPin = null;
   h.hold = () => Promise.resolve({});
   h.router.push.mockClear();
   vi.mocked(saveOrder).mockReset();
   vi.mocked(payOrder).mockReset();
+  vi.mocked(syncForPayment).mockReset();
   useSyncStore.setState({ status: "online" });
   useCartStore.getState().reset("takeaway");
 });
@@ -176,6 +192,35 @@ describe("a paid order and its receipt", () => {
     await act(async () => { fireEvent.keyDown(window, { key: "F5" }); });
     expect(useCartStore.getState().cart.lines).toEqual([]);
     expect(useCartStore.getState().cart.id).not.toBe(closedId);
+  });
+});
+
+describe("a waiter's Pay (roles QA, 6 Nov 2026)", () => {
+  // The waiter has no payments.take: the save created the order, then the payment asked for the PIN, so a cancelled
+  // PIN left an unpaid order on the server.
+  async function waiterPays() {
+    h.lacks = ["payments.take"];
+    render(<PosPage />);
+    fireEvent.click(screen.getByText("Add tea"));
+    act(() => useCartStore.getState().patch({ customer: { id: "c-1", name: "Ali Raza", phone: null } }));
+    vi.mocked(payOrder).mockResolvedValue({ receipt: { order: { label: "#7" } }, change_minor: 0, offline: false, local: { status: "paid", paid_minor: 10000, total_minor: 10000, label: "#7" }, cart: {} } as never);
+    fireEvent.keyDown(window, { key: "F8" });
+    await act(async () => { fireEvent.click(await screen.findByText("Pay now")); });
+  }
+
+  it("asks for the manager's PIN before anything is saved, and a cancelled PIN saves nothing", async () => {
+    await waiterPays();
+    expect(syncForPayment).not.toHaveBeenCalled(); // opening the payment screen saved the order before
+    expect(payOrder).not.toHaveBeenCalled();
+    expect(saveOrder).not.toHaveBeenCalled();
+    expect(h.labels).toContain("Take payment");
+  });
+
+  it("takes the payment with the PIN it was given", async () => {
+    h.managerPin = "4321";
+    await waiterPays();
+    expect(payOrder).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(payOrder).mock.calls[0][3]).toBe("4321");
   });
 });
 

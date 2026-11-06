@@ -713,6 +713,19 @@ describe("the Orders screen's actions", () => {
   });
 });
 
+describe("payOrder with a manager's PIN (roles QA, 6 Nov 2026)", () => {
+  it("sends the PIN with the payment it approves, not only with the save before it", async () => {
+    server = fresh([["Karahi", 100000]]);
+    const bodies: Record<string, unknown>[] = [];
+    const serve = h.handler!;
+    h.handler = (path, opts) => { if (path.endsWith("/payments")) bodies.push(opts.body as Record<string, unknown>); return serve(path, opts); };
+    await payOrder({ ...opened(), notes: "no onions" }, [cash(100000)], 0, "4321", { shownDue: 100000 });
+    expect(bodies[0]).toMatchObject({ approver_pin: "4321" });
+    await payOrder(opened(), [cash(100000)], 0, undefined, { shownDue: 100000 }).catch(() => undefined);
+    expect(bodies[1] ?? {}).not.toHaveProperty("approver_pin");
+  });
+});
+
 describe("payOrder offline with a tip over two payments", () => {
   // Review item 14: each queued payment carried the whole tip and Payments::Processor added it per record (Rs 50 became Rs 100).
   it("puts the tip on the first queued payment only", async () => {
@@ -827,6 +840,16 @@ describe("a summary row from GET /orders (review R2)", () => {
     expect(stored.lines.map((l) => l.name)).toEqual(["Karahi"]);
     expect(stored.order_discounts).toEqual(cached.order_discounts);
     expect(h.rows.get(server.id)).toMatchObject({ lines: cached.lines, status: "paid" });
+  });
+
+  it("keeps the server's item count, so the Orders card can say how many items an order has", async () => {
+    server = fresh([["Karahi", 100000], ["Naan", 2500]]);
+    const row: Record<string, unknown> = { ...asOrder(server), item_count: 2 };
+    delete row.items;
+    expect((await storeServerOrder(row as unknown as Order)).item_count).toBe(2);
+    delete row.item_count;
+    expect((await storeServerOrder(row as unknown as Order)).item_count).toBe(2); // an older server: the last count stays
+    expect(serverToLocal(asOrder(server)).item_count).toBe(2); // a whole order counts its live lines
   });
 
   it("takes the server's lines from a whole order", async () => {
