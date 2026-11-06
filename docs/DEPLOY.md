@@ -113,6 +113,11 @@ policies apply to (the `postgres` superuser ignores them, so until that variable
 application's own scoping alone). Set it once: `openssl rand -hex 24`, paste, `docker compose up -d api jobs`. A failed health check fails the run and prints the API log; the previous
 images stay on the server, so `IMAGE_TAG=<previous sha>` in `.env` and `docker compose up -d` rolls back.
 
+Since 6 Nov 2026 the API, web and WhatsApp containers run as uid 1000 (`rails` / `node`), not root (security review,
+A14; the images were not rebuilt on a laptop, so the first CI build is the test). The two volumes they write were made
+by root, so once, before the first deploy of those images: `docker run --rm -v easalpha_storage:/d alpine chown -R 1000:1000 /d`
+and the same for `easalpha_wasessions`. Without it uploads and the WhatsApp session fail with "permission denied".
+
 Watch a run: `gh run watch`, or Actions on GitHub. Tagged release: `git tag v1.0.0 && git push --tags` also builds and
 uploads the desktop installers to the Download page (`desktop.yml`).
 
