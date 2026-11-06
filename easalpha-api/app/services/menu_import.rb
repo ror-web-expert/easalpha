@@ -52,8 +52,9 @@ class MenuImport
     SafeCsv.parse(@data.to_s, headers: true, header_converters: ->(h) { h.to_s.strip.downcase.tr(" ", "_") }).each_with_index do |row, i|
       add_row(line: i + 2, category: row["category"], name: row["name"] || row["product"], name_ur: row["name_ur"], price: row["price"], sku: row["sku"], description: row["description"], image: row["image"])
     end
-  rescue CSV::MalformedCSVError => e
-    @errors << "CSV could not be read: #{e.message}"
+  rescue Api::Errors::BadRequest => e
+    raise unless e.code == "import.csv"
+    @errors << e.message # the preview lists it, as it does a JSON file that cannot be read
   end
 
   def parse_json
