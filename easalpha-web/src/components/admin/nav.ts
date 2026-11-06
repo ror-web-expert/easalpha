@@ -177,6 +177,8 @@ export const NAV: NavGroup[] = [
       { href: "/admin/canteen/workers", label: "Workers", icon: Fingerprint, perms: ["canteen.manage"], module: "canteen" },
       { href: "/admin/canteen/sessions", label: "Meal Sessions", icon: Timer, perms: ["canteen.manage"], module: "canteen" },
       { href: "/admin/canteen/reports", label: "Reports", icon: BarChart3, perms: ["canteen.manage"], module: "canteen" },
+      // GET /settings answers any staff login; saving the canteen switches needs settings.manage.
+      { href: "/admin/canteen/settings", label: "Settings", icon: SlidersHorizontal, perms: ["settings.manage", "canteen.manage"], module: "canteen" },
     ],
   },
   {

@@ -4,6 +4,7 @@
 /admin/canteen/plans
 /admin/canteen/reports
 /admin/canteen/sessions
+/admin/canteen/settings
 /admin/canteen/workers
 /admin/customers
 /admin/customers/account
