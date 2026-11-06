@@ -68,8 +68,9 @@ module EasAlpha
     end
 
     # The other databases of this environment (production's Solid Cable "cable", and "queue" and "cache"): db:prepare
-    # made their tables as the owner, so the app role could not write there, and with EASALPHA_APP_DB_PASSWORD set every
-    # live update (orders, kitchen, tokens) failed to broadcast. Granted here as the owner, before bin/start switches.
+    # makes their tables as the owner, so without these grants the app role could not write there and, once
+    # EASALPHA_APP_DB_PASSWORD is set, every live update (orders, kitchen, tokens) would fail to broadcast. Granted here
+    # as the owner, before bin/start switches.
     def grant_other_databases!
       primary = ActiveRecord::Base.connection_db_config.database
       ActiveRecord::Base.configurations.configs_for(env_name: Rails.env).each do |db|

@@ -10,6 +10,7 @@ RSpec.describe "bin/start" do
     Dir.mktmpdir do |dir|
       FileUtils.mkdir_p(File.join(dir, "bin"))
       FileUtils.cp(Rails.root.join("bin/start"), File.join(dir, "bin/start"))
+      File.chmod(0o755, File.join(dir, "bin/start"))
       %w[rails jobs].each do |name|
         File.write(File.join(dir, "bin", name), "#!/usr/bin/env bash\necho \"#{name} $* as ${PGUSER:-}\"\n")
         File.chmod(0o755, File.join(dir, "bin", name))
