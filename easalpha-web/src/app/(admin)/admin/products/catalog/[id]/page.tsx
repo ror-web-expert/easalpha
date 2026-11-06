@@ -307,7 +307,7 @@ export default function ProductEditPage() {
         footer={<><Button variant="secondary" onClick={() => setNewCategory(null)}>Cancel</Button><Button loading={addCategory.isPending} disabled={!!categorySaveBlocker({ name: newCategory ?? "" })} title={categorySaveBlocker({ name: newCategory ?? "" }) ?? undefined} onClick={saveCategory}>Add</Button></>}>
         <Field label="Category name" hint="Such as Burgers, Karahi or Drinks"><Input value={newCategory ?? ""} onChange={(e) => setNewCategory(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveCategory(); }} autoFocus /></Field>
       </Dialog>
-      <ConfirmDialog open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate(id, { onSuccess: () => router.replace("/admin/products/catalog") })} title={`Archive ${form.name}?`} description="It leaves the till on the next sync; past orders keep it." confirmLabel="Archive" destructive loading={remove.isPending} />
+      <ConfirmDialog open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate(id, { onSuccess: () => router.replace("/admin/products/catalog") })} title={`Archive ${form.name}?`} description="It leaves the till on the next sync; past orders keep it, and so do its barcodes. Tick Archived on the Catalog to find it and restore it." confirmLabel="Archive" destructive loading={remove.isPending} />
     </>
   );
 }

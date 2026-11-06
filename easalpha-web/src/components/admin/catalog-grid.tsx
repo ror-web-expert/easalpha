@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { ArchiveRestore, Package, Pencil, Star, Trash2, TrendingUp } from "lucide-react";
+import { ArchiveRestore, Package, Pencil, Plus, Star, Trash2, TrendingUp } from "lucide-react";
 import type { Category, Product } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -113,6 +113,7 @@ export function ProductGrid({ rows, catName, showPrices, onFav, onAnalyse, onRem
         <Package className="mb-2 h-8 w-8 text-fg-muted" />
         <p className="text-sm font-medium text-heading">No products here</p>
         <p className="mt-1 text-sm text-fg-muted">Pick another category, clear the search, or add a product.</p>
+        <Link href="/admin/products/catalog/new" className="mt-3"><Button size="sm"><Plus className="h-4 w-4" /> New product</Button></Link>
       </div>
     );
   }
