@@ -97,7 +97,7 @@ module Api
           raise Api::Errors::NotFound unless waiting.exists?
           user = Auth::Identity.new_account!(:phone, phone, name: waiting.last.name)
         end
-        user.verify!(:phone) unless user.verified?(:phone)
+        Auth::Identity.claim!(user, :phone)
         joined = Auth::Identity.accept_waiting!(user, :phone, phone)
         issue_for(user, app: params[:app].presence || "admin", joined: joined)
       end
@@ -117,8 +117,10 @@ module Api
       end
 
       # POST /auth/password/reset  email, code, password
-      # The code proves the email: the password is set, every session of the login signed out and the email confirmed. A
-      # phone the login never proved goes, since the person resetting showed only the email (QA of 6 Nov 2026, P8).
+      # The code proves the email: the password is set, every session of the login signed out and the email confirmed.
+      # When the email was not proven before, the person resetting showed only it, and a phone on the login may be
+      # someone else's, proven or not: it stays, unproven, until a phone code and this password confirm it again
+      # (QA of 6 Nov 2026, P8).
       def password_reset
         email = EmailCode.normalize(params.require(:email))
         code = EmailCode.check(email: email, purpose: "reset_password", code: params.require(:code))
@@ -126,7 +128,7 @@ module Api
         raise Api::Errors::Unauthorized.new("code.invalid", "The code is wrong or expired") unless user
         User.transaction do
           changes = { password: params.require(:password).to_s, email_verified_at: Time.current }
-          changes[:phone] = nil if user.phone.present? && !user.verified?(:phone) && !user.verified?(:email)
+          changes[:phone_verified_at] = nil unless user.verified?(:email)
           user.update!(changes)
           code.consume!
           RefreshToken.where(user_id: user.id, revoked_at: nil).update_all(revoked_at: Time.current)

@@ -234,6 +234,34 @@ RSpec.describe "Proven phones and emails, and staff invitations", type: :request
     end
   end
 
+  it "drops a password the owner typed for a phone-only login once its holder signs in by code or adds an email" do
+    api_post "/api/v1/staff", { name: "Till Ali", phone: "+923331230040", password: "owner-knows-it", role_id: role.("manager").id, staff_type: "admin" }, headers: headers
+    ali = User.find_by!(phone: "+923331230040")
+    expect(ali.password_digest).to be_present
+    api_post "/api/v1/auth/otp/verify", { phone: ali.phone, code: otp(ali.phone, "login") }
+    expect(response).to have_http_status(:ok)
+    expect(ali.reload).to have_attributes(password_digest: nil, phone_verified_at: be_present)
+    session = { "Authorization" => "Bearer #{json[:access_token]}", "Content-Type" => "application/json" }
+    ali.update_columns(password_digest: BCrypt::Password.create("owner-knows-it")) # a login from before this fix
+    api_post "/api/v1/me/email_code", { email: "ali.own@example.com" }, headers: session
+    api_patch "/api/v1/me", { email: "ali.own@example.com", email_code: json[:dev_code] }, headers: session
+    expect(response).to have_http_status(:ok)
+    expect(ali.reload.password_digest).to be_nil
+    api_post "/api/v1/auth/login", { email: "ali.own@example.com", password: "owner-knows-it" }
+    expect(response).to have_http_status(:unauthorized)
+  end
+
+  it "clears a returning member's old PIN when another active member took it, on accepting an invitation" do
+    stranger = signup_stranger(phone: cashier_phone)
+    old = within(biz) { Membership.create!(user: stranger, role: role.("cashier"), status: "active").tap { |m| m.set_pin!("2580") } }
+    within(biz) { old.deactivate! }
+    add_member!(biz, "waiter", pin: "2580")
+    within(biz) { StaffInvitation.create!(role: role.("cashier"), name: "Back", phone: cashier_phone, staff_type: "cashier", expires_at: 1.day.from_now) }
+    api_post "/api/v1/auth/otp/verify", { phone: cashier_phone, code: otp(cashier_phone, "login"), password: "stranger-pass", app: "pos" }
+    expect(response).to have_http_status(:ok), response.body
+    expect(within(biz) { old.reload }).to have_attributes(status: "active", pin_digest: nil)
+  end
+
   it "confirms an email on /me with a code sent to it" do
     api_post "/api/v1/me/email_code", {}, headers: headers
     expect(json).to include(sent: true, email: owner.user.email)
@@ -243,16 +271,23 @@ RSpec.describe "Proven phones and emails, and staff invitations", type: :request
   end
 
   describe "existing data" do
-    it "counts a phone proven by a code used since its login was made, and no email" do
-      by_code = create(:user, phone: "+923331230020")
-      typed = create(:user, phone: "+923331230021")
-      stale = create(:user, phone: "+923331230022")
-      OtpCode.create!(phone: by_code.phone, purpose: "login", code_digest: "x", expires_at: 1.minute.from_now, consumed_at: Time.current)
+    it "counts a sign-up code at the login's making, a phone login only on a login with no email, and no email" do
+      code = ->(u, purpose, at) { OtpCode.create!(phone: u.phone, purpose: purpose, code_digest: "x", expires_at: 1.minute.from_now, consumed_at: at) }
+      signed_up = create(:user, email: nil, password: nil, phone: "+923331230020")
+      phone_only = create(:user, email: nil, password: nil, phone: "+923331230021")
+      with_email = create(:user, phone: "+923331230022") # a stranger's email and password may sit beside the number
+      typed = create(:user, email: nil, password: nil, phone: "+923331230023")
+      stale = create(:user, email: nil, password: nil, phone: "+923331230024")
+      late_signup = create(:user, email: nil, password: nil, phone: "+923331230025")
+      code.(signed_up, "signup", signed_up.created_at - 2.seconds)
+      code.(phone_only, "login", Time.current)
+      code.(with_email, "login", Time.current)
       OtpCode.create!(phone: typed.phone, purpose: "login", code_digest: "x", expires_at: 1.minute.from_now) # sent, never used
-      OtpCode.create!(phone: stale.phone, purpose: "login", code_digest: "x", expires_at: 1.minute.from_now, consumed_at: 2.days.ago) # before this login had it
+      code.(stale, "login", 2.days.ago) # before this login had the number
+      code.(late_signup, "signup", 1.hour.from_now) # a failed sign-up with a number already taken
       User.update_all(phone_verified_at: nil, email_verified_at: nil)
       ActiveRecord::Migration.suppress_messages { VerifiedIdentitiesAndStaffInvitations.new.backfill }
-      expect([ by_code, typed, stale ].map { |u| u.reload.verified?(:phone) }).to eq([ true, false, false ])
+      expect([ signed_up, phone_only, with_email, typed, stale, late_signup ].map { |u| u.reload.verified?(:phone) }).to eq([ true, true, false, false, false, false ])
       expect(User.where.not(email_verified_at: nil).count).to eq(0)
     end
 

@@ -69,7 +69,9 @@ class StaffInvitation < ApplicationRecord
         chosen = { role: role, status: "active", deactivated_at: nil, all_branches: all_branches, branch_ids: branch_ids, staff_type: staff_type, cashier_role: cashier_role }
         m = Membership.find_by(user_id: user.id)
         if m.nil? then m = Membership.create!(chosen.merge(user: user, invited_via: proof_kind == :phone ? "whatsapp" : "email"))
-        elsif !m.active? then m.update!(chosen) # invited back after leaving
+        elsif !m.active? # invited back after leaving; a PIN another active member took meanwhile goes (S5)
+          m.assign_attributes(pin_digest: nil, pin_lookup: nil) if m.pin_clashes?
+          m.update!(chosen)
         end
         # The PIN chosen at invitation time, unless another member took it meanwhile: then the owner sets a new one.
         m.update!(pin_digest: pin_digest, pin_lookup: pin_lookup) if pin_digest && m.pin_digest.blank? && !(pin_lookup && Membership.active.where(pin_lookup: pin_lookup).where.not(id: m.id).exists?)

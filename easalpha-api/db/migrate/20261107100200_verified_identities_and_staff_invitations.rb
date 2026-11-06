@@ -53,16 +53,20 @@ class VerifiedIdentitiesAndStaffInvitations < ActiveRecord::Migration[8.1]
     backfill
   end
 
-  # Phones proven before this migration: a sign-up, login or phone-confirmation code used since the login was made.
+  # Phones proven before this migration. A sign-up code proves the phone of the login it made, used a moment before
+  # (the old sign-up used it before checking the phone was free, so only one at the login's own making counts). A
+  # login or phone-confirmation code proves it only on a login with no email: the old phone login opened whichever
+  # login held the number, a stranger's with an email and password of their own too. Logins with an email confirm
+  # their phone at the next phone login, with the password once.
   def backfill
-    # A sign-up code is used a moment before its account is made, hence the hour of slack.
     execute <<~SQL
       UPDATE users u SET phone_verified_at = proof.at
       FROM (
         SELECT holder.id AS user_id, MIN(o.consumed_at) AS at
         FROM users holder JOIN otp_codes o ON o.phone = holder.phone
-        WHERE o.consumed_at IS NOT NULL AND o.purpose IN ('signup', 'login', 'verify_phone')
-          AND o.consumed_at >= holder.created_at - interval '1 hour'
+        WHERE o.consumed_at IS NOT NULL
+          AND ((o.purpose = 'signup' AND o.consumed_at BETWEEN holder.created_at - interval '15 minutes' AND holder.created_at + interval '1 minute')
+            OR (o.purpose IN ('login', 'verify_phone') AND holder.email IS NULL AND o.consumed_at >= holder.created_at))
         GROUP BY holder.id
       ) proof
       WHERE u.id = proof.user_id

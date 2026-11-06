@@ -80,7 +80,10 @@ RSpec.describe "Support access tokens", type: :request do
       [ :post, "/api/v1/devices", { name: "Support till", kind: "till" } ],
       [ :post, "/api/v1/support_sessions/#{session_id}/approve", {} ],
       [ :post, "/api/v1/auth/switch", { business_id: biz.id } ],
-      [ :post, "/api/v1/riders", { name: "Rider", phone: "+923451112244", create_login: true } ]
+      [ :post, "/api/v1/riders", { name: "Rider", phone: "+923451112244", create_login: true } ],
+      [ :patch, "/api/v1/integrations/foodpanda", { secret: "rotate" } ],
+      [ :patch, "/api/v1/settings", { values: { "tax.pra.bearer_token" => "theirs" } } ],
+      [ :post, "/api/v1/whatsapp/connection/start", {} ]
     ]
     attempts.each do |verb, path, body|
       send(verb, path, params: body.to_json, headers: support)

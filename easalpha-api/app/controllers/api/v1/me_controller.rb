@@ -39,6 +39,9 @@ module Api
         proof = verify_credentials!(attrs)
         attrs[:phone_verified_at] = Time.current if proof[:phone]
         attrs[:email_verified_at] = Time.current if proof[:email]
+        # A first email, proven by its code alone, would make a password on the login work: one this session never
+        # showed was set by whoever made the login (an owner adding staff by phone), so it goes.
+        attrs[:password_digest] = nil if proof[:first_email] && current_user.password_digest.present?
         before = current_user.slice(:name, :email, :phone, :locale)
         User.transaction do
           proof[:release].each { |holder, kind| holder.release!(kind) }
@@ -78,8 +81,9 @@ module Api
         phone_code = new_phone && params[:otp_code].present? ? OtpCode.check(phone: new_phone, purpose: "verify_phone", code: params[:otp_code]) : nil
         email_code = new_email && params[:email_code].present? ? EmailCode.check(email: new_email, purpose: "verify_email", code: params[:email_code]) : nil
         proof = { codes: [ phone_code, email_code ].compact, phone: phone_code.present?, email: email_code.present?, release: [] }
+        password_ok = params[:current_password].present? && current_user.authenticate(params[:current_password].to_s)
+        proof[:first_email] = email_change && current_user.email.blank? && !password_ok
         if params[:password].present? || email_change || phone_change
-          password_ok = params[:current_password].present? && current_user.authenticate(params[:current_password].to_s)
           raise Api::Errors::BadRequest.new("password.current_wrong", "The current password is wrong") if !password_ok && (params[:password].present? || params[:current_password].present?)
           if !password_ok && ((phone_change && !phone_code) || (email_change && !email_code))
             raise Api::Errors::BadRequest.new("contact.verification_required", "Enter your current password to change your email or phone, or the code sent to the new one")

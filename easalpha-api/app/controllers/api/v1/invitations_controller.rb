@@ -44,8 +44,8 @@ module Api
         User.transaction do
           code.consume!
           user ||= Auth::Identity.new_account!(kind, value, name: inv.name)
+          Auth::Identity.claim!(user, kind)
           user.update!(password: params[:new_password]) if params[:new_password].present? && user.password_digest.blank?
-          user.verify!(kind) unless user.verified?(kind)
         end
         m = inv.accept!(user)
         Tenancy::Context.with(m.business, user: user, membership: m) do

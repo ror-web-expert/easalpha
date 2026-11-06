@@ -26,6 +26,16 @@ module Auth
       end
     end
 
+    # The account a code just opened is the prover's: the phone or email is proven, and on a login with no email a
+    # password goes. Only its maker knew it (an owner adding staff by phone may type one), and an email added later
+    # would make it work for them.
+    def claim!(user, kind)
+      attrs = {}
+      attrs[:"#{kind}_verified_at"] = Time.current unless user.verified?(kind)
+      attrs[:password_digest] = nil if kind.to_sym == :phone && user.email.blank? && user.password_digest.present?
+      user.update_columns(attrs.merge(updated_at: Time.current)) if attrs.any?
+    end
+
     # Every invitation waiting for this proven phone or email joins `user`; the memberships made.
     def accept_waiting!(user, kind, value) = StaffInvitation.waiting_for(kind, value).map { |inv| inv.accept!(user) }
   end

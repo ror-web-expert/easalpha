@@ -21,8 +21,8 @@ RSpec.describe "Password reset by email code", type: :request do
     expect(mails.size).to eq(1)
   end
 
-  it "sets the new password with the code, signs every session out, confirms the email and drops a phone never proved" do
-    owner.user.update!(phone: "+923339990001")
+  it "sets the new password with the code, signs every session out, confirms the email, and leaves a phone unproven" do
+    owner.user.update!(phone: "+923339990001", phone_verified_at: Time.current)
     api_post "/api/v1/auth/login", { email: "forgot@example.com", password: "password123" }
     old_refresh = json[:refresh_token]
     forgot("forgot@example.com")
@@ -31,7 +31,9 @@ RSpec.describe "Password reset by email code", type: :request do
     expect(response).to have_http_status(:unauthorized)
     api_post "/api/v1/auth/password/reset", { email: "FORGOT@example.com", code: code, password: "brand-new-pass" }
     expect(response).to have_http_status(:ok)
-    expect(owner.user.reload).to have_attributes(phone: nil, email_verified_at: be_present)
+    # The email was not proven before: the phone, proven or not, may be someone else's, so it confirms again (with this
+    # password, at the next phone login) before it links or opens anything.
+    expect(owner.user.reload).to have_attributes(phone: "+923339990001", phone_verified_at: nil, email_verified_at: be_present)
     expect(owner.user.authenticate("brand-new-pass")).to be_truthy
     api_post "/api/v1/auth/refresh", { refresh_token: old_refresh }
     expect(response).to have_http_status(:unauthorized)
@@ -39,15 +41,15 @@ RSpec.describe "Password reset by email code", type: :request do
     expect(response).to have_http_status(:unauthorized) # one use
   end
 
-  it "keeps a proven phone, refuses a short password without using the code, and lets a code expire" do
-    owner.user.update!(phone: "+923339990002", phone_verified_at: Time.current)
+  it "keeps a proven phone on a login whose email was proven, refuses a short password without using the code, and lets a code expire" do
+    owner.user.update!(phone: "+923339990002", phone_verified_at: Time.current, email_verified_at: Time.current)
     forgot("forgot@example.com")
     code = json[:dev_code]
     api_post "/api/v1/auth/password/reset", { email: "forgot@example.com", code: code, password: "short" }
     expect(response).to have_http_status(:unprocessable_content)
     api_post "/api/v1/auth/password/reset", { email: "forgot@example.com", code: code, password: "long-enough-1" }
     expect(response).to have_http_status(:ok)
-    expect(owner.user.reload.phone).to eq("+923339990002")
+    expect(owner.user.reload).to have_attributes(phone: "+923339990002", phone_verified_at: be_present)
     forgot("forgot@example.com")
     travel 16.minutes
     api_post "/api/v1/auth/password/reset", { email: "forgot@example.com", code: json[:dev_code], password: "long-enough-2" }
