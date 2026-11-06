@@ -293,4 +293,106 @@ RSpec.describe "Books tell the truth", type: :request do
       expect(response).to have_http_status(:created), response.body
     end
   end
+
+  # One trading day with every kind of money event, then the books read as an accountant would: the trial balance
+  # balances, and each account holds what its own ledger (cash, customers, suppliers, stock, payroll) says.
+  describe "a day of mixed events" do
+    it "balances, and every account holds what an accountant would expect" do
+      api_patch "/api/v1/settings", { values: { "modules.canteen" => true, "charges.service_charge.mode" => "fixed", "charges.service_charge.value" => 50,
+                                                "charges.service_charge.order_types" => %w[takeaway] } }, headers: headers
+      expect(response).to have_http_status(:ok), response.body
+      get "/api/v1/payment_accounts", headers: headers
+      bank = json[:data].find { |a| a[:name] == "Bank" }[:id]
+      api_post "/api/v1/payment_accounts/#{bank}/adjust", { kind: "deposit", amount_minor: 5_000_000, note: "Owner's capital" }, headers: headers
+      expect(response).to have_http_status(:ok), response.body
+
+      # 1. A taxed takeaway with a Rs 50 service charge and a Rs 100 tip, in cash: 450 + 72 tax + 50 + 100 = Rs 672.
+      sale = sell!(m[:burger], tip: 10_000)
+      expect(sale).to include(total_minor: 67_200, tax_minor: 7_200, service_charge_minor: 5_000, tip_minor: 10_000)
+
+      # 2. A chai on account (Rs 92.80), Rs 20 of it refunded to the account.
+      api_post "/api/v1/customers", { name: "Rao Bilal", phone: "03491234567" }, headers: headers
+      rao = json[:id]
+      api_post "/api/v1/orders", { order_type: "walk_in", customer_id: rao, lines: [ { product_id: m[:chai].id } ], place: true }, headers: headers
+      chai = json
+      api_post "/api/v1/orders/#{chai[:id]}/payments", { payments: [ { method_code: "khata", amount_minor: 9_280 } ] }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      api_post "/api/v1/orders/#{chai[:id]}/refunds", { amount_minor: 2_000, method_code: "khata", reason: "Short pour" }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+
+      # 3. A subsidised canteen meal: the Rs 522 burger at a Rs 200 worker price.
+      month = today.beginning_of_month
+      worker = within(biz) do
+        lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
+        Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: today, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
+        e = Employee.create!(name: "Akbar Ali", base_salary_minor: 3_000_000, pay_frequency: "monthly", joined_on: Date.new(2026, 1, 1), shares_tips: true)
+        (month..month.end_of_month).each { |d| Attendance.create!(employee_id: e.id, business_day: d, status: "present", source: "manual") }
+        e
+      end
+      api_post "/api/v1/canteen/claims", { employee_id: worker.id }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+
+      # 4. The month's payroll, paid from the bank: Rs 30,000 salary + Rs 100 tips - Rs 200 of meals = Rs 29,900.
+      api_post "/api/v1/payroll/runs", { month: month.strftime("%Y-%m") }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      expect(json[:payslips].sole).to include(base_minor: 3_000_000, tips_minor: 10_000, deductions_minor: 20_000, net_minor: 2_990_000)
+      api_post "/api/v1/payroll/runs/#{json[:id]}/pay", { method_code: "bank" }, headers: headers
+      expect(response).to have_http_status(:ok), response.body
+
+      # 5. A supplier taken on owing Rs 5,000 from before, and 6. a purchase return: 10 buns at Rs 20 and 10 at Rs 30
+      # (average Rs 25), then 4 sent back at the first receipt's Rs 20.
+      api_post "/api/v1/suppliers", { name: "Dawn Bread", opening_balance_minor: 500_000 }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      dawn = json[:id]
+      buns = within(biz) do
+        Unit.seed_defaults!
+        StockItem.create!(name: "Bun", sku: "BUN", base_unit: Unit.find_by!(code: "pcs"))
+      end
+      api_post "/api/v1/goods_receipts", { supplier_id: dawn, lines: [ { stock_item_id: buns.id, quantity: 10, unit_cost_minor: 2_000 } ] }, headers: headers
+      first = json[:id]
+      api_post "/api/v1/goods_receipts", { supplier_id: dawn, lines: [ { stock_item_id: buns.id, quantity: 10, unit_cost_minor: 3_000 } ] }, headers: headers
+      api_post "/api/v1/purchase_returns", { supplier_id: dawn, goods_receipt_id: first, reason: "Stale", settlement: "credit_note", lines: [ { stock_item_id: buns.id, quantity: 4 } ] }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+
+      # 7. Yesterday's sale, journaled before the split (all of its Rs 622 in Sales), refunded in full today.
+      sold_at = within(biz) { branch.business_day_end_at(today - 1) - 14.hours }
+      api_post "/api/v1/orders", { order_type: "takeaway", client_created_at: sold_at.iso8601, lines: [ { product_id: m[:burger].id } ], place: true }, headers: headers
+      old = json
+      api_post "/api/v1/orders/#{old[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 62_200, tendered_minor: 62_200, client_created_at: sold_at.iso8601 } ], tip_minor: 5_000 }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      journal_as_before_split!(old[:id])
+      api_post "/api/v1/orders/#{old[:id]}/refunds", { amount_minor: 62_200, method_code: "cash", reason: "Wrong order" }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+
+      get "/api/v1/finance/trial_balance?from=#{today - 7}&to=#{today}", headers: headers
+      expect(json[:balanced]).to be true
+      get "/api/v1/finance/balance_sheet", headers: headers
+      expect(json[:balanced]).to be true
+      expect(json[:current_earnings_minor]).to eq(96_276 + 5_000 - 2_000 - 3_000_000 - 32_200)
+
+      held = within(biz) do
+        bal = Finance::Statements.balances(as_of: today)
+        GlAccount.active.where(is_header: false).to_h { |a| [ a.payment_account_id ? a.name : a.code, bal[a.id] ] }.reject { |_, v| v.zero? }
+      end
+      expect(held).to eq(
+        "Cash" => 67_200,          # the till's sale; yesterday's sale came in and went back out
+        "Bank" => 2_010_000,       # Rs 50,000 put in, Rs 29,900 of salaries out
+        "1100" => 7_280,           # Rao owes Rs 72.80; the worker's Rs 200 was cleared by the payroll
+        "1200" => 40_000,          # 16 buns at the Rs 25 average
+        "2010" => 542_000,         # Rs 5,000 opening + Rs 500 received - Rs 80 returned
+        "2100" => 15_404,          # Rs 72 + Rs 10.04 (the chai's Rs 12.80 less the refund's share) + Rs 72 on the meal
+        "3010" => 4_500_000,       # Rs 50,000 put in, less the supplier's opening balance
+        "4000" => 96_276,          # Rs 450 + Rs 62.76 + Rs 450 on the meal; the old sale in and back out
+        "4010" => 5_000,           # the service charge
+        "5000" => 2_000,           # the buns went back at Rs 20 against the Rs 25 they were carried at
+        "5110" => 3_000_000,       # gross salary: Rs 29,900 paid, Rs 200 of meals cleared, Rs 100 of tips out of Tips Payable
+        "5170" => 32_200           # the company's share of the meal
+      )
+      within(biz) do
+        expect(held["1100"]).to eq(Customer.sum(:balance_minor))
+        expect(held["1200"]).to eq(StockLevel.sum(:value_minor))
+        expect(held["2010"]).to eq(Supplier.sum(:balance_minor))
+      end
+    end
+  end
 end
