@@ -2,7 +2,8 @@ require "rails_helper"
 
 # The one revenue rule across every report (final round of 6 Nov 2026: reports#0-#4, #6, #8, #9, B5, B13, B14). One
 # business day: a paid order, a part-refunded one, a fully refunded one, a reopened one whose excess was refunded, a
-# staff meal and a khata sale, then an expense, a drawer payout, a count that finds buns missing and a drawer counted
+# staff meal, a khata sale and an order whose part payment went back while it was open before it was paid in full,
+# then an expense, a drawer payout, a count that finds buns missing and a drawer counted
 # short at the close. Every report and
 # the profit and loss say the same revenue and tax, the tax is the Tax Payable movement, and the profit and loss's net
 # is the balance sheet's current earnings. A refund the next day, after the day was closed, leaves the closed day as
@@ -118,6 +119,11 @@ RSpec.describe "The one revenue rule", type: :request do
     api_post "/api/v1/customers", { name: "Ali Raza", phone: "+923001112233" }, headers: h
     expect(response).to have_http_status(:created), response.body
     pay!(order!([ { product_id: m[:burger].id } ], customer_id: json[:id]), "khata") # Rs 522 on account
+    back = order!([ { product_id: m[:burger].id } ])
+    api_post "/api/v1/orders/#{back[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: 20_000 } ] }, headers: h
+    expect(response).to have_http_status(:created), response.body
+    refund!(back, 20_000)                                               # a part payment given back while it was open,
+    pay!(back)                                                          # then the Rs 522 paid in full: Rs 522 stays
 
     utilities = within(biz) { ExpenseCategory.find_by!(name: "Utilities") }
     api_post "/api/v1/expenses", { category_id: utilities.id, amount_minor: 5_000, method_code: "cash", paid_to: "K-Electric" }, headers: h
@@ -126,39 +132,40 @@ RSpec.describe "The one revenue rule", type: :request do
     expect(response).to have_http_status(:created), response.body
     within(biz) do
       count = Stock::Posting.create!({ kind: "count", from_section_id: StockSection.default_for(branch).id }, lines: [ { stock_item_id: bun.id, counted_qty: 90 } ], actor: owner, branch: branch)
-      Stock::Posting.post!(count, actor: owner) # 95 expected after five burgers: five buns short
+      Stock::Posting.post!(count, actor: owner) # 94 expected after six burgers: four buns short
     end
     expected = within(biz) { Shift.find(shift[:id]).expected_cash }
     api_post "/api/v1/shifts/#{shift[:id]}/close", { counted_cash_minor: expected - 1_000 }, headers: h # the drawer counts Rs 10 short
     expect(response).to have_http_status(:ok), response.body
 
-    # Rs 522 + Rs 422 + 0 + Rs 522 + Rs 522; tax Rs 72 on each, less Rs 13.79 for the Rs 100 refund.
+    # Rs 522 + Rs 422 + 0 + Rs 522 + Rs 522 + Rs 522; tax Rs 72 on each, less Rs 13.79 for the Rs 100 refund. Money
+    # handed back on an open order (the reopened one's excess, the returned part payment) is no refund of the sale.
     f = figures(day)
-    expect(f[:revenue].values.uniq).to eq([ 198_800 ]), f[:revenue].inspect
-    expect(f[:tax].values.uniq).to eq([ 27_421 ]), f[:tax].inspect
-    expect(books(day)).to include(tax: 27_421, tips: 0)
-    expect(f[:income].uniq).to eq([ 198_800 - 27_421 ])
-    expect(f[:overview]).to include(orders: 5, refunds_minor: 19_280)
+    expect(f[:revenue].values.uniq).to eq([ 251_000 ]), f[:revenue].inspect
+    expect(f[:tax].values.uniq).to eq([ 34_621 ]), f[:tax].inspect
+    expect(books(day)).to include(tax: 34_621, tips: 0)
+    expect(f[:income].uniq).to eq([ 251_000 - 34_621 ])
+    expect(f[:overview]).to include(orders: 6, refunds_minor: 19_280)
 
     pl = f[:pl]
-    expect(pl).to include(cost_of_goods_minor: 10_000, gross_profit_minor: 171_379 - 10_000)
+    expect(pl).to include(cost_of_goods_minor: 12_000, gross_profit_minor: 216_379 - 12_000)
     # The payout is an expense of its own (Petty cash); the shortage at the count is only in the journal.
-    expect(pl[:operating]).to include(expenses_minor: 8_000, stock_differences_minor: 10_000, other_minor: 1_000)
+    expect(pl[:operating]).to include(expenses_minor: 8_000, stock_differences_minor: 8_000, other_minor: 1_000)
     expect(pl[:operating][:other]).to eq([ { code: "5195", name: "Cash Over and Short", kind: "expense", amount_minor: 1_000 } ])
-    expect(pl[:net_profit_minor]).to eq(171_379 - 10_000 - 8_000 - 10_000 - 1_000)
+    expect(pl[:net_profit_minor]).to eq(216_379 - 12_000 - 8_000 - 8_000 - 1_000)
     expect(pl[:net_profit_minor]).to eq(books(day)[:earnings])
     expect(pl[:net_profit_minor]).to eq(within(biz) { Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor] })
 
     within(biz) do
       sales = Reports::Sales.new(branch: branch, from: day, to: day)
       # A staff meal is no sale: not in items, categories, top sellers or the per-order commission.
-      expect(sales.items.map { |r| [ r[:name], r[:quantity] ] }).to eq([ [ "Zinger Burger", 4.0 ] ])
-      expect(sales.categories.map { |r| [ r[:name], r[:quantity] ] }).to eq([ [ "Mains", 4.0 ] ])
-      expect(Reports::Dashboard.spec(branch, period: "today")[:top_selling].map { |r| r[:quantity] }).to eq([ 4.0 ])
-      expect(Reports::Commissions.run(branch: branch, from: day, to: day)[:rows].find { |r| r[:applies_to] == "cashier" }).to include(orders: 4, commission_minor: 4_000)
+      expect(sales.items.map { |r| [ r[:name], r[:quantity] ] }).to eq([ [ "Zinger Burger", 5.0 ] ])
+      expect(sales.categories.map { |r| [ r[:name], r[:quantity] ] }).to eq([ [ "Mains", 5.0 ] ])
+      expect(Reports::Dashboard.spec(branch, period: "today")[:top_selling].map { |r| r[:quantity] }).to eq([ 5.0 ])
+      expect(Reports::Commissions.run(branch: branch, from: day, to: day)[:rows].find { |r| r[:applies_to] == "cashier" }).to include(orders: 5, commission_minor: 5_000)
       # Every sale at the hour it was paid, none at midnight for want of a paid_at.
-      expect(sales.by_hour.find { |r| r[:hour] == Time.current.in_time_zone(branch.time_zone).hour }[:orders]).to eq(5)
-      expect(Reports::Catalogue.sales_detail(branch: branch, from: day, to: day)[:totals]).to include(orders: 5, gross_minor: 218_080, refunds_minor: 19_280)
+      expect(sales.by_hour.find { |r| r[:hour] == Time.current.in_time_zone(branch.time_zone).hour }[:orders]).to eq(6)
+      expect(Reports::Catalogue.sales_detail(branch: branch, from: day, to: day)[:totals]).to include(orders: 6, gross_minor: 270_280, refunds_minor: 19_280)
     end
 
     api_post "/api/v1/day_close/lock", { business_day: day.to_s, force: true }, headers: h
@@ -170,16 +177,16 @@ RSpec.describe "The one revenue rule", type: :request do
       refund!({ id: first.id }, 5_000) # on the next day, the closed day stays as it was
       expect(within(biz) { Refund.order(:created_at).last.business_day }).to eq(day + 1)
       again = figures(day)
-      expect(again[:revenue].values.uniq).to eq([ 198_800 ])
-      expect(again[:tax].values.uniq).to eq([ 27_421 ])
-      expect(closed).to include("net_sales_minor" => 198_800, "tax_minor" => 27_421)
+      expect(again[:revenue].values.uniq).to eq([ 251_000 ])
+      expect(again[:tax].values.uniq).to eq([ 34_621 ])
+      expect(closed).to include("net_sales_minor" => 251_000, "tax_minor" => 34_621)
       after = figures(day + 1)
       expect(after[:revenue].values.uniq).to eq([ -5_000 ]), after[:revenue].inspect
       expect(after[:tax].values.uniq).to eq([ -690 ]) # Rs 6.90 of the Rs 50 was tax
       expect(books(day + 1)).to include(tax: -690)
       expect(after[:pl][:net_profit_minor]).to eq(books(day + 1)[:earnings])
       both = figures(day, day + 1)
-      expect(both[:revenue].values.uniq).to eq([ 193_800 ])
+      expect(both[:revenue].values.uniq).to eq([ 246_000 ])
       expect(both[:pl][:net_profit_minor]).to eq(within(biz) { Finance::Statements.balance_sheet(as_of: day + 1)[:current_earnings_minor] })
     end
   end

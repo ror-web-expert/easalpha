@@ -6,8 +6,9 @@ module Reports
   #   (status refunded), which was a sale on its day. A staff meal charges nothing and is no sale.
   # - A refund counts on its own business day, the day the money went back, which is the day the journal books it. A
   #   later refund never rewrites an earlier or locked day; over days that hold both, a fully refunded order is zero.
-  # - The part of a refund that only gives back what a reopened order was paid above its new total is no revenue: the
-  #   total already went down when the order was edited.
+  # - Money given back while an order was open is no refund of the sale: what a reopened order was paid above its new
+  #   total (the total already went down when it was edited), or a part payment returned before the order was paid in
+  #   full. What an order keeps never counts above its total, so only refunds that take it below that lower revenue.
   # - A refund takes back tax, service charge, delivery charge, tips and rounding in the shares Finance::Journal splits
   #   it into, so the tax here is the Tax Payable movement and the income the sales accounts' movement.
   # Two cases the journal books on other terms, which the profit and loss lists among the other entries in the books:
