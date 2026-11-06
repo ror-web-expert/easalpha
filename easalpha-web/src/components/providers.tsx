@@ -5,7 +5,7 @@ import { useAuthStore } from "@/store/auth";
 import { useDeviceStore } from "@/store/device";
 import { useThemeStore } from "@/store/theme";
 import { Toaster } from "@/components/ui/toast";
-import { ApiError } from "@/lib/api";
+import { ApiError, shareSessionAcrossTabs } from "@/lib/api";
 import { UpdateNotice } from "@/components/update-notice";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -25,6 +25,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     useAuthStore.persist.rehydrate();
     useDeviceStore.persist.rehydrate();
     useThemeStore.getState().init();
+    // A refresh in another tab spends the token this tab holds: follow the pair it saves (review R28).
+    return shareSessionAcrossTabs();
   }, []);
   return (
     <QueryClientProvider client={client}>

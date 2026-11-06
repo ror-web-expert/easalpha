@@ -1,11 +1,12 @@
 module Auth
   class SessionIssuer
-    # Builds the response body for any successful login: tokens plus the context the client needs.
-    def self.issue(user:, membership:, app:, device: nil, branch: nil, request: nil)
+    # Builds the response body for any successful login: tokens plus the context the client needs. `refresh_token` is a
+    # raw token already issued (POST /auth/refresh hands back the rotation's successor); otherwise a new one is issued.
+    def self.issue(user:, membership:, app:, device: nil, branch: nil, request: nil, refresh_token: nil)
       business = membership.business
       branch ||= device&.branch || business.main_branch
       access = TokenService.access_token(user: user, membership: membership, app: app, device: device, branch: branch)
-      refresh = RefreshToken.issue!(user: user, membership: membership, device: device, app: app, user_agent: request&.user_agent, ip: request&.remote_ip)
+      refresh = refresh_token || RefreshToken.issue!(user: user, membership: membership, device: device, app: app, user_agent: request&.user_agent, ip: request&.remote_ip)
       user.update_column(:last_login_at, Time.current)
       {
         access_token: access,

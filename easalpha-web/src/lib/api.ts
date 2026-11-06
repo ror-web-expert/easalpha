@@ -62,25 +62,75 @@ function principalFor(area: AuthArea): Principal {
   return { token: null, refresh: null, branchId: null, kind: "none" };
 }
 
-let refreshing: Promise<boolean> | null = null;
+// ---- Token refresh, one session across tabs (review R28) ----
+// A refresh token is spent when used, and every tab of the till (or of the admin) starts from the same saved session.
+// So a tab takes the new pair another tab saved (the storage event), and refreshes with the newest pair saved for the
+// person signed in; two tabs refreshing at the same instant both get the same pair back (the API's replay window).
+type SessionArea = "admin" | "pos";
+const sessionStore = (kind: SessionArea) => (kind === "admin" ? useAuthStore : useDeviceStore);
+const storageKey = (kind: SessionArea) => sessionStore(kind).persist.getOptions().name;
 
-async function refreshSession(kind: AuthArea, refreshToken: string): Promise<boolean> {
-  if (refreshing) return refreshing;
-  refreshing = (async () => {
+/** The session this browser has saved for the area: whichever tab changed it last wrote it. */
+function savedSession(kind: SessionArea): Session | null {
+  try {
+    const raw = localStorage.getItem(storageKey(kind) ?? "");
+    return raw ? ((JSON.parse(raw) as { state?: { session?: Session | null } }).state?.session ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A refreshed session into this tab. The admin keeps the branch picked in the top bar (the refresh answers with the main branch). */
+function applySession(kind: SessionArea, s: Session) {
+  if (kind === "admin") useAuthStore.setState((st) => ({ session: s, branchId: st.branchId ?? s.branch?.id ?? null }));
+  else useDeviceStore.getState().setSession(s);
+}
+
+/**
+ * Takes the pair another tab saved when it is for the person signed in here (same membership and app) and newer than
+ * ours. A tab that locked or signed out, or another cashier's sign-in, changes nothing here. True when ours changed.
+ */
+export function adoptSavedSession(kind: SessionArea): boolean {
+  const mine = sessionStore(kind).getState().session;
+  const saved = savedSession(kind);
+  if (!mine || !saved?.refresh_token || saved.membership?.id !== mine.membership?.id || saved.app !== mine.app || saved.refresh_token === mine.refresh_token) return false;
+  applySession(kind, saved);
+  return true;
+}
+
+/** Follows the pair other tabs of this browser save. Mounted once, by Providers; returns the unsubscribe. */
+export function shareSessionAcrossTabs(): () => void {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (e: StorageEvent) => {
+    for (const kind of ["admin", "pos"] as const) if (e.key && e.key === storageKey(kind)) adoptSavedSession(kind);
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
+
+const refreshing: Partial<Record<SessionArea, Promise<boolean>>> = {};
+
+async function refreshSession(kind: SessionArea): Promise<boolean> {
+  const running = refreshing[kind];
+  if (running) return running;
+  const run = (async () => {
     try {
-      const res = await fetch(`${API_URL}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) });
+      // Another tab may have spent the token this one holds: refresh with the newest pair saved for this person.
+      adoptSavedSession(kind);
+      const token = sessionStore(kind).getState().session?.refresh_token;
+      if (!token) return false;
+      const res = await fetch(`${API_URL}/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: token }) });
       if (!res.ok) return false;
-      const data = (await res.json()) as Session;
-      if (kind === "admin") useAuthStore.getState().setSession(data);
-      else useDeviceStore.getState().setSession(data);
+      applySession(kind, (await res.json()) as Session);
       return true;
     } catch {
       return false;
     } finally {
-      refreshing = null;
+      delete refreshing[kind];
     }
   })();
-  return refreshing;
+  refreshing[kind] = run;
+  return run;
 }
 
 function buildQuery(q?: RequestOptions["query"]) {
@@ -125,7 +175,7 @@ export async function api<T = unknown>(path: string, opts: RequestOptions = {}):
     if (res.ok) return data as T;
     const err = (data as { error?: { code?: string; message?: string; details?: unknown } } | null)?.error;
     if (res.status === 401 && retry && p.refresh && (p.kind === "admin" || p.kind === "pos")) {
-      const ok = await refreshSession(p.kind, p.refresh);
+      const ok = await refreshSession(p.kind);
       if (ok) return attempt(false);
       if (p.kind === "admin") useAuthStore.getState().clear();
       else useDeviceStore.getState().lock();

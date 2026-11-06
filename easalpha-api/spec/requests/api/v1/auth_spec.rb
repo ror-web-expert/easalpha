@@ -62,12 +62,13 @@ RSpec.describe "Auth", type: :request do
       expect(json[:error][:code]).to eq("login.invalid")
     end
 
-    it "refreshes and rotates the refresh token, then rejects the old one" do
+    it "refreshes and rotates the refresh token, then rejects the old one once the replay window has passed" do
       api_post "/api/v1/auth/login", { email: "login@example.com", password: "password123" }
       old = json[:refresh_token]
       api_post "/api/v1/auth/refresh", { refresh_token: old }
       expect(response).to have_http_status(:ok)
       expect(json[:refresh_token]).not_to eq(old)
+      travel 31.seconds
       api_post "/api/v1/auth/refresh", { refresh_token: old }
       expect(response).to have_http_status(:unauthorized)
     end
@@ -88,6 +89,71 @@ RSpec.describe "Auth", type: :request do
       api_post "/api/v1/auth/login", { email: "login@example.com", password: "password123", app: "admin" }
       expect(response).to have_http_status(:forbidden)
       expect(json[:error][:code]).to eq("app.denied")
+    end
+  end
+
+  # Review R28: two tabs of one till share the session. Both refresh when the access token runs out; the second one
+  # presents the token the first has just spent and used to get a 401, which signed that tab out.
+  describe "POST /api/v1/auth/refresh replay window" do
+    let!(:owner) { signup_business(email: "tabs@example.com") }
+    let(:spent) do
+      api_post "/api/v1/auth/login", { email: "tabs@example.com", password: "password123" }
+      json[:refresh_token]
+    end
+
+    def refresh(token)
+      api_post "/api/v1/auth/refresh", { refresh_token: token }
+      response.status == 200 ? json : nil
+    end
+
+    it "answers the spent token within 30 seconds with the same new refresh token, issuing nothing more" do
+      first = refresh(spent)
+      expect(first[:refresh_token]).to be_present
+      expect { travel(29.seconds) { expect(refresh(spent)).to include(refresh_token: first[:refresh_token], access_token: be_present) } }.not_to change(RefreshToken, :count)
+      expect(JWT.decode(json[:access_token], Rails.application.secret_key_base, true, algorithm: "HS256").first).to include("mid" => owner.id, "app" => "admin")
+      expect(refresh(first[:refresh_token])[:refresh_token]).not_to eq(first[:refresh_token]) # the successor rotates as usual
+    end
+
+    it "refuses the spent token after 30 seconds" do
+      refresh(spent)
+      travel 31.seconds
+      expect(refresh(spent)).to be_nil
+      expect(json[:error][:code]).to eq("refresh.invalid")
+    end
+
+    it "refuses it once the successor is spent" do
+      successor = refresh(spent)[:refresh_token]
+      refresh(successor)
+      expect(refresh(spent)).to be_nil
+    end
+
+    it "refuses it once the successor is signed out" do
+      successor = refresh(spent)[:refresh_token]
+      api_post "/api/v1/auth/logout", { refresh_token: successor }
+      expect(refresh(spent)).to be_nil
+    end
+
+    it "never revives a token signed out with logout" do
+      token = spent
+      api_post "/api/v1/auth/logout", { refresh_token: token }
+      expect(refresh(token)).to be_nil
+    end
+
+    it "refuses a replay for a member deactivated in the meantime" do
+      staff = within(owner.business) { Membership.create!(user: create(:user), role: Role.find_by!(system_key: "cashier"), status: "active") }
+      raw = within(owner.business) { RefreshToken.issue!(user: staff.user, membership: staff, app: "pos") }
+      expect(refresh(raw)).to be_present
+      within(owner.business) { staff.deactivate! }
+      expect(refresh(raw)).to be_nil
+    end
+
+    it "keeps a refused refresh from spending the token" do
+      staff = within(owner.business) { Membership.create!(user: create(:user), role: Role.find_by!(system_key: "cashier"), status: "active") }
+      raw = within(owner.business) { RefreshToken.issue!(user: staff.user, membership: staff, app: "pos") }
+      within(owner.business) { staff.update_columns(status: "invited") } # not active, tokens left alone
+      expect(refresh(raw)).to be_nil
+      expect(json[:error][:code]).to eq("session.invalid")
+      expect(RefreshToken.find_by(token_digest: RefreshToken.digest(raw)).revoked_at).to be_nil
     end
   end
 
