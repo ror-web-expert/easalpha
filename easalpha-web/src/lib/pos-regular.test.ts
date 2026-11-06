@@ -47,6 +47,16 @@ describe("regular discount on the till", () => {
     expect(online.discounts?.map((d) => d.id)).toEqual(["v1"]);
   });
 
+  // Leftovers of 7 Nov 2026 (L3, item 9): a manager took the regular discount off the order on the server, which
+  // keeps it off (regular_discount_removed_at); the till put its own back when the order was priced offline.
+  it("adds none to an order whose regular discount a manager took off, and takes the till's own off it", () => {
+    const removed = cart({ regular_discount_removed_at: "2026-10-18T01:00:00+05:00" });
+    expect(withRegularDiscount(removed, ctx())).toBe(removed);
+    expect(payableTotals(withRegularDiscount(removed, ctx()), { settings, cash: false }).total_minor).toBe(411_400);
+    const mine = withRegularDiscount(cart(), ctx());
+    expect(withRegularDiscount({ ...mine, regular_discount_removed_at: "2026-10-18T01:00:00+05:00" }, ctx()).discounts).toEqual([]);
+  });
+
   it("gives nothing to walk-in, new, blocked or lapsed customers, or when the tiers are switched off", () => {
     const none = (extra: object) => regularDiscountFor({ lines: cart().lines, orderType: "dine_in", tiers: [tier()], settings, at: now, customer: { id: "sadia", is_walk_in: false, last_order_at: yesterday }, ...extra });
     expect(none({})?.amount_minor).toBe(34_000);

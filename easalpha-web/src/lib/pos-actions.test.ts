@@ -884,6 +884,23 @@ describe("an offline khata sale for a regular customer", () => {
     expect(byCash.receipt.khata).toBeNull();
   });
 
+  // Leftovers of 7 Nov 2026 (L3, item 9): the server keeps a regular discount a manager took off off the order
+  // (regular_discount_removed_at), the till's copy did not know it, and offline the till priced the order 10% under.
+  it("keeps a regular discount a manager took off off the order offline, through an edit", async () => {
+    h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
+    const saved = toCachedCustomer({ id: "sadia", name: "Sadia Akhtar", phone: "+923001807130", khata_no: "32", status: "active", is_walk_in: false, balance_minor: 0, credit_limit_minor: null, orders_count: 4, last_order_at: yesterday } as never);
+    useCustomerStore.setState({ list: [saved], byId: new Map([["sadia", saved]]), loaded: true });
+    server = fresh([["Karahi", 100000]], { status: "served" });
+    await storeServerOrder({ ...asOrder(server), customer_id: "sadia", customer_name: "Sadia Akhtar", regular_discount_removed_at: "2026-10-13T10:30:00Z" } as Order);
+    h.online = false;
+    const open = localToCart(h.rows.get(server.id) as LocalOrder);
+    expect(open.regular_discount_removed_at).toBe("2026-10-13T10:30:00Z");
+    expect(payableTotals(regularPricing(open), { settings: h.settings, cash: false }).total_minor).toBe(100000); // the server's price
+    const { local } = await saveOrder({ ...open, lines: [...open.lines, openLine("Naan", 30000)] });
+    expect(local).toMatchObject({ total_minor: 130000, discount_minor: 0, regular_discount_removed_at: "2026-10-13T10:30:00Z" });
+    expect(localToCart(h.rows.get(server.id) as LocalOrder).regular_discount_removed_at).toBe("2026-10-13T10:30:00Z");
+  });
+
   it("leaves the discount to the server while online", () => {
     h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
     expect(regularPricing({ ...cart(), customer: { ...cart().customer!, last_order_at: yesterday } }).discounts ?? []).toEqual([]);

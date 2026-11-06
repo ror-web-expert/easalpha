@@ -122,7 +122,7 @@ export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrd
     paid_minor: 0, payments: [], receipt_number: null, void_reason: null, membership_id: membershipId, cashier_name: cashier, business_day: businessDayFor(branch?.day_end_time),
     client_created_at: cart.client_created_at, created_at: now, updated_at: now, local_only: true, open: OPEN_STATUSES.includes(status as never) ? 1 : 0,
     delivery_charge_minor: t.delivery_charge_minor, address_id: cart.address_id ?? null, address_text: cart.address_text ?? null, zone_name: cart.zone_name ?? null,
-    ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null,
+    ...chargeFields(cart), tax_choice: cart.tax_choice ?? null, tax_rate_id: cart.tax_rate_id ?? null, regular_discount_removed_at: cart.regular_discount_removed_at ?? null,
     // Kept so the order opens again with its discount lines (the till's own regular discount among them) and not twice.
     order_discounts: cart.discounts?.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })),
     ...extra,
@@ -164,6 +164,8 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     // The Orders cards read "? items" for every order known only from a summary row (roles QA, 6 Nov 2026).
     item_count: o.item_count ?? (full ? lines.filter((l) => l.status !== "cancelled").length : prev?.item_count) ?? null,
     reopened_at: o.reopened_at ?? null, reopen_count: o.reopen_count ?? 0,
+    // Only the full order says it; a summary row keeps what the till knew (L3, item 9).
+    regular_discount_removed_at: (full ? o.regular_discount_removed_at : prev?.regular_discount_removed_at) ?? null,
   };
 }
 
@@ -213,6 +215,7 @@ export function localToCart(o: LocalOrder): Cart {
     tax_choice: o.tax_choice ?? undefined, tax_rate_id: o.tax_rate_id ?? undefined,
     // As reopenFields reads the server's order: the till's copy opens reopened too (L3, 7 Nov 2026).
     reopened: !!o.reopened_at && OPEN_STATUSES.includes(o.status as never), reopen_count: o.reopen_count ?? 0, payment_method_summary: o.payment_method_summary ?? null,
+    regular_discount_removed_at: o.regular_discount_removed_at ?? null,
   };
 }
 
