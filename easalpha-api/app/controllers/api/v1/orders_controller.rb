@@ -23,10 +23,12 @@ module Api
         scope = scope.where(taken_by_membership_id: current_membership.id) if only_own?
         if params[:q].present?
           q = params[:q].to_s.strip
-          # A receipt number (yymmdd-BRANCH-serial, the barcode on the receipt) matches exactly whatever day it is from.
+          # A receipt number (yymmdd-BRANCH-serial, the barcode on the receipt) matches exactly, whatever day it is from:
+          # an equality, so a _ or % in it is a character, not a wildcard (R14). The branch part may be any code a
+          # branch was given before codes were limited to A-Z and 0-9 (R15), a space included.
           scope = if q.match?(/\A#?\d+\z/) then scope.where(serial: q.delete("#").to_i)
-          elsif q.match?(/\A\d{6}-\S+-\d+\z/) then scope.unscope(where: :business_day).where("orders.receipt_number ILIKE ?", q)
-          else scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: "%#{q}%")
+          elsif q.match?(/\A\d{6}-.+-\d+\z/) then scope.unscope(where: :business_day).where("lower(orders.receipt_number) = lower(?)", q)
+          else scope.where("orders.till_serial ILIKE :q OR orders.guest_name ILIKE :q OR orders.notes ILIKE :q", q: ApplicationRecord.contains_pattern(q))
           end
         end
         if params[:sort].present? && params[:sort] != "newest"

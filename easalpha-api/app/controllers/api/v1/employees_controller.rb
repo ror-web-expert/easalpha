@@ -10,7 +10,7 @@ module Api
       def index
         scope = Employee.active.includes(:department, employee_salary_components: :salary_component).order(:name)
         scope = scope.where(department_id: params[:department_id]) if params[:department_id].present?
-        scope = scope.where("name ILIKE :q OR cnic ILIKE :q OR designation ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("name ILIKE :q OR cnic ILIKE :q OR designation ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
         render json: { data: scope.map { |e| PayrollSerializers.employee(e) } }
       end
 

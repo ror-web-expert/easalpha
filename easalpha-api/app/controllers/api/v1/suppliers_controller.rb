@@ -17,7 +17,7 @@ module Api
       # GET /suppliers?q=&with_balance=true
       def index
         scope = Supplier.active.order(:name)
-        scope = scope.where("name ILIKE :q OR phone ILIKE :q OR contact_name ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("name ILIKE :q OR phone ILIKE :q OR contact_name ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
         scope = scope.where("balance_minor <> 0") if params[:with_balance] == "true"
         rows, cursor = paginate(scope)
         counts = SupplierSerializers.supplier_counts(rows.map(&:id))

@@ -10,7 +10,7 @@ module Api
       # GET /stock_items?q=&category=&low=true&packaging=true
       def index
         scope = StockItem.active.includes(:base_unit, :purchase_unit, :stock_levels).order(:name)
-        scope = scope.where("stock_items.name ILIKE :q OR stock_items.sku ILIKE :q OR stock_items.barcode = :exact", q: "%#{params[:q]}%", exact: params[:q]) if params[:q].present?
+        scope = scope.where("stock_items.name ILIKE :q OR stock_items.sku ILIKE :q OR stock_items.barcode = :exact", q: ApplicationRecord.contains_pattern(params[:q]), exact: params[:q]) if params[:q].present?
         scope = scope.where(category: params[:category]) if params[:category].present?
         scope = scope.where(is_packaging: true) if params[:packaging] == "true"
         rows, cursor = paginate(scope)

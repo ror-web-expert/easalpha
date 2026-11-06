@@ -87,7 +87,7 @@ module Api
         scope = scope.where(payment_method_id: PaymentMethod.where(code: params[:method_code]).select(:id)) if params[:method_code].present?
         scope = scope.where(source: params[:source]) if params[:source].present?
         scope = scope.live unless params[:include_voided] == "true"
-        scope = scope.where("note ILIKE :q OR paid_to ILIKE :q", q: "%#{params[:q]}%") if params[:q].present?
+        scope = scope.where("note ILIKE :q OR paid_to ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q])) if params[:q].present?
         scope
       end
     end

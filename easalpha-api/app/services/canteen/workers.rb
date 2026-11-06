@@ -39,7 +39,7 @@ module Canteen
         tail = digits.sub(/\A0/, "")
         scope.where("employees.phone LIKE :p OR replace(employees.cnic, '-', '') LIKE :p", p: "%#{tail}%")
       else
-        scope.where("employees.name ILIKE ?", "%#{q}%")
+        scope.where("employees.name ILIKE ?", ApplicationRecord.contains_pattern(q))
       end.order(:name).limit(limit)
     end
   end

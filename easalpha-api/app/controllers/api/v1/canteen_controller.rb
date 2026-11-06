@@ -41,7 +41,7 @@ module Api
         scope = MealClaim.includes(:meal_session, :employee, meal_plan_item: :product).where(branch_id: current_branch.id, plan_date: date)
         scope = scope.where(meal_session_id: params[:session_id]) if params[:session_id].present?
         scope = scope.where(status: params[:status]) if params[:status].present?
-        scope = scope.where("meal_claims.token_label ILIKE :q", q: "%#{params[:q].to_s.strip}%") if params[:q].present?
+        scope = scope.where("meal_claims.token_label ILIKE :q", q: ApplicationRecord.contains_pattern(params[:q].to_s.strip)) if params[:q].present?
         rows = scope.order(scanned_at: :desc).limit((params[:limit].presence || 500).to_i.clamp(1, 2000))
         render json: { date: date, data: rows.map { |c| CanteenSerializers.claim(c) } }
       end
