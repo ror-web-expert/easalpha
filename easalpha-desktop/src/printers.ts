@@ -33,17 +33,18 @@ function validLines(lines: unknown): lines is PrintLine[] {
 }
 
 export async function printToPrinter(printer: PrinterConfig, lines: PrintLine[]): Promise<void> {
+  const options = { barcode: printer.barcode };
   switch (printer.kind) {
     case "network": {
-      await sendToNetworkPrinter(printer.host ?? "", printer.port ?? 9100, encodeLines(lines, printer.width));
+      await sendToNetworkPrinter(printer.host ?? "", printer.port ?? 9100, encodeLines(lines, printer.width, options));
       return;
     }
     case "usb": {
-      await sendToUsbPrinter(printer.vendorId, printer.productId, encodeLines(lines, printer.width));
+      await sendToUsbPrinter(printer.vendorId, printer.productId, encodeLines(lines, printer.width, options));
       return;
     }
     case "system": {
-      await sendToSystemPrinter(printer.systemName, lines, printer.width);
+      await sendToSystemPrinter(printer.systemName, lines, printer.width, options);
       return;
     }
   }
@@ -76,7 +77,7 @@ export function testPrintLines(printer: PrinterConfig, extra: string): PrintLine
     { divider: true },
     { text: `Printer: ${printer.name}` },
     { text: `Kind: ${printer.kind}   Width: ${printer.width} mm` },
-    { text: `Role: ${printer.role ?? "none"}` },
+    { text: `Role: ${printer.role ?? "none"}   Barcode: ${printer.barcode ?? "code128"}` },
     { text: extra },
     { divider: true },
     { text: "Left" },
@@ -85,6 +86,8 @@ export function testPrintLines(printer: PrinterConfig, extra: string): PrintLine
     { text: "Bold", bold: true },
     { text: "Large", size: 2 },
     { qr: "https://easalpha.com" },
+    // A receipt-number-shaped value: a scan should read exactly this, with no "{B" in front, else switch the mode.
+    { barcode: "261106-TEST-1" },
     { text: "Non-ASCII prints as ? for now: ?????", align: "center" },
     { feed: 3 },
     { cut: true },

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CMD, barcode, charsPerLine, divider, encodeLines, encodeText, feedLines, qrCode, renderPlainText } from "./escpos";
+import { CMD, barcode, barcodeModuleWidth, charsPerLine, code128Modules, divider, encodeLines, encodeText, feedLines, qrCode, renderPlainText } from "./escpos";
 
 const hex = (b: Buffer) => b.toString("hex");
 const includes = (hay: Buffer, needle: Buffer) => hay.indexOf(needle) !== -1;
@@ -142,8 +142,57 @@ test("barcode is GS k 73 CODE128 in code set B with HRI below, centred, and skip
   const payload = Buffer.from("{B261030-MAIN-42", "ascii");
   assert.ok(includes(out, Buffer.concat([Buffer.from([0x1d, 0x6b, 0x49, payload.length]), payload])));
   assert.ok(out.indexOf(CMD.alignCenter) < out.indexOf(payload));
-  assert.equal(barcode("").length, 0);
-  assert.equal(barcode("چائے").length, 0);
+  assert.equal(barcode("", 80).length, 0);
+  assert.equal(barcode("چائے", 80).length, 0);
   assert.equal(encodeLines([{ barcode: "" }], 80).length, encodeLines([], 80).length);
   assert.deepEqual(renderPlainText([{ barcode: "261030-MAIN-42" }], 58), ["    [BARCODE] 261030-MAIN-42"]); // centred on 32 columns
+});
+
+test("barcode module width follows the paper: 2 dots when the symbol and quiet zones fit, else 1 dot with taller bars, else none", () => {
+  // Code set B: 11 modules a character plus start, check and stop; 10 modules of quiet zone each side.
+  assert.equal(code128Modules(14), 189);
+  assert.equal(barcodeModuleWidth(14, 80), 2); // (189 + 20) * 2 = 418 of 576 dots
+  assert.equal(barcodeModuleWidth(14, 58), 1); // 418 > 384; 209 fits
+  assert.equal(barcodeModuleWidth(21, 80), 2);
+  assert.equal(barcodeModuleWidth(22, 80), 1);
+  assert.equal(barcodeModuleWidth(47, 80), 1);
+  assert.equal(barcodeModuleWidth(48, 80), 0);
+  assert.equal(barcodeModuleWidth(12, 58), 2);
+  assert.equal(barcodeModuleWidth(13, 58), 1);
+  assert.equal(barcodeModuleWidth(29, 58), 1);
+  assert.equal(barcodeModuleWidth(30, 58), 0);
+  const narrow = barcode("261030-MAIN-42", 58);
+  assert.ok(includes(narrow, Buffer.from([0x1d, 0x77, 0x01]))); // GS w 1
+  assert.ok(includes(narrow, Buffer.from([0x1d, 0x68, 80]))); // taller bars for thin modules
+  assert.ok(!includes(narrow, Buffer.from([0x1d, 0x77, 0x02])));
+  const wide = barcode("261030-MAIN-42", 80);
+  assert.ok(includes(wide, Buffer.from([0x1d, 0x77, 0x02])) && includes(wide, Buffer.from([0x1d, 0x68, 64])));
+});
+
+test("a value too wide for the paper prints as a centred text line instead of a barcode the firmware would drop", () => {
+  const value = "261030-SOMELONGBRANCHNAME-000123"; // 32 characters: 11 * 34 + 13 + 20 = 407 modules, over 384 dots
+  assert.equal(value.length, 32);
+  assert.equal(barcode(value, 58).length, 0);
+  const out = encodeLines([{ barcode: value }], 58);
+  assert.ok(!includes(out, Buffer.from([0x1d, 0x6b, 0x49]))); // no GS k 73
+  assert.ok(includes(out, Buffer.concat([CMD.alignCenter, Buffer.from(value, "ascii"), CMD.lf])));
+  // The same value still fits 80 mm paper at 1-dot modules.
+  const wide = encodeLines([{ barcode: value }], 80);
+  assert.ok(includes(wide, Buffer.from([0x1d, 0x77, 0x01])));
+  assert.ok(includes(wide, Buffer.from("{B" + value, "ascii")));
+});
+
+test("barcode mode plain sends GS k 73 with the data alone (no {B prefix); mode off prints the number as text", () => {
+  const data = Buffer.from("261030-MAIN-42", "ascii");
+  for (const width of [58, 80] as const) {
+    const plain = encodeLines([{ barcode: "261030-MAIN-42" }], width, { barcode: "plain" });
+    assert.ok(includes(plain, Buffer.concat([Buffer.from([0x1d, 0x6b, 0x49, data.length]), data])));
+    assert.ok(!includes(plain, Buffer.from("{B", "ascii")));
+    assert.ok(includes(plain, Buffer.from([0x1d, 0x77, width === 80 ? 2 : 1]))); // still sized for the paper
+    const off = encodeLines([{ barcode: "261030-MAIN-42" }], width, { barcode: "off" });
+    assert.ok(!includes(off, Buffer.from([0x1d, 0x6b])));
+    assert.ok(includes(off, Buffer.concat([CMD.alignCenter, data, CMD.lf, CMD.alignLeft])));
+  }
+  // An empty or non-ASCII value prints nothing in any mode.
+  assert.equal(encodeLines([{ barcode: "چائے" }], 58, { barcode: "off" }).length, encodeLines([], 58).length);
 });
