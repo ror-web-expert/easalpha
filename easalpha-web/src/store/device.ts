@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { Branch, Business, Device, Session } from "@/lib/types";
 import { useCartStore } from "@/store/cart";
 import { clearRecentCustomers } from "@/lib/pos-customers";
+import { clearStashes } from "@/lib/session-stash";
 
 interface DeviceState {
   deviceToken: string | null;
@@ -36,9 +37,11 @@ export const useDeviceStore = create<DeviceState>()(
       hydrated: false,
       pair: ({ device_token, device, business, branch }) => set({ deviceToken: device_token, device, business, branch, session: null }),
       unpair: () => {
-        // The next pairing may be another business: the cart and the recent-customers list go with the token.
+        // The next pairing may be another business: the cart, the recent-customers list and the sessions kept for an
+        // offline unlock (lib/session-stash.ts) go with the token.
         useCartStore.getState().clear();
         clearRecentCustomers();
+        clearStashes();
         set({ deviceToken: null, device: null, business: null, branch: null, session: null });
       },
       setSession: (session) => {

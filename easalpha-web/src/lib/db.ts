@@ -81,6 +81,9 @@ export interface QueueItem {
   status: "pending" | "sending";
   /** When the push carrying this row started; a row still "sending" long after that never came back (recoverStuck). */
   sending_at?: number;
+  /** The sync key of the session that made the record, which signs it at every push (lib/sync-sign.ts). None on a
+   *  record queued before the signatures, or by a session without a key. */
+  sync_key_id?: string; sync_key?: string;
 }
 
 export interface AttentionItem {
@@ -89,6 +92,8 @@ export interface AttentionItem {
   blocked_by?: string;
   /** What a manager must approve for it (the server's details.permissions, after what the last Try again approved), with labels. */
   permissions?: string[]; permission_labels?: Record<string, string>;
+  /** The maker's sync key, kept so Try again is signed by them, never by whoever is signed in then. */
+  sync_key_id?: string; sync_key?: string;
 }
 
 export interface KV { key: string; value: unknown }

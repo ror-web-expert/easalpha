@@ -9,6 +9,8 @@ import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
 import { useCustomerStore } from "@/store/customers";
 import { OPEN_STATUSES, type SyncChanges, type SyncPushResponse, type SyncRecordType } from "@/lib/types";
+import { sessionSyncKey, signRecord, type SyncKey } from "@/lib/sync-sign";
+import { forgetStashes } from "@/lib/session-stash";
 
 let running = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -66,11 +68,43 @@ export async function refreshCounts() {
   } catch {}
 }
 
+// ---- Signed records (lib/sync-sign.ts) ----
+/** The key a new record keeps: the signed-in session's, when it is the member the record names; never anyone else's. */
+function makerKey(membershipId: string | undefined): SyncKey | null {
+  const s = useDeviceStore.getState().session;
+  return membershipId && s?.membership?.id === membershipId ? sessionSyncKey(s) : null;
+}
+const keyFields = (k: SyncKey | null) => (k ? { sync_key_id: k.id, sync_key: k.key } : {});
+const keyOf = (i: { sync_key_id?: string; sync_key?: string } | undefined): SyncKey | null => (i?.sync_key_id && i.sync_key ? { id: i.sync_key_id, key: i.sync_key } : null);
+
+/**
+ * Queues a record made now by the signed-in session, with that session's sync key. It carries the till's time
+ * (client_created_at): the server judges a signature by it, so a void, refund, cash movement, shift close or order
+ * update (which have no time of their own) gets the moment it was queued.
+ */
 export async function enqueue(rec: { type: SyncRecordType; id: string; membership_id?: string; payload: Record<string, unknown> }) {
-  const item: QueueItem = { id: rec.id, type: rec.type, membership_id: rec.membership_id, payload: rec.payload, created_at: new Date().toISOString(), attempts: 0, next_at: 0, last_error: null, status: "pending" };
+  const payload = rec.payload.client_created_at ? rec.payload : { ...rec.payload, client_created_at: new Date().toISOString() };
+  await putQueued({ ...rec, payload }, makerKey(rec.membership_id));
+}
+
+async function putQueued(rec: { type: SyncRecordType; id: string; membership_id?: string; payload: Record<string, unknown> }, key: SyncKey | null) {
+  const item: QueueItem = { id: rec.id, type: rec.type, membership_id: rec.membership_id, payload: rec.payload, created_at: new Date().toISOString(), attempts: 0, next_at: 0, last_error: null, status: "pending", ...keyFields(key) };
   await db.queue.put(item);
   await refreshCounts();
   schedule(500);
+}
+
+/** A row as the push sends it: signed with its maker's key, over the payload as it is now (edits made while it waited
+ *  included); with no key, in the form tills sent before the signatures, which the server judges by the old rule. */
+export async function pushRecord(i: Pick<QueueItem, "type" | "id" | "membership_id" | "payload" | "sync_key_id" | "sync_key">): Promise<Record<string, unknown>> {
+  const rec = { type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload };
+  const key = keyOf(i);
+  if (!key) return rec;
+  try {
+    return { ...(await signRecord(rec, key)) };
+  } catch {
+    return rec; // no WebCrypto here (a plain-http page): the server decides on the unsigned record
+  }
 }
 
 /**
@@ -195,7 +229,7 @@ async function blockDependent(item: QueueItem, parentId: string, parentMessage: 
   await db.queue.delete(item.id);
   await db.attention.put({
     id: item.id, type: item.type, code: "blocked", message: `Waits on an order the server rejected${parentMessage ? `: ${parentMessage}` : ""}`,
-    payload: { ...item.payload, __membership_id: item.membership_id }, blocked_by: parentId, created_at: new Date().toISOString(),
+    payload: { ...item.payload, __membership_id: item.membership_id }, blocked_by: parentId, created_at: new Date().toISOString(), ...keyFields(keyOf(item)),
   });
 }
 
@@ -223,7 +257,7 @@ export async function processQueue(): Promise<void> {
     for (const i of items) { const a = approvals.get(i.id); if (a) approved.set(i.id, { codes: a.codes, labels: a.labels }); }
     let res: SyncPushResponse;
     try {
-      const records = items.map((i) => ({ type: i.type, id: i.id, membership_id: i.membership_id, payload: i.payload, ...approvalFields(approvals.get(i.id)) }));
+      const records = await Promise.all(items.map(async (i) => ({ ...(await pushRecord(i)), ...approvalFields(approvals.get(i.id)) })));
       res = await api<SyncPushResponse>("/sync/push", { method: "POST", auth: "pos", timeoutMs: 60000, body: { records } });
     } catch (e) {
       const err = e instanceof ApiError ? e : null;
@@ -257,7 +291,7 @@ export async function processQueue(): Promise<void> {
         // A refusal for approval keeps what the manager must approve: what the last PIN approved, then what the server named.
         const ask = APPROVAL_REFUSALS.includes(r.code ?? "") ? mergeAsk(approved.get(r.id) ?? { codes: [], labels: {} }, approvalAsk(r)) : null;
         // __membership_id keeps the cashier who made the record, so Try again is attributed to them, not to whoever is signed in then.
-        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}),
+        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}), ...keyFields(keyOf(item)),
           ...(ask?.codes.length ? { permissions: ask.codes, permission_labels: ask.labels } : {}) });
         await markRejected(r.type as SyncRecordType, r.id, item, r.message ?? "Rejected");
       }
@@ -330,6 +364,8 @@ export async function pullChanges() {
     if (!cs.catalog) { await cs.refresh(); return; }
     const changes = await api<SyncChanges>("/sync/changes", { auth: "pos", query: { since: cs.cursor ?? undefined } });
     await cs.applyChanges(changes);
+    // A member deactivated since can no longer unlock this till offline with the copy of their session (K5).
+    forgetStashes((changes.staff ?? []).filter((m): m is { id: string; status: string } => !!m && typeof m === "object" && "status" in m && (m as { status?: unknown }).status !== "active").map((m) => m.id));
   } catch {}
 }
 
@@ -390,11 +426,12 @@ export function startSync(opts: { pull?: boolean } = {}) {
   };
 }
 
+// Back to the queue as it was made: its maker, its time and its maker's key (or none), whoever is signed in now.
 async function requeue(a: AttentionItem) {
   await db.attention.delete(a.id);
   const { __membership_id, ...payload } = a.payload;
   await unmarkRejected(a.type as SyncRecordType, a.id, payload);
-  await enqueue({ type: a.type as SyncRecordType, id: a.id, membership_id: __membership_id as string | undefined, payload });
+  await putQueued({ type: a.type as SyncRecordType, id: a.id, membership_id: __membership_id as string | undefined, payload }, keyOf(a));
 }
 
 /**
@@ -405,6 +442,7 @@ async function requeue(a: AttentionItem) {
  * follow it in the same push.
  */
 export async function retryAttention(id: string, approverPin?: string, codes?: string[]) {
+  void flushDismissals();
   const a = await db.attention.get(id);
   if (!a) return;
   if (approverPin) approvals.set(id, { pin: approverPin, codes: codes ?? a.permissions ?? [], labels: a.permission_labels ?? {} });
@@ -413,11 +451,56 @@ export async function retryAttention(id: string, approverPin?: string, codes?: s
   await refreshCounts();
 }
 
-/** Drops the record from the list (and anything held back by it). The local order row stays, marked rejected. */
+/**
+ * Drops the record from the list (and anything held back by it). The local order row stays, marked rejected. What the
+ * server refused is resolved there too (K7), so the admin's Needs attention does not keep it open.
+ */
 export async function dismissAttention(id: string) {
-  await db.attention.delete(id);
-  for (const child of ((await db.attention.toArray()) as AttentionItem[]).filter((x) => x.blocked_by === id)) await db.attention.delete(child.id);
+  const dropped = [await db.attention.get(id), ...((await db.attention.toArray()) as AttentionItem[]).filter((x) => x.blocked_by === id)].filter((x): x is AttentionItem => !!x);
+  for (const a of dropped) await db.attention.delete(a.id);
   await refreshCounts();
+  // A record held back on the till ("blocked") never reached the server: nothing to resolve for it.
+  void flushDismissals(dropped.filter((a) => a.code !== "blocked").map((a) => a.id));
+}
+
+// ---- Dismissals the server has not heard of yet ----
+const DISMISSED_KEY = "easalpha.sync-dismissed";
+
+function pendingDismissals(): string[] {
+  try {
+    const ids = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as unknown;
+    return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// Each change reads and writes the list at once, so a flush running alongside a new dismissal never drops it.
+function changePendingDismissals(change: (ids: string[]) => string[]) {
+  try {
+    const ids = [...new Set(change(pendingDismissals()))];
+    if (ids.length) localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
+    else localStorage.removeItem(DISMISSED_KEY);
+  } catch {}
+}
+
+/**
+ * POST /sync/rejections/:record_id/resolve for each record the till dismissed (and any still waiting from before).
+ * Without a connection they wait in this browser for the next dismissal, Try again or Attention page visit; one the
+ * server refuses (not allowed, nothing open) is dropped.
+ */
+export async function flushDismissals(ids: string[] = []): Promise<void> {
+  if (ids.length) changePendingDismissals((pending) => [...pending, ...ids]);
+  const todo = pendingDismissals();
+  if (!todo.length || !isOnline()) return;
+  for (const id of todo) {
+    try {
+      await api(`/sync/rejections/${id}/resolve`, { method: "POST", auth: "pos", body: { resolution: "dismissed" }, timeoutMs: 8000 });
+    } catch (e) {
+      if (e instanceof ApiError && e.isNetwork) { noteNetworkFailure(); return; }
+    }
+    changePendingDismissals((pending) => pending.filter((x) => x !== id));
+  }
 }
 
 /** A record whose dismissal loses money the server never recorded: a payment, refund, void, or an order paid offline. */
