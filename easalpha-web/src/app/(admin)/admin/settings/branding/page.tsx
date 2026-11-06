@@ -149,7 +149,7 @@ export default function BrandingPage() {
               <Field label="Secondary phone" hint="Printed next to the primary number"><Input type="tel" value={receipt.secondary_phone} onChange={(e) => setR("secondary_phone", e.target.value)} placeholder="+92" /></Field>
               <Field label="Paper width"><Select value={receipt.paper} onChange={(e) => setR("paper", e.target.value === "58" ? "58" : "80")}><option value="80">80 mm (48 chars)</option><option value="58">58 mm (32 chars)</option></Select></Field>
               <Field label="Language"><Select value={receipt.language} onChange={(e) => setR("language", e.target.value === "ur" ? "ur" : "en")}><option value="en">English</option><option value="ur">Urdu</option></Select></Field>
-              <p className="text-xs text-fg-muted sm:col-span-2">Keys: pos.receipt.header, pos.receipt.footer, pos.receipt.policy, pos.receipt.show_logo, pos.receipt.barcode, pos.receipt.footer_qr_url, pos.receipt.paper, pos.receipt.language, store.secondary_phone. Tills re-sync when the settings version changes.</p>
+              <p className="text-xs text-fg-muted sm:col-span-2">The server receipt and the till, online or offline, print from these settings; tills pick up a change on their next sync.</p>
             </div>
             <div className="lg:w-[340px]">
               <div className="mb-2 flex items-center justify-between text-xs text-fg-muted"><span>Live preview</span><span>{receipt.paper} mm · sample order</span></div>

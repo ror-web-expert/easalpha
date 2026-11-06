@@ -35,10 +35,17 @@ export interface Business {
   settings: BusinessSettings; read_only: boolean; created_at: string;
 }
 
+/** A branch's tax registration as the API sends it: the public numbers only. The API token stays on the server; the
+ *  branch screens (settings.manage) learn only whether one is saved, token_set, and its last characters (S1). */
+export interface TaxRegistration {
+  authority?: string | null; ntn?: string | null; strn?: string | null; pos_id?: string | null;
+  token_set?: boolean; token_hint?: string | null;
+}
+
 export interface Branch {
   id: ID; business_id: ID; name: string; code: string; address: string | null; city: string | null; phone: string | null;
   time_zone: string | null; day_end_time: string | null; business_day_start?: string | null; business_day_window?: string | null;
-  tax_registration: Record<string, string> | null;
+  tax_registration: TaxRegistration | null;
   opening_hours: Record<string, unknown> | null; qr_settings?: Partial<QrSettings> | null; is_main: boolean; archived_at: string | null;
 }
 
@@ -335,7 +342,7 @@ export interface CustomerPayment {
 export interface Receipt {
   receipt_number: string | null; duplicate: boolean; printed_at: string;
   business: { name: string; legal_name: string | null; phone: string | null; email?: string | null; logo_key: string | null; currency: string };
-  branch: { name: string; address: string | null; city: string | null; phone: string | null; tax_registration: Record<string, string> | null };
+  branch: { name: string; address: string | null; city: string | null; phone: string | null; tax_registration: TaxRegistration | null };
   header: string | null; footer: string | null; language: string; paper: string;
   order: { id: ID; serial: number | null; label: string; order_type: OrderType; table: string | null; business_day: string; placed_at: string | null; paid_at: string | null;
     cashier: string | null; /** The till (device) the order was taken on; receipts from before 6 Nov 2026 lack it. */ till?: string | null;

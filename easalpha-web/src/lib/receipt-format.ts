@@ -1,6 +1,6 @@
 // What a receipt says, shared by the printed lines (lib/print.ts) and the on-screen view (components/pos/receipt.tsx)
 // so both read the same: the title, the tax registration lines, the tax row labels, the item count and the savings.
-import type { Receipt } from "@/lib/types";
+import type { BusinessSettings, Receipt, TaxRegistration } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 
 /** "BILL" before any money is taken, "RECEIPT" once paid, "TAX INVOICE" when the authority numbered it, "DUPLICATE RECEIPT" on a reprint. */
@@ -10,9 +10,43 @@ export function receiptTitle(r: Pick<Receipt, "duplicate" | "receipt_number" | "
   return r.tax_invoice?.number ? "TAX INVOICE" : "RECEIPT";
 }
 
-/** "NTN 1234567-8", "STRN 03-00-1234-567-89": every registration the branch holds, in the order they were entered. */
-export function registrationLines(tax_registration: Record<string, string> | null | undefined): string[] {
-  return Object.entries(tax_registration ?? {}).filter(([, v]) => String(v ?? "").trim()).map(([k, v]) => `${k.replace(/_/g, " ").toUpperCase()} ${String(v).trim()}`);
+/** The parts of a branch's tax registration anything outside the server may hold: the authority and the public numbers.
+ *  The API token the branch also keeps printed on every receipt until 6 Nov 2026 (S1); it is an allow-list now. */
+export const PUBLIC_TAX_KEYS = ["authority", "ntn", "strn", "pos_id"] as const;
+const PRINTED: [key: "ntn" | "strn" | "pos_id", label: string][] = [["ntn", "NTN"], ["strn", "STRN"], ["pos_id", "POS ID"]];
+
+/** The registration reduced to PUBLIC_TAX_KEYS (null when nothing is left), whatever a stored copy carries. */
+export function publicTaxRegistration(reg: TaxRegistration | Record<string, unknown> | null | undefined): TaxRegistration | null {
+  const r = (reg ?? {}) as Record<string, unknown>;
+  const out = Object.fromEntries(PUBLIC_TAX_KEYS.flatMap((k) => (typeof r[k] === "string" && (r[k] as string).trim() ? [[k, (r[k] as string).trim()]] : [])));
+  return Object.keys(out).length ? (out as TaxRegistration) : null;
+}
+
+/** "NTN 1234567-8", "STRN 32-77-8761-234-56", "PRA POS ID 12345": the public numbers only, in that order. */
+export function registrationLines(tax_registration: TaxRegistration | Record<string, unknown> | null | undefined): string[] {
+  const r = publicTaxRegistration(tax_registration) ?? {};
+  const authority = (r.authority ?? "").toUpperCase();
+  return PRINTED.flatMap(([k, label]) => {
+    const v = r[k];
+    if (!v) return [];
+    return [`${k === "pos_id" && authority && authority !== "NONE" ? `${authority} ${label}` : label} ${v}`];
+  });
+}
+
+/**
+ * The receipt's header, footer, language and paper: the pos.receipt.* settings the Branding page saves, else the
+ * receipt hash older businesses kept in their settings, else the defaults; the same source as the server's
+ * Receipts::Branding. The offline receipt read only that old hash, so a saved header and footer never printed (S6).
+ */
+export function receiptBranding(settings: BusinessSettings | Record<string, unknown> | null | undefined): { header: string | null; footer: string | null; language: string; paper: string } {
+  const s = (settings ?? {}) as Record<string, unknown>;
+  const legacy = (s.receipt && typeof s.receipt === "object" ? s.receipt : {}) as Record<string, unknown>;
+  const pick = (field: string, fallback: string | null): string | null => {
+    const key = `pos.receipt.${field}`;
+    const v = key in s ? s[key] : field in legacy ? legacy[field] : fallback;
+    return v === null || v === undefined || String(v) === "" ? null : String(v);
+  };
+  return { header: pick("header", null), footer: pick("footer", "Thank you"), language: pick("language", "en") ?? "en", paper: pick("paper", "80") ?? "80" };
 }
 
 /** The phones on one line: "0300-1234567 | 021-1111111" (single spaces, so the printed line wraps the same as the screen). */

@@ -31,6 +31,9 @@ module Api
         SafeCsv.generate { |csv| csv << headers; yield csv }
       end
 
+      # Times in the branch's own clock, as every screen shows them, not UTC (S13).
+      def local(time) = time&.in_time_zone(current_branch&.time_zone || current_business.time_zone)&.strftime("%Y-%m-%d %H:%M:%S")
+
       def csv_menu
         csv(%w[menu category product sku price description active show_online tax_rate]) do |out|
           Product.where(archived_at: nil).includes(category: :menu).includes(:tax_rate).find_each do |p|
@@ -43,7 +46,7 @@ module Api
         csv(%w[business_day serial type source status payment_status customer table subtotal discount service_charge tax total paid placed_at paid_at voided_reason]) do |out|
           Order.where(branch_id: current_branch.id, business_day: range).includes(:customer, :dining_table).find_each do |o|
             out << [ o.business_day, o.serial, o.order_type, o.source, o.status, o.payment_status, o.customer&.name, o.dining_table&.code, o.subtotal_minor / 100.0, o.discount_minor / 100.0,
-                    o.service_charge_minor / 100.0, o.tax_minor / 100.0, o.total_minor / 100.0, o.paid_minor / 100.0, o.placed_at, o.paid_at, o.void_reason ]
+                    o.service_charge_minor / 100.0, o.tax_minor / 100.0, o.total_minor / 100.0, o.paid_minor / 100.0, local(o.placed_at), local(o.paid_at), o.void_reason ]
           end
         end
       end
@@ -58,14 +61,14 @@ module Api
 
       def csv_customers
         csv(%w[khata_no name phone email company group balance orders net_spent last_order_at]) do |out|
-          Customer.active.includes(:group).find_each { |c| out << [ c.khata_no, c.name, c.phone, c.email, c.company, c.group&.name, c.balance_minor / 100.0, c.orders_count, c.net_spent_minor / 100.0, c.last_order_at ] }
+          Customer.active.includes(:group).find_each { |c| out << [ c.khata_no, c.name, c.phone, c.email, c.company, c.group&.name, c.balance_minor / 100.0, c.orders_count, c.net_spent_minor / 100.0, local(c.last_order_at) ] }
         end
       end
 
       def csv_payments
         csv(%w[business_day serial method amount tendered change reference received_at]) do |out|
           Payment.where(branch_id: current_branch.id, business_day: range, status: "captured").includes(:order).find_each do |p|
-            out << [ p.business_day, p.order.serial, p.method_code, p.amount_minor / 100.0, p.tendered_minor && p.tendered_minor / 100.0, p.change_minor / 100.0, p.reference, p.received_at ]
+            out << [ p.business_day, p.order.serial, p.method_code, p.amount_minor / 100.0, p.tendered_minor && p.tendered_minor / 100.0, p.change_minor / 100.0, p.reference, local(p.received_at) ]
           end
         end
       end
@@ -81,7 +84,7 @@ module Api
       def csv_stock_ledger
         csv(%w[business_day occurred_at kind section item quantity before after unit_cost value reason ref_table ref_id]) do |out|
           StockLedgerEntry.where(branch_id: current_branch.id, business_day: range).includes(:stock_section, :stock_item).order(:occurred_at).find_each do |e|
-            out << [ e.business_day, e.occurred_at, e.kind, e.stock_section.name, e.stock_item.name, e.quantity, e.before_qty, e.after_qty, (e.unit_cost_minor / 100).round(4), e.value_minor / 100.0, e.reason, e.ref_table, e.ref_id ]
+            out << [ e.business_day, local(e.occurred_at), e.kind, e.stock_section.name, e.stock_item.name, e.quantity, e.before_qty, e.after_qty, (e.unit_cost_minor / 100).round(4), e.value_minor / 100.0, e.reason, e.ref_table, e.ref_id ]
           end
         end
       end
@@ -89,7 +92,7 @@ module Api
       def csv_stock_documents
         csv(%w[number kind status business_day from_section to_section reason invoice_ref lines posted_at]) do |out|
           StockDocument.where(branch_id: current_branch.id).includes(:from_section, :to_section, :lines).order(:number).find_each do |d|
-            out << [ d.label, d.kind, d.status, d.business_day, d.from_section&.name, d.to_section&.name, d.reason, d.invoice_ref, d.lines.size, d.posted_at ]
+            out << [ d.label, d.kind, d.status, d.business_day, d.from_section&.name, d.to_section&.name, d.reason, d.invoice_ref, d.lines.size, local(d.posted_at) ]
           end
         end
       end
@@ -116,14 +119,17 @@ module Api
 
       def csv_staff
         csv(%w[name phone email role status created_at]) do |out|
-          Membership.includes(:user, :role).find_each { |m| out << [ m.user.name, m.user.phone, m.user.email, m.role.name, m.status, m.created_at ] }
+          Membership.includes(:user, :role).find_each { |m| out << [ m.user.name, m.user.phone, m.user.email, m.role.name, m.status, local(m.created_at) ] }
         end
       end
 
+      # Days and times in the business's clock; the details redacted again, for rows stored before redaction (S1, S13).
       def csv_audit_logs
+        zone = ActiveSupport::TimeZone[current_business.time_zone] || Time.zone
+        window = zone.parse(range.begin.to_s)..zone.parse(range.end.to_s).end_of_day
         csv(%w[occurred_at action table record_id user_id device_id approved_by after]) do |out|
-          AuditLog.where(business_id: current_business.id, occurred_at: range.begin.beginning_of_day..range.end.end_of_day).find_each do |a|
-            out << [ a.occurred_at, a.action, a.table_name, a.record_id, a.user_id, a.device_id, a.approved_by_user_id, a.after&.to_json ]
+          AuditLog.where(business_id: current_business.id, occurred_at: window).find_each do |a|
+            out << [ a.occurred_at.in_time_zone(zone).strftime("%Y-%m-%d %H:%M:%S"), a.action, a.table_name, a.record_id, a.user_id, a.device_id, a.approved_by_user_id, AuditLog.redact(a.after)&.to_json ]
           end
         end
       end
