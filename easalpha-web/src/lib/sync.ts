@@ -84,16 +84,20 @@ export async function enqueue(rec: { type: SyncRecordType; id: string; membershi
  * push was out was lost, and the payment met the old total (final round, web-till#3).
  */
 export async function patchQueued(id: string, patch: (p: Record<string, unknown>) => Record<string, unknown>, type?: SyncRecordType): Promise<boolean> {
-  const item = (await db.queue.get(id)) as QueueItem | undefined;
-  if (!item || (type && item.type !== type)) return false;
-  if (item.status === "sending") {
-    if (item.type !== "order" && item.type !== "order_update") return false;
-    await db.queue.put({ ...item, patched_payload: patch(item.patched_payload ?? item.payload), patched_by: useDeviceStore.getState().session?.membership?.id ?? item.patched_by });
-    return true;
-  }
-  await db.queue.put({ ...item, payload: patch(item.payload) });
-  schedule(500);
-  return true;
+  // Read and written in one transaction, so a push answering in between cannot delete or re-mark the row under it.
+  const outcome = await db.transaction("rw", db.queue, async () => {
+    const item = (await db.queue.get(id)) as QueueItem | undefined;
+    if (!item || (type && item.type !== type)) return "none";
+    if (item.status === "sending") {
+      if (item.type !== "order" && item.type !== "order_update") return "none";
+      await db.queue.put({ ...item, patched_payload: patch(item.patched_payload ?? item.payload), patched_by: useDeviceStore.getState().session?.membership?.id ?? item.patched_by });
+      return "kept";
+    }
+    await db.queue.put({ ...item, payload: patch(item.payload) });
+    return "patched";
+  });
+  if (outcome === "patched") schedule(500);
+  return outcome !== "none";
 }
 
 export async function isQueued(id: string) {
@@ -128,11 +132,13 @@ export async function confirmDiscardUnsynced(): Promise<boolean> {
  * (final round, web-till#4). A change kept beside a row (patchQueued) becomes its payload.
  */
 export async function recoverStuck(all = false): Promise<number> {
-  const stuck = (await db.queue.where("status").equals("sending").toArray()) as QueueItem[];
-  const cutoff = Date.now() - 120_000;
-  const back = stuck.filter((i) => (all && !running) || !i.sending_at || i.sending_at < cutoff);
-  if (back.length) await db.queue.bulkPut(back.map((i) => pendingAgain(i)));
-  return back.length;
+  return db.transaction("rw", db.queue, async () => {
+    const stuck = (await db.queue.where("status").equals("sending").toArray()) as QueueItem[];
+    const cutoff = Date.now() - 120_000;
+    const back = stuck.filter((i) => (all && !running) || !i.sending_at || i.sending_at < cutoff);
+    if (back.length) await db.queue.bulkPut(back.map((i) => pendingAgain(i)));
+    return back.length;
+  });
 }
 
 /** A row back in the queue, with any change kept beside it while it was being sent. */
@@ -273,8 +279,7 @@ export async function processQueue(): Promise<void> {
     const rejectedNow = new Map(results.filter((r) => r.status === "rejected" && r.type === "order").map((r) => [r.id, r.message]));
     for (const r of results) {
       // The row as it is now, if it is still the one this push carried (enqueue may have put a newer record there).
-      const row = await sentRow(r.id, now);
-      if (row) await db.queue.delete(r.id);
+      const row = await takeSentRow(r.id, now);
       if (r.status === "accepted" || r.status === "duplicate") {
         if (row?.patched_payload) await sendChangesMadeDuringPush(row);
         await markSynced(r.type as SyncRecordType, r.id, items.find((i) => i.id === r.id));
@@ -316,12 +321,23 @@ async function sentRow(id: string, sentAt: number): Promise<QueueItem | null> {
   return row && row.status === "sending" && row.sending_at === sentAt ? row : null;
 }
 
+/** The push answered for this row: out of the queue, with any change made meanwhile (one transaction with patchQueued's). */
+function takeSentRow(id: string, sentAt: number): Promise<QueueItem | null> {
+  return db.transaction("rw", db.queue, async () => {
+    const row = await sentRow(id, sentAt);
+    if (row) await db.queue.delete(id);
+    return row;
+  });
+}
+
 /** The push failed or the till is locked: its rows go back to pending as they are now, with any change made meanwhile. */
 async function putBack(items: QueueItem[], sentAt: number, change: (row: QueueItem) => Partial<QueueItem>) {
-  for (const i of items) {
-    const row = await sentRow(i.id, sentAt);
-    if (row) await db.queue.put(pendingAgain(row, change(row)));
-  }
+  await db.transaction("rw", db.queue, async () => {
+    for (const i of items) {
+      const row = await sentRow(i.id, sentAt);
+      if (row) await db.queue.put(pendingAgain(row, change(row)));
+    }
+  });
 }
 
 /** The fields of an order record that an order update carries, as the till's own offline update sends them. */
