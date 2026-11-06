@@ -41,12 +41,15 @@ module Customers
       deliver(customer, "account_bill", vars, document: document, strict: true)
     end
 
-    # A bill past its due date, to the same phones as the bill; the run's id travels in the message so it goes once.
-    def overdue!(customer, run:, today:)
-      period = run.period_from.beginning_of_month == run.period_from && run.period_to == run.period_from.end_of_month ? run.period_from.strftime("%B %Y") : "#{run.period_from.strftime('%-d %b %Y')} to #{run.period_to.strftime('%-d %b %Y')}"
+    # A bill past its due date (Customers::Overdue), to the same phones as the bill, quoting what is still unpaid of it,
+    # not the balance (later purchases are not overdue). Its run's id, or for a printed bill its period, travels in the
+    # message so it goes once.
+    def overdue!(customer, bill:, unpaid_minor:, today:)
+      from, to, due = bill[:period_from], bill[:period_to], bill[:due_on]
+      period = from.beginning_of_month == from && to == from.end_of_month ? from.strftime("%B %Y") : "#{from.strftime('%-d %b %Y')} to #{to.strftime('%-d %b %Y')}"
       vars = Whatsapp::Account.variables_for(customer).merge(
-        period: period, due_on: run.due_on.strftime("%-d %b %Y"), days_overdue: (today - run.due_on).to_i, due_amount: rupees([ customer.balance_minor, 0 ].max),
-        link: Customers::BillToken.url(customer, from: run.period_from, to: run.period_to, due_on: run.due_on), bill_run_id: run.id
+        period: period, due_on: due.strftime("%-d %b %Y"), days_overdue: (today - due).to_i, due_amount: rupees([ unpaid_minor, 0 ].max),
+        link: Customers::BillToken.url(customer, from: from, to: to, due_on: due), bill_run_id: bill[:run]&.id, bill_period_to: to.to_s
       )
       deliver(customer, "account_overdue", vars)
     end
