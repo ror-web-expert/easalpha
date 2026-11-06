@@ -171,6 +171,11 @@ module Sync
       end
       builder.update!(attrs: attrs, lines: Array(payload[:lines]).map(&:to_h), approvals: @approvals)
       Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
+      # A staff meal completed offline on an order the server already held: the till sends complete on the update.
+      if complete?(payload) && !order.reload.completed? && (order.is_staff_meal || order.total_minor.zero?)
+        Orders::Transitions.place!(order, actor: actor, device: @device) if order.status.in?(%w[draft held])
+        complete!(order, actor)
+      end
       "accepted"
     end
 

@@ -192,6 +192,15 @@ RSpec.describe "Sync push: session, actor, approvals, khata, completion, clock",
       expect(first_result[:status]).to eq("duplicate")
     end
 
+    it "closes a staff meal when the till sends complete on a queued update of an order the server already holds" do
+      id = SecureRandom.uuid
+      push([ chai_order(id: id, **staff_meal).merge(approver_pin: "9999") ])
+      expect(within(biz) { Order.find(id).status }).to eq("placed")
+      push([ { type: "order_update", id: id, membership_id: cashier.id, payload: { complete: true, lines: [ { product_id: m[:chai].id, quantity: 1 } ] } } ])
+      expect(first_result[:status]).to eq("accepted"), response.body
+      expect(within(biz) { Order.find(id) }).to have_attributes(status: "closed", payment_status: "paid", total_minor: 0)
+    end
+
     it "does not close an unpaid order that is not a staff meal" do
       id = SecureRandom.uuid
       push([ chai_order(id: id, status: "completed") ])
