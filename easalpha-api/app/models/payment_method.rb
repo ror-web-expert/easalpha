@@ -26,13 +26,19 @@ class PaymentMethod < ApplicationRecord
 
   ACCOUNT_KINDS = { "cash" => "cash", "wallet" => "wallet", "bank" => "bank", "card" => "bank", "qr" => "bank", "custom" => "custom" }.freeze
 
-  # Creates the matching finance account (and its ledger mirror) when a method is added without one.
+  # Creates the matching finance account (and its ledger mirror) when a method is added without one. An internal
+  # method (the canteen's company subsidy, the payroll's salary deduction) moves no money, so it gets none: its
+  # postings go straight to the journal, to the expense it stands for (Finance::Journal::INTERNAL_ACCOUNTS).
   def ensure_account!
-    return if khata? || payment_account
+    return if khata? || internal? || payment_account
     account = PaymentAccount.create!(name: name, kind: ACCOUNT_KINDS.fetch(kind, "custom"))
     update!(payment_account: account)
     Finance::Chart.for_payment_account(account)
   end
+
+  # An internal method that an older build gave a "custom" account under Cash at Bank (QA 6 Nov 2026, B4) posts
+  # nothing there any more; finance:reclass_internal_methods moves what it holds to the right accounts and closes it.
+  def payment_account = internal? ? nil : super
 
   def self.seed_defaults!(business)
     accounts = {}
