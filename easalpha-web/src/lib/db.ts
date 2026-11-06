@@ -86,6 +86,10 @@ export interface QueueItem {
   status: "pending" | "sending";
   /** When the push carrying this row started; a row still "sending" long after that never came back (recoverStuck). */
   sending_at?: number;
+  /** The payload as changed (patchQueued) while a push carrying the row was out: applied once that push answers. */
+  patched_payload?: Record<string, unknown>;
+  /** Who was signed in when that change was made, and their sync key: the records it becomes are theirs. */
+  patched_by?: string; patched_key_id?: string; patched_key?: string;
   /** The sync key of the session that made the record, which signs it at every push (lib/sync-sign.ts). None on a
    *  record queued before the signatures, or by a session without a key. */
   sync_key_id?: string; sync_key?: string;

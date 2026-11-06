@@ -1393,6 +1393,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_07_070000) do
     t.datetime "updated_at", null: false
     t.bigint "label_price_minor"
     t.string "qr_ref"
+    t.uuid "client_line_id"
     t.index ["business_id", "station_id", "status"], name: "index_order_items_on_business_id_and_station_id_and_status"
     t.index ["business_id"], name: "index_order_items_on_business_id"
     t.index ["order_id", "sort_order"], name: "index_order_items_on_order_id_and_sort_order"

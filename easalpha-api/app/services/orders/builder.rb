@@ -185,12 +185,13 @@ module Orders
       keep = []
       Array(lines).each_with_index do |raw, idx|
         line = raw.to_h.with_indifferent_access
-        existing = amend && line[:id].present? ? order.items.find { |i| i.id == line[:id] } : nil
+        existing = amend && line[:id].present? ? find_line(line[:id]) : nil
         if existing && !existing.cancelled?
           update_existing!(existing, line, idx)
           keep << existing.id
         else
           item = build_item(line, idx)
+          item.client_line_id = line[:id] if line[:id].to_s.match?(UUID)
           item.save!
           build_modifiers!(item, line[:modifiers])
           keep << item.id
@@ -204,6 +205,16 @@ module Orders
         end
       end
       order.items.reload
+    end
+
+    UUID = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+
+    # A line by its id here, or by the till's own id for it: an order made offline gets the server's ids when its
+    # record lands, so the till's next update (queued, or made while that push was out) still names its lines by
+    # the ids the till gave them. Matched by id alone, every line came back as new and the old ones were cancelled,
+    # the kitchen sent both (final round, web-till#3).
+    def find_line(id)
+      order.items.find { |i| i.id == id } || order.items.find { |i| i.client_line_id == id && !i.cancelled? }
     end
 
     def validate_customer!

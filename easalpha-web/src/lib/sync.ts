@@ -8,6 +8,7 @@ import { useSyncStore } from "@/store/sync";
 import { useCatalogStore } from "@/store/catalog";
 import { useDeviceStore } from "@/store/device";
 import { useCustomerStore } from "@/store/customers";
+import { uuid } from "@/lib/utils";
 import { OPEN_STATUSES, type SyncChanges, type SyncPushResponse, type SyncRecordType } from "@/lib/types";
 import { sessionSyncKey, signRecord, type SyncKey } from "@/lib/sync-sign";
 import { forgetStashes } from "@/lib/session-stash";
@@ -111,13 +112,28 @@ export async function pushRecord(i: Pick<QueueItem, "type" | "id" | "membership_
  * Merge new payload fields into a queued record (e.g. add payments to an order that has not been pushed yet). Returns
  * false when not queued, or when `type` is given and the queued record is another type (an order_update shares its
  * order's id, and the server ignores payments or a void inside it).
+ * An order or update a push is carrying keeps the change beside it (patched_payload) until that push answers, and it
+ * reaches the server then: in the record put back after a failure, on the Attention page with a refusal, or as records
+ * of its own after an accept (sendChangesMadeDuringPush). Refused, a Naan added and paid for while the order's first
+ * push was out was lost, and the payment met the old total (final round, web-till#3).
  */
 export async function patchQueued(id: string, patch: (p: Record<string, unknown>) => Record<string, unknown>, type?: SyncRecordType): Promise<boolean> {
-  const item = await db.queue.get(id);
-  if (!item || item.status === "sending" || (type && item.type !== type)) return false;
-  await db.queue.put({ ...item, payload: patch(item.payload) });
-  schedule(500);
-  return true;
+  // Read and written in one transaction, so a push answering in between cannot delete or re-mark the row under it.
+  const outcome = await db.transaction("rw", db.queue, async () => {
+    const item = (await db.queue.get(id)) as QueueItem | undefined;
+    if (!item || (type && item.type !== type)) return "none";
+    if (item.status === "sending") {
+      if (item.type !== "order" && item.type !== "order_update") return "none";
+      const by = useDeviceStore.getState().session?.membership?.id;
+      const key = by ? makerKey(by) : null;
+      await db.queue.put({ ...item, patched_payload: patch(item.patched_payload ?? item.payload), ...(by ? { patched_by: by, patched_key_id: key?.id, patched_key: key?.key } : {}) });
+      return "kept";
+    }
+    await db.queue.put({ ...item, payload: patch(item.payload) });
+    return "patched";
+  });
+  if (outcome === "patched") schedule(500);
+  return outcome !== "none";
 }
 
 export async function isQueued(id: string) {
@@ -146,14 +162,29 @@ export async function confirmDiscardUnsynced(): Promise<boolean> {
 /**
  * A push that never came back (power cut, tab closed mid-send) leaves its rows marked "sending", and only "pending" rows
  * are ever picked up again. On a fresh start nothing can be in flight, so every such row goes back to pending; while
- * running, a row sending for over two minutes (the push times out at one) is treated the same way.
+ * running, a row sending for over two minutes (the push times out at one) is treated the same way. A push of this tab
+ * still out is never "fresh": sync restarting under it (a sign-in, an old till's token refresh) recovers only rows over
+ * two minutes old, or its rows went back to pending, took a payment, and were deleted with it when it answered
+ * (final round, web-till#4). A change kept beside a row (patchQueued) becomes its payload.
  */
 export async function recoverStuck(all = false): Promise<number> {
-  const stuck = (await db.queue.where("status").equals("sending").toArray()) as QueueItem[];
-  const cutoff = Date.now() - 120_000;
-  const back = stuck.filter((i) => all || !i.sending_at || i.sending_at < cutoff);
-  if (back.length) await db.queue.bulkPut(back.map((i) => ({ ...i, status: "pending" as const, sending_at: undefined })));
-  return back.length;
+  return db.transaction("rw", db.queue, async () => {
+    const stuck = (await db.queue.where("status").equals("sending").toArray()) as QueueItem[];
+    const cutoff = Date.now() - 120_000;
+    const back = stuck.filter((i) => (all && !running) || !i.sending_at || i.sending_at < cutoff);
+    if (back.length) await db.queue.bulkPut(back.map((i) => pendingAgain(i)));
+    return back.length;
+  });
+}
+
+/** A row back in the queue, with any change kept beside it while it was being sent. */
+function pendingAgain(row: QueueItem, change: Partial<QueueItem> = {}): QueueItem {
+  const next: QueueItem = { ...row, ...change, payload: row.patched_payload ?? row.payload, status: "pending", sending_at: undefined };
+  delete next.patched_payload;
+  delete next.patched_by;
+  delete next.patched_key_id;
+  delete next.patched_key;
+  return next;
 }
 
 export function schedule(ms = 0) {
@@ -180,10 +211,13 @@ const byCreated = (a: QueueItem, b: QueueItem) => (a.created_at < b.created_at ?
  * server works through a batch in array order). A payment, void, refund or update whose order is queued but not in this
  * batch (in backoff, or in flight) is held for a later one; one whose order was rejected is blocked, for the Attention
  * page. Dependents only ride along once every leading row fits, so a cut-off batch never carries a child without its parent.
+ * A queued update of the order leads its payment, void or refund the same way (queuedUpdateIds): the server prices the
+ * payment against the lines the update brings.
  */
-export function planBatch(pending: QueueItem[], opts: { now: number; queuedOrderIds: Set<string>; rejectedOrderIds: Set<string>; limit?: number }): { send: QueueItem[]; held: QueueItem[]; blocked: QueueItem[] } {
+export function planBatch(pending: QueueItem[], opts: { now: number; queuedOrderIds: Set<string>; rejectedOrderIds: Set<string>; queuedUpdateIds?: Set<string>; limit?: number }): { send: QueueItem[]; held: QueueItem[]; blocked: QueueItem[] } {
   const due = pending.filter((i) => i.next_at <= opts.now).sort(byCreated);
   const dueOrders = new Set(due.filter((i) => i.type === "order").map((i) => i.id));
+  const dueUpdates = new Set(due.filter((i) => i.type === "order_update").map((i) => i.id));
   const heads: QueueItem[] = [];
   const tail: QueueItem[] = [];
   const held: QueueItem[] = [];
@@ -192,8 +226,9 @@ export function planBatch(pending: QueueItem[], opts: { now: number; queuedOrder
     const parent = parentOrderId(i);
     if (!parent) { heads.push(i); continue; }
     if (opts.rejectedOrderIds.has(parent)) { blocked.push(i); continue; }
-    if (dueOrders.has(parent)) { tail.push(i); continue; }
-    if (opts.queuedOrderIds.has(parent)) { held.push(i); continue; }
+    const behindUpdate = i.type !== "order_update";
+    if (dueOrders.has(parent) || (behindUpdate && dueUpdates.has(parent))) { tail.push(i); continue; }
+    if (opts.queuedOrderIds.has(parent) || (behindUpdate && opts.queuedUpdateIds?.has(parent))) { held.push(i); continue; }
     heads.push(i); // the order is already on the server
   }
   const limit = opts.limit ?? 200;
@@ -220,6 +255,7 @@ async function queueSnapshot() {
     all, attention,
     pending: all.filter((i) => i.status === "pending"),
     queuedOrderIds: new Set(all.filter((i) => i.type === "order").map((i) => i.id)),
+    queuedUpdateIds: new Set(all.filter((i) => i.type === "order_update").map((i) => i.id)),
     rejectedOrderIds: new Set(attention.filter((a) => a.type === "order").map((a) => a.id)),
   };
 }
@@ -242,7 +278,7 @@ export async function processQueue(): Promise<void> {
     await recoverStuck();
     const now = Date.now();
     const snap = await queueSnapshot();
-    const plan = planBatch(snap.pending, { now, queuedOrderIds: snap.queuedOrderIds, rejectedOrderIds: snap.rejectedOrderIds });
+    const plan = planBatch(snap.pending, { now, queuedOrderIds: snap.queuedOrderIds, queuedUpdateIds: snap.queuedUpdateIds, rejectedOrderIds: snap.rejectedOrderIds });
     for (const b of plan.blocked) {
       const parent = parentOrderId(b)!;
       await blockDependent(b, parent, snap.attention.find((a) => a.id === parent)?.message);
@@ -263,12 +299,12 @@ export async function processQueue(): Promise<void> {
       const err = e instanceof ApiError ? e : null;
       if (err?.code === "session.required") {
         // The till is locked: nothing is wrong with the records. They go back as they were and push at the next sign-in.
-        await db.queue.bulkPut(items.map((i) => ({ ...i, status: "pending" as const, sending_at: undefined })));
+        await putBack(items, now, () => ({}));
         store.set({ status: "online" });
         return;
       }
       if (err?.isNetwork) noteNetworkFailure();
-      await db.queue.bulkPut(items.map((i) => ({ ...i, status: "pending" as const, sending_at: undefined, attempts: i.attempts + 1, next_at: Date.now() + backoff(i.attempts + 1), last_error: err?.message ?? "Sync failed" })));
+      await putBack(items, now, (i) => ({ attempts: i.attempts + 1, next_at: Date.now() + backoff(i.attempts + 1), last_error: err?.message ?? "Sync failed" }));
       store.set({ status: err?.isNetwork ? "offline" : "online", lastError: err?.message ?? "Sync failed" });
       if (!err?.isNetwork) schedule(backoff(items[0].attempts + 1));
       return;
@@ -280,18 +316,21 @@ export async function processQueue(): Promise<void> {
     const results = res.results ?? [];
     const rejectedNow = new Map(results.filter((r) => r.status === "rejected" && r.type === "order").map((r) => [r.id, r.message]));
     for (const r of results) {
+      // The row as it is now, if it is still the one this push carried (enqueue may have put a newer record there).
+      const row = await takeSentRow(r.id, now);
       if (r.status === "accepted" || r.status === "duplicate") {
-        await db.queue.delete(r.id);
+        // Synced first: a save made from here on finds the order on the server and updates it there.
         await markSynced(r.type as SyncRecordType, r.id, items.find((i) => i.id === r.id));
+        if (row?.patched_payload) await sendChangesMadeDuringPush(row);
       } else {
         const item = items.find((i) => i.id === r.id);
         const parent = item ? parentOrderId(item) : null;
         const blockedBy = parent && (rejectedNow.has(parent) || snap.rejectedOrderIds.has(parent)) ? parent : undefined;
-        await db.queue.delete(r.id);
         // A refusal for approval keeps what the manager must approve: what the last PIN approved, then what the server named.
         const ask = APPROVAL_REFUSALS.includes(r.code ?? "") ? mergeAsk(approved.get(r.id) ?? { codes: [], labels: {} }, approvalAsk(r)) : null;
         // __membership_id keeps the cashier who made the record, so Try again is attributed to them, not to whoever is signed in then.
-        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}), ...keyFields(keyOf(item)),
+        // A change made while it was out goes with it, so Try again sends the order as the till has it.
+        await db.attention.put({ id: r.id, type: r.type, code: r.code ?? "rejected", message: r.message ?? "Rejected", payload: { ...(row?.patched_payload ?? item?.payload ?? {}), __membership_id: item?.membership_id }, created_at: new Date().toISOString(), ...(blockedBy ? { blocked_by: blockedBy } : {}), ...keyFields(keyOf(item)),
           ...(ask?.codes.length ? { permissions: ask.codes, permission_labels: ask.labels } : {}) });
         await markRejected(r.type as SyncRecordType, r.id, item, r.message ?? "Rejected");
       }
@@ -311,10 +350,85 @@ export async function processQueue(): Promise<void> {
   }
 }
 
+/**
+ * A row of the push that started at `sentAt`, as the queue holds it now; null once it is not that push's any more: a
+ * newer record put under the same id (enqueue), or a row recoverStuck sent back. The push's answer is not about those,
+ * so they are neither deleted nor put back as they were.
+ */
+async function sentRow(id: string, sentAt: number): Promise<QueueItem | null> {
+  const row = (await db.queue.get(id)) as QueueItem | undefined;
+  return row && row.status === "sending" && row.sending_at === sentAt ? row : null;
+}
+
+/** The push answered for this row: out of the queue, with any change made meanwhile (one transaction with patchQueued's). */
+function takeSentRow(id: string, sentAt: number): Promise<QueueItem | null> {
+  return db.transaction("rw", db.queue, async () => {
+    const row = await sentRow(id, sentAt);
+    if (row) await db.queue.delete(id);
+    return row;
+  });
+}
+
+/** The push failed or the till is locked: its rows go back to pending as they are now, with any change made meanwhile. */
+async function putBack(items: QueueItem[], sentAt: number, change: (row: QueueItem) => Partial<QueueItem>) {
+  await db.transaction("rw", db.queue, async () => {
+    for (const i of items) {
+      const row = await sentRow(i.id, sentAt);
+      if (row) await db.queue.put(pendingAgain(row, change(row)));
+    }
+  });
+}
+
+/** The fields of an order record that an order update carries, as the till's own offline update sends them. */
+const UPDATE_FIELDS = ["order_type", "table_id", "guest_name", "covers", "customer_id", "notes", "lines", "address_id",
+  "service_charge_percent", "service_charge_fixed_minor", "delivery_charge_percent", "delivery_charge_minor", "is_staff_meal", "staff_meal_reason"];
+const updateFields = (p: Record<string, unknown>) => Object.fromEntries(UPDATE_FIELDS.filter((k) => p[k] !== undefined).map((k) => [k, p[k]]));
+
+/**
+ * What changed on an order or update while the push carrying it was out (patchQueued kept it beside the row), sent as
+ * records of their own now that the push was accepted: the server holds what the push carried, and an order record
+ * sent again only takes the payments it is missing. Lines and fields go as an order update (the server finds the lines
+ * by the till's ids), placed if it was sent to the kitchen meanwhile and complete if a staff meal was; each payment
+ * goes as a payment, the tip on the first; a void as a void. They are the change's maker's (who was signed in when it
+ * was made), signed with that session's key, as every record is its maker's.
+ */
+async function sendChangesMadeDuringPush(row: QueueItem) {
+  const sent = row.payload;
+  const now = row.patched_payload ?? sent;
+  const membership_id = row.patched_by ?? row.membership_id;
+  const key = row.patched_key_id && row.patched_key ? { id: row.patched_key_id, key: row.patched_key } : makerKey(membership_id);
+  const queue = (type: SyncRecordType, id: string, payload: Record<string, unknown>) =>
+    putQueued({ type, id, membership_id, payload: payload.client_created_at ? payload : { ...payload, client_created_at: new Date().toISOString() } }, key);
+  if (row.type === "order_update") {
+    await queue("order_update", row.id, { ...now, client_seq: Date.now() });
+    return;
+  }
+  if (row.type !== "order") return;
+  if (now.voided && !sent.voided) {
+    await queue("void", uuid(), { order_id: row.id, reason: typeof now.void_reason === "string" && now.void_reason ? now.void_reason : "voided on till" });
+    return;
+  }
+  const placed = now.status === "placed" && sent.status !== "placed";
+  const complete = !!now.complete && !sent.complete;
+  if (placed || complete || JSON.stringify(updateFields(now)) !== JSON.stringify(updateFields(sent))) {
+    await queue("order_update", row.id, {
+      ...updateFields(now), is_staff_meal: !!now.is_staff_meal, staff_meal_reason: now.is_staff_meal ? now.staff_meal_reason ?? null : null, client_seq: Date.now(),
+      ...(placed ? { status: "placed" } : {}), ...(complete ? { complete: true } : {}),
+    });
+  }
+  const payments = (p: Record<string, unknown>) => (Array.isArray(p.payments) ? p.payments : []) as Record<string, unknown>[];
+  const sentIds = new Set(payments(sent).map((p) => p.id));
+  const tip = Math.max(0, Number(now.tip_minor ?? 0) - Number(sent.tip_minor ?? 0));
+  const added = payments(now).filter((p): p is Record<string, unknown> & { id: string } => typeof p.id === "string" && !sentIds.has(p.id));
+  for (const [i, p] of added.entries()) {
+    await queue("payment", p.id, { order_id: row.id, method_code: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor, reference: p.reference, client_created_at: p.client_created_at, tip_minor: i === 0 ? tip : 0 });
+  }
+}
+
 /** The next run: at once while more is sendable, else when the earliest backoff ends (a held payment follows its order then). */
 async function wake(now: number) {
   const snap = await queueSnapshot();
-  const again = planBatch(snap.pending, { now, queuedOrderIds: snap.queuedOrderIds, rejectedOrderIds: snap.rejectedOrderIds });
+  const again = planBatch(snap.pending, { now, queuedOrderIds: snap.queuedOrderIds, queuedUpdateIds: snap.queuedUpdateIds, rejectedOrderIds: snap.rejectedOrderIds });
   if (again.send.length) { schedule(200); return; }
   const next = Math.min(...snap.pending.map((i) => i.next_at).filter((t) => t > now));
   if (Number.isFinite(next)) schedule(Math.max(500, next - now + 50));
@@ -323,13 +437,25 @@ async function wake(now: number) {
 const orderIdOf = (type: SyncRecordType, id: string, payload: Record<string, unknown> | undefined) =>
   type === "order" || type === "order_update" ? id : typeof payload?.order_id === "string" ? payload.order_id : null;
 
+/**
+ * True while the Attention page still holds a record of this order (the order, an update, payment, void or refund of
+ * it, or one held back by it): the order stays flagged Rejected until that one is tried again or dismissed. When any
+ * accepted record cleared the flag, a refused offline edit showed as paid and synced while the server held the order
+ * open with a balance due (final round, web-till#7).
+ */
+async function refusedRecordOf(orderId: string): Promise<boolean> {
+  const all = (await db.attention.toArray()) as AttentionItem[];
+  return all.some((a) => a.blocked_by === orderId || orderIdOf(a.type as SyncRecordType, a.id, a.payload) === orderId);
+}
+
 async function markSynced(type: SyncRecordType, id: string, item?: Pick<QueueItem, "payload">) {
   const orderId = orderIdOf(type, id, item?.payload);
   if (!orderId) return;
   const o = await db.orders.get(orderId);
   if (!o) return;
-  if (type === "order") await db.orders.put({ ...o, local_only: false, sync_status: undefined, sync_error: undefined });
-  else if (o.sync_status) await db.orders.put({ ...o, sync_status: undefined, sync_error: undefined });
+  const refused = await refusedRecordOf(orderId);
+  if (type === "order") await db.orders.put({ ...o, local_only: false, ...(refused ? {} : { sync_status: undefined, sync_error: undefined }) });
+  else if (o.sync_status && !refused) await db.orders.put({ ...o, sync_status: undefined, sync_error: undefined });
 }
 
 /**
@@ -347,14 +473,18 @@ async function markRejected(type: SyncRecordType, id: string, item: Pick<QueueIt
   else await db.orders.put({ ...o, sync_status: "rejected", sync_error: o.sync_status === "rejected" && o.sync_error ? o.sync_error : `${type.replace("_", " ")} ${reason}` });
 }
 
-/** Back in the queue after Try again: the order is pending once more, open again if the rejection had closed it. */
+/**
+ * Back in the queue after Try again: the order is pending once more, open again if the rejection had closed it. The
+ * Rejected flag stays while another of its records is still on the Attention page.
+ */
 async function unmarkRejected(type: SyncRecordType, id: string, payload: Record<string, unknown>) {
   const orderId = orderIdOf(type, id, payload);
   if (!orderId) return;
   const o = await db.orders.get(orderId);
   if (!o) return;
   const status = type === "order" && o.status === "rejected" ? (typeof payload.status === "string" ? payload.status : "placed") : o.status;
-  await db.orders.put({ ...o, status, open: OPEN_STATUSES.includes(status as never) ? 1 : 0, sync_status: undefined, sync_error: undefined, ...(type === "order" ? { local_only: true } : {}) });
+  const clear = (await refusedRecordOf(orderId)) ? {} : { sync_status: undefined, sync_error: undefined };
+  await db.orders.put({ ...o, status, open: OPEN_STATUSES.includes(status as never) ? 1 : 0, ...clear, ...(type === "order" ? { local_only: true } : {}) });
 }
 
 /** GET /sync/changes since the stored cursor, merged into the local catalog. */

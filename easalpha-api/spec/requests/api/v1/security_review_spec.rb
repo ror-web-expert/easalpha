@@ -53,7 +53,7 @@ RSpec.describe "Security review: staff payload, kitchen auth, throttles, guest i
       expect(t.fetch("super_login/email").block.call(request_for("/api/v1/super/login", email: "Root@easalpha.com", password: "x"))).to eq("root@easalpha.com")
       expect(t.fetch("super_login/email").limit).to eq(10)
       expect(t.fetch("super_login/email").period).to eq(10.minutes)
-      expect(t.fetch("public/ip").block.call(request_for("/api/v1/qr/abc/orders", {}))).to eq("203.0.113.9")
+      expect(t.fetch("qr/send").block.call(request_for("/api/v1/qr/abc/orders", {}))).to eq("abc") # per table since the final round
       expect(t.fetch("public/ip").block.call(request_for("/api/v1/public/storefront/x/orders", {}))).to eq("203.0.113.9")
       expect(t.fetch("public/ip").block.call(request_for("/api/v1/orders", {}))).to be_nil
     end

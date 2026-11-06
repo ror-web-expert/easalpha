@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Device, Session } from "@/lib/types";
 
@@ -65,5 +65,21 @@ describe("the till's sync after a PIN sign-in", () => {
   it("treats a device stored without a kind as the till it was paired as", async () => {
     signedIn(null);
     await waitFor(() => expect(h.startSync).toHaveBeenCalledTimes(1));
+  });
+
+  // Final round, web-till#4: every token refresh stored a new session and restarted sync under a push still out.
+  it("keeps sync running through a token refresh, and starts it again for the next person signed in", async () => {
+    const stop = vi.fn();
+    h.startSync.mockImplementation(() => stop);
+    signedIn("till");
+    await waitFor(() => expect(h.startSync).toHaveBeenCalledTimes(1));
+    act(() => useDeviceStore.setState({ session: { ...session, access_token: "a2", refresh_token: "r2" } as Session }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(h.startSync).toHaveBeenCalledTimes(1);
+    expect(stop).not.toHaveBeenCalled();
+    act(() => useDeviceStore.setState({ session: { ...session, membership: { id: "m-2" } } as unknown as Session }));
+    await waitFor(() => expect(h.startSync).toHaveBeenCalledTimes(2));
+    expect(stop).toHaveBeenCalledTimes(1);
+    h.startSync.mockImplementation(() => () => {});
   });
 });

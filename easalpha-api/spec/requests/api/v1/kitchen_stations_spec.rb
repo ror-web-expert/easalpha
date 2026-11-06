@@ -8,8 +8,9 @@ RSpec.describe "Kitchen stations, bumps and the customers' screens", type: :requ
   let(:biz) { owner.business }
   let(:headers) { auth_headers(owner) }
   let!(:m) { build_menu!(biz) }
-  let(:kds) { within(biz) { Device.create!(branch: Branch.first, name: "KDS", kind: "kitchen", paired_at: Time.current) } }
-  let(:screen) { within(biz) { Device.create!(branch: Branch.first, name: "Queue", kind: "token_screen", paired_at: Time.current) } }
+  # The oldest branch: a spec may add another branch before these are first used, and Branch.first follows uuids.
+  let(:kds) { within(biz) { Device.create!(branch: Branch.order(:created_at).first, name: "KDS", kind: "kitchen", paired_at: Time.current) } }
+  let(:screen) { within(biz) { Device.create!(branch: Branch.order(:created_at).first, name: "Queue", kind: "token_screen", paired_at: Time.current) } }
 
   def placed(lines, **extra)
     api_post "/api/v1/orders", { order_type: "walk_in", lines: lines, place: true }.merge(extra), headers: headers

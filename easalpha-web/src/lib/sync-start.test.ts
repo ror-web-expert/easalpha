@@ -10,7 +10,7 @@ const h = vi.hoisted(() => {
       count: async () => m.size, toArray: async () => [...m.values()], where: () => ({ equals: () => ({ toArray: async () => [] }) }),
     };
   };
-  return { calls: [] as string[], db: { queue: table(), attention: table(), orders: table(), customers: table() } };
+  return { calls: [] as string[], db: { queue: table(), attention: table(), orders: table(), customers: table(), transaction: (_mode: string, _tables: unknown, fn: () => Promise<unknown>) => fn() } };
 });
 vi.mock("@/lib/db", () => ({ db: h.db, kvGet: async () => undefined, kvSet: async () => undefined }));
 vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), api: async (path: string) => { h.calls.push(path); return {}; } }));
