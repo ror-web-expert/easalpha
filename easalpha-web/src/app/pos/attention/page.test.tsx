@@ -12,7 +12,7 @@ vi.mock("@/lib/db", () => ({
     queue: { orderBy: () => ({ toArray: async () => h.queue }) },
   },
 }));
-vi.mock("@/lib/sync", () => ({ dismissAttention: vi.fn(), retryAttention: vi.fn(), processQueue: vi.fn(), isMoneyRecord: (a: AttentionItem) => a.type === "payment" || a.type === "customer_payment" }));
+vi.mock("@/lib/sync", () => ({ dismissAttention: vi.fn(), retryAttention: vi.fn(), processQueue: vi.fn(), flushDismissals: vi.fn(async () => {}), isMoneyRecord: (a: AttentionItem) => a.type === "payment" || a.type === "customer_payment" }));
 vi.mock("@/store/device", () => {
   const state = { session: { membership: { id: h.me } } };
   return { useDeviceStore: (sel: (s: typeof state) => unknown) => sel(state), usePosCan: () => (...codes: string[]) => codes.some((c) => !h.lacks.includes(c)) };

@@ -92,8 +92,10 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
       end
       api_post "/api/v1/sync/push", { records: records }, headers: pos
       expect(json[:results].map { |r| r[:status] }).to eq(%w[duplicate duplicate rejected duplicate duplicate])
+      # Refused again by the same till, the record keeps its one open row, brought up to date (K7).
       get "/api/v1/sync/rejections", headers: headers
-      expect(json[:data].size).to eq(2)
+      expect(json[:data].size).to eq(1)
+      expect(within(biz) { SyncRejection.sole.sync_batch_id }).to eq(within(biz) { SyncBatch.order(:started_at).last.id })
       api_post "/api/v1/sync/rejections/#{json[:data].first[:id]}/resolve", { resolution: "item deleted, customer refunded" }, headers: headers
       expect(response).to have_http_status(:no_content)
     end
@@ -119,11 +121,14 @@ RSpec.describe "Tax invoices, offline sync, khata ledger", type: :request do
 
     it "rejects records from a member who was deactivated before the action and locks a day" do
       # The cashier signed in on this till once (a refresh token), then was deactivated; the owner pushes the queue.
-      within(biz) { RefreshToken.issue!(user: cashier.user, membership: cashier, device: device, app: "pos") }
-      within(biz) { cashier.deactivate! }
-      records = [ { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", client_created_at: 1.minute.from_now.iso8601, lines: [ { product_id: m[:chai].id } ] } } ]
-      api_post "/api/v1/sync/push", { records: records }, headers: auth_headers(owner, app: "pos", device: device)
-      expect(json[:results].first).to include(status: "rejected", code: "actor.unknown")
+      # An unsigned record (a till build before the signatures) is judged by the old rule until Sync::Signature::SUNSET.
+      travel_to(Sync::Signature::SUNSET - 10.days) do
+        within(biz) { RefreshToken.issue!(user: cashier.user, membership: cashier, device: device, app: "pos") }
+        within(biz) { cashier.deactivate! }
+        records = [ { type: "order", id: SecureRandom.uuid, membership_id: cashier.id, payload: { order_type: "walk_in", status: "placed", client_created_at: 1.minute.from_now.iso8601, lines: [ { product_id: m[:chai].id } ] } } ]
+        api_post "/api/v1/sync/push", { records: records }, headers: auth_headers(owner, app: "pos", device: device)
+        expect(json[:results].first).to include(status: "rejected", code: "actor.unknown")
+      end
     end
   end
 
