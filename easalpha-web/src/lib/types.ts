@@ -742,7 +742,10 @@ export interface FinanceIssue { kind: string; detail: string; order_id?: ID; lab
 export interface FinanceIntegrity { from: string; to: string; ok: boolean; issues: FinanceIssue[]; checked_at: string }
 export interface ProfitLoss {
   from: string; to: string; orders: number;
-  revenue: { gross_sales_minor: number; discounts_minor: number; service_charge_minor: number; delivery_charge_minor: number; refunds_minor: number; net_sales_minor: number; tax_collected_minor: number };
+  /** revenue_minor is the sales report's revenue (Reports::Revenue); net sales is it less the tax collected, and the
+   *  lines from gross sales to refunds add up to net sales. Tips, rounding and revenue are absent before 6 Nov 2026. */
+  revenue: { revenue_minor?: number; gross_sales_minor: number; discounts_minor: number; service_charge_minor: number; delivery_charge_minor: number; tips_minor?: number; rounding_minor?: number;
+    refunds_minor: number; net_sales_minor: number; tax_collected_minor: number };
   cost_of_goods_minor: number; gross_profit_minor: number; gross_margin_percent: number | null;
   operating: { expenses_minor: number; expenses_by_category: { category: string; count: number; amount_minor: number }[]; overheads_minor: number; overheads: (Overhead & { allocated_minor: number })[]; commissions_minor: number; aggregator_commission_minor: number; waste_minor: number; total_minor: number };
   net_profit_minor: number; net_margin_percent: number | null;

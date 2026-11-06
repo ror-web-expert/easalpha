@@ -12,7 +12,7 @@ module Reports
         cogs = -StockLedgerEntry.where(branch_id: b.id, business_day: from..to, kind: %w[sale sale_return packaging]).sum(:value_minor)
         revenue = Revenue.sum(paid)
         { branch: Serializers.branch(b), orders: paid.count, revenue_minor: revenue, average_order_minor: paid.count.zero? ? 0 : revenue / paid.count, discounts_minor: paid.sum(:discount_minor),
-          voided: voided.count, voided_minor: voided.sum(:total_minor), expenses_minor: expenses, cost_of_goods_minor: cogs, gross_profit_minor: revenue - paid.sum(:tax_minor) - cogs,
+          voided: voided.count, voided_minor: voided.sum(:total_minor), expenses_minor: expenses, cost_of_goods_minor: cogs, gross_profit_minor: revenue - Revenue.tax(paid) - cogs,
           khata_minor: Payment.by_method_kind("khata").where(branch_id: b.id, business_day: from..to, status: "captured").sum(:amount_minor), by_type: paid.group(:order_type).count }
       end
       total = rows.sum { |r| r[:revenue_minor] }

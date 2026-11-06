@@ -8,7 +8,7 @@ import { formatMoney, formatPercent } from "@/lib/money";
 import { daysAgo, isoDay } from "@/lib/dates";
 import { Cards, type DateRange } from "@/components/admin/page";
 import { ReportShell, StatementLine } from "@/components/admin/report-shell";
-import { marginTone } from "@/components/admin/report-helpers";
+import { marginTone, revenueLines } from "@/components/admin/report-helpers";
 import { Badge, Card, CardBody, CardHeader, CardTitle, SummaryCard } from "@/components/ui";
 
 type Line = { section: string; line: string; amount: string };
@@ -17,13 +17,9 @@ export default function FinancialReportPage() {
   const [range, setRange] = useState<DateRange>({ from: daysAgo(29), to: isoDay() });
   const q = useQuery({ queryKey: ["finance", "profit_loss", range], queryFn: () => api<ProfitLoss>("/finance/profit_loss", { query: { from: range.from, to: range.to } }) });
   const p = q.data;
+  const revenue = p ? revenueLines(p.revenue) : [];
   const lines: Line[] = p ? [
-    { section: "Revenue", line: "Gross sales", amount: formatMoney(p.revenue.gross_sales_minor) },
-    { section: "Revenue", line: "Discounts", amount: formatMoney(-p.revenue.discounts_minor) },
-    { section: "Revenue", line: "Service charge", amount: formatMoney(p.revenue.service_charge_minor) },
-    { section: "Revenue", line: "Delivery charge", amount: formatMoney(p.revenue.delivery_charge_minor) },
-    { section: "Revenue", line: "Refunds", amount: formatMoney(-p.revenue.refunds_minor) },
-    { section: "Revenue", line: "Net sales", amount: formatMoney(p.revenue.net_sales_minor) },
+    ...revenue.map((l) => ({ section: "Revenue", line: l.label, amount: formatMoney(l.minor) })),
     { section: "Cost of goods", line: "Cost of goods sold", amount: formatMoney(-p.cost_of_goods_minor) },
     { section: "Gross profit", line: `Gross profit (${formatPercent(p.gross_margin_percent ?? 0)})`, amount: formatMoney(p.gross_profit_minor) },
     ...p.operating.expenses_by_category.map((c) => ({ section: "Operating expenses", line: `${c.category} (${c.count})`, amount: formatMoney(-c.amount_minor) })),
@@ -57,12 +53,7 @@ export default function FinancialReportPage() {
             <Card>
               <CardHeader><CardTitle>Revenue</CardTitle></CardHeader>
               <CardBody>
-                <StatementLine label="Gross sales" value={formatMoney(p.revenue.gross_sales_minor)} />
-                <StatementLine label="Discounts" value={formatMoney(-p.revenue.discounts_minor)} indent />
-                <StatementLine label="Service charge" value={formatMoney(p.revenue.service_charge_minor)} indent />
-                <StatementLine label="Delivery charge" value={formatMoney(p.revenue.delivery_charge_minor)} indent />
-                <StatementLine label="Refunds" value={formatMoney(-p.revenue.refunds_minor)} indent />
-                <StatementLine label="Net sales" value={formatMoney(p.revenue.net_sales_minor)} strong />
+                {revenue.map((l) => <StatementLine key={l.label} label={l.label} value={formatMoney(l.minor)} indent={l.indent} strong={l.strong} />)}
                 <StatementLine label="Tax collected" value={formatMoney(p.revenue.tax_collected_minor)} indent right={<Badge variant="outline">not income</Badge>} />
               </CardBody>
             </Card>

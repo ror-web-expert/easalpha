@@ -64,9 +64,9 @@ module Reports
       by_item = cogs_by_item.map { |id, v| items[id] && { item: StockSerializers.item(items[id]), cogs_minor: v } }.compact.sort_by { |r| -r[:cogs_minor] }
       by_category = by_item.group_by { |r| r[:item][:category].presence || "Uncategorised" }.map { |c, rs| { category: c, cogs_minor: rs.sum { |r| r[:cogs_minor] } } }.sort_by { |r| -r[:cogs_minor] }
       # Revenue by the one rule (Reports::Revenue): paid and closed totals minus their refunds, a refunded order is
-      # zero; here net of tax, which is not the restaurant's money.
+      # zero; here net of the tax collected, which is not the restaurant's money (the profit and loss's net sales).
       completed = Revenue.completed(Order.where(branch_id: branch.id, business_day: from..to))
-      revenue = Revenue.sum(completed) - completed.sum(:tax_minor)
+      revenue = Revenue.sum(completed) - Revenue.tax(completed)
       cogs = by_item.sum { |r| r[:cogs_minor] }
       { from: from, to: to, valuation: valuation, stock_value_minor: value_of(StockLevel.all), cogs_minor: cogs, revenue_minor: revenue,
         gross_margin_percent: revenue.positive? ? ((revenue - cogs) * 100.0 / revenue).round(1) : nil, cogs_by_category: by_category, cogs_by_item: by_item.first(50) }
