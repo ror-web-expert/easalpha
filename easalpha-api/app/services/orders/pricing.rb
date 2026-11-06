@@ -14,15 +14,21 @@ module Orders
       end
       subtotal = items.sum(&:line_subtotal_minor)
 
+      promotions = promotions_for(order)
       order.discounts.each do |d|
         if d.order_item_id
           line = items.find { |i| i.id == d.order_item_id } or next
           d.amount_minor = [ discount_amount(d, line.line_subtotal_minor), line.line_subtotal_minor - line.line_discount_minor ].min
           line.line_discount_minor += d.amount_minor
         else
-          base = subtotal - items.sum(&:line_discount_minor)
-          d.amount_minor = [ discount_amount(d, base), base ].min
-          allocate(d.amount_minor, items)
+          # A coupon keeps its promotion's rules on every recalculation (QA T2): it comes off the lines it is for, and
+          # gives nothing while what the order comes to at its turn is below the minimum order.
+          promotion = promotions[d.promotion_id]
+          pool = promotion ? items.select { |i| promotion.covers?(i) } : items
+          base = pool.sum { |i| i.line_subtotal_minor - i.line_discount_minor }
+          below = promotion && subtotal - items.sum(&:line_discount_minor) < promotion.min_order_minor
+          d.amount_minor = below ? 0 : [ discount_amount(d, base), base ].min
+          allocate(d.amount_minor, pool)
         end
       end
 
@@ -63,6 +69,12 @@ module Orders
     def line_subtotal(i)
       return i.label_price_minor + (i.modifiers_minor * i.quantity).round if i.label_priced?
       ((i.unit_price_minor + i.modifiers_minor) * i.quantity).round
+    end
+
+    # The promotions behind the order's coupon discounts, by id; archived ones too, since a coupon applied stays.
+    def promotions_for(order)
+      ids = order.discounts.filter_map(&:promotion_id).uniq
+      ids.empty? ? {} : Promotion.where(id: ids).index_by(&:id)
     end
 
     def save_all!(order)
