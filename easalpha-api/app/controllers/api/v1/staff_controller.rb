@@ -1,8 +1,13 @@
 module Api
   module V1
     class StaffController < BaseController
+      # A role that adds riders (RIDER_CREATE) without managing staff sees, resends and cancels the rider invitations
+      # its adds become, and no other (L2 of 7 Nov 2026 left it with a toast and nothing on the Riders page).
+      INVITATION_ACTIONS = %i[invitations resend_invitation cancel_invitation].freeze
+
       before_action :authenticate!
-      before_action -> { require_permission!("staff.manage") }, except: [ :index, :show, :permissions, :sessions ]
+      before_action -> { require_permission!("staff.manage") }, except: [ :index, :show, :permissions, :sessions, *INVITATION_ACTIONS ]
+      before_action -> { require_permission!("staff.manage", "RIDER_CREATE") }, only: INVITATION_ACTIONS
       before_action :refuse_support!, except: [ :index, :show, :permissions, :sessions ]
 
       def index
@@ -150,19 +155,19 @@ module Api
 
       # GET /staff/invitations  people added by a phone or email they have not proved yet, until they join
       def invitations
-        render json: { data: StaffInvitation.pending.includes(:role).order(created_at: :desc).map { |i| Serializers.staff_invitation(i) } }
+        render json: { data: invitation_scope.pending.order(created_at: :desc).map { |i| Serializers.staff_invitation(i) } }
       end
 
       # POST /staff/invitations/:id/resend  the message again, and two more weeks to accept
       def resend_invitation
-        inv = StaffInvitation.pending.find(params[:id])
+        inv = invitation_scope.pending.find(params[:id])
         inv.update!(expires_at: StaffInvitation::TTL.from_now)
         inv.deliver!
         render json: Serializers.staff_invitation(inv)
       end
 
       def cancel_invitation
-        inv = StaffInvitation.where(status: "pending").find(params[:id])
+        inv = invitation_scope.where(status: "pending").find(params[:id])
         inv.update!(status: "cancelled")
         head :no_content
       end
@@ -177,6 +182,13 @@ module Api
       end
 
       private
+
+      # Every invitation for staff.manage; for a rider adder without it, only the invitations for the Rider role.
+      def invitation_scope
+        scope = StaffInvitation.includes(:role)
+        return scope if current_membership.can?("staff.manage")
+        scope.left_joins(:role).where("staff_invitations.rider_id IS NOT NULL OR staff_invitations.staff_type = 'rider' OR roles.system_key = 'rider'")
+      end
 
       def member_json(m)
         current_membership.can?("staff.manage") || m.id == current_membership.id ? Serializers.membership(m) : Serializers.membership_listing(m)

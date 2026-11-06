@@ -170,4 +170,57 @@ RSpec.describe "Rider profiles and rider logins", type: :request do
       expect { migrate! }.not_to(change { within(biz) { Rider.count } })
     end
   end
+
+  describe "rider invitations after the L2 pass" do
+    def stranger!(n, phone) = api_post("/api/v1/auth/signup", { name: "Stranger #{n}", business_name: "Stranger Cafe #{n}", email: "stranger-inv#{n}@example.com", password: "stranger-pass", phone: phone })
+
+    it "shows a role that adds riders without managing staff the rider invitations only, which it may resend and cancel" do
+      stranger!(1, "+923211230031")
+      api_post "/api/v1/riders", { name: "Asad", phone: "+923211230031", vehicle: "bike", create_login: true, pin: "6262" }, headers: headers
+      rider_inv = json[:invitation][:id]
+      stranger!(2, "+923211230032")
+      api_post "/api/v1/staff", { name: "Sana", phone: "+923211230032", role_id: role.("cashier").id, pin: "6363" }, headers: headers
+      expect(response).to have_http_status(:accepted), response.body
+      cashier_inv = within(biz) { StaffInvitation.where.not(id: rider_inv).last.id }
+
+      adder = add_member!(biz, "cashier")
+      within(biz) { adder.set_permissions!(%w[app.admin RIDER_CREATE]) }
+      h = auth_headers(adder.reload)
+      get "/api/v1/staff/invitations", headers: h
+      expect(response).to have_http_status(:ok), response.body
+      expect(json[:data].map { |i| i[:id] }).to eq([ rider_inv ])
+      api_post "/api/v1/staff/invitations/#{cashier_inv}/resend", {}, headers: h
+      expect(response).to have_http_status(:not_found)
+      api_post "/api/v1/staff/invitations/#{rider_inv}/resend", {}, headers: h
+      expect(response).to have_http_status(:ok), response.body
+      delete "/api/v1/staff/invitations/#{cashier_inv}", headers: h
+      expect(response).to have_http_status(:not_found)
+      delete "/api/v1/staff/invitations/#{rider_inv}", headers: h
+      expect(response).to have_http_status(:no_content)
+
+      get "/api/v1/staff/invitations", headers: auth_headers(add_member!(biz, "waiter"))
+      expect(response).to have_http_status(:forbidden)
+      get "/api/v1/staff/invitations", headers: headers
+      expect(json[:data].map { |i| i[:id] }).to eq([ cashier_inv ])
+    end
+
+    it "keeps the rider profile a member already has when they accept an invitation made with another one" do
+      stranger!(3, "+923211230033")
+      user = User.find_by!(phone: "+923211230033")
+      m, own, spare, inv = within(biz) do
+        m = Membership.create!(user: user, role: role.("rider"), status: "active", all_branches: true)
+        own = Riders::Profile.ensure_for!(m)
+        spare = Rider.create!(name: "Zain", phone: "+923211230033")
+        inv = StaffInvitation.invite!(role: role.("rider"), name: "Zain", phone: "+923211230033", email: nil, staff_type: "rider", cashier_role: nil,
+                                      all_branches: false, branch_ids: [ branch.id ], rider_id: spare.id, by: owner)
+        [ m, own, spare, inv ]
+      end
+      api_post "/api/v1/invitations/#{inv.token}/code", {}
+      api_post "/api/v1/invitations/#{inv.token}/accept", { code: json[:dev_code], password: "stranger-pass" }
+      expect(response).to have_http_status(:created), response.body
+      expect(rider_of(m).id).to eq(own.id)
+      expect(within(biz) { spare.reload }).to have_attributes(membership_id: nil, active: false)
+      expect(within(biz) { inv.reload.status }).to eq("accepted")
+    end
+  end
 end

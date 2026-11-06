@@ -75,12 +75,25 @@ class StaffInvitation < ApplicationRecord
         end
         # The PIN chosen at invitation time, unless another member took it meanwhile: then the owner sets a new one.
         m.update!(pin_digest: pin_digest, pin_lookup: pin_lookup) if pin_digest && m.pin_digest.blank? && !(pin_lookup && Membership.active.where(pin_lookup: pin_lookup).where.not(id: m.id).exists?)
-        Rider.where(id: rider_id).update_all(membership_id: m.id) if rider_id
+        link_invited_rider!(m) if rider_id
         Riders::Profile.ensure_for!(m) # the Rider role from Staff had no profile; one invited from Riders is the one linked above
         update!(status: "accepted", accepted_at: Time.current, accepted_by_user_id: user.id, membership_id: m.id)
         AuditLog.record(action: "create", record: m, after: { user_id: user.id, role: role.name, invitation_id: id, accepted: true })
         m
       end
     end
+  end
+
+  private
+
+  # The rider made for this invitation becomes the member's, unless the member already rides for this business on a
+  # profile of their own (put on the Rider role another way while this waited): that one stays theirs, and the
+  # invitation's goes if it carries nothing. Linking it too broke the one-profile-per-login index, a 500 (L2).
+  def link_invited_rider!(m)
+    own = Rider.where(membership_id: m.id).where.not(id: rider_id).first
+    return Rider.where(id: rider_id).update_all(membership_id: m.id) unless own
+    spare = Rider.find_by(id: rider_id)
+    return unless spare && spare.membership_id.nil? && spare.float_minor.zero? && !spare.deliveries.exists? && !spare.cash_movements.exists?
+    spare.update!(active: false, archived_at: Time.current)
   end
 end

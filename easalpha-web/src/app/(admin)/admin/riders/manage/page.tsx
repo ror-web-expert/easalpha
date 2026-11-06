@@ -33,8 +33,10 @@ export default function RidersPage() {
   const remove = useRemove(["riders"], (id) => `/riders/${id}`, "Rider removed");
   // Invitations are staff.manage's list, as on the staff screens: a rider whose phone is on a login that never
   // confirmed it waits there, and their row says "invited" instead of a bare "none" (L2, 7 Nov 2026).
-  const canStaff = can("staff.manage");
-  const invitations = useList<StaffInvitation>("staff_invitations", "/staff/invitations", {}, canStaff);
+  // The rider invitations are the staff list's, and a role that adds riders sees them too (GET /staff/invitations answers it
+  // the rider ones only).
+  const seesInvites = can("staff.manage", ...RIDER_PERMS.permanent.create);
+  const invitations = useList<StaffInvitation>("staff_invitations", "/staff/invitations", {}, seesInvites);
   const waiting = (invitations.data ?? []).filter(isRiderInvitation);
   const invitedRider = (r: Rider) => waiting.find((i) => i.rider_id === r.id);
   const qc = useQueryClient();
@@ -44,7 +46,7 @@ export default function RidersPage() {
     onSuccess: (r) => {
       ["riders", "staff_invitations"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setForm(null);
-      const o = riderAddOutcome(r, canStaff);
+      const o = riderAddOutcome(r, seesInvites);
       if (o.tone === "info") toast.info(o.title, o.body); else toast.success(o.title, o.body);
     },
     onError: (e) => toast.error("Could not save", errorMessage(e)),
@@ -138,7 +140,7 @@ export default function RidersPage() {
           </TBody>
         </Table>
       )}
-      {tab === "permanent" && canStaff ? <WaitingInvitations invitations={waiting} description={WAITING} /> : null}
+      {tab === "permanent" && seesInvites ? <WaitingInvitations invitations={waiting} description={WAITING} /> : null}
 
       <Dialog open={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit rider" : "Add rider"}
         footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending || add.isPending} disabled={!form?.name.trim() || !pinOk} onClick={submit}>Save</Button></>}>

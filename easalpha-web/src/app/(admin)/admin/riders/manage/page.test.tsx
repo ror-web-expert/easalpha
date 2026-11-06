@@ -63,8 +63,13 @@ describe("Manage Riders: logins waiting for the rider", () => {
     expect(within(loginCell("Kashif")).getByText("App")).toBeInTheDocument();
   });
 
-  it("asks for no invitations without staff.manage, as the staff screens", async () => {
-    signIn(RIDER_PERMS);
+  it("lists them for a role that adds riders without staff.manage; a role that only views riders asks for none", async () => {
+    signIn(RIDER_PERMS); // RIDER_CREATE, no staff.manage: the API answers it the rider invitations
+    show();
+    expect(within(await screen.findByRole("region", { name: "Waiting to join" })).getByText("Asif")).toBeInTheDocument();
+    cleanup();
+    vi.mocked(api).mockClear();
+    signIn(["app.admin", "RIDERS", "RIDER_VIEW"]);
     show();
     expect(await screen.findByRole("link", { name: "Asif" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Waiting to join" })).toBeNull();
