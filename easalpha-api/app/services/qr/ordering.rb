@@ -161,8 +161,8 @@ module Qr
 
     # The guests' lines still waiting for the cashier, by the submit key on them. An order from before the keys were
     # kept treats every unsent line of a running order as the round, and the whole of a guest's unsent order.
-    def waiting_round(order)
-      waiting = order.items.reload.select { |i| i.status == "pending" }
+    def waiting_round(order, items = order.items.reload)
+      waiting = items.select { |i| i.status == "pending" }
       tagged = waiting.select(&:qr_ref)
       return tagged if tagged.any?
       order.sent? || order.source.in?(%w[qr online]) ? waiting : []

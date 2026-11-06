@@ -81,6 +81,8 @@ RSpec.describe "QR ordering: rounds on a table's open order", type: :request do
     expect(round[:id]).to eq(draft[:id])
     expect(round[:qr_status]).to eq("pending") # waits although the branch sends guest orders straight in
     expect(tickets(draft[:id])).to be_empty
+    get "/api/v1/qr_orders?status=pending", headers: headers
+    expect(json[:data].find { |r| r[:id] == draft[:id] }[:waiting_items]).to eq([ { name: "Chai", quantity: "3" } ]) # the guest's round, not the waiter's lines
 
     api_post "/api/v1/qr_orders/#{draft[:id]}/reject", { reason: "Out of chai" }, headers: headers
     expect(response).to have_http_status(:ok), response.body

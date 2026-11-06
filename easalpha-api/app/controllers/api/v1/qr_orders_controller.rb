@@ -20,7 +20,7 @@ module Api
         rows, cursor = paginate(scope)
         render_page(rows, cursor) do |o|
           OrderSerializers.summary(o).merge(qr_status: o.qr_status, guest_name: o.guest_name, address_text: o.address&.to_s.presence || o.delivery_address, guest_phone: o.guest_phone, notes: o.notes,
-                                            waiting_items: o.items.select { |i| i.status == "pending" }.map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, "") } })
+                                            waiting_items: Qr::Ordering.waiting_round(o, o.items).map { |i| { name: i.name_snapshot, quantity: i.quantity.to_s("F").sub(/\.0+\z/, "") } })
         end
       end
 

@@ -104,8 +104,11 @@ module Customers
       return unless Whatsapp::Provider.live?(business)
       runs = recent_runs(today).to_a
       cycle = runs.empty? ? cycle(business, today) : nil
+      # Each customer's runs, newest first, read once for everyone.
+      billed = Hash.new { |h, k| h[k] = [] }
+      runs.each { |r| r.results.map { |row| row["customer_id"] }.uniq.each { |id| billed[id] << r } }
       Customer.active.where(is_walk_in: false).where("balance_minor >= ?", minimum(business)).find_each do |customer|
-        bills = cycle || from_runs(runs.select { |r| r.results.any? { |row| row["customer_id"] == customer.id } })
+        bills = cycle || from_runs(billed.fetch(customer.id, []))
         pos = position(customer, today: today, bills: bills, deep: false) or next
         bill = pos[:bill]
         next unless (today - bill[:due_on]).to_i.between?(after, after + WINDOW) && !reminded?(customer, bill)
