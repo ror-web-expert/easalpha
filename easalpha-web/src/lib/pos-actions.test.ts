@@ -91,6 +91,7 @@ import { applyServerDiscount, buildLocalReceipt, cartToLocal, completeOrder, fin
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
+import { refundOffer } from "./refunds";
 
 type Discount = { id: string; kind: string; value: number; amount_minor: number; reason: string | null; order_item_id: string | null };
 interface ServerOrder {
@@ -500,6 +501,42 @@ describe("payOrder saves only what the server lacks", () => {
     // Completed since, the same copy opens as a plain order: reopened means open again after a completion.
     h.rows.set(server.id, { ...(h.rows.get(server.id) as LocalOrder), status: "closed", open: 0 });
     expect(localToCart(h.rows.get(server.id) as LocalOrder).reopened).toBe(false);
+  });
+
+  // Leftovers of 7 Nov 2026 (L3, item 6): the copy an offline edit stored was a fresh order's: Unpaid, no receipt
+  // number, today's day, the cashier signed in now. The Orders card read Unpaid for a paid order, a reprint offline
+  // had no receipt number or barcode, and a reopened order whose total went up was offered a refund of all it was
+  // paid (refundOffer reads an open order without a receipt number as one never completed), which the server refuses.
+  describe("the till's copy after an offline edit", () => {
+    const reopenedPaid = () => {
+      server = fresh([["Karahi", 100000]], { status: "served", paid_minor: 100000, methods: { cash: 100000 }, reopened_at: "2026-10-13T11:00:00Z", reopen_count: 1 });
+      return { ...asOrder(server), receipt_number: "261013-MAIN-7", taken_by_membership_id: "m-taker" } as Order;
+    };
+
+    it("keeps a paid order paid, with its receipt, day and taker, when the edit leaves what is due as it was", async () => {
+      await storeServerOrder(reopenedPaid());
+      h.online = false;
+      const { local } = await saveOrder({ ...opened(), notes: "no onions" });
+      expect(local).toMatchObject({ payment_status: "paid", paid_minor: 100000, total_minor: 100000, receipt_number: "261013-MAIN-7", business_day: "2026-10-13", membership_id: "m-taker", reopened_at: "2026-10-13T11:00:00Z" });
+      expect(h.rows.get(server.id)).toMatchObject({ payment_status: "paid", receipt_number: "261013-MAIN-7", notes: "no onions" });
+      expect(refundOffer(local)).toBeNull();
+      expect(buildLocalReceipt(local, true).receipt_number).toBe("261013-MAIN-7");
+    });
+
+    it("follows an edit that changes what is due: part-paid above what was paid, as the server answers it", async () => {
+      await storeServerOrder(reopenedPaid());
+      h.online = false;
+      const cart = opened();
+      const { local, cart: next } = await saveOrder({ ...cart, lines: [...cart.lines, openLine("Naan", 30000)] });
+      expect(local).toMatchObject({ payment_status: "partial", paid_minor: 100000, total_minor: 130000, receipt_number: "261013-MAIN-7", business_day: "2026-10-13" });
+      expect(refundOffer(local)).toBeNull(); // nothing paid above the total: no refund while it is open
+      expect(screenDue(next, ["cash"])).toBe(30000);
+      // A part-paid order stays part-paid through an edit that leaves its total.
+      server = fresh([["Karahi", 100000]], { status: "served", paid_minor: 40000, methods: { cash: 40000 } });
+      await storeServerOrder(asOrder(server));
+      const again = await saveOrder({ ...opened(), notes: "less salt" });
+      expect(again.local).toMatchObject({ payment_status: "partial", paid_minor: 40000, total_minor: 100000 });
+    });
   });
 
   it("still saves a changed note, and names the save as the step that failed", async () => {
