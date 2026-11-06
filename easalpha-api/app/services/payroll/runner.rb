@@ -31,12 +31,17 @@ module Payroll
         who = employees.size == 1 ? "the employee" : "the #{employees.size} employees"
         raise Api::Errors::Conflict.new("payroll.exists", "Payroll for #{month.strftime('%B %Y')} already exists for #{branch&.name}; cancel it and generate it again to include #{who} added since")
       end
-      main_branch = branch || Branch.active.order(is_main: :desc).first
-      commissions = Reports::Commissions.run(branch: main_branch, from: from, to: to)[:rows].group_by { |r| r[:membership_id] }
+      # Commission on the run's branch, or on every branch for an all-branches run (the Run Payroll page's kind): the
+      # main branch alone left a second branch's waiters and cashiers unpaid. An archived branch's month counts too.
+      commissions = (branch ? [ branch ] : Branch.all.to_a).flat_map { |b| Reports::Commissions.run(branch: b, from: from, to: to)[:rows] }.group_by { |r| r[:membership_id] }
       # Tips are shared among the people who earned them: the run's branch when it has one, every branch otherwise.
+      # What another live or paid run of the month already put on payslips is not shared again: a branch run counts
+      # that branch's runs and the all-branches runs, an all-branches run every run (6 Nov 2026 review).
       tips_scope = Order.where(business_day: from..to, status: %w[paid closed])
       tips_scope = tips_scope.where(branch_id: branch.id) if branch
-      tips_total = tips_scope.sum(:tip_minor)
+      allotted = Payslip.joins(:payroll_run).where(payroll_runs: { month: month }).where.not(payroll_runs: { status: "cancelled" }).where.not(payroll_run_id: run.id)
+      allotted = allotted.where(payroll_runs: { branch_id: [ branch.id, nil ] }) if branch
+      tips_total = [ tips_scope.sum(:tip_minor) - allotted.sum(:tips_minor), 0 ].max
       tip_sharers = employees.select(&:shares_tips)
       canteen = Canteen::Payroll.enabled?
       deducted = canteen ? Canteen::Payroll.deducted_months : []
@@ -106,6 +111,10 @@ module Payroll
       raise Api::Errors::Conflict.new("payroll.status", "Payroll is #{run.status}") unless run.status.in?(LIVE)
       category = ExpenseCategory.active.find_by(name: "Salaries") || ExpenseCategory.create!(name: "Salaries")
       PayrollRun.transaction do
+        # Two Pay requests for one run (a retry after the page timed out, two managers): the second waits here for the
+        # first and then finds it paid, instead of paying every salary and settling every canteen bill again.
+        run.lock!
+        raise Api::Errors::Conflict.new("payroll.status", "Payroll is #{run.status}") unless run.status.in?(LIVE)
         run.payslips.includes(:employee).each do |p|
           Canteen::Payroll.settle!(p, actor: actor, branch: branch) if Canteen::Payroll.enabled?
           if p.net_minor.positive?
