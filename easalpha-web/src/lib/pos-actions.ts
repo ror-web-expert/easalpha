@@ -89,24 +89,30 @@ export function cartToLocal(input: Cart, status: string, extra: Partial<LocalOrd
   };
 }
 
+/**
+ * The till's copy of a server order. A summary row (GET /orders) has no items, discounts, charge settings, tax choice
+ * or staff-meal reason: what the till already holds of those is kept, never blanked (review R2: a receipt scan stored
+ * the summary row and emptied the cached lines).
+ */
 export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
-  const lines: CartLine[] = (o.items ?? []).map((i) => ({
+  const full = Array.isArray(o.items);
+  const lines: CartLine[] = full ? o.items.map((i) => ({
     key: i.id, id: i.id, product_id: i.product_id ?? undefined, variant_id: i.variant_id, deal_id: i.deal_id ?? undefined, name: i.name, unit_price_minor: i.unit_price_minor, quantity: Number(i.quantity),
     notes: i.notes, modifiers: (i.modifiers ?? []).map((m) => ({ modifier_id: m.modifier_id ?? "", name: m.name, price_minor: m.price_minor, quantity: Number(m.quantity) })),
     open_item: i.open_item ? { name: i.name, price_minor: i.unit_price_minor } : undefined, price_override_minor: i.price_overridden ? i.unit_price_minor : null,
     tax_rate: i.tax_rate, tax_inclusive: i.tax_inclusive, station_id: i.station_id, status: i.status, sent: !!i.sent_at,
-  }));
+  })) : prev?.lines ?? [];
   return {
     id: o.id, serial: o.serial, till_serial: o.till_serial, label: o.label, status: o.status, payment_status: o.payment_status, order_type: o.order_type, table_id: o.table_id, table_code: o.table_code,
     guest_name: o.guest_name, covers: o.covers, customer_id: o.customer_id, customer_name: prev?.customer_name ?? null, customer_phone: prev?.customer_phone ?? null, notes: o.notes,
-    is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? null, lines, subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor,
+    is_staff_meal: o.is_staff_meal, staff_meal_reason: (full ? o.staff_meal_reason : o.is_staff_meal ? prev?.staff_meal_reason : null) ?? null, lines, subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor,
     tax_minor: o.tax_minor, rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor ?? o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, payments: prev?.payments ?? [], receipt_number: o.receipt_number,
     void_reason: o.void_reason, membership_id: o.taken_by_membership_id, cashier_name: prev?.cashier_name ?? null, business_day: o.business_day, client_created_at: o.client_created_at ?? o.created_at,
     created_at: o.created_at, updated_at: o.updated_at, local_only: false, open: OPEN_STATUSES.includes(o.status) ? 1 : 0,
     delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: prev?.address_id ?? null,
-    service_charge_percent: o.service_charge_percent ?? null, service_charge_fixed_minor: o.service_charge_fixed_minor ?? 0, delivery_charge_percent: o.delivery_charge_percent ?? 0,
-    tax_choice: o.tax_choice ?? null, tax_rate_id: o.tax_rate_id ?? null,
-    // SPEC discounts: a summary row carries no lines; keep the ones already known rather than dropping them.
+    service_charge_percent: (full ? o.service_charge_percent : prev?.service_charge_percent) ?? null, service_charge_fixed_minor: (full ? o.service_charge_fixed_minor : prev?.service_charge_fixed_minor) ?? 0,
+    delivery_charge_percent: (full ? o.delivery_charge_percent : prev?.delivery_charge_percent) ?? 0,
+    tax_choice: (full ? o.tax_choice : prev?.tax_choice) ?? null, tax_rate_id: (full ? o.tax_rate_id : prev?.tax_rate_id) ?? null,
     order_discounts: o.discounts ? o.discounts.map((d) => ({ id: d.id, kind: d.kind, value: Number(d.value), amount_minor: d.amount_minor, reason: d.reason, order_item_id: d.order_item_id })) : prev?.order_discounts,
   };
 }
@@ -552,8 +558,7 @@ export async function refreshOrdersFromServer(business_day: string) {
       for (const o of page.data) {
         const prev = await db.orders.get(o.id);
         if (prev?.local_only) continue;
-        const local = serverToLocal({ ...o, items: o.items ?? [] }, prev);
-        await db.orders.put(o.items ? local : { ...local, lines: prev?.lines ?? [] });
+        await db.orders.put(serverToLocal(o, prev));
       }
       if (!page.next_cursor) break;
       cursor = page.next_cursor;

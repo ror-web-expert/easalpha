@@ -72,7 +72,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { localToCart, payOrder, payStep, regularPricing, reopenFields, saveOrder, serverToLocal, TotalChangedError } from "./pos-actions";
+import { localToCart, payOrder, payStep, regularPricing, reopenFields, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -529,6 +529,29 @@ describe("saveOrder carries the staff-meal flag on an order the server already h
     expect(r.offline).toBe(true);
     expect(r.cart.is_staff_meal).toBe(true);
     expect(h.queued.at(-1)).toMatchObject({ type: "order_update", id: "o-1", payload: { is_staff_meal: true, staff_meal_reason: "Rider meal" } });
+  });
+});
+
+describe("a summary row from GET /orders (review R2)", () => {
+  it("updates the status and money but keeps the lines, discounts and charges the till already holds", async () => {
+    server = fresh([["Karahi", 100000]], { discounts: [{ id: "d-1", kind: "voucher", value: 100, amount_minor: 10000, reason: null, order_item_id: null }] });
+    const cached: LocalOrder = { ...serverToLocal(asOrder(server)), service_charge_percent: 0, tax_choice: "none" };
+    h.rows.set(server.id, cached);
+    // What OrderSerializers.summary leaves out of the full order.
+    const row: Record<string, unknown> = { ...asOrder(server), status: "paid", paid_minor: 90000 };
+    for (const k of ["items", "discounts", "service_charge_percent", "service_charge_fixed_minor", "delivery_charge_percent", "tax_choice", "tax_rate_id", "staff_meal_reason"]) delete row[k];
+    const stored = await storeServerOrder(row as unknown as Order);
+    expect(stored).toMatchObject({ status: "paid", paid_minor: 90000, service_charge_percent: 0, tax_choice: "none" });
+    expect(stored.lines.map((l) => l.name)).toEqual(["Karahi"]);
+    expect(stored.order_discounts).toEqual(cached.order_discounts);
+    expect(h.rows.get(server.id)).toMatchObject({ lines: cached.lines, status: "paid" });
+  });
+
+  it("takes the server's lines from a whole order", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    server.items.push({ id: "item-2", name: "Naan", unit_price_minor: 2500, quantity: 2 });
+    expect((await storeServerOrder(asOrder(server))).lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
   });
 });
 
