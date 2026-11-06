@@ -24,10 +24,13 @@ class PaymentAccount < ApplicationRecord
     end
   end
 
+  # The reversal keeps the original's reference and shift, so its journal lands on the same account (an expense's
+  # own category, not Other Expenses) and the shift's expected cash gets the money back.
   def reverse!(entry, by: nil, description: nil)
     PaymentAccount.transaction do
       day = Branch.unscoped.find_by(id: entry.branch_id || branch_id)&.business_day_for(Time.current) || Date.current
-      rev = post!(kind: entry.kind, amount_minor: -entry.amount_minor, business_day: day, description: description || "Reversal of #{entry.id}", by: by, branch_id: entry.branch_id)
+      ref = entry.ref_table.present? ? entry.ref_table.classify.safe_constantize&.find_by(id: entry.ref_id) : nil
+      rev = post!(kind: entry.kind, amount_minor: -entry.amount_minor, business_day: day, ref: ref, description: description || "Reversal of #{entry.id}", by: by, shift_id: entry.shift_id, branch_id: entry.branch_id)
       entry.update!(reversed_by_entry_id: rev.id)
       rev
     end
