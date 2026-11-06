@@ -93,13 +93,16 @@ module Api
         render json: { synced: fixed }
       end
 
-      # POST /orders/:id/reopen  pin? approver_pin?  SPEC reopen flow
+      # POST /orders/:id/reopen  approver_pin?, approval_codes?  SPEC reopen flow
       def reopen
-        require_permission!("REOPEN_ORDER", "orders.refund")
+        require_permission!("REOPEN_ORDER", "orders.refund", "orders.create")
         order = Order.find(params[:id])
         day_lock_guard!(order.business_day)
+        # A till user who may not reopen asks a manager, whose PIN approves REOPEN_ORDER as the dialog names it (QA T11:
+        # the cashier was refused outright, PIN or not).
+        approver = current_membership.can?("orders.refund") ? current_membership : require_approval!("REOPEN_ORDER")
         order = Orders::Transitions.reopen!(order, actor: current_membership, device: current_device)
-        audit!("update", record: order, after: { reopened: true, reopen_count: order.reopen_count })
+        audit!("update", record: order, after: { reopened: true, reopen_count: order.reopen_count }, approved_by: approver == current_membership ? nil : approver.user)
         render json: OrderSerializers.full(order.reload)
       end
 
@@ -157,6 +160,8 @@ module Api
       def create
         require_permission!("orders.create")
         if params[:id].present? && (existing = Order.find_by(id: params[:id]))
+          # A repeated create answers with the order it made; a finished one is not that (refuse_closed!).
+          refuse_closed!(existing)
           return render json: OrderSerializers.full(existing), status: :ok
         end
         approvals = collect_approvals
@@ -184,6 +189,7 @@ module Api
       def tax_choice
         require_permission!("orders.create")
         order = Order.includes(:items).find(params[:id])
+        refuse_closed!(order)
         if ActiveModel::Type::Boolean.new.cast(params[:none])
           Orders::Builder.apply_tax_choice!(order, none: true)
         else
@@ -196,12 +202,16 @@ module Api
       def update
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
+        refuse_closed!(order)
         approvals = collect_approvals
         require_order_update_pin!(order) if order.reopened?
         before_items = Orders::Story.snapshot(order)
         amount_before = order.total_minor
         builder = Orders::Builder.new(order, actor: current_membership, device: current_device, branch: current_branch)
-        builder.update!(attrs: staff_meal_change(order, order_attrs.except(:id), approvals), lines: lines_param, approvals: approvals)
+        # The till's clock dates an order once, at create, inside the Orders::ClientTime window; every save sends that
+        # time back. An update never re-dates it, so it cannot move the order a year back and buy a regular-discount
+        # tier (review orders-money#7), nor clamp a long-open order's time again on each save.
+        builder.update!(attrs: staff_meal_change(order, order_attrs.except(:id, :client_created_at), approvals), lines: lines_param, approvals: approvals)
         Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
         if order.sent?
           diff = Orders::Story.diff(before_items, Orders::Story.snapshot(order.reload))
@@ -257,6 +267,7 @@ module Api
         require_permission!("orders.create", "discounts.apply")
         order = Order.includes(items: :modifiers).find(params[:id])
         raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+        day_lock_guard!(order.business_day) # an open order left on a day locked by force changes no more, as in Builder#update!
         # Review 3.9: every discount change is logged with the order's discount and total before and after.
         before = { discount_minor: order.discount_minor, total_minor: order.total_minor }
         if params[:voucher_code].present?
@@ -272,6 +283,7 @@ module Api
           raise Api::Errors::NotFound.new("coupon.invalid", "This coupon does not exist") unless promotion
           raise Api::Errors::Conflict.new("coupon.unavailable", "This coupon is not valid right now") unless promotion.available_at?(Time.current, zone: current_business.time_zone)
           raise Api::Errors::Conflict.new("discount.applied", "#{promotion.coupon_code} is already applied to this order") if order.discounts.exists?(promotion_id: promotion.id)
+          check_coupon!(order, promotion)
           kind = promotion.kind == "fixed" ? "fixed" : "promotion"
           value = promotion.value
         end
@@ -282,7 +294,8 @@ module Api
           approver = require_approval!("discounts.above_limit") if over || !current_membership.can?("discounts.apply")
         end
         raise Api::Errors::BadRequest.new("discount.reason_required", "A reason is required") if promotion.nil? && current_business.setting("discount_requires_reason") && params[:reason].blank?
-        d = order.discounts.create!(kind: kind, value: value, reason: params[:reason].presence || promotion&.name, order_item_id: params[:order_item_id].presence, promotion_id: promotion&.id,
+        # A coupon's own targets choose its lines, never a line the request names.
+        d = order.discounts.create!(kind: kind, value: value, reason: params[:reason].presence || promotion&.name, order_item_id: promotion ? nil : params[:order_item_id].presence, promotion_id: promotion&.id,
                                     applied_by_membership_id: current_membership.id, approved_by_membership_id: approver && approver != current_membership ? approver.id : nil)
         Orders::Pricing.recalculate!(order.reload)
         Orders::Pricing.save_all!(order)
@@ -294,9 +307,14 @@ module Api
       def remove_discount
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
+        # As for adding one: a settled sale, or one on a locked day, keeps its discounts (and its voucher stays used).
+        raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+        day_lock_guard!(order.business_day)
         d = order.discounts.find(params[:discount_id])
         before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
         Marketing::Vouchers.release!(d) if d.kind == "voucher"
+        # A coupon taken off gives its use back, as a void does, so a one-use offer is not spent on a sale without it.
+        Promotion.where(id: d.promotion_id).update_all("units_sold = GREATEST(units_sold - 1, 0)") if d.promotion_id
         d.destroy!
         Orders::Pricing.recalculate!(order.reload)
         Orders::Pricing.save_all!(order)
@@ -305,6 +323,33 @@ module Api
       end
 
       private
+
+      # A paid, closed, voided or refunded order takes no more lines. The till may still hold it (its receipt left on
+      # screen, or paid on another till): answered order.closed with the order, from a create or a save alike, it
+      # starts a new order instead of dropping the lines added to the finished one (QA T9).
+      def refuse_closed!(order)
+        return if order.open?
+        raise Api::Errors::Conflict.new("order.closed", "#{order.label} is already #{order.status}: start a new order", details: { order: OrderSerializers.full(order) })
+      end
+
+      # A coupon's own rules before it goes on (QA T2). One coupon per order: a promotion has no stacking field and the
+      # SPEC names none. Its minimum order is weighed against what the order comes to now, before tax (as a voucher's
+      # minimum spend is), and a coupon for some products or categories needs one of them on the order. Pricing keeps
+      # the same rules on every later recalculation.
+      def check_coupon!(order, promotion)
+        if (other = order.discounts.where.not(promotion_id: nil).first)
+          applied = Promotion.find_by(id: other.promotion_id)&.coupon_code || other.reason
+          raise Api::Errors::Conflict.new("coupon.one_per_order", "#{applied} is already on this order: remove it to use #{promotion.coupon_code}")
+        end
+        rs = ->(minor) { "Rs #{Customers::Notify.rupees(minor)}" }
+        comes_to = order.subtotal_minor - order.discount_minor
+        if comes_to < promotion.min_order_minor
+          raise Api::Errors::Conflict.new("coupon.min_order", "#{promotion.coupon_code} needs an order of #{rs.(promotion.min_order_minor)} or more; this order comes to #{rs.(comes_to)}",
+                                          details: { min_order_minor: promotion.min_order_minor, order_minor: comes_to })
+        end
+        return unless promotion.targeted? && order.active_items.none? { |i| promotion.covers?(i) }
+        raise Api::Errors::Conflict.new("coupon.no_items", "#{promotion.coupon_code} is for #{promotion.target_names} only: add it to the order first")
+      end
 
       # SPEC REQUIRE_PIN_FOR_ORDER_UPDATE: a restriction that demands the order-update PIN (the user's own PIN, or a
       # manager's PIN) before a reopened order is saved.

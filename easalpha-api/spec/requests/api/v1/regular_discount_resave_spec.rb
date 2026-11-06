@@ -47,6 +47,38 @@ RSpec.describe "Regular discount on an order saved again", type: :request do
     api_patch "/api/v1/orders/#{o[:id]}", { customer_id: cust.id, lines: [ { id: o[:items].first[:id], product_id: m[:burger].id, quantity: 1 } ] }, headers: headers
     expect(json[:discounts].find { |d| d[:kind] == "regular" }[:amount_minor]).to eq((after_product * 0.10).round)
   end
+
+  # Review orders-money#8: every save with lines destroyed and recreated the regular row, which then sorted behind a
+  # manual discount, so the order repriced on a save that changed nothing.
+  it "keeps the regular discount where it was among the discounts, so a save with the same lines changes nothing" do
+    cust = within(biz) { Customer.create!(name: "Sana Farooq", last_order_at: 1.day.ago) }
+    api_post "/api/v1/orders", { order_type: "walk_in", customer_id: cust.id, lines: [ { product_id: m[:burger].id, quantity: 2 } ] }, headers: headers
+    o = json
+    api_post "/api/v1/orders/#{o[:id]}/discounts", { kind: "percent", value: 10, reason: "Manager" }, headers: headers
+    expect(json[:discounts].map { |d| [ d[:kind], d[:amount_minor] ] }).to eq([ [ "regular", 9_000 ], [ "percent", 8_100 ] ])
+    total = json[:total_minor]
+    regular_id = json[:discounts].first[:id]
+    2.times do
+      api_patch "/api/v1/orders/#{o[:id]}", { customer_id: cust.id, lines: [ { id: o[:items].first[:id], quantity: 2 } ] }, headers: headers
+      expect(json[:discounts].map { |d| [ d[:kind], d[:amount_minor] ] }).to eq([ [ "regular", 9_000 ], [ "percent", 8_100 ] ])
+      expect(json[:total_minor]).to eq(total)
+    end
+    expect(json[:discounts].first[:id]).to eq(regular_id)
+  end
+
+  it "keeps the tier a reopened order was given, though the customer's last order is now this one" do
+    api_post "/api/v1/regular_discount_tiers", { name: "Back within a week", within_days: 7, kind: "percent", value: 5 }, headers: headers
+    cust = within(biz) { Customer.create!(name: "Ali", last_order_at: 5.days.ago) }
+    api_post "/api/v1/orders", { order_type: "walk_in", customer_id: cust.id, lines: [ { product_id: m[:burger].id, quantity: 1 } ], place: true }, headers: headers
+    o = json
+    expect(o[:discounts].map { |d| d[:reason] }).to eq([ "Regular discount: Back within a week" ])
+    api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "cash", amount_minor: o[:total_minor], tendered_minor: o[:total_minor] } ] }, headers: headers
+    api_post "/api/v1/orders/#{o[:id]}/reopen", {}, headers: headers
+    api_patch "/api/v1/orders/#{o[:id]}", { customer_id: cust.id, lines: [ { id: o[:items].first[:id], quantity: 1 } ] }, headers: headers
+    expect(response).to have_http_status(:ok), response.body
+    expect(json[:discounts].map { |d| [ d[:reason], d[:amount_minor] ] }).to eq([ [ "Regular discount: Back within a week", 2_250 ] ])
+    expect(json).to include(total_minor: o[:total_minor], due_minor: 0)
+  end
 end
 
 RSpec.describe "Repairing orders hit by the regular-discount bug", type: :request do

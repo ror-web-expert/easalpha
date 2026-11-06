@@ -51,11 +51,27 @@ module Orders
     end
 
     def ready!(order, actor: nil, device: nil)
+      return kitchen_done!(order) if order.status.in?(Order::AFTER_KITCHEN_STATUSES)
       raise Api::Errors::Conflict.new("order.status", "Order is #{order.status}") unless order.status.in?(%w[placed preparing])
       Order.transaction do
         order.items.where(status: %w[sent preparing]).update_all(status: "ready", bumped_at: Time.current)
         order.ready_at = Time.current
         change!(order, "ready", actor: actor, device: device)
+      end
+      Realtime.order_changed(order)
+      Realtime.token_ready(order)
+      order
+    end
+
+    # The kitchen finished an order already past it: paid before it was cooked (a takeaway paid at once), or served or
+    # reopened with a line added. Its lines are ready and it leaves the kitchen display; its status stays (QA F2). A
+    # second bump changes nothing.
+    def kitchen_done!(order)
+      cooking = order.items.where(status: %w[sent preparing])
+      return order if order.ready_at && !cooking.exists?
+      Order.transaction do
+        cooking.update_all(status: "ready", bumped_at: Time.current)
+        order.update!(ready_at: order.ready_at || Time.current)
       end
       Realtime.order_changed(order)
       Realtime.token_ready(order)
@@ -83,7 +99,8 @@ module Orders
     end
 
     def void!(order, reason:, actor:, approver:, device: nil)
-      raise Api::Errors::Conflict.new("order.paid", "A paid order is refunded, not voided") if order.paid_minor.positive? || order.status.in?(%w[paid closed])
+      # Money the order still holds is refunded first; an open order whose part payment went back holds none (ledger#0).
+      raise Api::Errors::Conflict.new("order.paid", "A paid order is refunded, not voided") if order.status.in?(%w[paid closed]) || (order.paid_minor.positive? && Payments::Refunder.held_minor(order).positive?)
       raise Api::Errors::Conflict.new("order.status", "Order is already #{order.status}") if order.status.in?(%w[voided refunded])
       raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
       stock_action = order.sent? ? (order.status.in?(%w[ready served dispatched]) ? "waste" : "returned") : "none"
@@ -126,8 +143,11 @@ module Orders
 
     def mark_paid!(order, actor:, device: nil)
       order.paid_at ||= Time.current
+      number!(order)
       order.completed_by_membership_id = actor&.id
-      order.items.where(status: %w[sent preparing ready]).update_all(status: "served")
+      # Paying is not cooking (QA F2; the SPEC keeps the payment status apart from the order's): lines the kitchen has
+      # not finished stay on its display until it bumps them.
+      counter_served!(order)
       change!(order, "paid", actor: actor, device: device)
       Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor)
       deduct_on_completion!(order, actor: actor)
@@ -146,6 +166,13 @@ module Orders
       order.closed_at = Time.current
       order.completed_by_membership_id = actor&.id
       order.unpaid_direct = true unless paid
+      # Settled without a payment (a staff meal, a zero total): it still gets its receipt number and paid time, so the
+      # receipt is a RECEIPT with its barcode and the hourly sales find it (review orders-money#6, QA T13).
+      if paid
+        order.paid_at ||= Time.current
+        number!(order)
+      end
+      counter_served!(order) # a free canteen meal is completed at the counter without a payment
       change!(order, "closed", actor: actor, device: device)
       Story.record!(order, "completed", actor: actor, device: device, amount_after: order.total_minor, note: paid ? nil : "placed unpaid") unless was_completed
       deduct_on_completion!(order, actor: actor)
@@ -190,6 +217,17 @@ module Orders
       return unless order.source.in?(%w[till app]) # web, QR and aggregator orders carry their own customer details
       required = order.business.setting("pos.customer_required.#{order.order_type}")
       raise Api::Errors::Unprocessable.new("customer.required", "A customer must be selected on #{order.order_type.tr('_', '-')} orders") if required
+    end
+
+    # A canteen meal is handed over at the counter from the day's plan, never cooked to order: once it is paid or
+    # completed its lines are served, so it never waits on the kitchen display.
+    def counter_served!(order)
+      order.items.where(status: %w[sent preparing ready]).update_all(status: "served") if order.source == "kiosk"
+    end
+
+    # The receipt number: business day, branch code and the day's serial (the barcode on the receipt).
+    def number!(order)
+      order.receipt_number ||= "#{order.business_day&.strftime('%y%m%d')}-#{order.branch.code}-#{order.serial}"
     end
 
     def change!(order, to, actor:, device:, reason: nil)

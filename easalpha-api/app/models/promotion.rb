@@ -35,4 +35,22 @@ class Promotion < ApplicationRecord
     else 0
     end
   end
+
+  def targeted? = applies_to.in?(%w[product category])
+
+  # The lines the discount comes off: all of them for an order-wide promotion, else those of its products or of
+  # products in its categories. A deal has its own price and an open item no product, so neither is a target.
+  def covers?(item)
+    case applies_to
+    when "product" then target_ids.include?(item.product_id)
+    when "category" then item.product.present? && target_ids.include?(item.product.category_id)
+    else true
+    end
+  end
+
+  # "Chai" or "Drinks, Desserts", for the message when an order has none of them.
+  def target_names
+    names = applies_to == "category" ? Category.where(id: target_ids).pluck(:name) : Product.where(id: target_ids).pluck(:name)
+    names.presence&.join(", ") || "other items"
+  end
 end

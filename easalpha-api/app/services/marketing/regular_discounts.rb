@@ -19,21 +19,35 @@ module Marketing
     # A known customer who has ordered before and is not on the blocked list.
     def regular?(customer, business) = customer.present? && !customer.is_walk_in && customer.last_order_at.present? && !blocked_ids(business).include?(customer.id.to_s)
 
-    # Replaces the order's regular discount with the current best match (or removes it). Idempotent.
+    # Puts the order's regular discount right for its lines (or takes it off). Idempotent. The row is changed in place,
+    # so it keeps its turn among the discounts: recreated on every save that carried lines, it moved behind a manual
+    # discount and an unchanged order repriced (review orders-money#8).
     def apply!(order)
       return if order.source == "kiosk" # a canteen meal is priced by the plan, never by how often the worker eats
       return if order.source == "online" # the storefront never verifies the phone it is given: no recency discount on a claimed identity (6 Nov 2026, A11)
       existing = order.discounts.select { |d| d.kind == "regular" }
       customer = order.customer_id && Customer.find_by(id: order.customer_id)
-      tier = enabled?(order.business) ? tier_for(customer, order) : nil
-      return if tier.nil? && existing.empty?
-      existing.each(&:destroy!)
+      tier = enabled?(order.business) ? kept_tier(existing.first, customer, order) || tier_for(customer, order) : nil
+      amount = tier ? tier.discount_for(base_for(order, tier)) : 0
+      return if amount <= 0 && existing.empty?
+      if amount <= 0
+        existing.each(&:destroy!)
+      elsif existing.any?
+        existing.first.update!(value: BigDecimal(amount.to_s) / 100, reason: "Regular discount: #{tier.name}", regular_discount_tier_id: tier.id)
+        existing.drop(1).each(&:destroy!)
+      else
+        order.discounts.create!(kind: "regular", value: BigDecimal(amount.to_s) / 100, reason: "Regular discount: #{tier.name}", regular_discount_tier_id: tier.id)
+      end
       order.discounts.reset
-      return unless tier
-      amount = tier.discount_for(base_for(order, tier))
-      return if amount <= 0
-      order.discounts.create!(kind: "regular", value: BigDecimal(amount.to_s) / 100, reason: "Regular discount: #{tier.name}", regular_discount_tier_id: tier.id)
-      order.discounts.reset
+    end
+
+    # The tier the order already has, while the same customer stays and the tier still applies to it. Recency is not
+    # weighed again: once the order is paid the customer's last order is this one, so a reopened order would drop to
+    # the tightest tier on its next save (as Orders::RegularDiscountRepair keeps the tier an order was opened with).
+    def kept_tier(row, customer, order)
+      return nil if row.nil? || order.will_save_change_to_customer_id? || !regular?(customer, order.business)
+      tier = RegularDiscountTier.active.find_by(id: row.regular_discount_tier_id)
+      tier unless tier.nil? || tier.excludes?(order)
     end
 
     # What a tier's discount is worked out from, here and in Orders::RegularDiscountRepair: each line the tier does not
