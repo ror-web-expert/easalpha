@@ -61,13 +61,17 @@ RSpec.describe Finance::ProfitLoss, type: :request do
       expect(pl[:revenue][:revenue_minor]).to eq(sales[:revenue_minor])
       expect(pl[:orders]).to eq(sales[:orders])
       r = pl[:revenue]
-      expect(r).to include(revenue_minor: 99_400, tax_collected_minor: 14_400, net_sales_minor: 85_000, gross_sales_minor: 90_000, discounts_minor: 0,
-                           service_charge_minor: 0, delivery_charge_minor: 0, tips_minor: 5_000, rounding_minor: 0, refunds_minor: 10_000)
-      expect(r[:gross_sales_minor] - r[:discounts_minor] + r[:service_charge_minor] + r[:delivery_charge_minor] + r[:tips_minor] + r[:rounding_minor] - r[:refunds_minor]).to eq(r[:net_sales_minor])
+      # Three burgers sold (Rs 450 and Rs 72 tax each); refunds take back their shares as the journal splits them: Rs
+      # 86.21 of sales and Rs 13.79 of tax from the Rs 100, everything from the full one. The tip is the staff's.
+      expect(r).to include(revenue_minor: 99_400, tax_collected_minor: 13_021, net_sales_minor: 81_379, gross_sales_minor: 135_000, discounts_minor: 0,
+                           service_charge_minor: 0, delivery_charge_minor: 0, tips_minor: 5_000, rounding_minor: 0, refunds_minor: 53_621)
+      expect(r[:gross_sales_minor] - r[:discounts_minor] + r[:service_charge_minor] + r[:delivery_charge_minor] + r[:rounding_minor] - r[:refunds_minor]).to eq(r[:net_sales_minor])
+      expect(r[:net_sales_minor] + r[:tax_collected_minor] + r[:tips_minor]).to eq(r[:revenue_minor])
       # Three buns went out with a sale (the paid, the part-refunded and the staff meal); the refunded one came back.
-      expect(pl).to include(cost_of_goods_minor: 6_000, gross_profit_minor: 79_000)
-      expect(Reports::Stock.valuation_cogs(branch: branch, from: day, to: day)).to include(revenue_minor: 85_000, cogs_minor: 6_000)
-      expect(Reports::Branches.compare(from: day, to: day)[:rows].first).to include(revenue_minor: 99_400, cost_of_goods_minor: 6_000, gross_profit_minor: 79_000)
+      expect(pl).to include(cost_of_goods_minor: 6_000, gross_profit_minor: 75_379, net_profit_minor: 75_379)
+      expect(Reports::Stock.valuation_cogs(branch: branch, from: day, to: day)).to include(revenue_minor: 81_379, cogs_minor: 6_000)
+      expect(Reports::Branches.compare(from: day, to: day)[:rows].first).to include(revenue_minor: 99_400, cost_of_goods_minor: 6_000, gross_profit_minor: 75_379)
+      expect(Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor]).to eq(pl[:net_profit_minor])
     end
   end
 end

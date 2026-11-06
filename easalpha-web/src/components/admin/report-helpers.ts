@@ -94,7 +94,8 @@ export function urgencyTone(u: StockUrgency | string | null | undefined): BadgeV
 
 /**
  * The profit and loss revenue block, gross sales down to net sales, each amount signed as it adds up (discounts and
- * refunds negative): the lines above Net sales sum to it, tips and rounding included.
+ * refunds negative): the lines above Net sales sum to it. Tax and tips are collected for others, so they are shown
+ * beside it (taxAndTips), not in it.
  */
 export function revenueLines(r: ProfitLoss["revenue"]): { label: string; minor: number; indent?: boolean; strong?: boolean }[] {
   return [
@@ -102,10 +103,17 @@ export function revenueLines(r: ProfitLoss["revenue"]): { label: string; minor: 
     { label: "Discounts", minor: -r.discounts_minor, indent: true },
     { label: "Service charge", minor: r.service_charge_minor, indent: true },
     { label: "Delivery charge", minor: r.delivery_charge_minor, indent: true },
-    { label: "Tips", minor: r.tips_minor ?? 0, indent: true },
-    { label: "Rounding", minor: r.rounding_minor ?? 0, indent: true },
+    { label: "Rounding", minor: r.rounding_minor, indent: true },
     { label: "Refunds", minor: -r.refunds_minor, indent: true },
     { label: "Net sales", minor: r.net_sales_minor, strong: true },
+  ];
+}
+
+/** What customers paid beyond net sales, none of it income: the tax (owed to the tax authority) and the tips (the staff's). */
+export function taxAndTips(r: ProfitLoss["revenue"]): { label: string; minor: number }[] {
+  return [
+    { label: "Tax collected", minor: r.tax_collected_minor },
+    { label: "Tips", minor: r.tips_minor },
   ];
 }
 

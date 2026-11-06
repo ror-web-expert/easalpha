@@ -16,7 +16,7 @@ export interface OrderTakerRow { membership_id: string | null; name: string | nu
 export function OverviewCards({ o }: { o: ReportOverview }) {
   return (
     <Cards>
-      <SummaryCard label="Revenue" value={formatMoney(o.revenue_minor)} sub={`${o.orders} paid orders · avg ${formatMoney(o.average_order_minor)}`} tone="success" />
+      <SummaryCard label="Revenue" value={formatMoney(o.revenue_minor)} sub={`${o.orders} orders sold · avg ${formatMoney(o.average_order_minor)}`} tone="success" />
       <SummaryCard label="Discounts" value={formatMoney(o.discount_minor)} sub={`Tax ${formatMoney(o.tax_minor)} · service ${formatMoney(o.service_charge_minor)}`} tone="neutral" />
       <SummaryCard label="Voided" value={formatMoney(o.voided_minor)} sub={`${o.voided} orders · refunds ${formatMoney(o.refunds_minor)}`} tone="danger" />
       <SummaryCard label="Customers" value={o.customers} sub={`${o.staff_meals} staff meals · tips ${formatMoney(o.tips_minor)}`} tone="info" />
