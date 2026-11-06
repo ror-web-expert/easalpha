@@ -906,7 +906,14 @@ export interface CanteenWorker {
 }
 export interface CanteenToday {
   date: string; now: string; branch: { id: ID; name: string }; session: MealSession | null; sessions: MealSession[]; plans: MealPlan[];
-  counts: { claimed: number; served: number; workers: number }; settings: { manual_lookup: boolean; print_token: boolean };
+  /** refused: open meals refused at sync (staff sessions only; a kiosk keeps its own from the sync results). */
+  counts: { claimed: number; served: number; workers: number; refused?: number }; settings: { manual_lookup: boolean; print_token: boolean };
+  refused?: CanteenRefusedClaim[];
+}
+/** A meal a kiosk took offline that the server refused at replay: the worker has the food, the account does not. */
+export interface CanteenRefusedClaim {
+  id: ID; record_id: ID; code: string; message: string | null; refused_at: string; taken_at: string | null; token_label: string | null;
+  employee_id: ID | null; employee_name: string | null; fingerprint_id: string | null; dish: string | null; session: string | null; device_id: ID | null; device: string | null;
 }
 export interface CanteenSummaryRow { key: string; meals: number; served: number; workers: number; planned: number | null; worker_minor: number; company_minor: number; total_minor: number }
 export interface CanteenSummary { from: string; to: string; group_by: string; rows: CanteenSummaryRow[]; totals: { meals: number; served: number; worker_minor: number; company_minor: number; total_minor: number } }

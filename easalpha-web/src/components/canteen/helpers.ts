@@ -50,6 +50,25 @@ export function tokenLines(c: { token_label: string; employee_name: string | nul
   ];
 }
 
+/** A meal this kiosk took offline that the server refused at replay (lib/sync moves it to the attention list): the
+ *  worker has the food and the token, but nothing is on their account, so the supervisor needs to see it. */
+export interface RefusedClaim { id: string; token: string | null; worker: string | null; dish: string | null; at: string | null; reason: string; code: string }
+type AttentionLike = { id: string; type: string; code: string; message: string; payload: Record<string, unknown> };
+
+/** The refused meal claims among the attention rows, newest first, named from the kiosk's own copy of the claim or,
+ *  once that copy is gone (another day), from its worker list. */
+export function refusedClaims(attention: AttentionLike[], local: MealClaim[], workers: { id: string; name: string; fingerprint_id: string | null }[]): RefusedClaim[] {
+  const text = (v: unknown) => (typeof v === "string" && v ? v : null);
+  return attention.filter((a) => a.type === "meal_claim").map((a) => {
+    const c = local.find((l) => l.id === a.id);
+    const p = a.payload ?? {};
+    const employeeId = text(p.employee_id);
+    const finger = text(p.fingerprint_id);
+    const w = employeeId ? workers.find((x) => x.id === employeeId) : finger ? workerByFingerprint(workers, finger) : undefined;
+    return { id: a.id, token: c?.token_label ?? text(p.token_label), worker: c?.employee_name ?? w?.name ?? null, dish: c?.dish ?? null, at: c?.scanned_at ?? text(p.client_created_at), reason: a.message, code: a.code };
+  }).sort((x, y) => (y.at ?? "").localeCompare(x.at ?? ""));
+}
+
 /** Show the session windows in the kiosk's idle screen: "Lunch 12:00 to 15:00". */
 export function sessionWindow(s: { name: string; starts_at: string; ends_at: string }): string {
   return `${s.name} ${s.starts_at} to ${s.ends_at}`;

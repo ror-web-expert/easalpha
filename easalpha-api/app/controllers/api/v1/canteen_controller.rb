@@ -7,20 +7,33 @@ module Api
       DEVICE_KINDS = %w[kiosk till tablet token_screen].freeze
 
       before_action :require_canteen!
-      before_action :read_only_guard!, only: %i[claim serve cancel link_workers enrol_worker create_session update_session destroy_session save_plan copy_plans publish_plan unpublish_plan destroy_plan]
+      before_action :read_only_guard!, only: %i[claim serve cancel link_workers enrol_worker create_session update_session destroy_session save_plan copy_plans publish_plan unpublish_plan destroy_plan resolve_refused]
 
       # GET /canteen/today?date=  the kiosk's and the counter's view: the session now, the day's plans, the counts.
+      # A staff session also gets the meals refused at sync (a kiosk keeps its own from the sync results).
       def today
         date = params[:date].present? ? Date.parse(params[:date].to_s) : today_date
         session = Canteen::Sessions.current(current_branch)
         plans = Canteen::Plans.for_day(current_branch, date)
         claims = MealClaim.live.where(branch_id: current_branch.id, plan_date: date)
-        render json: { date: date, now: Time.current, branch: { id: current_branch.id, name: current_branch.name }, session: session && CanteenSerializers.session(session),
-                       sessions: MealSession.active.where(branch_id: current_branch.id).order(:sort_order, :starts_at).map { |s| CanteenSerializers.session(s) },
-                       plans: plans.map { |p| CanteenSerializers.plan(p) }, counts: { claimed: claims.count, served: claims.where(status: "served").count, workers: Employee.active.count },
-                       settings: { manual_lookup: current_business.setting("canteen.manual_lookup") != false, print_token: current_business.setting("canteen.print_token") != false } }
+        body = { date: date, now: Time.current, branch: { id: current_branch.id, name: current_branch.name }, session: session && CanteenSerializers.session(session),
+                 sessions: MealSession.active.where(branch_id: current_branch.id).order(:sort_order, :starts_at).map { |s| CanteenSerializers.session(s) },
+                 plans: plans.map { |p| CanteenSerializers.plan(p) }, counts: { claimed: claims.count, served: claims.where(status: "served").count, workers: Employee.active.count },
+                 settings: { manual_lookup: current_business.setting("canteen.manual_lookup") != false, print_token: current_business.setting("canteen.print_token") != false } }
+        if current_membership
+          body[:counts][:refused] = Canteen::Refused.scope(current_branch).count
+          body[:refused] = Canteen::Refused.list(current_branch)
+        end
+        render json: body
       rescue Date::Error
         raise Api::Errors::BadRequest.new("canteen.date", "date must be YYYY-MM-DD")
+      end
+
+      # POST /canteen/refused/:id/resolve { resolution: fixed | dismissed }  a meal refused at sync, dealt with
+      def resolve_refused
+        r = Canteen::Refused.resolve!(current_branch, params[:id], by: current_membership, resolution: params[:resolution])
+        audit!("update", record: r, after: { resolved: true, resolution: r.resolution })
+        head :no_content
       end
 
       # GET /canteen/sync  what a kiosk keeps locally: sessions, today's published plans, every worker and today's claims

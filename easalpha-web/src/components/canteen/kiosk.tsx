@@ -3,23 +3,25 @@
 // token appears and prints. Works with no internet: today's plan, the workers and the claims are kept locally, a claim
 // made offline is queued (type meal_claim) and the "already taken" rule is applied here before it is applied again on
 // the server. Several kiosks in one canteen agree through the server when online; offline each one knows what it has
-// served itself plus everything the server had at its last sync.
+// served itself plus everything the server had at its last sync. A queued claim the server refuses at replay lands in
+// the sync's attention list; the footer counts those for the supervisor, with the reason (6 Nov 2026 review, R19).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Fingerprint, Search, Utensils, Wifi, WifiOff, X, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Fingerprint, Search, Utensils, Wifi, WifiOff, X, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { kvGet, kvSet } from "@/lib/db";
-import { enqueue, startSync } from "@/lib/sync";
+import { db, kvGet, kvSet, type AttentionItem } from "@/lib/db";
+import { dismissAttention, enqueue, startSync } from "@/lib/sync";
 import { useOnline } from "@/lib/hooks";
 import { formatMoney } from "@/lib/money";
 import { printJob } from "@/lib/print";
 import type { CanteenSync, CanteenToday, CanteenWorker, MealClaim, MealPlanItem } from "@/lib/types";
 import { useDeviceStore } from "@/store/device";
 import { useCatalogStore } from "@/store/catalog";
+import { useSyncStore } from "@/store/sync";
 import { useBeep } from "@/components/kitchen/auth";
 import { Button, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { alreadyTaken, nextTokenLabel, parseWedge, sessionWindow, tokenLines, workerByFingerprint, type TokenState } from "./helpers";
+import { alreadyTaken, nextTokenLabel, parseWedge, refusedClaims, sessionWindow, tokenLines, workerByFingerprint, type RefusedClaim, type TokenState } from "./helpers";
 
 type Who = { fingerprint_id?: string; employee_id?: string; name?: string };
 type Result = { kind: "ok" | "taken" | "error"; title: string; detail?: string; token?: string; offline?: boolean };
@@ -42,6 +44,11 @@ export function CanteenKiosk() {
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [waiting, setWaiting] = useState(0);
+  const [showRefused, setShowRefused] = useState(false);
+  const pendingCount = useSyncStore((s) => s.pending);
+  const attentionCount = useSyncStore((s) => s.attention);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const today = useQuery({ queryKey: ["canteen_today"], queryFn: () => api<CanteenToday>("/canteen/today", { auth: "pos", timeoutMs: 8000 }), refetchInterval: 30_000, retry: false });
@@ -67,6 +74,17 @@ export function CanteenKiosk() {
     const tick = setInterval(() => setNow(new Date()), 1000);
     return () => { alive = false; stop(); clearInterval(every); clearInterval(tick); };
   }, []);
+  // What is still queued is waiting to send; a claim the server refused leaves the queue for the attention list. The
+  // sync recounts both after every push (lib/sync refreshCounts), so both lists are read again whenever a count moves.
+  useEffect(() => {
+    let alive = true;
+    Promise.all([db.queue.toArray(), db.attention.toArray()]).then(([queued, rows]) => {
+      if (!alive) return;
+      setWaiting(queued.filter((q) => q.type === "meal_claim").length);
+      setAttention(rows as AttentionItem[]);
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [pendingCount, attentionCount]);
 
   const data = today.data ?? cached;
   const session = data?.session ?? null;
@@ -74,6 +92,13 @@ export function CanteenKiosk() {
   const items = useMemo(() => plan?.items ?? [], [plan]);
   const workers = useMemo<CanteenWorker[]>(() => sync?.workers ?? [], [sync]);
   const serverClaims = useMemo<MealClaim[]>(() => claims.data ?? sync?.claims ?? [], [claims.data, sync]);
+  // A refused claim keeps its local copy (the worker ate, so a second helping is still refused here) but is no longer
+  // waiting to send: it is counted apart, with the server's reason.
+  const refused = useMemo(() => refusedClaims(attention, localClaims, workers), [attention, localClaims, workers]);
+  const dismissRefused = useCallback(async (id: string) => {
+    await dismissAttention(id);
+    setAttention((rows) => rows.filter((r) => r.id !== id));
+  }, []);
   // Once the server has a claim this kiosk made offline, the local copy has done its job.
   useEffect(() => {
     if (!claims.data || !localClaims.length) return;
@@ -251,7 +276,12 @@ export function CanteenKiosk() {
       <footer className="flex h-14 items-center gap-3 border-t border-white/10 bg-navy px-5 text-sm text-white/70">
         {data?.settings.manual_lookup !== false ? <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => setManual(true)}><Search className="h-4 w-4" /> Find worker by name or number</Button> : null}
         <div className="flex-1" />
-        <span>{device?.code ? `Kiosk ${device.code}` : ""}{localClaims.length ? ` · ${localClaims.length} waiting to send` : ""}</span>
+        <span>{device?.code ? `Kiosk ${device.code}` : ""}{waiting ? ` · ${waiting} waiting to send` : ""}</span>
+        {refused.length ? (
+          <Button size="sm" variant="ghost" className="bg-amber-500/20 text-amber-100 hover:bg-amber-500/30" onClick={() => setShowRefused(true)} data-testid="refused">
+            <AlertTriangle className="h-4 w-4" /> {refused.length} refused
+          </Button>
+        ) : null}
       </footer>
 
       {result ? (
@@ -266,6 +296,33 @@ export function CanteenKiosk() {
       ) : null}
 
       {manual ? <ManualLookup workers={workers} online={online} onClose={() => setManual(false)} onPick={(w) => { setManual(false); const itemId = selected ?? (items.length === 1 ? items[0].id : null); if (itemId) void claim({ employee_id: w.id, name: w.name }, itemId); else setPending({ employee_id: w.id, name: w.name }); }} /> : null}
+      {showRefused && refused.length ? <RefusedList rows={refused} onDismiss={(id) => void dismissRefused(id)} onClose={() => setShowRefused(false)} /> : null}
+    </div>
+  );
+}
+
+/** For the supervisor: the meals taken here offline that the server refused, and why. Dismiss clears the kiosk's
+ *  note only; the admin Canteen page keeps listing each one until a manager resolves it. */
+function RefusedList({ rows, onDismiss, onClose }: { rows: RefusedClaim[]; onDismiss: (id: string) => void; onClose: () => void }) {
+  const time = (at: string | null) => (at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null);
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 p-6 pt-16" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl bg-card p-5 text-fg" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Meals the server refused">
+        <div className="mb-1 flex items-center justify-between"><h2 className="text-xl font-semibold">Meals the server refused</h2><Button variant="ghost" size="icon" onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></Button></div>
+        <p className="mb-3 text-sm text-fg-muted">Taken here while offline and refused when they reached the server, so they are not on the workers&apos; accounts. Show this to the supervisor; the admin Canteen page lists them too.</p>
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-start justify-between gap-3 rounded-xl border bg-page px-4 py-3" data-testid="refused-row">
+              <div className="min-w-0">
+                <div className="text-lg font-semibold">{r.worker ?? "Unknown worker"}{r.dish ? <span className="font-normal text-fg-secondary"> · {r.dish}</span> : null}</div>
+                <div className="text-sm text-fg-muted">{[r.token, time(r.at)].filter(Boolean).join(" · ")}</div>
+                <div className="mt-1 text-sm text-danger">{r.reason}</div>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => onDismiss(r.id)}>Dismiss</Button>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
