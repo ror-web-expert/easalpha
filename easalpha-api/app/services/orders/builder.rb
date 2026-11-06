@@ -12,7 +12,7 @@ module Orders
     end
 
     def self.create!(attrs, lines:, actor:, device:, branch:, approvals: {})
-      shift = actor && Shift.open.find_by(cashier_membership_id: actor.id)
+      shift = actor && Shift.for_till(device: device, membership: actor, branch: branch) # the till's shift, as its payments (QA T4)
       order = Order.new(attrs.merge(branch: branch, device: device, taken_by_membership_id: actor&.id, shift_id: shift&.id))
       apply_charge_defaults!(order, attrs, branch.business)
       order.id = attrs[:id] if attrs[:id].present?

@@ -84,7 +84,8 @@ module Api
       # POST /riders/:id/settle { handed_in_minor, note, keep_float }
       def settle
         r = Rider.active.find(params[:id])
-        s = Riders::Float.settle!(r, handed_in_minor: params.require(:handed_in_minor).to_i, actor: current_membership, branch: current_branch, shift: current_shift, note: params[:note], keep_float: ActiveModel::Type::Boolean.new.cast(params[:keep_float]))
+        s = Riders::Float.settle!(r, handed_in_minor: params.require(:handed_in_minor).to_i, actor: current_membership, branch: current_branch, shift: current_shift, device: current_device,
+                                     note: params[:note], keep_float: ActiveModel::Type::Boolean.new.cast(params[:keep_float]))
         render json: { settlement: DeliverySerializers.settlement(s), rider: DeliverySerializers.rider(r.reload) }, status: :created
       end
 

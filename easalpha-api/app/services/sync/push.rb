@@ -118,11 +118,9 @@ module Sync
       attrs[:is_staff_meal] = ActiveModel::Type::Boolean.new.cast(attrs[:is_staff_meal]) if attrs.key?(:is_staff_meal)
       attrs[:staff_meal_approved_by_id] = (approver_for("orders.staff_meal", actor) || actor).id if attrs[:is_staff_meal]
       attrs[:client_created_at] = Orders::ClientTime.clamp(attrs[:client_created_at], record_id: id) if attrs.key?(:client_created_at)
-      # Read before anything is written: a payment time the server cannot read refuses the record, not half of it, and
-      # so does money taken by someone who may not take it.
-      payments = clamped_payments(payload[:payments])
+      # Money taken by someone who may not take it refuses the record before anything is written.
       voided = payload[:voided].present? || payload[:status].to_s == "voided"
-      payment_approver = payments.any? && !voided ? approver_for("payments.take", actor) : nil
+      payment_approver = payload[:payments].present? && !voided ? approver_for("payments.take", actor) : nil
       day = @branch.business_day_for(attrs[:client_created_at] || Time.current)
       raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
       builder = Orders::Builder.create!(attrs, lines: Array(payload[:lines]).map(&:to_h), actor: actor, device: @device, branch: @branch, approvals: @approvals)
@@ -130,9 +128,9 @@ module Sync
       Orders::Transitions.place!(order, actor: actor, device: @device) if complete?(payload) || payload[:status].to_s != "draft" && payload[:status].present?
       if voided
         Orders::Transitions.void!(order, reason: payload[:void_reason].presence || "voided on till", actor: actor, approver: approver_for("orders.void", actor), device: @device)
-      elsif payments.any?
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: payments, tip_minor: payload[:tip_minor].to_i, offline: true)
-        audit_payment_approval(payment_approver, order, payments)
+      elsif payload[:payments].present?
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.for_till(device: @device, membership: actor, branch: @branch)).call(payments: payload[:payments], tip_minor: payload[:tip_minor].to_i, offline: true)
+        audit_payment_approval(payment_approver, order, Array(payload[:payments]))
       end
       complete!(order, actor) if complete?(payload)
       "accepted"
@@ -148,7 +146,7 @@ module Sync
       if missing.any?
         approver = approver_for("payments.take", actor)
         tip = order.paid_minor.zero? ? payload[:tip_minor].to_i : 0
-        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: clamped_payments(missing), tip_minor: tip, offline: true)
+        Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.for_till(device: @device, membership: actor, branch: @branch)).call(payments: missing, tip_minor: tip, offline: true)
         audit_payment_approval(approver, order, missing)
         changed = true
       end
@@ -212,7 +210,7 @@ module Sync
       return "duplicate" if Payment.exists?(id: id)
       order = Order.includes(items: :modifiers).find(need(payload, :order_id))
       approver = approver_for("payments.take", actor)
-      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.open.find_by(cashier_membership_id: actor.id)).call(payments: clamped_payments([ payload.merge(id: id) ]), tip_minor: replayed_tip(order, payload, id), offline: true)
+      Payments::Processor.new(order, actor: actor, device: @device, shift: Shift.for_till(device: @device, membership: actor, branch: @branch)).call(payments: [ payload.merge(id: id) ], tip_minor: replayed_tip(order, payload, id), offline: true)
       audit_payment_approval(approver, order, [ payload.merge(id: id) ])
       "accepted"
     end
@@ -226,17 +224,6 @@ module Sync
       lines = payments.map { |p| p.to_h.with_indifferent_access }
       AuditLog.record(action: "approve", record: order, approved_by: approver.user,
                       after: { permission: "payments.take", payment_ids: lines.filter_map { |p| p[:id].presence }, amount_minor: lines.sum { |p| p[:amount_minor].to_i } })
-    end
-
-    # The till's time on a payment dates it when there is no shift (Payments::Processor#money_day), so it is kept in
-    # the same window as the order's: unclamped, a sale from a till whose clock was days out landed on one day and its
-    # payment on another, or on a locked day that refused it after the order was already in (final round, sync-auth#2).
-    def clamped_payments(lines)
-      Array(lines).map do |raw|
-        line = raw.to_h.with_indifferent_access
-        next line if line[:client_created_at].blank?
-        line.merge(client_created_at: Orders::ClientTime.clamp(line[:client_created_at], table_name: "payments", record_id: line[:id]).iso8601(3))
-      end
     end
 
     # A queued payment's tip, taken while the order has none yet. A till from before 6 Nov 2026 put the whole tip on
@@ -256,7 +243,8 @@ module Sync
       return "duplicate" if Refund.exists?(id: id)
       order = Order.find(need(payload, :order_id))
       approver = approver_for("orders.refund", actor)
-      Payments::Refunder.call(order, amount_minor: payload[:amount_minor].to_i, method_code: payload[:method_code], reason: payload[:reason].to_s, actor: actor, approver: approver, device: @device, id: id)
+      Payments::Refunder.call(order, amount_minor: payload[:amount_minor].to_i, method_code: payload[:method_code], reason: payload[:reason].to_s, actor: actor, approver: approver, device: @device, id: id,
+                                     shift: Shift.for_till(device: @device, membership: actor, branch: @branch))
       "accepted"
     end
 
@@ -270,21 +258,20 @@ module Sync
 
     # Shift records go through the checks the online shift endpoints make (ShiftsController): queued, they skipped
     # them all, so a waiter could close a cashier's shift with any count or take a payout from their drawer (final
-    # round, sync-auth#1). The till's time dates the shift, so it is kept in the orders' window, and that day must be
-    # open: Shifts::Manager.open! checks today only.
+    # round, sync-auth#1). Shifts::Manager.open! keeps the till's time in the orders' window and puts a shift opened
+    # on a day locked since on today.
     def apply_shift_open(id, payload, actor)
       return "duplicate" if Shift.exists?(id: id)
       require_permission!(actor, "shifts.own", "shifts.any")
-      made_at = Orders::ClientTime.clamp(payload[:client_created_at], table_name: "shifts", record_id: id)
-      day = @branch.business_day_for(made_at || Time.current)
-      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
-      Shifts::Manager.open!(cashier: actor, branch: @branch, device: @device, opening_cash_minor: payload[:opening_cash_minor].to_i, id: id, client_created_at: made_at)
+      Shifts::Manager.open!(cashier: actor, branch: @branch, device: @device, opening_cash_minor: payload[:opening_cash_minor].to_i, id: id, client_created_at: payload[:client_created_at])
       "accepted"
     end
 
-    # The manager approval on a close or a cash-out is recorded when a PIN came with the record, and not demanded
-    # when none did: the same as the online endpoints. The record's id is the shift's (payload shift_id from a till
-    # that gives the close its own id, so a close queued behind its own shift_open does not replace it).
+    # The manager approval on a close is recorded when a PIN came with the record, and not demanded when none did: the
+    # same as POST /shifts/:id/close, which also lets only the shift's cashier or a manager close it. Not anyone signed
+    # in on that till (Shifts::Manager.may_move?, which cash movements use behind a cash.in_out PIN): a close needs no
+    # PIN, so a waiter on the till could close the cashier's shift with any count. The record's id is the shift's
+    # (payload shift_id from a till that gives the close its own id, so it does not replace a queued shift_open).
     def apply_shift_close(id, payload, actor)
       shift = branch_shift(payload[:shift_id].presence || id)
       return "duplicate" unless shift.open?
@@ -299,19 +286,25 @@ module Sync
     def apply_meal_claim(id, payload, actor)
       return "duplicate" if MealClaim.exists?(id: id)
       Canteen::Claims.claim!(branch: @branch, device: @device, actor: actor, id: id, fingerprint_id: payload[:fingerprint_id], employee_id: payload[:employee_id], meal_plan_item_id: payload[:meal_plan_item_id],
-                             meal_session_id: payload[:meal_session_id], token_label: payload[:token_label], source: payload[:source], client_created_at: payload[:client_created_at])
+                             meal_session_id: payload[:meal_session_id], token_label: payload[:token_label], source: payload[:source], client_created_at: payload[:client_created_at], replay: true)
       "accepted"
     end
 
+    # As POST /shifts/:id/cash_movements: a shift at this branch that the member may move cash on (theirs, a
+    # manager's, or the one open on this till), one of the four kinds, and the manager's PIN on the record when the
+    # member lacks cash.in_out or goes above its limit (Shifts::Manager.cash_movement! refuses it as approval.required
+    # otherwise); a PIN sent anyway is recorded.
     def apply_cash_movement(id, payload, actor)
       return "duplicate" if CashMovement.exists?(id: id)
-      require_permission!(actor, "cash.in_out", "shifts.any")
       shift = branch_shift(need(payload, :shift_id))
-      own_shift!(shift, actor, "Not your shift")
+      raise Api::Errors::Forbidden.new("permission.denied", "Not your shift") unless Shifts::Manager.may_move?(shift, member: actor, device: @device)
       kind = payload[:kind].to_s
       raise Api::Errors::BadRequest.new("cash.kind", "kind must be cash_in, cash_out, payout or drop") unless kind.in?(%w[cash_in cash_out payout drop])
-      approver = kind == "cash_in" ? nil : given_approval("shifts.any", actor)
-      Shifts::Manager.cash_movement!(shift, kind: kind, amount_minor: payload[:amount_minor].to_i, reason: payload[:reason].to_s, by: actor, approver: approver, reference: payload[:reference], id: id)
+      amount = payload[:amount_minor].to_i
+      needs_pin = Shifts::Manager.movement_needs_approval?(actor, kind, amount)
+      approver = actor.can?("shifts.any") || (kind == "cash_in" && !needs_pin) ? nil : @approvals["shifts.any"]
+      Shifts::Manager.cash_movement!(shift, kind: kind, amount_minor: amount, reason: payload[:reason].to_s, by: actor, approver: approver, reference: payload[:reference], id: id,
+                                            category_id: payload[:category_id].presence, paid_to: payload[:paid_to])
       "accepted"
     end
 
@@ -328,7 +321,7 @@ module Sync
         raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@branch.id, day)
       end
       cp = Payments::Khata.receive!(customer, id: id, amount_minor: payload[:amount_minor].to_i, method_code: need(payload, :method_code), reference: payload[:reference].presence,
-                                    actor: actor, shift: Shift.open.find_by(cashier_membership_id: actor.id), branch: @branch, direction: payload[:direction].presence_in(%w[received paid]) || "received")
+                                    actor: actor, shift: Shift.for_till(device: @device, membership: actor, branch: @branch), branch: @branch, direction: payload[:direction].presence_in(%w[received paid]) || "received")
       AuditLog.record(action: "approve", record: cp, approved_by: approver.user, after: { permission: "khata.collect", amount_minor: cp.amount_minor }) if approver
       "accepted"
     end

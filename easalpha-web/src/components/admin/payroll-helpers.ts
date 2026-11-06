@@ -1,7 +1,7 @@
 // Pure helpers for the Payroll group (SPEC "Staff, attendance and payroll"): status labels and tones, the Today counters,
 // the rules form (validation, weekly offs to working_days and back), month keys and the per-day salary example.
 import type { BadgeVariant } from "@/components/ui/badge";
-import type { AdvanceStatus, AttendanceDay, AttendanceDayStatus, AttendanceRuleSet, AttendanceTodayCounters, LeaveStatus, PayrollRunStatus, PayslipRow, PenaltyKind, ScanResult } from "@/lib/types";
+import type { AdvanceStatus, AttendanceDay, AttendanceDayStatus, AttendanceRuleSet, AttendanceTodayCounters, LeaveStatus, PaymentMethod, PayrollRunStatus, PayslipRow, PenaltyKind, ScanResult } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 
 // ---- Attendance statuses ----
@@ -263,4 +263,21 @@ export function payslipTotals(rows: PayslipRow[]) {
     base: t.base + p.base_minor, earnings: t.earnings + p.earnings_minor, deductions: t.deductions + p.deductions_minor, absence: t.absence + p.absence_minor,
     fines: t.fines + p.late_fines_minor, advances: t.advances + p.advances_recovered_minor, net: t.net + p.net_minor,
   }), { base: 0, earnings: 0, deductions: 0, absence: 0, fines: 0, advances: 0, net: 0 });
+}
+
+// ---- Paying from an account ----
+/** Methods money can be paid from, cash first: active, not the customer account (khata) and not an internal method
+ *  (the canteen subsidy and the salary deduction move no money; QA B15 found them in "Paid from"). */
+export function payableMethods(methods: PaymentMethod[]): PaymentMethod[] {
+  return methods.filter((m) => m.active && m.kind !== "khata" && !m.internal).sort((a, b) => (a.kind === "cash" ? -1 : b.kind === "cash" ? 1 : a.sort_order - b.sort_order));
+}
+
+/** Paying more than the account holds takes it below zero (QA 6 Nov 2026: salaries from Cash left it at -Rs 50,449).
+ *  The screen says so but does not stop the payment, since the money may have come in outside the books. null when the
+ *  account stays at or above zero, or is not known. */
+export function overdraftNote(account: { name: string; current_balance_minor: number } | null | undefined, amountMinor: number): string | null {
+  if (!account || !(amountMinor > 0)) return null;
+  const after = account.current_balance_minor - amountMinor;
+  if (after >= 0) return null;
+  return `${account.name} holds ${formatMoney(account.current_balance_minor)}. Paying ${formatMoney(amountMinor)} from it takes it to ${formatMoney(after)}.`;
 }

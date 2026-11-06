@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { AttendanceDay, AttendanceRuleSet, PayslipRow } from "@/lib/types";
+import type { AttendanceDay, AttendanceRuleSet, PaymentMethod, PayslipRow } from "@/lib/types";
 import {
   advanceStatusVariant, attendanceStatusLabel, attendanceStatusVariant, BLANK_RULES, counterCards, daysInMonth, deriveCounters, formatMoneyExact, leaveStatusVariant, minutesLabel, monthKey, monthLabel,
-  payslipPdfRow, payslipTotals, PENALTY_OPTIONS, perDayMinor, ruleToForm, rulesPayload, runStatusVariant, scanResultLabel, scanResultVariant, shiftMonth, validateRulesForm, weeklyOffsFromWorkingDays, workingDaysFromWeeklyOffs,
+  overdraftNote, payableMethods, payslipPdfRow, payslipTotals, PENALTY_OPTIONS, perDayMinor, ruleToForm, rulesPayload, runStatusVariant, scanResultLabel, scanResultVariant, shiftMonth, validateRulesForm,
+  weeklyOffsFromWorkingDays, workingDaysFromWeeklyOffs,
 } from "./payroll-helpers";
 
 const day = (over: Partial<AttendanceDay>): Pick<AttendanceDay, "checked_in_at" | "checked_out_at" | "status"> =>
@@ -158,5 +159,26 @@ describe("payslip PDF rows", () => {
     expect(t.base).toBe(6_000_000);
     expect(t.net).toBe(4_845_714);
     expect(t.advances).toBe(1_000_000);
+  });
+});
+
+describe("paying from an account (QA B15)", () => {
+  const method = (over: Partial<PaymentMethod>): PaymentMethod =>
+    ({ id: over.code ?? "m", code: "cash", name: "Cash", kind: "cash", payment_account_id: "a", active: true, works_offline: true, needs_reference: false, sort_order: 0, ...over });
+  it("offers cash first and never the customer account or the canteen's internal methods", () => {
+    const list = payableMethods([
+      method({ code: "bank", name: "Bank transfer", kind: "bank", sort_order: 4 }), method({ code: "khata", name: "Khata", kind: "khata" }),
+      method({ code: "canteen_subsidy", name: "Company subsidy", kind: "custom", internal: true, sort_order: 99 }),
+      method({ code: "canteen_payroll", name: "Salary deduction", kind: "custom", internal: true, sort_order: 99 }),
+      method({ code: "old", name: "Old wallet", kind: "wallet", active: false }), method({ code: "cash" }),
+    ]);
+    expect(list.map((m) => m.code)).toEqual(["cash", "bank"]);
+  });
+  it("warns when the payment takes the account below zero, and stays quiet otherwise", () => {
+    expect(overdraftNote({ name: "Cash", current_balance_minor: 1_200_000 }, 6_244_900)).toBe("Cash holds Rs 12,000. Paying Rs 62,449 from it takes it to -Rs 50,449.");
+    expect(overdraftNote({ name: "Cash", current_balance_minor: 1_200_000 }, 1_200_000)).toBeNull();
+    expect(overdraftNote({ name: "Bank", current_balance_minor: -500 }, 100)).toContain("takes it to -Rs 6.");
+    expect(overdraftNote(null, 100)).toBeNull();
+    expect(overdraftNote({ name: "Cash", current_balance_minor: 0 }, 0)).toBeNull();
   });
 });

@@ -28,21 +28,27 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
   def close(shift, by:, counted: 100_000, id: shift.id) = { type: "shift_close", id: id, membership_id: by.id, payload: { counted_cash_minor: counted } }
 
   describe "shift records (sync-auth#1)" do
-    it "refuses a waiter's payout from the cashier's drawer, a close of the cashier's shift and a shift of their own, as online" do
+    it "refuses a waiter's payout from the cashier's drawer without a manager's PIN, a close of the cashier's shift and a shift of their own, as online" do
       shift = open_shift!(cashier)
       push([ movement(shift, by: waiter), close(shift, by: waiter, counted: 40_000),
              { type: "shift_open", id: SecureRandom.uuid, membership_id: waiter.id, payload: { opening_cash_minor: 0, client_created_at: Time.current.iso8601 } } ], headers: as(waiter))
-      expect(results.map { |r| [ r[:status], r[:code] ] }).to eq([ %w[rejected permission.denied] ] * 3), response.body
+      expect(results.map { |r| [ r[:status], r[:code] ] }).to eq([ %w[rejected approval.required], %w[rejected permission.denied], %w[rejected permission.denied] ]), response.body
+      expect(results.first[:details][:permissions]).to eq([ "shifts.any" ])
       within(biz) do
         expect(shift.reload).to be_open
         expect(CashMovement.count).to eq(0)
         expect(Shift.count).to eq(1)
       end
+      # A manager's PIN approves the payout, as at the till's Payout online; the close stays the cashier's or a manager's.
+      push([ movement(shift, by: waiter).merge(approver_pin: "9999", approval_codes: [ "shifts.any" ]), close(shift, by: waiter).merge(approver_pin: "9999", approval_codes: [ "shifts.any" ]) ], headers: as(waiter))
+      expect(results.map { |r| r[:code] || r[:status] }).to eq(%w[accepted permission.denied]), response.body
+      expect(within(biz) { CashMovement.sole.approved_by_membership_id }).to eq(manager.id)
     end
 
-    it "keeps a cashier to their own shift and a valid kind; a manager may close anyone's; another branch's shift is not found" do
+    it "keeps a cashier to their own shift or the one open on their till and to a valid kind; a manager may close anyone's; another branch's shift is not found" do
       other = add_member!(biz, "cashier", pin: "2222")
-      theirs = open_shift!(other)
+      other_till = within(biz) { Device.create!(branch: Branch.first, name: "Till 2", kind: "till", paired_at: Time.current, code: "T6") }
+      theirs = within(biz) { Shifts::Manager.open!(cashier: other, branch: branch, device: other_till, opening_cash_minor: 100_000) }
       push([ movement(theirs, by: cashier, kind: "cash_out", amount: 500), close(theirs, by: cashier) ])
       expect(results.map { |r| r[:code] }).to eq(%w[permission.denied permission.denied])
       mine = open_shift!(cashier)
@@ -82,6 +88,8 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
     end
   end
 
+  # The clamp itself sits in Payments::Processor#money_day and Shifts::Manager.open! since P1's merge; these replays
+  # check that queued payments and shifts get it.
   describe "the till's clock on money and shifts (sync-auth#2)" do
     it "dates a replayed payment in the order's window, so the sale and its money land on one day" do
       id, pay = SecureRandom.uuid, SecureRandom.uuid
@@ -92,26 +100,18 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
         o, p = Order.find(id), Payment.find(pay)
         expect(o.status).to eq("paid")
         expect(p.business_day).to eq(o.business_day)
-        expect(p.client_created_at).to be_within(1.minute).of(7.days.ago)
         expect(AuditLog.where(action: "client_time_clamped", record_id: pay).count).to eq(1)
       end
 
-      # A payment record of its own, from a till whose clock says next year, is dated today.
+      # A payment record of its own, from a till whose clock says next year, is dated an hour ahead at most.
       later, pay2 = SecureRandom.uuid, SecureRandom.uuid
       push([ order(later) ])
       push([ { type: "payment", id: pay2, membership_id: cashier.id, payload: { order_id: later, method_code: "cash", amount_minor: 9_280, tendered_minor: 9_280, client_created_at: 1.year.from_now.iso8601 } } ])
       expect(results.first[:status]).to eq("accepted"), response.body
-      expect(within(biz) { Payment.find(pay2).business_day }).to eq(today_for(biz))
+      expect(within(biz) { Payment.find(pay2).business_day }).to be <= branch.business_day_for(1.hour.from_now)
     end
 
-    it "refuses an order whose payment time cannot be read before writing anything" do
-      id = SecureRandom.uuid
-      push([ order(id, payments: [ { id: SecureRandom.uuid, method_code: "cash", amount_minor: 9_280, client_created_at: "yesterday" } ]) ])
-      expect(results.first).to include(status: "rejected", code: "order.client_time")
-      expect(within(biz) { Order.exists?(id: id) }).to be false
-    end
-
-    it "keeps a shift opened offline in the same window, and refuses one whose own day is locked" do
+    it "keeps a shift opened offline in the same window, and puts one opened on a day locked since on today" do
       sid = SecureRandom.uuid
       push([ { type: "shift_open", id: sid, membership_id: cashier.id, payload: { opening_cash_minor: 0, client_created_at: 30.days.ago.iso8601 } } ])
       expect(results.first[:status]).to eq("accepted"), response.body
@@ -124,8 +124,8 @@ RSpec.describe "Sync replay: shift checks, clock, shared PIN, split tips, till l
       within(biz) { DayClose.create!(branch_id: branch.id, business_day: day, locked_at: Time.current) }
       again = SecureRandom.uuid
       push([ { type: "shift_open", id: again, membership_id: cashier.id, payload: { opening_cash_minor: 0, client_created_at: 30.days.ago.iso8601 } } ])
-      expect(results.first).to include(status: "rejected", code: "day.locked")
-      expect(within(biz) { Shift.exists?(id: again) }).to be false
+      expect(results.first[:status]).to eq("accepted"), response.body
+      expect(within(biz) { Shift.find(again).business_day }).to eq(today_for(biz))
     end
   end
 

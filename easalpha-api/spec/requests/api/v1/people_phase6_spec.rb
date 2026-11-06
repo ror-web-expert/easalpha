@@ -185,7 +185,9 @@ RSpec.describe "People phase 6", type: :request do
       expect(response).to have_http_status(:ok)
       api_post "/api/v1/day_end_settlements", {}, headers: headers
       expect(response).to have_http_status(:created)
-      expect(json).to include(shifts_count: 1, amount_minor: 100_000 + o[:total_minor])
+      # The float went back to the safe at the count; the settlement clears the takings (QA B3).
+      expect(json).to include(shifts_count: 1, amount_minor: o[:total_minor])
+      expect(json[:detail][:shifts].sole).to include(counted_minor: 100_000 + o[:total_minor], float_to_safe_minor: 100_000, amount_minor: o[:total_minor])
       get "/api/v1/reports/cashier_till?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:rows].find { |r| r[:membership_id] == cashier.id }).to include(in_tills_now_minor: 0, shifts_settled: 1)
       expect(json[:settlements].size).to eq(1)

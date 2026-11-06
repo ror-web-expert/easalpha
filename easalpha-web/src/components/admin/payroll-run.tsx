@@ -13,7 +13,7 @@ import { useApproval } from "@/components/approval";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Dialog, EmptyRow, Field, KeyValue, Loading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { toast } from "@/store/toast";
 import { attendanceStatusLabel, formatMoneyExact, minutesLabel, monthLabel, PAYSLIP_PDF_COLUMNS, payslipPdfRow, payslipTotals, penaltyLabel } from "./payroll-helpers";
-import { MethodSelect, RunBadge } from "./payroll-shared";
+import { MethodSelect, PayFromWarning, RunBadge } from "./payroll-shared";
 
 const CHARGE_ORDER: ChargeableStatus[] = ["late", "half_day", "absent"];
 
@@ -109,7 +109,7 @@ export function RunDetailPanel({ runId, onChanged }: { runId: string; onChanged?
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const { run: approve, dialog } = useApproval();
-  const refresh = () => { qc.invalidateQueries({ queryKey: ["payroll_run", runId] }); ["payroll_runs", "payroll_overview", "payroll_ledger", "payroll_reports", "advances", "expenses", "accounts"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); onChanged?.(); };
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["payroll_run", runId] }); ["payroll_runs", "payroll_overview", "payroll_ledger", "payroll_reports", "advances", "expenses", "accounts", "payment_accounts"].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); onChanged?.(); };
   const r = q.data;
   const pay = async () => {
     if (!r) return;
@@ -177,6 +177,7 @@ export function RunDetailPanel({ runId, onChanged }: { runId: string; onChanged?
       <Dialog open={payOpen} onClose={() => setPayOpen(false)} title="Sync to Expenses" description={`Pays every payslip in ${r.label} as a salary expense (${formatMoney(r.net_minor)} in total), closes the advances recovered and marks the run paid. A manager PIN is asked for.`} size="sm"
         footer={<><Button variant="secondary" onClick={() => setPayOpen(false)}>Cancel</Button><Button onClick={pay} loading={paying}>Pay {formatMoney(r.net_minor)}</Button></>}>
         <Field label="Paid from"><MethodSelect value={method} onChange={setMethod} /></Field>
+        <PayFromWarning methodCode={method} amountMinor={r.net_minor} />
       </Dialog>
       <ConfirmDialog open={cancelOpen} onClose={() => setCancelOpen(false)} onConfirm={cancel} title={`Cancel ${r.label}?`} description="The payslips are kept for reference but the month can be generated again. A paid run cannot be cancelled." confirmLabel="Cancel run" destructive loading={cancelling} />
       {dialog}

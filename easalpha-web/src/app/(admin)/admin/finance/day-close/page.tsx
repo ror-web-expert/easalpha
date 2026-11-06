@@ -5,6 +5,7 @@ import { CalendarCheck, Lock, Unlock } from "lucide-react";
 import { api } from "@/lib/api";
 import type { DayCloseStatus } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
+import { shiftLabel } from "@/components/admin/shift-helpers";
 import { formatDateTime, isoDay } from "@/lib/dates";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
@@ -43,7 +44,8 @@ export default function DayClosePage() {
                 <Stat label="Tax" value={formatMoney(d.summary?.tax_minor)} />
                 <Stat label="Refunds" value={formatMoney(d.summary?.refunds_minor)} tone="danger" />
                 <h4 className="mt-3 mb-1 text-xs font-semibold uppercase text-fg-secondary">Shifts</h4>
-                {d.summary?.shifts.map((s) => <Stat key={s.id} label={`${s.status}`} value={s.over_short_minor !== null ? formatMoney(s.over_short_minor) : "open"} tone={s.over_short_minor !== null && s.over_short_minor < 0 ? "danger" : undefined} />)}
+                {/* Each drawer: who, what was counted against what was expected, and the over or short the count booked. */}
+                {d.summary?.shifts.map((s) => <Stat key={s.id} label={shiftLabel(s)} value={s.over_short_minor !== null ? `${s.over_short_minor < 0 ? "Short" : "Over"} ${formatMoney(Math.abs(s.over_short_minor))}` : "open"} tone={s.over_short_minor !== null && s.over_short_minor < 0 ? "danger" : undefined} />)}
               </CardBody>
             </Card>
             <Card>
