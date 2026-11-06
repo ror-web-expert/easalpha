@@ -11,8 +11,10 @@ class Device < ApplicationRecord
 
   def next_code
     prefix = { "till" => "T", "tablet" => "W", "kitchen" => "K", "customer_display" => "C", "token_screen" => "S", "kiosk" => "Q" }[kind] || "D"
-    n = Device.where(branch_id: branch_id, kind: kind).count + 1
-    "#{prefix}#{n}"
+    # The next number not taken by any device of this branch, deleted or revoked ones included: counting the rows
+    # gave a code already in use once a device had been removed (D1..D4, D6 left after D5 went: the next was D6 again).
+    taken = Device.where(branch_id: branch_id).where("code ~ ?", "^#{prefix}[0-9]+$").pluck(:code).map { |c| c.delete_prefix(prefix).to_i }
+    "#{prefix}#{(taken.max || 0) + 1}"
   end
 
   def issue_pairing_code!
