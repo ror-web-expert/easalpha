@@ -281,8 +281,9 @@ export async function processQueue(): Promise<void> {
       // The row as it is now, if it is still the one this push carried (enqueue may have put a newer record there).
       const row = await takeSentRow(r.id, now);
       if (r.status === "accepted" || r.status === "duplicate") {
-        if (row?.patched_payload) await sendChangesMadeDuringPush(row);
+        // Synced first: a save made from here on finds the order on the server and updates it there.
         await markSynced(r.type as SyncRecordType, r.id, items.find((i) => i.id === r.id));
+        if (row?.patched_payload) await sendChangesMadeDuringPush(row);
       } else {
         const item = items.find((i) => i.id === r.id);
         const parent = item ? parentOrderId(item) : null;
