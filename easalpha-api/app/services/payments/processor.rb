@@ -94,7 +94,7 @@ module Payments
     # What happens once an order is paid in full: receipt number, Paid status, customer stats, loyalty points, the tax
     # invoice and the audit row. Also used to complete an order whose payments already cover a corrected total.
     def finalize_paid!
-      @order.receipt_number ||= "#{@order.business_day&.strftime('%y%m%d')}-#{@order.branch.code}-#{@order.serial}"
+      Orders::Transitions.number!(@order)
       first_time = @order.paid_at.nil? # a reopened order paid again keeps its one count in the customer's orders and spend
       Orders::Transitions.mark_paid!(@order, actor: @actor, device: @device)
       update_customer_stats! if first_time

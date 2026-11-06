@@ -30,7 +30,9 @@ class Order < ApplicationRecord
 
   scope :open, -> { where(status: OPEN_STATUSES) }
   scope :on_day, ->(day) { where(business_day: day) }
-  scope :in_kitchen, -> { where(status: KITCHEN_STATUSES) }
+  # Orders the kitchen is working on, and those paid or completed before it finished them (a takeaway paid at once):
+  # paying is not cooking, so they stay until their lines are bumped (QA F2).
+  scope :in_kitchen, -> { where(status: KITCHEN_STATUSES).or(where(status: %w[paid closed], id: OrderItem.where(status: %w[sent preparing]).select(:order_id))) }
   # Pre-orders stay off the kitchen screen until two hours before they are due.
   scope :due_in_kitchen, -> { where("scheduled_for IS NULL OR scheduled_for <= ?", 2.hours.from_now) }
   scope :preorders, -> { where.not(scheduled_for: nil) }
