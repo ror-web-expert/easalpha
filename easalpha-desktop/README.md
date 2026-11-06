@@ -118,11 +118,14 @@ Printers are stored in `settings.json`:
 
 ## Print server for tablets
 
-The server starts with the app on `0.0.0.0`, port 9977 by default (change it in Printers; the server restarts). CORS is open (`*`) so the tablet web app can call it directly.
+The server starts with the app on `0.0.0.0`, port 9977 by default (change it in Printers; the server restarts).
+
+- **Token.** `/printers` and `/print` need the install's token, shown under Printers and entered once in Admin, Settings, Print Server; tablets send it as `Authorization: Bearer <token>`. It is compared in constant time. `?token=` in the address still works in this release only (the answer carries `Deprecation: true`); the next release drops it, because an address lands in logs and browser history.
+- **Which pages may call it.** A browser gets CORS headers only on a page from the web app's own address: `webUrl` plus `printServerOrigins` in `settings.json`, which defaults to `["https://easalpha.com"]` when absent. A self-hosted shop whose tablets open another address lists it there (for example `"printServerOrigins": ["http://192.168.1.5:3000"]`; an empty list leaves `webUrl` alone). A request from any other page, a preflight included, is answered 403 without CORS headers, so a website a tablet happens to open cannot print or kick the drawer through it. A request with no `Origin` (curl, a script on the till) is not a web page: the token alone decides.
 
 | Route | Body | Response |
 | --- | --- | --- |
-| `GET /health` | | `{ "ok": true, "version": "0.1.0" }` |
+| `GET /health` | | `{ "ok": true, "version": "0.1.0", "token_required": true }` |
 | `GET /printers` | | the same list as `listPrinters()` |
 | `POST /print` | a `PrintJob` as JSON | `{ "ok": true }` or `{ "ok": false, "error": "..." }` (HTTP 422 on a failed print) |
 
@@ -131,7 +134,7 @@ The Printers window shows "Tablets print through http://LAN-IP:PORT/print". Ente
 Example from a tablet or a shell:
 
 ```sh
-curl -X POST http://192.168.1.10:9977/print -H 'Content-Type: application/json' \
+curl -X POST http://192.168.1.10:9977/print -H 'Content-Type: application/json' -H 'Authorization: Bearer K7PQ2M9X' \
   -d '{"role":"kitchen","lines":[{"text":"Table 4","bold":true,"size":2},{"divider":true},{"text":"2 x Chicken Karahi"},{"feed":3},{"cut":true}]}'
 ```
 
@@ -141,4 +144,4 @@ curl -X POST http://192.168.1.10:9977/print -H 'Content-Type: application/json' 
 - **Urdu on receipts.** Non-ASCII text prints as `?`. The plan is to render Urdu lines as a raster image (`GS v 0`) with a bundled Nastaliq font in a later phase; the `text` line shape does not need to change.
 - **Logo image** at the top of the receipt (also a raster job, same phase as Urdu).
 - **Code signing.** Updates and first-open warnings: the Windows and macOS builds are unsigned until certificates are bought (`CSC_LINK`, `CSC_KEY_PASSWORD` in CI); unsigned macOS builds cannot self-update.
-- **Authentication on the print server.** It is open on the LAN by design (tablets do not configure anything); a shared token header can be added when the admin panel stores one.
+- **`?token=` on the print server.** Still accepted in this release for hand-made links and scripts; remove it in the next one (`authorized()` in `src/printServer.ts`).
