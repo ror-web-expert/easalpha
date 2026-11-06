@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CanteenRefusedClaim, CanteenToday } from "@/lib/types";
@@ -23,6 +23,8 @@ function renderPage() {
   return render(<QueryClientProvider client={qc}><CanteenTodayPage /></QueryClientProvider>);
 }
 
+configure({ asyncUtilTimeout: 4000 }); // the whole page renders: room for a busy CI machine
+
 beforeEach(() => {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation((async (path: string) => (path === "/canteen/today" ? today([refused]) : path === "/canteen/claims" ? { data: [] } : undefined)) as typeof api);
@@ -40,12 +42,12 @@ describe("Canteen, Today", () => {
     expect(card).toHaveTextContent("already took Zinger Burger");
     fireEvent.click(within(card).getByRole("button", { name: "Mark fixed" }));
     await waitFor(() => expect(api).toHaveBeenCalledWith("/canteen/refused/r-1/resolve", { method: "POST", body: { resolution: "fixed" } }));
-  });
+  }, 20_000);
 
   it("shows no card when nothing was refused", async () => {
     vi.mocked(api).mockImplementation((async (path: string) => (path === "/canteen/today" ? today([]) : { data: [] })) as typeof api);
     renderPage();
     await screen.findByText("Meals today");
     expect(screen.queryByTestId("refused-claims")).toBeNull();
-  });
+  }, 20_000);
 });

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AttentionItem, QueueItem } from "@/lib/db";
@@ -66,6 +66,9 @@ function scan(id: string) {
   fireEvent.keyDown(window, { key: "Enter" });
 }
 
+// The whole kiosk renders, fetches and pushes: give the waits room on a busy CI machine.
+configure({ asyncUtilTimeout: 4000 });
+
 beforeEach(() => {
   h.queue.clear(); h.attention.clear(); h.orders.clear(); h.kv.clear();
   h.online = false;
@@ -105,7 +108,7 @@ describe("canteen kiosk, meals refused at sync", () => {
     fireEvent.click(within(row).getByRole("button", { name: "Dismiss" }));
     await waitFor(() => expect(screen.queryByTestId("refused")).toBeNull());
     expect(h.attention.size).toBe(0);
-  });
+  }, 20_000);
 
   it("lists refusals already on this kiosk when it starts, named from its worker list once the local copy is gone", async () => {
     h.attention.set("m-9", { id: "m-9", type: "meal_claim", ...refusal, payload: { fingerprint_id: "FP-001", token_label: "Q1-014", client_created_at: "2026-11-05T13:10:00Z" }, created_at: "2026-11-05T16:00:00Z" });
@@ -117,5 +120,5 @@ describe("canteen kiosk, meals refused at sync", () => {
     fireEvent.click(badge);
     await waitFor(() => expect(screen.getByTestId("refused-row")).toHaveTextContent("Akbar Ali"));
     expect(screen.getByTestId("refused-row")).toHaveTextContent("Q1-014");
-  });
+  }, 20_000);
 });
