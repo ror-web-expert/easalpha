@@ -276,7 +276,7 @@ function SellScreen() {
     setPayOpen(true);
   };
   /** SPEC discounts: a voucher, loyalty points or a redemption option (or removing one), re-priced by the server. Online only. */
-  const runDiscount = async (fn: (orderId: string) => Promise<Order>, label: string): Promise<boolean> => {
+  const runDiscount = async (fn: (orderId: string, ctx: { saved: Cart; approver_pin?: string }) => Promise<Order>, label: string): Promise<boolean> => {
     setBusy(true);
     try {
       const r = await withOrderPin((o) => applyServerDiscount(cart, fn, o), label);

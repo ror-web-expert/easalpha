@@ -87,7 +87,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { buildLocalReceipt, cartToLocal, completeOrder, findLocalOrder, loadOrderForEdit, localToCart, payOrder, payStep, refundOrder, regularPricing, reopenFields, reopenOrder, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
+import { applyServerDiscount, buildLocalReceipt, cartToLocal, completeOrder, findLocalOrder, loadOrderForEdit, localToCart, payOrder, payStep, refundOrder, regularPricing, reopenFields, reopenOrder, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -710,6 +710,22 @@ describe("the Orders screen's actions", () => {
     h.rows.set("b", { ...serverToLocal(asOrder(server)), id: "b", label: "#13", till_serial: "T1-0070", created_at: "2026-11-02T10:00:00Z" });
     expect((await findLocalOrder(" t1-007 "))?.id).toBe("a");
     expect(await findLocalOrder("T1-008")).toBeNull();
+  });
+});
+
+describe("applyServerDiscount (QA T10)", () => {
+  // A discount above the cashier's limit needs the manager's PIN on the discount request itself, and a line discount
+  // needs the line's server id, which a line added since the last save gets only from this save.
+  it("hands the call the cart as saved and the manager's PIN", async () => {
+    server = fresh([["Karahi", 100000]]);
+    h.rows.set(server.id, serverToLocal(asOrder(server)));
+    const fn = vi.fn(async () => asOrder(server));
+    await applyServerDiscount({ ...opened(), lines: [...opened().lines, openLine("Naan", 5000)] }, fn, { approver_pin: "4321" });
+    expect(h.calls).toEqual(["save"]);
+    const [id, ctx] = fn.mock.calls[0] as unknown as [string, { saved: Cart; approver_pin?: string }];
+    expect(id).toBe("o-1");
+    expect(ctx.approver_pin).toBe("4321");
+    expect(ctx.saved.lines.map((l) => [l.name, !!l.id])).toEqual([["Karahi", true], ["Naan", true]]);
   });
 });
 

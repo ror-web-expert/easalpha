@@ -154,7 +154,7 @@ export function PaymentDialog({ open, onClose, cart, onPay, busy, onCharges, onT
   const chargesLocked = !onCharges || paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
   // SPEC discounts: the same lock, and the lines by kind for the totals block.
   const discountsLocked = paidBefore > 0 || splits.length > 0 || cart.is_staff_meal;
-  const discountLines = discountRows(cart.discounts, base.discount_minor);
+  const discountLines = discountRows(cart.discounts, base.discount_minor, (id) => cart.lines.find((l) => l.id === id)?.name);
 
   return (
     // Reviews 3.1 and 3.2: a fixed height that always fits the screen (1024 x 768 included). Only the method column

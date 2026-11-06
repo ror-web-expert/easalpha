@@ -560,14 +560,16 @@ export async function applyTaxChoice(cart: Cart, choice: { none: true } | { tax_
  * SPEC discounts: a voucher code, loyalty points or a redemption option, or removing one of them. The server decides
  * and re-prices (POST /orders/:id/discounts, /redeem_points, /redeem_option, DELETE /orders/:id/discounts/:id), so this
  * is online only and never queued. The cart is saved first so the server has the latest lines and customer (which is
- * also when a regular discount tier is applied automatically), then `fn` runs against the server order id.
+ * also when a regular discount tier is applied automatically), then `fn` runs against the server order id, with the
+ * cart as saved (whose lines carry the server's ids, for a line discount) and a manager's PIN when one was given: a
+ * discount above the role's limit needs it on the discount request itself (QA T10).
  */
-export async function applyServerDiscount(cart: Cart, fn: (orderId: string) => Promise<Order>, opts: { approver_pin?: string; pin?: string } = {}): Promise<Cart> {
+export async function applyServerDiscount(cart: Cart, fn: (orderId: string, ctx: { saved: Cart; approver_pin?: string }) => Promise<Order>, opts: { approver_pin?: string; pin?: string } = {}): Promise<Cart> {
   if (!isOnline()) throw new ApiError("offline", "Discounts need the internet", 0);
   const saved = await saveOrder(cart, opts);
   if (saved.offline) throw new ApiError("offline", "Discounts need the internet", 0);
   const current = saved.cart;
-  const order = await fn(current.id);
+  const order = await fn(current.id, { saved: current, approver_pin: opts.approver_pin });
   const local = await storeServerOrder(order);
   return { ...localToCart(local), customer: cart.customer, address_text: cart.address_text, zone_name: cart.zone_name, lines: local.lines.filter((l) => l.status !== "cancelled"), ...reopenFields(order) };
 }
