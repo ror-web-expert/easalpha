@@ -634,7 +634,9 @@ export async function closeShift(shift: Shift, counted_cash_minor: number, count
       return { shift: closed, z, offline: false };
     } catch (e) { if (!isNetwork(e)) throw e; }
   }
-  await enqueue({ type: "shift_close", id: shift.id, membership_id: membershipId ?? undefined, payload: { counted_cash_minor, count_detail, note } });
+  // A record id of its own: under the shift's id it replaced the queued shift_open of a shift opened offline too (the
+  // queue keeps one record per id), and the server never heard of the shift. The server finds it by shift_id.
+  await enqueue({ type: "shift_close", id: uuid(), membership_id: membershipId ?? undefined, payload: { shift_id: shift.id, counted_cash_minor, count_detail, note } });
   useCatalogStore.getState().setShift(null);
   return { shift: { ...shift, status: "closed", closed_at: new Date().toISOString(), counted_cash_minor }, z: null, offline: true };
 }
