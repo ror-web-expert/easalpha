@@ -10,8 +10,14 @@ const h = vi.hoisted(() => ({
   products: [] as unknown[],
 }));
 
+// db.kv and db.transaction: the offline till serial is read and written in one read-write transaction (R29).
+const kv = new Map<string, unknown>();
 vi.mock("@/lib/db", () => ({
-  db: { orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o) } },
+  db: {
+    orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o) },
+    kv: { get: async (key: string) => (kv.has(key) ? { key, value: kv.get(key) } : undefined), put: async (row: { key: string; value: unknown }) => void kv.set(row.key, row.value) },
+    transaction: (_mode: string, _table: unknown, fn: () => Promise<unknown>) => fn(),
+  },
   kvGet: async () => null,
   kvSet: async () => undefined,
 }));

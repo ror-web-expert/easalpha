@@ -7,6 +7,15 @@ import { api } from "@/lib/api";
 vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/api")>()), api: vi.fn() }));
 
 import CanteenTodayPage from "./page";
+import { useAuthStore } from "@/store/auth";
+import type { Session } from "@/lib/types";
+
+// The page sits behind the canteen permissions (R5): a canteen manager's session.
+const session = {
+  access_token: "t", refresh_token: "r", user: { name: "Owner One", email: "owner@example.com" },
+  business: { id: "biz1", name: "Factory Mess", plan: null }, branch: { id: "b-1", name: "Main", day_end_time: "02:01" }, businesses: [],
+  membership: { role: { name: "Owner", system_key: "owner" } }, permissions: ["canteen.manage", "canteen.serve"], modules: { canteen: true },
+} as unknown as Session;
 
 // R19 (6 Nov 2026 review): meals a kiosk took offline and the server refused at sync were on no screen at all.
 const refused: CanteenRefusedClaim = {
@@ -26,10 +35,11 @@ function renderPage() {
 configure({ asyncUtilTimeout: 4000 }); // the whole page renders: room for a busy CI machine
 
 beforeEach(() => {
+  useAuthStore.setState({ session, branchId: "b-1" });
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation((async (path: string) => (path === "/canteen/today" ? today([refused]) : path === "/canteen/claims" ? { data: [] } : undefined)) as typeof api);
 });
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); useAuthStore.setState({ session: null, branchId: null }); });
 
 describe("Canteen, Today", () => {
   it("lists the meals refused at sync with who, what and why, and resolves one as fixed", async () => {
