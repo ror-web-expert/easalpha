@@ -15,15 +15,11 @@ import { titleCase } from "@/lib/utils";
 import { Cards, DateRangePicker, FilterBar, PageHeader, type DateRange } from "@/components/admin/page";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, EmptyState, ErrorState, SummaryCard, SummaryCardSkeleton, Table, TBody, TD, TH, THead, TR, EmptyRow, Tabs } from "@/components/ui";
 import { TrendChart, BarsChart, Breakdown } from "@/components/charts/charts";
-import { hasPermission, useAuthStore } from "@/store/auth";
+import { useAuthStore } from "@/store/auth";
 import { DASHBOARD_PERIODS, hourLabel, specStatusVariant } from "@/components/admin/order-helpers";
 import { useVisibleNav } from "@/components/admin/sidebar";
 import { accessDenial } from "@/components/admin/no-access";
-
-/** What GET /reports/dashboard/all asks (reports_controller.rb): a report code, and one of the dashboard's. */
-export function canReadDashboard(perms: string[] | undefined): boolean {
-  return hasPermission(perms, "reports.view_all", "reports.view_branch", "reports.view_own") && hasPermission(perms, "reports.view_all", "reports.view_branch", "DASHBOARD", "VIEW_DAILY_SALES");
-}
+import { canReadDashboard } from "@/components/admin/dashboard-access";
 
 // The landing page for every admin login. A role without the dashboard's codes (a stock clerk) got a raw "Missing
 // permission" and cards that never loaded (QA of 6 Nov 2026, P5): it is greeted with the pages it opens instead.

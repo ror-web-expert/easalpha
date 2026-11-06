@@ -15,7 +15,8 @@ vi.mock("@/lib/api", async (importOriginal) => ({ ...(await importOriginal<typeo
 import StorePage from "@/app/(admin)/admin/settings/store/page";
 import RolesPage from "@/app/(admin)/admin/staff/roles/page";
 import LoyaltyPage from "@/app/(admin)/admin/settings/loyalty-points/page";
-import DashboardPage, { canReadDashboard } from "@/app/(admin)/admin/page";
+import DashboardPage from "@/app/(admin)/admin/page";
+import { canReadDashboard } from "@/components/admin/dashboard-access";
 
 const signIn = (permissions: string[]) =>
   useAuthStore.setState({ session: { access_token: "t", refresh_token: "r", user: { name: "Sana" }, business: { id: "biz", name: "Victim Grill", settings: {} }, branch: { id: "b1" }, membership: { id: "m1", role: { name: "Manager", system_key: "manager" } }, permissions, businesses: [], modules: { customer_accounts: true, payroll: true, canteen: false } } as unknown as Session, branchId: "b1" });

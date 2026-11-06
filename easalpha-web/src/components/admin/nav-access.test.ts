@@ -104,6 +104,8 @@ const API_NEEDS: Record<string, string[][]> = {
   "/admin/canteen/workers": [["canteen.serve", "canteen.manage", "orders.create"]],
   "/admin/canteen/sessions": [["canteen.manage"]],
   "/admin/canteen/reports": [["canteen.manage"]],
+  // Reads GET /settings like every settings screen (open to the admin); saving needs settings.manage (read-only without).
+  "/admin/canteen/settings": [],
   "/admin/reports": [R], "/admin/reports/grand": [R], "/admin/reports/sales": [R], "/admin/reports/sales-calendar": [R],
   "/admin/reports/financial": [["finance.view", "reports.view_all"]],
   "/admin/reports/products-deals": [R], "/admin/reports/categories": [R], "/admin/reports/order-takers": [R], "/admin/reports/cashiers": [R],
