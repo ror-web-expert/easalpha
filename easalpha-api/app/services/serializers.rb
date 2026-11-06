@@ -72,10 +72,15 @@ module Serializers
   # A row EasAlpha support wrote on an approved session names the support person (super_admin_id), not the owner;
   # before and after are redacted again on the way out, for rows written before AuditLog.redact existed (S1).
   def audit_log(a, names: {}, support_names: {})
-    actor = a.super_admin_id ? "EasAlpha support (#{support_names[a.super_admin_id] || 'staff'})" : names[a.user_id]
+    actor = audit_actor(a.user_id, a.super_admin_id, names: names, support_names: support_names)
     { id: a.id, action: a.action, table_name: a.table_name, entity: AuditLog.entity_label(a.table_name), record_id: a.record_id, user_id: a.user_id, user_name: actor, super_admin_id: a.super_admin_id,
       device_id: a.device_id, approved_by_user_id: a.approved_by_user_id, approved_by_name: names[a.approved_by_user_id],
       before: AuditLog.redact(a.before), after: AuditLog.redact(a.after), ip: a.ip, occurred_at: a.occurred_at }
+  end
+
+  # Who an audit row names, for the list and the insights alike: the support person, else the user.
+  def audit_actor(user_id, super_admin_id, names: {}, support_names: {})
+    super_admin_id ? "EasAlpha support (#{support_names[super_admin_id] || 'staff'})" : names[user_id]
   end
 
   def checklist_item(i)
