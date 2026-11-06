@@ -10,10 +10,15 @@ import { exportTablePdf } from "@/lib/pdf";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
 import { BarsChart } from "@/components/charts/charts";
 import { MonthPicker, PayrollGuard, RunBadge } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { monthKey, monthLabel, shiftMonth } from "@/components/admin/payroll-helpers";
 import { Button, Card, CardHeader, CardTitle, EmptyRow, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 export default function PayrollReportsPage() {
+  return <PayrollGuard perms={["payroll.manage", "PAYROLL"]}><Reports /></PayrollGuard>;
+}
+
+function Reports() {
   const [to, setTo] = useState(monthKey());
   const [from, setFrom] = useState(shiftMonth(monthKey(), -5));
   const q = useQuery({ queryKey: ["payroll_reports", from, to], queryFn: () => api<PayrollReport>("/payroll/reports", { query: { from, to } }) });
@@ -30,8 +35,10 @@ export default function PayrollReportsPage() {
     });
   };
   const chart = (r?.by_month ?? []).map((m) => ({ month: monthLabel(m.month).slice(0, 3) + " " + m.month.slice(2, 4), gross: m.gross_minor, net: m.net_minor, deductions: m.deductions_minor }));
+  const denied = noAccessFor(q.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
+    <>
       <PageHeader icon={BarChart3} title="Payroll reports" description="What payroll cost by month and by department across the generated and paid runs. Cancelled runs are left out." actions={<Button variant="secondary" onClick={exportPdf} disabled={!r?.by_month.length}><FileText className="h-4 w-4" /> Export PDF</Button>} />
       <FilterBar>
         <span className="text-xs text-fg-muted">From</span><MonthPicker value={from} onChange={(v) => { setFrom(v); if (v > to) setTo(v); }} />
@@ -76,6 +83,6 @@ export default function PayrollReportsPage() {
           </div>
         </>
       )}
-    </PayrollGuard>
+    </>
   );
 }

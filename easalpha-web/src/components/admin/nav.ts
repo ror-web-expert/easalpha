@@ -161,19 +161,22 @@ export const NAV: NavGroup[] = [
       { href: "/admin/payroll/ledger", label: "Ledger", icon: BookOpen, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
       { href: "/admin/payroll/fingerprint", label: "Fingerprint", icon: Fingerprint, perms: ["payroll.manage", "staff.manage", "PAYROLL"], module: "payroll" },
       { href: "/admin/payroll/reports", label: "Reports", icon: BarChart3, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
-      { href: "/admin/payroll/settings", label: "Settings", icon: Wallet2, perms: ["payroll.manage", "settings.manage"], module: "payroll" },
+      // GET /payroll/settings needs payroll.manage or PAYROLL; settings.manage only joins them for saving.
+      { href: "/admin/payroll/settings", label: "Settings", icon: Wallet2, perms: ["payroll.manage", "PAYROLL"], module: "payroll" },
     ],
   },
   {
     label: "Canteen",
     icon: Utensils,
+    // As the API's canteen controller checks them (review R5): canteen.serve opens the kiosk screens (today, meals),
+    // everything else needs canteen.manage. settings.manage and the report permissions open none of it.
     items: [
-      { href: "/admin/canteen", label: "Today", icon: Utensils, exact: true, perms: ["canteen.manage", "canteen.serve", "settings.manage"], module: "canteen" },
-      { href: "/admin/canteen/plans", label: "Meal Plans", icon: CalendarDays, perms: ["canteen.manage", "settings.manage"], module: "canteen" },
-      { href: "/admin/canteen/claims", label: "Meals", icon: ListChecks, perms: ["canteen.manage", "canteen.serve", "settings.manage"], module: "canteen" },
-      { href: "/admin/canteen/workers", label: "Workers", icon: Fingerprint, perms: ["canteen.manage", "settings.manage"], module: "canteen" },
-      { href: "/admin/canteen/sessions", label: "Meal Sessions", icon: Timer, perms: ["canteen.manage", "settings.manage"], module: "canteen" },
-      { href: "/admin/canteen/reports", label: "Reports", icon: BarChart3, perms: ["canteen.manage", "canteen.serve", "settings.manage", ...REPORTS], module: "canteen" },
+      { href: "/admin/canteen", label: "Today", icon: Utensils, exact: true, perms: ["canteen.manage", "canteen.serve"], module: "canteen" },
+      { href: "/admin/canteen/plans", label: "Meal Plans", icon: CalendarDays, perms: ["canteen.manage"], module: "canteen" },
+      { href: "/admin/canteen/claims", label: "Meals", icon: ListChecks, perms: ["canteen.manage", "canteen.serve"], module: "canteen" },
+      { href: "/admin/canteen/workers", label: "Workers", icon: Fingerprint, perms: ["canteen.manage"], module: "canteen" },
+      { href: "/admin/canteen/sessions", label: "Meal Sessions", icon: Timer, perms: ["canteen.manage"], module: "canteen" },
+      { href: "/admin/canteen/reports", label: "Reports", icon: BarChart3, perms: ["canteen.manage"], module: "canteen" },
     ],
   },
   {
@@ -248,6 +251,20 @@ export const NAV: NavGroup[] = [
     ],
   },
 ];
+
+/** Whether a sidebar entry is the page at `pathname`: exact entries match only themselves, others their sub-pages too. */
+export function isNavActive(it: NavItem, pathname: string): boolean {
+  const base = it.href.split("#")[0];
+  if (it.href.includes("#")) return false; // report tabs: only the exact Business Overview entry highlights
+  return base === "/admin" || it.exact ? pathname === base : pathname === base || pathname.startsWith(base + "/");
+}
+
+/** The entry a page belongs to, among those `where` accepts: the longest matching href wins (/admin/stock/items over /admin/stock). */
+export function navItemFor(pathname: string, where: (it: NavItem) => boolean = () => true): NavItem | null {
+  let best: NavItem | null = null;
+  for (const g of NAV) for (const it of g.items) if (where(it) && isNavActive(it, pathname) && (!best || it.href.length > best.href.length)) best = it;
+  return best;
+}
 
 /** One line per settings area, for the Settings overview page (review 4.10). Keys match the `section` on each item. */
 export const SETTINGS_SECTIONS: { key: string; summary: string }[] = [

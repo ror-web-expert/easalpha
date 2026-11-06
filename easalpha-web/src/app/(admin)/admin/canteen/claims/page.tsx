@@ -9,10 +9,17 @@ import { formatMoney } from "@/lib/money";
 import { formatTime, isoDay } from "@/lib/dates";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
 import { useList } from "@/components/admin/crud";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
+import { CANTEEN_KIOSK_PERMS } from "@/components/canteen/helpers";
+import { useCan } from "@/store/auth";
 import { Badge, Button, Dialog, EmptyRow, Field, Input, Loading, Select, SummaryCard, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 import { toast } from "@/store/toast";
 
 export default function CanteenClaimsPage() {
+  return <RequirePermission perms={CANTEEN_KIOSK_PERMS}><Meals /></RequirePermission>;
+}
+
+function Meals() {
   const qc = useQueryClient();
   const [date, setDate] = useState(isoDay());
   const [session, setSession] = useState("");
@@ -20,7 +27,9 @@ export default function CanteenClaimsPage() {
   const [cancel, setCancel] = useState<MealClaim | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const sessions = useList<MealSession>("canteen_sessions_all", "/canteen/sessions");
+  // The counter staff (canteen.serve) see the meals; the session list and cancelling are canteen.manage's.
+  const manages = useCan()("canteen.manage");
+  const sessions = useList<MealSession>("canteen_sessions_all", "/canteen/sessions", {}, manages);
   const list = useQuery({ queryKey: ["canteen_claims_admin", date, session, status], queryFn: () => api<{ data: MealClaim[] }>("/canteen/claims", { query: { date, session_id: session || undefined, status: status || undefined, limit: 2000 } }), refetchInterval: 20_000, select: (r) => r.data });
   const rows = list.data ?? [];
   const live = rows.filter((c) => c.status !== "cancelled");
@@ -31,6 +40,8 @@ export default function CanteenClaimsPage() {
     catch (e) { toast.error("Could not cancel", errorMessage(e)); }
     finally { setBusy(false); }
   };
+  const denied = noAccessFor(list.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={ListChecks} title="Meals" description="Every token of the day. Cancelling a meal refunds the worker's account and frees the dish count." />
@@ -60,7 +71,7 @@ export default function CanteenClaimsPage() {
                 <TD right className="tabular">{formatMoney(c.worker_price_minor)}</TD>
                 <TD right className="tabular">{c.company_share_minor ? formatMoney(c.company_share_minor) : "-"}</TD>
                 <TD><Badge variant={c.status === "served" ? "success" : c.status === "cancelled" ? "danger" : "info"}>{c.status}</Badge>{c.cancel_reason ? <div className="text-xs text-fg-muted">{c.cancel_reason}</div> : null}</TD>
-                <TD right>{c.status !== "cancelled" ? <Button variant="ghost" size="sm" onClick={() => setCancel(c)}><XCircle className="h-4 w-4 text-danger" /> Cancel</Button> : null}</TD>
+                <TD right>{c.status !== "cancelled" && manages ? <Button variant="ghost" size="sm" onClick={() => setCancel(c)}><XCircle className="h-4 w-4 text-danger" /> Cancel</Button> : null}</TD>
               </TR>
             )) : <EmptyRow colSpan={10}>No meals on this day.</EmptyRow>}
           </TBody>

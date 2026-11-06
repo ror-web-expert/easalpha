@@ -10,14 +10,21 @@ import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { Cards, PageHeader } from "@/components/admin/page";
 import { PayrollGuard, RunBadge } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { monthLabel } from "@/components/admin/payroll-helpers";
 import { Button, Card, CardBody, CardHeader, CardTitle, EmptyRow, KeyValue, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 export default function PayrollOverviewPage() {
+  return <PayrollGuard perms={["payroll.manage", "PAYROLL"]}><Overview /></PayrollGuard>;
+}
+
+function Overview() {
   const q = useQuery({ queryKey: ["payroll_overview"], queryFn: () => api<PayrollOverview>("/payroll/overview") });
   const o = q.data;
+  const denied = noAccessFor(q.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
+    <>
       <PageHeader icon={Gauge} title="Payroll overview" description="Employees, advances waiting for a decision, this month's run and the advances still being recovered." actions={<Link href="/admin/payroll/run"><Button><BadgeDollarSign className="h-4 w-4" /> Run Payroll</Button></Link>} />
       {q.isLoading || !o ? <Loading /> : (
         <>
@@ -52,6 +59,6 @@ export default function PayrollOverviewPage() {
           </div>
         </>
       )}
-    </PayrollGuard>
+    </>
   );
 }

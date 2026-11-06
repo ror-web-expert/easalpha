@@ -8,6 +8,7 @@ import { formatDateTime } from "@/lib/dates";
 import { PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
 import { SettingsScreenCard, SettingsVersion, useSettings } from "@/components/admin/settings-screen";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
 import { BulkSendTab, ManualSendTab, SendLogsTab, TemplatesTab } from "@/components/admin/marketing-whatsapp";
 import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Loading, SummaryCard, Tabs } from "@/components/ui";
 
@@ -29,7 +30,13 @@ const STATUS: Record<WhatsappConnection["status"], { label: string; tone: "neutr
   unavailable: { label: "Unavailable", tone: "danger" },
 };
 
+// Every WhatsApp call (connection, templates, usage, sends) needs settings.manage (review R5: a manager opening this by
+// URL got the settings card around four refused calls).
 export default function WhatsappSettingsPage() {
+  return <RequirePermission perms={["settings.manage"]}><WhatsappSettings /></RequirePermission>;
+}
+
+function WhatsappSettings() {
   const settings = useSettings();
   const allKeys = settings.data?.groups.store?.screens["WhatsApp"] ?? [];
   const providerKey = allKeys.find((k) => k.key === PROVIDER_KEY);
@@ -37,6 +44,8 @@ export default function WhatsappSettingsPage() {
   const master = keys.find((k) => k.key === "whatsapp.account.master_enabled")?.value === true;
   const usage = useQuery({ queryKey: ["whatsapp_usage"], queryFn: () => api<WhatsappUsage>("/whatsapp/usage") });
   const [tab, setTab] = useState<Tab>("templates");
+  const denied = noAccessFor(usage.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={MessageCircle} title="WhatsApp" description="Statements and receipts sent from the cashier desktop app. The master toggle switches off every send button everywhere." />

@@ -9,12 +9,20 @@ import { formatMoney } from "@/lib/money";
 import { formatTime } from "@/lib/dates";
 import { Cards, PageHeader } from "@/components/admin/page";
 import { Badge, Card, CardBody, CardHeader, CardTitle, EmptyRow, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
-import { sessionWindow } from "@/components/canteen/helpers";
+import { CANTEEN_KIOSK_PERMS, sessionWindow } from "@/components/canteen/helpers";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
 
 export default function CanteenTodayPage() {
+  return <RequirePermission perms={CANTEEN_KIOSK_PERMS}><TodayBoard /></RequirePermission>;
+}
+
+function TodayBoard() {
   const today = useQuery({ queryKey: ["canteen_today_admin"], queryFn: () => api<CanteenToday>("/canteen/today"), refetchInterval: 15_000 });
   const claims = useQuery({ queryKey: ["canteen_claims_admin_recent"], queryFn: () => api<{ data: MealClaim[] }>("/canteen/claims", { query: { limit: 25 } }), refetchInterval: 15_000, select: (r) => r.data });
   const t = today.data;
+  // Opened by URL by someone the API refuses (no canteen permission, or the module was switched off): review R5.
+  const denied = noAccessFor(today.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={Utensils} title="Canteen" description="Workers scan a finger at the kiosk, take one dish per meal session and collect with a token. Every meal goes on the worker's account."

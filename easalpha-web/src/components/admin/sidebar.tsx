@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Building2, ChevronDown, ChevronRight, ChevronsUpDown, CornerDownLeft, LogOut, Menu as MenuIcon, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV, type NavGroup, type NavItem } from "./nav";
+import { NAV, isNavActive as isActive, navItemFor, type NavGroup, type NavItem } from "./nav";
 import { useAuthStore, hasPermission } from "@/store/auth";
 import { api } from "@/lib/api";
 import type { Session } from "@/lib/types";
@@ -14,14 +14,9 @@ import { Badge, Button, ThemeToggle } from "@/components/ui";
 import { format } from "date-fns";
 import { toast } from "@/store/toast";
 import { HeaderPills } from "./dashboard-pills";
-import { MODULE_INFO, useModules } from "@/lib/modules";
+import { useModules } from "@/lib/modules";
 import { AnnouncementBanner, NeedHelpFab, PoweredBy } from "./help-support";
-
-function isActive(it: NavItem, pathname: string) {
-  const base = it.href.split("#")[0];
-  if (it.href.includes("#")) return false; // report tabs: only the exact Business Overview entry highlights
-  return base === "/admin" || it.exact ? pathname === base : pathname === base || pathname.startsWith(base + "/");
-}
+import { NoAccess } from "./no-access";
 
 /** Groups and items this user may see, in nav order. */
 export function useVisibleNav(): NavGroup[] {
@@ -326,22 +321,9 @@ function DayBar() {
 function ModuleGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const modules = useModules();
-  const isOwner = useAuthStore((s) => s.session?.membership.role.system_key === "owner");
-  const item = useMemo(() => {
-    let best: NavItem | null = null;
-    for (const g of NAV) for (const it of g.items) if (it.module && isActive(it, pathname) && (!best || it.href.length > best.href.length)) best = it;
-    return best;
-  }, [pathname]);
+  const item = useMemo(() => navItemFor(pathname, (it) => !!it.module), [pathname]);
   if (!item?.module || !modules.loaded || modules[item.module]) return <>{children}</>;
-  const info = MODULE_INFO[item.module];
-  return (
-    <div className="mx-auto mt-12 max-w-lg rounded-2xl border bg-card p-8 text-center" data-module-off={item.module}>
-      <h1 className="text-xl font-medium">{info.title} is switched off</h1>
-      <p className="mt-2 text-sm text-fg-secondary">{info.summary}</p>
-      <p className="mt-4 text-sm">{isOwner ? "Switch it on to use this page." : "Ask the owner to switch it on in Settings, Modules."}</p>
-      {isOwner ? <Link href="/admin/settings/modules" className="mt-5 inline-flex h-10 items-center rounded-full bg-primary px-6 text-sm font-medium text-primary-fg">Open Modules</Link> : null}
-    </div>
-  );
+  return <NoAccess kind="module" module={item.module} />;
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

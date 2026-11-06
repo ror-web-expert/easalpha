@@ -9,11 +9,16 @@ import { formatMoney } from "@/lib/money";
 import { exportTablePdf } from "@/lib/pdf";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
 import { EmployeeSelect, MonthPicker, PayrollGuard, RunBadge } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { monthKey, monthLabel, PAYSLIP_PDF_COLUMNS, payslipPdfRow, shiftMonth } from "@/components/admin/payroll-helpers";
 import { PayslipDetailPanel } from "@/components/admin/payroll-run";
 import { Button, Dialog, EmptyRow, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 export default function PayrollLedgerPage() {
+  return <PayrollGuard perms={["payroll.manage", "PAYROLL"]}><Ledger /></PayrollGuard>;
+}
+
+function Ledger() {
   const [employee, setEmployee] = useState("");
   const [to, setTo] = useState(monthKey());
   const [from, setFrom] = useState(shiftMonth(monthKey(), -11));
@@ -29,8 +34,10 @@ export default function PayrollLedgerPage() {
     filename: `payroll-ledger-${from}-${to}.pdf`, landscape: true,
   });
   const selected = rows.find((p) => p.id === open) ?? null;
+  const denied = noAccessFor(q.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
+    <>
       <PageHeader icon={BookOpen} title="Payroll ledger" description="Payslips across runs, one row per employee per month. Open a row for the full breakdown." actions={<Button variant="secondary" onClick={exportPdf} disabled={!rows.length}><FileText className="h-4 w-4" /> Export PDF</Button>} />
       <FilterBar>
         <EmployeeSelect value={employee} onChange={setEmployee} allLabel="All employees" />
@@ -62,6 +69,6 @@ export default function PayrollLedgerPage() {
       <Dialog open={!!selected} onClose={() => setOpen(null)} title={selected ? `${selected.employee_name}: ${selected.run_label}` : ""} description={selected ? `${monthLabel(selected.month)} payslip` : undefined} size="lg">
         {selected ? <PayslipDetailPanel payslip={selected} /> : null}
       </Dialog>
-    </PayrollGuard>
+    </>
   );
 }

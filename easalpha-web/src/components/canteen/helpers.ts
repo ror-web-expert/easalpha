@@ -3,6 +3,11 @@
 import type { MealClaim } from "@/lib/types";
 import type { PrintLine } from "@/lib/print";
 
+/** What the API's canteen controller asks of a signed-in user (review R5): the kiosk screens' calls (today, meals,
+ *  workers) take canteen.serve, canteen.manage or orders.create; everything else canteen.manage. */
+export const CANTEEN_KIOSK_PERMS = ["canteen.serve", "canteen.manage", "orders.create"];
+export const CANTEEN_MANAGE_PERMS = ["canteen.manage"];
+
 /** The kiosk numbers its own tokens, so a token exists before the server answers and when there is no connection:
  *  "Q1-001", "Q1-002"... per device per business day. */
 export interface TokenState { date: string; seq: number }

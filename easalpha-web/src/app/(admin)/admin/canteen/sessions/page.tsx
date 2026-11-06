@@ -7,12 +7,18 @@ import { api, errorMessage } from "@/lib/api";
 import type { MealSession } from "@/lib/types";
 import { PageHeader } from "@/components/admin/page";
 import { useList, useRemove, useSave } from "@/components/admin/crud";
+import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
+import { CANTEEN_MANAGE_PERMS } from "@/components/canteen/helpers";
 import { Badge, Button, Dialog, EmptyRow, Field, Input, Loading, Switch, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { toast } from "@/store/toast";
 
 interface Form { id?: string; name: string; starts_at: string; ends_at: string; max_claims: number; active: boolean; sort_order: number }
 
 export default function MealSessionsPage() {
+  return <RequirePermission perms={CANTEEN_MANAGE_PERMS}><MealSessions /></RequirePermission>;
+}
+
+function MealSessions() {
   const qc = useQueryClient();
   const list = useList<MealSession>("canteen_sessions_all", "/canteen/sessions");
   const [form, setForm] = useState<Form | null>(null);
@@ -22,6 +28,8 @@ export default function MealSessionsPage() {
     try { await api("/canteen/sessions", { query: { seed: 1 } }); void qc.invalidateQueries({ queryKey: ["canteen_sessions_all"] }); void qc.invalidateQueries({ queryKey: ["canteen_sessions"] }); toast.success("Breakfast, Lunch and Dinner added"); }
     catch (e) { toast.error("Could not add", errorMessage(e)); }
   };
+  const denied = noAccessFor(list.error);
+  if (denied) return denied;
   return (
     <>
       <PageHeader icon={Timer} title="Meal Sessions" description="A worker takes one meal per session. Times are the branch's clock; a window past midnight (22:00 to 02:00) is fine."

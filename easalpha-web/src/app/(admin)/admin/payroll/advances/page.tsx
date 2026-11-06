@@ -10,12 +10,17 @@ import { formatDate, formatDateTime } from "@/lib/dates";
 import { Cards, FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction, useList, useSave } from "@/components/admin/crud";
 import { AdvanceBadge, EmployeeSelect, MethodSelect, PayrollGuard } from "@/components/admin/payroll-shared";
+import { noAccessFor } from "@/components/admin/no-access";
 import { Button, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 interface Form { employee_id: string; amount_minor: number; installment_minor: number; reason: string }
 const STATUSES: AdvanceStatus[] = ["pending", "approved", "paid", "repaid", "rejected"];
 
 export default function AdvancesPage() {
+  return <PayrollGuard perms={["payroll.manage", "PAYROLL"]}><Advances /></PayrollGuard>;
+}
+
+function Advances() {
   const [status, setStatus] = useState("");
   const [employee, setEmployee] = useState("");
   const list = useList<Advance>("advances", "/payroll/advances", { status, employee_id: employee });
@@ -31,8 +36,10 @@ export default function AdvancesPage() {
   const pending = (all.data ?? []).filter((a) => a.status === "pending");
   const outstanding = (all.data ?? []).filter((a) => a.status === "paid" && a.outstanding_minor > 0);
   const canSubmit = form && form.employee_id && form.amount_minor > 0 && (form.installment_minor === 0 || form.installment_minor <= form.amount_minor);
+  const denied = noAccessFor(all.error);
+  if (denied) return denied;
   return (
-    <PayrollGuard perms={["payroll.manage", "PAYROLL"]}>
+    <>
       <PageHeader icon={CircleDollarSign} title="Advances" description="Salary advances: requested, approved, paid out, then recovered from payslips in instalments until repaid." actions={<Button onClick={() => setForm({ employee_id: "", amount_minor: 0, installment_minor: 0, reason: "" })}><Plus className="h-4 w-4" /> Request advance</Button>} />
       <Cards>
         <SummaryCard label="Pending" value={pending.length} sub={`${formatMoney(pending.reduce((s, a) => s + a.amount_minor, 0))} waiting for a decision`} tone={pending.length ? "warning" : "neutral"} />
@@ -84,6 +91,6 @@ export default function AdvancesPage() {
         footer={<><Button variant="secondary" onClick={() => setPayFor(null)}>Cancel</Button><Button loading={pay.isPending} onClick={() => payFor && pay.mutate({ id: payFor.id, method_code: method }, { onSuccess: () => setPayFor(null) })}>Pay</Button></>}>
         <Field label="Paid from"><MethodSelect value={method} onChange={setMethod} /></Field>
       </Dialog>
-    </PayrollGuard>
+    </>
   );
 }
