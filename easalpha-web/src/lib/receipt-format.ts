@@ -46,6 +46,11 @@ export function unitPriceNote(l: Pick<Receipt["lines"][number], "quantity" | "un
   return qty !== 1 && l.unit_price_minor ? `@ ${money(l.unit_price_minor)} each` : null;
 }
 
+/** "+ Extra raita (Rs 50)": a modifier under its item, its price a note since the item's amount already holds it. */
+export function modifierNote(mo: { name: string; price_minor?: number | null }, money: (minor: number) => string): string {
+  return `+ ${mo.name}${mo.price_minor ? ` (${money(mo.price_minor)})` : ""}`;
+}
+
 /** Everything taken off the bill, lines and order together, as "You saved Rs 110"; null when nothing was. */
 export function savingsLine(r: Pick<Receipt, "totals" | "business">): string | null {
   const saved = r.totals?.discount_minor ?? 0;

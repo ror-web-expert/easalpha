@@ -11,7 +11,7 @@ import { titleCase } from "@/lib/utils";
 import { settingValue } from "@/lib/pricing";
 import { formatQty } from "@/components/pos/receipt";
 import { billRows } from "./bill";
-import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "./receipt-format";
+import { itemCount, modifierNote, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "./receipt-format";
 import { loadSymbol, type CodeSymbol } from "@/components/admin/barcode-labels";
 
 export type PrintLine =
@@ -178,13 +178,16 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   lines.push(...row("QTY  ITEM", "AMOUNT", width, true));
   lines.push({ divider: true });
   const indent = "     ";
+  const note = (t: string) => lines.push(...wrap(t, width - indent.length).map((x) => text(`${indent}${x}`)));
+  // Only the item rows carry an amount, so the AMOUNT column adds up to the Subtotal: a modifier's price is already in
+  // its line, and a line discount is in the bill block below (QA T13: modifiers were counted twice).
   for (const l of r.lines ?? []) {
     lines.push(...row(`${formatQty(l.quantity).padStart(3)}  ${l.name}`, m(l.line_subtotal_minor ?? l.line_total_minor), width));
-    const note = unitPriceNote(l, m);
-    if (note) lines.push(...wrap(note, width - indent.length).map((t) => text(`${indent}${t}`)));
-    for (const mo of l.modifiers ?? []) lines.push(...row(`${indent}+ ${mo.name}`, mo.price_minor ? m(mo.price_minor) : "", width));
-    if (l.discount_minor) lines.push(...row(`${indent}Discount`, `-${m(l.discount_minor)}`, width));
-    if (l.notes) lines.push(...wrap(`"${l.notes}"`, width - indent.length).map((t) => text(`${indent}${t}`)));
+    const each = unitPriceNote(l, m);
+    if (each) note(each);
+    for (const mo of l.modifiers ?? []) note(modifierNote(mo, m));
+    if (l.discount_minor) note(`Discount -${m(l.discount_minor)}`);
+    if (l.notes) note(`"${l.notes}"`);
   }
   lines.push({ divider: true });
   // The bill block (lib/bill.ts): the lines above add up to the Subtotal, these rows add up to TOTAL.

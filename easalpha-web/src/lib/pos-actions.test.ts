@@ -87,7 +87,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { completeOrder, findLocalOrder, loadOrderForEdit, localToCart, payOrder, payStep, refundOrder, regularPricing, reopenFields, reopenOrder, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
+import { buildLocalReceipt, cartToLocal, completeOrder, findLocalOrder, loadOrderForEdit, localToCart, payOrder, payStep, refundOrder, regularPricing, reopenFields, reopenOrder, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -789,6 +789,19 @@ describe("an offline khata sale for a regular customer", () => {
     expect(useCustomerStore.getState().byId.get("sadia")).toMatchObject({ balance_minor: 194_500 + 370_300, orders_count: 5 });
   });
 
+  // QA K11: the offline account receipt had no "Account balance" line; the online one does.
+  it("prints what she owes now on the receipt, from her saved balance", async () => {
+    h.online = false;
+    const saved = toCachedCustomer({ id: "sadia", name: "Sadia Akhtar", phone: "+923001807130", khata_no: "32", status: "active", is_walk_in: false, balance_minor: 194_500, credit_limit_minor: null, orders_count: 4, last_order_at: null } as never);
+    useCustomerStore.setState({ list: [saved], byId: new Map([["sadia", saved]]), loaded: true });
+    const due = payableTotals(cart(), { settings: h.settings, cash: false }).total_minor;
+    const r = await payOrder(cart(), [{ method_code: "khata", amount_minor: due }]);
+    expect(r.receipt.khata).toEqual({ balance_minor: 194_500 + due });
+    // A cash sale for the same customer prints no account line.
+    const byCash = await payOrder({ ...cart(), id: "khata-2" }, [{ method_code: "cash", amount_minor: due, tendered_minor: due }]);
+    expect(byCash.receipt.khata).toBeNull();
+  });
+
   it("leaves the discount to the server while online", () => {
     h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
     expect(regularPricing({ ...cart(), customer: { ...cart().customer!, last_order_at: yesterday } }).discounts ?? []).toEqual([]);
@@ -857,6 +870,21 @@ describe("a summary row from GET /orders (review R2)", () => {
     h.rows.set(server.id, serverToLocal(asOrder(server)));
     server.items.push({ id: "item-2", name: "Naan", unit_price_minor: 2500, quantity: 2 });
     expect((await storeServerOrder(asOrder(server))).lines.map((l) => l.name)).toEqual(["Karahi", "Naan"]);
+  });
+});
+
+describe("the bill preview and the offline receipt (QA T13)", () => {
+  // "Tax 16% on Rs 1,090" for a bill with Rs 100 off: the base before the discount, where the server states the base after.
+  it("state the tax base after the order's discount, as the server's receipt does", () => {
+    const taxed: CartLine = { key: "k", product_id: "p", name: "Karahi", unit_price_minor: 109000, quantity: 1, modifiers: [], tax_rate: 16, tax_inclusive: false };
+    const cart: Cart = {
+      id: "bill-1", saved: false, local_only: false, status: "draft", order_type: "takeaway", lines: [taxed], customer: null, table_id: null, table_code: null, guest_name: "", covers: null,
+      notes: "", is_staff_meal: false, staff_meal_reason: "", label: null, client_created_at: "2026-11-06T10:00:00Z",
+      discount_minor: 10000, discounts: [{ id: "d-1", kind: "voucher", value: 100, amount_minor: 10000, reason: "Voucher EID-1", order_item_id: null }],
+    };
+    const r = buildLocalReceipt(cartToLocal(cart, "draft"));
+    expect(r.totals.tax_lines).toEqual([{ rate: 16, inclusive: false, taxable_minor: 99000, tax_minor: 15840 }]);
+    expect(r.totals.tax_minor).toBe(15840);
   });
 });
 

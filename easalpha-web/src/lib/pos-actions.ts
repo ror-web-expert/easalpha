@@ -3,7 +3,7 @@
 import { api, ApiError } from "@/lib/api";
 import { db, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, noteNetworkFailure, patchQueued, probeHealth, processQueue, reachabilityUnknown, refreshCounts } from "@/lib/sync";
-import { labelPrice, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
+import { allocatedLineTotals, labelPrice, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
 import { isCashCode, payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
 import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
 import { businessDayFor } from "@/lib/business-day";
@@ -762,13 +762,21 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
   const receipt = (settings.receipt ?? {}) as { header?: string; footer?: string; language?: string; paper?: string };
   const active = o.lines.filter((l) => l.status !== "cancelled");
   const taxGroups = new Map<string, { rate: number; inclusive: boolean; taxable_minor: number; tax_minor: number }>();
-  active.forEach((l) => {
-    const t = lineTotals(l);
+  // The base is what each line is taxed on: after its product discount and its share of the order's discount, as
+  // Receipts::Builder states it. It said "Tax 16% on" the figure before any discount (QA T13).
+  const allocated = allocatedLineTotals(active, orderLevelPool(o));
+  active.forEach((l, i) => {
+    const t = allocated[i];
     const k = `${l.tax_rate}-${l.tax_inclusive}`;
     const g = taxGroups.get(k) ?? { rate: l.tax_rate, inclusive: l.tax_inclusive, taxable_minor: 0, tax_minor: 0 };
-    g.taxable_minor += t.line_subtotal_minor; g.tax_minor += t.line_tax_minor;
+    g.taxable_minor += t.line_subtotal_minor - t.line_discount_minor; g.tax_minor += t.line_tax_minor;
     taxGroups.set(k, g);
   });
+  // An account sale says what the customer owes now, as the server's receipt does (QA K11): the till's saved balance,
+  // which an offline sale has just added to. Left out when the till has no balance for the customer.
+  const khataCodes = new Set((useCatalogStore.getState().paymentMethods ?? []).filter((m) => m.kind === "khata").map((m) => m.code).concat("khata"));
+  const onAccount = !!o.customer_id && o.payments.some((p) => khataCodes.has(p.method_code));
+  const balance = onAccount ? useCustomerStore.getState().byId.get(o.customer_id!)?.balance_minor ?? readRecentCustomers().find((c) => c.id === o.customer_id)?.balance_minor : undefined;
   return {
     receipt_number: o.receipt_number, duplicate, printed_at: new Date().toISOString(),
     business: { name: biz?.name ?? "", legal_name: null, phone: useDeviceStore.getState().business?.phone ?? null, email: null, logo_key: catalogLogo ?? useDeviceStore.getState().business?.logo_key ?? null, currency: biz?.currency ?? "PKR" },
@@ -779,7 +787,7 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
     lines: active.map((l) => { const t = lineTotals(l); return { name: l.name, quantity: String(l.quantity), unit: weightUnit(catalog, l), unit_price_minor: l.price_override_minor ?? l.unit_price_minor, label_price_minor: labelPrice(l), modifiers: l.modifiers.map((m) => ({ name: m.name, price_minor: m.price_minor })), line_subtotal_minor: t.line_subtotal_minor, line_total_minor: t.line_total_minor, discount_minor: t.line_discount_minor, notes: l.notes ?? null }; }),
     totals: { subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor, tax_lines: [...taxGroups.values()].filter((g) => g.rate), delivery_charge_minor: o.delivery_charge_minor ?? 0, rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, due_minor: Math.max(0, o.total_minor - o.paid_minor) },
     payments: o.payments.map((p) => ({ method: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? null, change_minor: p.change_minor ?? 0, reference: p.reference ?? null })),
-    refunds: [], khata: null,
+    refunds: [], khata: balance == null ? null : { balance_minor: balance },
     tax_invoice: { number: null, qr: null, status: branch?.tax_registration?.authority && branch.tax_registration.authority !== "none" ? "pending" : "not_registered" },
     feedback_whatsapp: useDeviceStore.getState().business?.phone ?? null,
   };
