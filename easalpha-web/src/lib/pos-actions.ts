@@ -3,7 +3,7 @@
 import { api, ApiError } from "@/lib/api";
 import { db, type LocalOrder, type LocalPayment } from "@/lib/db";
 import { enqueue, isOnline, isQueued, noteNetworkFailure, patchQueued, probeHealth, processQueue, reachabilityUnknown } from "@/lib/sync";
-import { lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
+import { labelPrice, lineTotals, toLineInput, type CartLine } from "@/lib/pricing";
 import { isCashCode, payableTotals, reconcilePayments, roundsCash, serverDueForPayment } from "@/lib/pos-rules";
 import { deliveryChargeFields, resolveDeliveryCharge, resolveServiceCharge, serviceChargeFields, totalsWithCharges } from "@/lib/pos-charges";
 import { businessDayFor } from "@/lib/business-day";
@@ -100,7 +100,7 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
     key: i.id, id: i.id, product_id: i.product_id ?? undefined, variant_id: i.variant_id, deal_id: i.deal_id ?? undefined, name: i.name, unit_price_minor: i.unit_price_minor, quantity: Number(i.quantity),
     notes: i.notes, modifiers: (i.modifiers ?? []).map((m) => ({ modifier_id: m.modifier_id ?? "", name: m.name, price_minor: m.price_minor, quantity: Number(m.quantity) })),
     open_item: i.open_item ? { name: i.name, price_minor: i.unit_price_minor } : undefined, price_override_minor: i.price_overridden ? i.unit_price_minor : null,
-    tax_rate: i.tax_rate, tax_inclusive: i.tax_inclusive, station_id: i.station_id, status: i.status, sent: !!i.sent_at,
+    tax_rate: i.tax_rate, tax_inclusive: i.tax_inclusive, station_id: i.station_id, status: i.status, sent: !!i.sent_at, label_price_minor: i.label_price_minor ?? null,
   })) : prev?.lines ?? [];
   return {
     id: o.id, serial: o.serial, till_serial: o.till_serial, label: o.label, status: o.status, payment_status: o.payment_status, order_type: o.order_type, table_id: o.table_id, table_code: o.table_code,
@@ -640,6 +640,12 @@ export async function closeShift(shift: Shift, counted_cash_minor: number, count
 }
 
 // ---- Receipt ----
+/** The unit a weighed line is sold in ("kg"), as the server snapshots it on the item; null for everything else. */
+function weightUnit(catalog: ReturnType<typeof ctx>["catalog"], l: CartLine): string | null {
+  const p = l.product_id && !l.open_item && !l.deal_id ? catalog?.products.find((x) => x.id === l.product_id) : null;
+  return p?.sold_by_weight ? p.weight_unit || null : null;
+}
+
 export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
   const { catalog, settings, branch } = ctx();
   const biz = catalog?.business ?? useDeviceStore.getState().business;
@@ -661,7 +667,8 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
     branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
     header: receipt.header ?? null, footer: receipt.footer ?? null, language: receipt.language ?? "en", paper: receipt.paper ?? "80",
     order: { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type as Receipt["order"]["order_type"], table: o.table_code, business_day: o.business_day, placed_at: o.created_at, paid_at: o.updated_at, cashier: o.cashier_name, till: useDeviceStore.getState().device?.name ?? null, is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason, customer: o.customer_id ? { name: o.customer_name ?? "", phone: o.customer_phone, khata_no: null } : null, guest_name: o.guest_name, notes: o.notes },
-    lines: active.map((l) => { const t = lineTotals(l); return { name: l.name, quantity: String(l.quantity), unit_price_minor: l.price_override_minor ?? l.unit_price_minor, modifiers: l.modifiers.map((m) => ({ name: m.name, price_minor: m.price_minor })), line_subtotal_minor: t.line_subtotal_minor, line_total_minor: t.line_total_minor, discount_minor: t.line_discount_minor, notes: l.notes ?? null }; }),
+    // A weighed line prints its weight with the unit, and a scale label says it set the amount (as Receipts::Builder).
+    lines: active.map((l) => { const t = lineTotals(l); return { name: l.name, quantity: String(l.quantity), unit: weightUnit(catalog, l), unit_price_minor: l.price_override_minor ?? l.unit_price_minor, label_price_minor: labelPrice(l), modifiers: l.modifiers.map((m) => ({ name: m.name, price_minor: m.price_minor })), line_subtotal_minor: t.line_subtotal_minor, line_total_minor: t.line_total_minor, discount_minor: t.line_discount_minor, notes: l.notes ?? null }; }),
     totals: { subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor, tax_lines: [...taxGroups.values()].filter((g) => g.rate), delivery_charge_minor: o.delivery_charge_minor ?? 0, rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, due_minor: Math.max(0, o.total_minor - o.paid_minor) },
     payments: o.payments.map((p) => ({ method: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? null, change_minor: p.change_minor ?? 0, reference: p.reference ?? null })),
     refunds: [], khata: null,

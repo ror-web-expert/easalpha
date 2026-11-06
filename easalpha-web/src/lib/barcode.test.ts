@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/types";
 import {
-  barcodeFormat, createScanDetector, eanCheckDigit, equivalentCodes, explainCapture, findBarcode, guessAffixes, isValidEan, judgeBurst, looksLikeBadEan,
-  packQuantity, parseScaleLabel, scannerConfig, visibleKey, visibleText, withCheckDigit, type DetectorConfig, type KeyStroke, type ScaleConfig,
+  MONEY_SCAN_GUARD, barcodeFormat, createScanDetector, createScanGuard, eanCheckDigit, equivalentCodes, explainCapture, findBarcode, guessAffixes, isValidEan, judgeBurst, keyTime, looksLikeBadEan,
+  packQuantity, parseScaleLabel, scannerConfig, upcAToUpcE, upcEToUpcA, visibleKey, visibleText, withCheckDigit, type DetectorConfig, type KeyStroke, type ScaleConfig, type ScanGuard,
 } from "./barcode";
 
 const base: DetectorConfig = { prefix: "", suffix: "", terminator: "enter", minLength: 4, maxKeyIntervalMs: 50 };
@@ -241,6 +241,83 @@ describe("check digits and formats", () => {
     expect(equivalentCodes("4006381333931")).toEqual([]);
     expect(equivalentCodes("ABC")).toEqual([]);
   });
+
+  // Review 6 Nov 2026, R27. Each pair is a UPC-E and the UPC-A it is short for, one per zero-suppression rule.
+  const UPC_E_PAIRS: [string, string][] = [
+    ["04252614", "042100005264"], // last digit 0-2: maker XX?00, item 00XXX
+    ["11234502", "112000003452"], // the same rule in number system 1
+    ["01234531", "012300000451"], // 3: maker XXX00, item 000XX
+    ["01234543", "012340000053"], // 4: maker XXXX0, item 0000X
+    ["01234572", "012345000072"], // 5-9: item 0000N
+  ];
+
+  it("expands a UPC-E to its UPC-A and shortens a UPC-A to its UPC-E", () => {
+    for (const [e, a] of UPC_E_PAIRS) {
+      expect(upcEToUpcA(e)).toBe(a);
+      expect(upcAToUpcE(a)).toBe(e);
+    }
+    expect(upcEToUpcA("04252615")).toBeNull(); // wrong check digit
+    expect(upcEToUpcA("24252614")).toBeNull(); // number system 2 has no UPC-E
+    expect(upcEToUpcA("96385074")).toBeNull(); // an EAN-8
+    expect(upcAToUpcE("036000291452")).toBeNull(); // too few zeros to shorten
+    expect(upcAToUpcE("042100005265")).toBeNull();
+  });
+
+  it("tries a UPC-E as its UPC-A in both spellings, a UPC-A as its UPC-E, and an EAN-8 padded to 13 digits", () => {
+    expect(equivalentCodes("04252614")).toEqual(["042100005264", "0042100005264"]);
+    expect(equivalentCodes("042100005264")).toEqual(["0042100005264", "04252614"]);
+    expect(equivalentCodes("0042100005264")).toEqual(["042100005264", "04252614"]);
+    expect(equivalentCodes("0000096385074")).toEqual(["000096385074", "96385074"]);
+    expect(equivalentCodes("96385074")).toEqual(["0000096385074"]);
+    expect(equivalentCodes("0000096385075")).toEqual(["000096385075"]); // a wrong check digit is no EAN-8
+  });
+});
+
+describe("money-field scan guard", () => {
+  /** Feeds keys `gap` ms apart, with the field holding `value` and growing by each digit as the browser types it. */
+  function feed(guard: ScanGuard, keys: string[], gap: number, value = 0, start = 1000) {
+    let v = value;
+    let t = start;
+    const out: { restore: number; swallow: boolean }[] = [];
+    for (const key of keys) {
+      const r = guard.key({ key, time: t }, v);
+      if (r) { out.push(r); v = r.restore; }
+      if (/^\d$/.test(key) && !(r?.swallow)) v = v * 10 + Number(key) * 100;
+      t += gap;
+    }
+    return { out, value: v, last: t - gap };
+  }
+
+  it("puts the field back and swallows the Enter after a scanner's burst", () => {
+    const r = feed(createScanGuard(), [...chars("4006381333931"), "Enter"], 8, 500_000);
+    expect(r.out).toEqual([{ restore: 500_000, swallow: true }]);
+  });
+
+  it("never touches a person's typing, however quick, nor a burst shorter than six", () => {
+    expect(feed(createScanGuard(), [...chars("120000"), "Enter"], 90).out).toEqual([]);
+    expect(feed(createScanGuard(), [...chars("50000"), "Enter"], 5).out).toEqual([]);
+    expect(MONEY_SCAN_GUARD).toMatchObject({ minLength: 6, maxKeyIntervalMs: 50 });
+  });
+
+  it("puts the field back after a burst that ends in a pause, from the next key or from flush", () => {
+    const guard = createScanGuard();
+    const r = feed(guard, chars("96385074"), 10, 0);
+    expect(guard.pending).toBe(true);
+    expect(guard.flush(r.last + 20)).toBeNull(); // not yet a pause
+    expect(guard.flush(r.last + 51)).toBe(0);
+    expect(guard.pending).toBe(false);
+    // A person's key after the scan's pause: the scan comes out and the key goes in.
+    const next = feed(createScanGuard(), [...chars("96385074"), "5"], 10, 300);
+    expect(next.out).toEqual([]); // 10 ms gap: the 5 joined the burst
+    const late = createScanGuard();
+    const burst = feed(late, chars("96385074"), 10, 300);
+    expect(late.key({ key: "5", time: burst.last + 400 }, 9_638_507_400 + 300)).toEqual({ restore: 300, swallow: false });
+  });
+
+  it("times a key by its event when that is the page clock", () => {
+    expect(keyTime({ timeStamp: 1234.5 })).toBe(1234.5);
+    expect(keyTime({ timeStamp: Date.now() })).toBeLessThan(1e12);
+  });
 });
 
 const scale: ScaleConfig = { enabled: true, prefixes: ["21", "22"], itemDigits: 5, value: "weight", decimals: 3 };
@@ -318,6 +395,24 @@ describe("findBarcode", () => {
     expect(findBarcode(products, "0036000291452")).toMatchObject({ product: { id: "juice" } });
   });
 
+  it("finds a UPC-E saved as UPC-A and back, and an EAN-8 the scanner padded to 13 digits", () => {
+    const small = product({ id: "small", barcodes: [{ id: "b10", code: "042100005264", variant_id: null, quantity: "1" }] });
+    const short = product({ id: "short", barcodes: [{ id: "b11", code: "01234531", variant_id: null, quantity: "1" }] });
+    expect(findBarcode([small], "04252614")).toMatchObject({ product: { id: "small" }, via: "code" });
+    expect(findBarcode([short], "012300000451")).toMatchObject({ product: { id: "short" } });
+    expect(findBarcode([short], "0012300000451")).toMatchObject({ product: { id: "short" } });
+    expect(findBarcode(products, "0000096385074")).toMatchObject({ product: { id: "juice" }, quantity: 6 });
+  });
+
+  it("matches letters in any case, the exact case first", () => {
+    expect(findBarcode(products, "off-1")).toMatchObject({ product: { id: "off" } });
+    const lower = product({ id: "lower", barcodes: [{ id: "b12", code: "abc-9", variant_id: null, quantity: "1" }] });
+    const upper = product({ id: "upper", barcodes: [{ id: "b13", code: "ABC-9", variant_id: null, quantity: "1" }] });
+    expect(findBarcode([upper, lower], "abc-9")?.product.id).toBe("lower");
+    expect(findBarcode([lower, upper], "ABC-9")?.product.id).toBe("upper");
+    expect(findBarcode([lower], "Abc-9")?.product.id).toBe("lower");
+  });
+
   it("skips archived products but still finds inactive ones", () => {
     expect(findBarcode(products, "55555555")).toBeNull();
     expect(findBarcode(products, "OFF-1")).toMatchObject({ product: { id: "off", active: false } });
@@ -348,6 +443,18 @@ describe("findBarcode", () => {
     expect(findBarcode(products, withCheckDigit("211234500100"), { scale: price })?.quantity).toBe(0.083);
     // The unit price can come from the till's order-type pricing.
     expect(findBarcode(products, withCheckDigit("211234500450"), { scale: price, unitPrice: () => 90000 })?.quantity).toBe(0.5);
+  });
+
+  it("charges a price label's own price on a product sold by weight (review 6 Nov 2026, R1)", () => {
+    const price = { ...scale, value: "price" as const, decimals: 0 };
+    // Rs 50 and Rs 100 of Rs 1,200/kg dates: 0.042 kg and 0.083 kg, which by weight would be Rs 50.40 and Rs 99.60.
+    expect(findBarcode(products, withCheckDigit("211234500050"), { scale: price })).toMatchObject({ quantity: 0.042, labelPriceMinor: 5_000 });
+    expect(findBarcode(products, withCheckDigit("211234500100"), { scale: price })).toMatchObject({ quantity: 0.083, labelPriceMinor: 10_000 });
+    // Tea is sold by the cup: its quantity is still price / unit price, priced by unit price as before.
+    expect(findBarcode(products, withCheckDigit("210007700150"), { scale: price })).toMatchObject({ product: { id: "tea" }, quantity: 3, labelPriceMinor: null });
+    // A weight label and an ordinary code carry no label price.
+    expect(findBarcode(products, withCheckDigit("211234500523"), { scale })?.labelPriceMinor).toBeNull();
+    expect(findBarcode(products, "96385074")?.labelPriceMinor).toBeNull();
   });
 
   it("does not add a zero quantity", () => {

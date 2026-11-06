@@ -8,7 +8,7 @@ module Orders
       items = order.items.to_a.reject(&:cancelled?)
       items.each do |i|
         i.modifiers_minor = i.modifiers.sum { |m| (m.price_minor_snapshot * m.quantity).round }
-        i.line_subtotal_minor = ((i.unit_price_minor + i.modifiers_minor) * i.quantity).round
+        i.line_subtotal_minor = line_subtotal(i)
         # SPEC: the discount set on the product itself (% or Rs) comes off first.
         i.line_discount_minor = i.product && !i.price_overridden ? i.product.discount_minor_for(i.line_subtotal_minor, i.quantity) : 0
       end
@@ -56,6 +56,13 @@ module Orders
       end
       order.payment_status = payment_status_for(order)
       order
+    end
+
+    # Unit price with modifiers times quantity. A scale-label line charges the printed price exactly (its quantity is
+    # only the weight that price buys, to 3 decimals), plus any modifiers by quantity, as src/lib/pricing.ts does.
+    def line_subtotal(i)
+      return i.label_price_minor + (i.modifiers_minor * i.quantity).round if i.label_priced?
+      ((i.unit_price_minor + i.modifiers_minor) * i.quantity).round
     end
 
     def save_all!(order)

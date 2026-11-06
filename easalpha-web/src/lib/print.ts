@@ -11,7 +11,7 @@ import { titleCase } from "@/lib/utils";
 import { settingValue } from "@/lib/pricing";
 import { formatQty } from "@/components/pos/receipt";
 import { billRows } from "./bill";
-import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel } from "./receipt-format";
+import { itemCount, phoneLine, receiptTitle, registrationLines, savingsLine, taxRowLabel, unitPriceNote } from "./receipt-format";
 import { loadSymbol, type CodeSymbol } from "@/components/admin/barcode-labels";
 
 export type PrintLine =
@@ -179,9 +179,9 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   lines.push({ divider: true });
   const indent = "     ";
   for (const l of r.lines ?? []) {
-    const qty = Number(l.quantity ?? 1);
     lines.push(...row(`${formatQty(l.quantity).padStart(3)}  ${l.name}`, m(l.line_subtotal_minor ?? l.line_total_minor), width));
-    if (qty !== 1 && l.unit_price_minor) lines.push(text(`${indent}@ ${m(l.unit_price_minor)} each`));
+    const note = unitPriceNote(l, m);
+    if (note) lines.push(...wrap(note, width - indent.length).map((t) => text(`${indent}${t}`)));
     for (const mo of l.modifiers ?? []) lines.push(...row(`${indent}+ ${mo.name}`, mo.price_minor ? m(mo.price_minor) : "", width));
     if (l.discount_minor) lines.push(...row(`${indent}Discount`, `-${m(l.discount_minor)}`, width));
     if (l.notes) lines.push(...wrap(`"${l.notes}"`, width - indent.length).map((t) => text(`${indent}${t}`)));

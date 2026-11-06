@@ -11,7 +11,10 @@ class OrderItem < ApplicationRecord
   validates :status, inclusion: { in: STATUSES }
   validates :quantity, numericality: { greater_than: 0 }
   validates :unit_price_minor, numericality: { greater_than_or_equal_to: 0 }
+  validates :label_price_minor, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
 
   def cancelled? = status == "cancelled"
   def gross_unit_minor = unit_price_minor + modifiers_minor
+  # A price-embedded scale label prices the line (Orders::Pricing); an override replaces it.
+  def label_priced? = label_price_minor.present? && !price_overridden
 end

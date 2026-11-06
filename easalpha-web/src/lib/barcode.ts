@@ -2,6 +2,7 @@
 // (the same rules as Catalog::Barcodes on the API), weighing-scale labels, and finding what a code adds in the local
 // catalog. Pure: no React and no DOM, so the till works offline with it and the rules are tested directly.
 import type { BarcodeFormat, BusinessSettings, Product, ProductBarcode, Variant } from "@/lib/types";
+import { labelWeight } from "@/lib/pricing";
 
 // ---- Settings (pos.barcode_scanning.*) ----
 
@@ -179,6 +180,49 @@ export function createScanDetector(config: DetectorConfig): ScanDetector {
   };
 }
 
+/** When a key was pressed, on the performance.now() clock: event.timeStamp where it is that clock (jsdom's is epoch time). */
+export function keyTime(e: { timeStamp: number }): number {
+  return e.timeStamp > 1e12 || !e.timeStamp ? performance.now() : e.timeStamp;
+}
+
+/**
+ * Review 6 Nov 2026, R27: a code scanned while a money field has the focus types itself in as an amount (Rs 40 billion
+ * tendered from an EAN-13). A burst of at least six characters, each within 50 ms of the last, is a scanner: no person
+ * types that fast, and every code worth scanning (EAN-8 and longer) is that long. Ends on Enter, Tab or a pause.
+ */
+export const MONEY_SCAN_GUARD: DetectorConfig = { prefix: "", suffix: "", terminator: "none", minLength: 6, maxKeyIntervalMs: 50 };
+
+export interface ScanGuard {
+  /**
+   * Feed a keydown on the field with the value it holds now (before the key's character goes in). "restore" says a
+   * scan just ended: put the field back to `value`, and swallow this key when `swallow` (the scanner's Enter or Tab).
+   */
+  key(stroke: KeyStroke, current: number): { restore: number; swallow: boolean } | null;
+  /** After a pause (call once no key came for longer than the interval): the value to put back, or null. */
+  flush(now: number): number | null;
+  readonly pending: boolean;
+}
+
+export function createScanGuard(config: DetectorConfig = MONEY_SCAN_GUARD): ScanGuard {
+  const detector = createScanDetector(config);
+  let before = 0;
+  return {
+    get pending() { return detector.length > 0; },
+    key(stroke, current) {
+      const start = before;
+      const r = detector.feed(stroke);
+      const restore = r?.ok ? { restore: start, swallow: r.burst.end !== "pause" } : null;
+      // The first character of a burst: what the field held before it (the restored value when a scan just ended).
+      if (detector.length === 1) before = restore ? start : current;
+      return restore;
+    },
+    flush(now) {
+      const r = detector.flush(now);
+      return r?.ok ? before : null;
+    },
+  };
+}
+
 /**
  * Best guess at the prefix and suffix around a code, for the scanner test: an AIM symbology identifier ("]E0"), the
  * characters around an EAN/UPC whose check digit is right, or symbols at either end.
@@ -320,11 +364,46 @@ export function barcodeFormat(code: string): BarcodeFormat {
 
 export const FORMAT_LABELS: Record<BarcodeFormat, string> = { ean13: "EAN-13", upca: "UPC-A", ean8: "EAN-8", code128: "Code 128", qr: "QR code" };
 
-/** The same product code written the other way: a UPC-A read as EAN-13 gets a leading 0, and back. */
+/**
+ * A UPC-E (number system 0 or 1, six digits, check digit) as the 12-digit UPC-A it is short for, or null when the
+ * code is not a valid UPC-E: "04252614" is "042100005264". Small packs carry UPC-E; the supplier's list has UPC-A.
+ */
+export function upcEToUpcA(code: string): string | null {
+  if (!/^[01]\d{7}$/.test(code)) return null;
+  const [d1, d2, d3, d4, d5, d6] = code.slice(1, 7);
+  const body = d6 <= "2" ? `${d1}${d2}${d6}0000${d3}${d4}${d5}` : d6 === "3" ? `${d1}${d2}${d3}00000${d4}${d5}` : d6 === "4" ? `${d1}${d2}${d3}${d4}00000${d5}` : `${d1}${d2}${d3}${d4}${d5}0000${d6}`;
+  const upcA = `${code[0]}${body}`;
+  return eanCheckDigit(upcA) === Number(code[7]) ? `${upcA}${code[7]}` : null;
+}
+
+/** A UPC-A that has a UPC-E form (number system 0 or 1 and the zeros it drops) as that 8-digit UPC-E; null otherwise. */
+export function upcAToUpcE(code: string): string | null {
+  if (!/^[01]\d{11}$/.test(code) || !isValidEan(code)) return null;
+  const maker = code.slice(1, 6);
+  const item = code.slice(6, 11);
+  let e: string | null = null;
+  if (/^\d\d[0-2]00$/.test(maker) && /^00\d{3}$/.test(item)) e = `${maker.slice(0, 2)}${item.slice(2)}${maker[2]}`;
+  else if (/^\d\d[3-9]00$/.test(maker) && /^000\d\d$/.test(item)) e = `${maker.slice(0, 3)}${item.slice(3)}3`;
+  else if (/^\d{4}0$/.test(maker) && /^0000\d$/.test(item)) e = `${maker.slice(0, 4)}${item[4]}4`;
+  else if (/^\d{4}[1-9]$/.test(maker) && /^0000[5-9]$/.test(item)) e = `${maker}${item[4]}`;
+  return e ? `${code[0]}${e}${code[11]}` : null;
+}
+
+/**
+ * The same product code written another way, tried after the code itself (review 6 Nov 2026, R27): a UPC-A read as
+ * EAN-13 gets a leading 0, and back; a UPC-E is the UPC-A it is short for (in both spellings), and a UPC-A its UPC-E;
+ * an EAN-8 that a scanner padded to 13 digits with five zeros is the EAN-8, and back.
+ */
 export function equivalentCodes(code: string): string[] {
-  if (/^0\d{12}$/.test(code)) return [code.slice(1)];
-  if (/^\d{12}$/.test(code)) return [`0${code}`];
-  return [];
+  const out: string[] = [];
+  const add = (c: string | null) => { if (c && c !== code && !out.includes(c)) out.push(c); };
+  const upcA = /^\d{12}$/.test(code) ? code : /^0\d{12}$/.test(code) ? code.slice(1) : null;
+  if (upcA) { add(upcA); add(`0${upcA}`); add(upcAToUpcE(upcA)); }
+  const expanded = upcEToUpcA(code);
+  if (expanded) { add(expanded); add(`0${expanded}`); }
+  if (/^0{5}\d{8}$/.test(code) && isValidEan(code.slice(5))) add(code.slice(5));
+  if (/^\d{8}$/.test(code) && isValidEan(code)) add(`00000${code}`);
+  return out;
 }
 
 // ---- Weighing-scale labels ----
@@ -372,6 +451,11 @@ export interface BarcodeMatch {
   quantity: number;
   via: "code" | "scale";
   scale: ScaleLabel | null;
+  /**
+   * What the line charges, exactly: the printed price of a price label on a product sold by weight (quantity is then
+   * the weight it buys, labelWeight). Null for everything else, priced by unit price times quantity.
+   */
+  labelPriceMinor: number | null;
 }
 export interface LookupOptions {
   scale?: ScaleConfig | null;
@@ -399,17 +483,21 @@ function findCode(products: Product[], test: (b: ProductBarcode) => boolean): { 
 }
 
 /**
- * What a scanned code adds: an exact product code first (with its size and pack quantity), then the same UPC/EAN
- * written with or without the leading 0, then a scale label whose item code is saved as a product barcode (as the
- * bare item code, the prefix plus item code, or the same number without leading zeros). Archived products never match;
- * inactive ones do, so the till can say the item is switched off.
+ * What a scanned code adds: an exact product code first (with its size and pack quantity), then the same code written
+ * another way (equivalentCodes: UPC-A / EAN-13, UPC-E, a padded EAN-8), then any of those in other letter case (a
+ * scanner on a Caps Lock keyboard sends "box-6" for BOX-6), then a scale label whose item code is saved as a product
+ * barcode (as the bare item code, the prefix plus item code, or the same number without leading zeros). Archived
+ * products never match; inactive ones do, so the till can say the item is switched off.
  */
 export function findBarcode(products: Product[], scanned: string, opts: LookupOptions = {}): BarcodeMatch | null {
   const code = scanned.trim();
   if (!code) return null;
-  for (const candidate of [code, ...equivalentCodes(code)]) {
-    const hit = findCode(products, (b) => b.code === candidate);
-    if (hit) return { ...hit, variant: variantOf(hit.product, hit.barcode), quantity: packQuantity(hit.barcode), via: "code", scale: null };
+  const candidates = [code, ...equivalentCodes(code)];
+  const folded = candidates.map((c) => c.toLowerCase());
+  const tests = [...candidates.map((c) => (b: ProductBarcode) => b.code === c), (b: ProductBarcode) => folded.includes(b.code.toLowerCase())];
+  for (const test of tests) {
+    const hit = findCode(products, test);
+    if (hit) return { ...hit, variant: variantOf(hit.product, hit.barcode), quantity: packQuantity(hit.barcode), via: "code", scale: null, labelPriceMinor: null };
   }
   const label = opts.scale ? parseScaleLabel(code, opts.scale) : null;
   if (!label) return null;
@@ -418,11 +506,16 @@ export function findBarcode(products: Product[], scanned: string, opts: LookupOp
   if (!hit) return null;
   const variant = variantOf(hit.product, hit.barcode);
   let quantity: number;
+  let labelPriceMinor: number | null = null;
   if (label.kind === "weight") quantity = label.weightKg ?? 0;
   else {
     const unit = opts.unitPrice ? opts.unitPrice(hit.product, variant) : variant?.price_minor ?? hit.product.base_price_minor;
-    quantity = unit > 0 ? round3((label.priceMinor ?? 0) / unit) : 0;
+    const price = label.priceMinor ?? 0;
+    quantity = labelWeight(price, unit);
+    // Review 6 Nov 2026, R1: Rs 50 of Rs 1,200/kg is 0.042 kg, which is Rs 50.40 by weight. A product sold by weight
+    // charges the printed price itself, as Orders::Builder does; the weight is what the stock and the receipt show.
+    if (hit.product.sold_by_weight && quantity > 0) labelPriceMinor = price;
   }
   if (!(quantity > 0)) return null;
-  return { ...hit, variant, quantity, via: "scale", scale: label };
+  return { ...hit, variant, quantity, via: "scale", scale: label, labelPriceMinor };
 }

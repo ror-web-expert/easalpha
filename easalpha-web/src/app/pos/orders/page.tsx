@@ -19,6 +19,7 @@ import { useSyncStore } from "@/store/sync";
 import { api, errorMessage } from "@/lib/api";
 import type { Receipt } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
+import { lineAmount } from "@/lib/pricing";
 import { formatTime } from "@/lib/dates";
 import { cn, titleCase } from "@/lib/utils";
 import { hasPrinter, printJob, receiptLines } from "@/lib/print";
@@ -186,7 +187,7 @@ function OrdersScreen() {
         </> : undefined}>
         {sel ? (
           <ul className="divide-y text-base">
-            {sel.lines.length ? sel.lines.map((l, i) => <li key={i} className={cn("flex justify-between py-2", l.status === "cancelled" && "line-through opacity-50")}><span>{l.quantity} × {l.name}{l.modifiers.length ? <span className="block text-xs text-fg-secondary">{l.modifiers.map((m) => m.name).join(", ")}</span> : null}{l.notes ? <span className="block text-xs italic text-fg-secondary">{l.notes}</span> : null}</span><span className="tabular">{formatMoney((l.price_override_minor ?? l.unit_price_minor) * l.quantity, currency)}</span></li>) : <li className="py-4 text-sm text-fg-muted">Line details not cached on this till.</li>}
+            {sel.lines.length ? sel.lines.map((l, i) => <li key={i} className={cn("flex justify-between py-2", l.status === "cancelled" && "line-through opacity-50")}><span>{l.quantity} × {l.name}{l.modifiers.length ? <span className="block text-xs text-fg-secondary">{l.modifiers.map((m) => m.name).join(", ")}</span> : null}{l.notes ? <span className="block text-xs italic text-fg-secondary">{l.notes}</span> : null}</span><span className="tabular">{formatMoney(lineAmount(l), currency)}</span></li>) : <li className="py-4 text-sm text-fg-muted">Line details not cached on this till.</li>}
             <li className="flex justify-between py-2 font-semibold"><span>Total</span><span className="tabular">{formatMoney(sel.total_minor, currency)}</span></li>
             {sel.paid_minor ? <li className="flex justify-between py-1 text-sm text-fg-secondary"><span>Paid</span><span className="tabular">{formatMoney(sel.paid_minor, currency)}</span></li> : null}
           </ul>

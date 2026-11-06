@@ -14,7 +14,7 @@ import type { BarcodeRow, Catalog, Customer, Product, ProductBarcode } from "@/l
 import { toCachedCustomer, type CachedCustomer } from "@/lib/offline-customers";
 import { useCustomerStore } from "@/store/customers";
 import {
-  FORMAT_LABELS, barcodeFormat, createScanDetector, findBarcode, isPrintableKey, parseScaleLabel, scannerConfig, type BarcodeMatch, type ScanResult, type ScaleConfig, type ScannerConfig,
+  FORMAT_LABELS, barcodeFormat, createScanDetector, equivalentCodes, findBarcode, isPrintableKey, keyTime, parseScaleLabel, scannerConfig, type BarcodeMatch, type ScanResult, type ScaleConfig, type ScannerConfig,
 } from "@/lib/barcode";
 import { useApproval } from "@/components/approval";
 import { Badge, Button, Dialog, Field, Input, Select, Switch } from "@/components/ui";
@@ -89,7 +89,7 @@ export function useBarcodeScanner({ config, enabled, onScan, accept = acceptsSca
       // Shortcuts (Ctrl+V, Cmd+F), held keys and IME input are a person. Ctrl+Alt is AltGr on some layouts: let it through.
       if (e.isComposing || e.repeat || e.metaKey || (e.ctrlKey && !e.altKey)) { detector.reset(); return; }
       // event.timeStamp is when the key was pressed, so a busy page does not stretch the gaps between keys.
-      const time = e.timeStamp > 1e12 || !e.timeStamp ? performance.now() : e.timeStamp;
+      const time = keyTime(e);
       const end = e.key === "Enter" || e.key === "Tab";
       // Enter or Tab just after a scan, with nothing typed since, is the scanner's own, sent after a pause already ended
       // the code (terminator "none"). Swallow it, or the item search would act on it and add its first tile.
@@ -150,10 +150,15 @@ export async function saveProductLocally(p: Product) {
   await kvSet("catalog", catalog);
 }
 
-/** GET /products/barcode_lookup for a code the local catalog does not know; a scale label is also tried by its item code. */
+/**
+ * GET /products/barcode_lookup for a code the local catalog does not know, also as the code written another way (a
+ * UPC-E as its UPC-A, a padded EAN-8, as findBarcode tries them; the server itself tries the UPC-A with and without
+ * its leading 0); a scale label is also tried by its item code.
+ */
 async function lookupOnline(code: string, scale: ScaleConfig): Promise<Product | null> {
   const label = parseScaleLabel(code, scale);
-  for (const c of label ? [code, label.itemCode] : [code]) {
+  const others = equivalentCodes(code).filter((c) => c !== `0${code}` && `0${c}` !== code);
+  for (const c of [code, ...others, ...(label ? [label.itemCode] : [])]) {
     try {
       const r = await api<BarcodeRow & { product: Product }>("/products/barcode_lookup", { query: { code: c }, auth: "pos", timeoutMs: 6000 });
       return r.product;

@@ -36,6 +36,16 @@ export function itemCount(lines: Pick<Receipt["lines"][number], "quantity">[] | 
   return `${shown} ${n === 1 ? "item" : "items"}`;
 }
 
+/**
+ * The note under an item: "@ Rs 80 each" when there is more than one; for a weighed line its weight and price a unit,
+ * "0.042 kg @ Rs 1,200/kg", ending ", label price" when a scale label set the amount (review 6 Nov 2026, R1).
+ */
+export function unitPriceNote(l: Pick<Receipt["lines"][number], "quantity" | "unit" | "unit_price_minor" | "label_price_minor">, money: (minor: number) => string): string | null {
+  const qty = Number(l.quantity ?? 1);
+  if (l.unit && l.unit_price_minor) return `${Number.isFinite(qty) ? qty : l.quantity} ${l.unit} @ ${money(l.unit_price_minor)}/${l.unit}${l.label_price_minor ? ", label price" : ""}`;
+  return qty !== 1 && l.unit_price_minor ? `@ ${money(l.unit_price_minor)} each` : null;
+}
+
 /** Everything taken off the bill, lines and order together, as "You saved Rs 110"; null when nothing was. */
 export function savingsLine(r: Pick<Receipt, "totals" | "business">): string | null {
   const saved = r.totals?.discount_minor ?? 0;
