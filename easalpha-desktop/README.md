@@ -87,6 +87,10 @@ Open EasAlpha > Printers (Ctrl+Shift+P) or call `openPrinterSettings()`. Each pr
 
 "Test print" sends a page with alignment, bold, double size, a QR code and a cut so you can check the width setting.
 
+### Half-printed, glued or uncut receipts
+
+A receipt whose rows run together ("ChaiRs 80"), with labels missing, no cut, and the end of one receipt at the top of the next, was printed through the browser's print dialog (no desktop app, no print server) into a Windows driver in text mode, such as "Generic / Text Only". That is what the first client saw on 30 Oct 2026. The browser cannot cut paper or open the drawer; since 6 Nov 2026 the web till at least prints the same fixed-width rows the printer would, so the words stay apart and the last rows feed out. For a cut, install this app on the till PC and add the printer as Network (TCP 9100) or USB for raw ESC/POS. A printer that only has a Windows driver works as System when the driver is the maker's graphics driver with the paper set to 80 mm and the cut on "end of document"; Generic / Text Only prints text only and never cuts.
+
 Printers are stored in `settings.json`:
 
 ```json

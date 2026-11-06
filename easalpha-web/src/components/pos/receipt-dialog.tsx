@@ -18,7 +18,7 @@ export function ReceiptDialog({ receipt, change, onClose, onNew, offline }: { re
   const [printing, setPrinting] = useState(false);
   const settings = useCatalogStore((s) => s.catalog?.business.settings);
   const branding = receiptSettings(settings, receipt);
-  // Desktop app -> print server -> browser dialog (src/lib/print.ts). The on-screen receipt stays as the browser's print area.
+  // Desktop app -> print server -> browser dialog (src/lib/print.ts); all three print the same fixed-width lines.
   const print = async () => {
     if (!receipt) return;
     setPrinting(true);

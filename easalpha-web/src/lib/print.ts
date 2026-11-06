@@ -1,7 +1,10 @@
 // Printing bridge for the till (SPEC "Kitchen display, printing and devices").
 // Printers live on the desktop POS. The desktop app exposes window.easalphaDesktop; a browser or tablet till prints through the
-// desktop's print server (its IP is the "pos.print_server.ip" setting); with neither, the browser print dialog is used.
+// desktop's print server (its IP is the "pos.print_server.ip" setting); with neither, the same lines go to the browser's print
+// dialog as fixed-width text in a private frame (printInBrowser). The browser cannot cut the paper or open the drawer.
+import QRCode from "qrcode";
 import type { BusinessSettings, Receipt, ZReport } from "@/lib/types";
+import { toast } from "@/store/toast";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
@@ -35,7 +38,10 @@ declare global {
 }
 
 export type PrintVia = "desktop" | "server" | "browser";
-export interface PrintResult { ok: boolean; via: PrintVia; error?: string }
+/** hint: set when the job went through the browser's print dialog, which cannot cut the paper (shown once per session). */
+export interface PrintResult { ok: boolean; via: PrintVia; error?: string; hint?: string }
+
+export const BROWSER_PRINT_HINT = "The browser's print dialog cannot cut the paper or open the drawer. For automatic cutting install the EasAlpha desktop app on this computer, or point this till at a print server under Settings, Printers.";
 
 /** The desktop print server listens on 9977. The setting's default (9100) is a raw printer port, so it means "use the server's default". */
 export const PRINT_SERVER_PORT = 9977;
@@ -152,8 +158,9 @@ export function receiptLines(r: Receipt, opts: { settings?: BusinessSettings | n
   lines.push({ divider: true });
   const t = r.totals;
   // The shared bill block (lib/bill.ts): the lines add up to the Subtotal and these rows add up to TOTAL.
-  if (t) for (const b of billRows(t, r.business?.currency)) lines.push(...row(b.label, b.amount_minor < 0 ? `-${m(-b.amount_minor)}` : m(b.amount_minor), width));
+  if (t) for (const b of billRows({ ...t, is_staff_meal: r.order?.is_staff_meal }, r.business?.currency)) lines.push(...row(b.label, b.amount_minor < 0 ? `-${m(-b.amount_minor)}` : m(b.amount_minor), width));
   lines.push(...row("TOTAL", m(t?.total_minor), width, true));
+  if (r.order?.is_staff_meal) lines.push(...wrap(`STAFF MEAL${r.order.staff_meal_reason ? ` - ${r.order.staff_meal_reason}` : ""}`, width).map((x) => center(x, { bold: true })));
   lines.push({ divider: true });
   for (const p of r.payments ?? []) {
     lines.push(...row(`Paid by ${titleCase(p.method)}`, m(p.amount_minor), width));
@@ -207,12 +214,113 @@ export function zReportLines(z: ZReport, opts: { currency?: string; settings?: B
   return lines;
 }
 
+// ---- Browser fallback ----
+export type TextRow = { text: string; bold?: boolean; size?: 1 | 2 } | { qr: string };
+
+/**
+ * The lines as fixed-width rows, exactly as a receipt printer lays them out: `width` columns, alignment by padding,
+ * double-size text on half the columns, dividers as dashes, feeds as blank rows. A blank row is a single space so a
+ * text-mode printer driver (which prints only text it is given) still moves down a line.
+ */
+export function textRows(lines: PrintLine[], width: number): TextRow[] {
+  const out: TextRow[] = [];
+  const pad = (t: string, align: "left" | "center" | "right" | undefined, cols: number) => {
+    if (t.length >= cols) return t;
+    const space = cols - t.length;
+    if (align === "center") return " ".repeat(Math.floor(space / 2)) + t;
+    if (align === "right") return " ".repeat(space) + t;
+    return t;
+  };
+  for (const l of lines) {
+    if ("text" in l) {
+      const cols = l.size === 2 ? Math.floor(width / 2) : width;
+      for (const para of String(l.text ?? "").split(/\r?\n/)) {
+        if (!para.length) { out.push({ text: " " }); continue; }
+        for (let i = 0; i < para.length; i += cols) out.push({ text: pad(para.slice(i, i + cols), l.align, cols), bold: l.bold, size: l.size });
+      }
+    } else if ("qr" in l) out.push({ qr: l.qr });
+    else if ("feed" in l) for (let i = 0; i < Math.min(l.feed, 10); i++) out.push({ text: " " });
+    else if ("divider" in l) out.push({ text: "-".repeat(width) });
+    // cut and drawer: nothing a browser can do
+  }
+  return out;
+}
+
+const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * A complete print document for the lines: a page as wide as the roll, one text run per row in a monospace font sized so
+ * `width` columns fill the printable area (1.5 mm a character, the printer's own font A), no opacity, no layout to lose.
+ * A text-mode Windows driver prints the rows as they are; a graphics driver prints them as shown.
+ */
+export async function printDocument(lines: PrintLine[], paper: string | number | null | undefined): Promise<string> {
+  const width = paperWidth(paper);
+  const narrow = width === 32;
+  const rows = textRows(lines, width);
+  const body: string[] = [];
+  for (const r of rows) {
+    if ("qr" in r) {
+      try { body.push(`<img src="${await QRCode.toDataURL(r.qr, { margin: 0, width: narrow ? 96 : 120, errorCorrectionLevel: "M" })}" alt="">`); }
+      catch { body.push(`<div class="l">${escapeHtml(r.qr)}</div>`); }
+      continue;
+    }
+    const cls = ["l", r.bold ? "b" : "", r.size === 2 ? "s2" : ""].filter(Boolean).join(" ");
+    body.push(`<div class="${cls}">${escapeHtml(r.text)}</div>`);
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>
+@page { size: ${narrow ? 58 : 80}mm auto; margin: 0; }
+html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+body { width: ${narrow ? 48 : 72}mm; padding: 2mm 0 0 ${narrow ? 2 : 3}mm; font-family: "Courier New", Consolas, "Liberation Mono", monospace; font-size: 9.5px; line-height: 1.25; }
+.l { white-space: pre; }
+.b { font-weight: 700; }
+.s2 { font-size: 19px; }
+img { display: block; margin: 2mm auto; }
+</style></head><body>${body.join("")}</body></html>`;
+}
+
+let hinted = false;
+
+/**
+ * Prints the job through the browser's dialog from a private frame holding printDocument(), so the printout is the
+ * printer's text layout rather than the page on screen (which a text-mode driver turned into glued words with the
+ * labels missing: first client report, 30 Oct 2026). The frame is removed after printing.
+ */
+async function printInBrowser(job: PrintJob, settings: BusinessSettings | undefined | null): Promise<PrintResult> {
+  if (typeof window === "undefined" || typeof document === "undefined" || typeof window.print !== "function") return { ok: false, via: "browser", error: "No printer available" };
+  const result: PrintResult = { ok: true, via: "browser", hint: BROWSER_PRINT_HINT };
+  if (!hinted) { hinted = true; toast.info("Printed through the browser", BROWSER_PRINT_HINT); }
+  let frame: HTMLIFrameElement | null = null;
+  try {
+    const html = await printDocument(job.lines, receiptSettings(settings).paper);
+    frame = document.createElement("iframe");
+    frame.title = "Print";
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;overflow:hidden";
+    document.body.appendChild(frame);
+    const win = frame.contentWindow;
+    const doc = frame.contentDocument ?? win?.document;
+    if (!win || !doc) throw new Error("No print frame");
+    doc.open(); doc.write(html); doc.close();
+    await Promise.all(Array.from(doc.images).map((img) => (img.complete ? null : new Promise<void>((res) => { img.onload = () => res(); img.onerror = () => res(); }))));
+    const done = () => { frame?.remove(); frame = null; };
+    win.addEventListener("afterprint", done, { once: true });
+    setTimeout(done, 120_000);
+    win.focus();
+    win.print();
+    return result;
+  } catch {
+    frame?.remove();
+    window.print();
+    return result;
+  }
+}
+
 // ---- Dispatch ----
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
- * Send a job to (a) the desktop app, else (b) the print server from the till settings, else (c) the browser print dialog.
- * Never throws: the result says which path was used and why it failed.
+ * Send a job to (a) the desktop app, else (b) the print server from the till settings, else (c) the browser print dialog
+ * with the same lines as fixed-width text (printInBrowser). Never throws: the result says which path was used and why it failed.
  */
 export async function printJob(job: PrintJob, opts: { settings?: BusinessSettings | null } = {}): Promise<PrintResult> {
   const desktop = desktopApp();
@@ -227,6 +335,5 @@ export async function printJob(job: PrintJob, opts: { settings?: BusinessSetting
       return res.ok ? { ok: true, via: "server" } : { ok: false, via: "server", error: `Print server replied ${res.status}` };
     } catch (e) { return { ok: false, via: "server", error: `Print server unreachable: ${errText(e)}` }; }
   }
-  if (typeof window !== "undefined" && typeof window.print === "function") { window.print(); return { ok: true, via: "browser" }; }
-  return { ok: false, via: "browser", error: "No printer available" };
+  return printInBrowser(job, opts.settings);
 }

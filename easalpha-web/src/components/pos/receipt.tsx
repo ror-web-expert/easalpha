@@ -29,8 +29,10 @@ function useQr(value: string | null | undefined, size: number) {
 }
 
 /**
- * Receipt as printed on a 58 or 80 mm roll. Wrap in .print-area to print. `branding` carries the SPEC receipt-branding
- * settings: logo, second phone, footer QR and paper width.
+ * Receipt as shown on screen (receipt dialog, bill preview, order views). Printing goes through lib/print.ts, which sends
+ * the same figures as fixed-width text lines (desktop app, print server, or the browser's print dialog). `branding`
+ * carries the SPEC receipt-branding settings: logo, second phone, footer QR and paper width. No opacity here: a
+ * text-mode printer driver drops semi-transparent text.
  */
 export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBranding }) {
   const c = r.business?.currency ?? "PKR";
@@ -43,7 +45,7 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
   const due = r.totals?.due_minor ?? 0;
   const cashPayments = (r.payments ?? []).filter((p) => p.method === "cash");
   const row = (l: string, v: string, opts: { bold?: boolean; big?: boolean; muted?: boolean } = {}) => (
-    <div key={l + v} className={`flex justify-between gap-2 ${opts.bold ? "font-bold" : ""} ${opts.big ? "text-[1.2em]" : ""} ${opts.muted ? "opacity-80" : ""}`}><span>{l}</span><span className="tabular whitespace-nowrap">{v}</span></div>
+    <div key={l + v} className={`flex justify-between gap-2 ${opts.bold ? "font-bold" : ""} ${opts.big ? "text-[1.2em]" : ""} ${opts.muted ? "text-[0.95em]" : ""}`}><span>{l}</span><span className="tabular whitespace-nowrap">{v}</span></div>
   );
   const Rule = ({ solid }: { solid?: boolean }) => <div className={`my-1.5 border-t ${solid ? "border-black" : "border-dashed border-black"}`} />;
   return (
@@ -65,11 +67,11 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
 
       {/* Order block */}
       <div className="grid grid-cols-[auto_1fr] gap-x-3">
-        {r.receipt_number ? <><span className="opacity-80">Receipt</span><span className="text-right font-bold">{r.receipt_number}</span></> : null}
-        <span className="opacity-80">Order</span><span className="text-right">{r.order?.label}  {titleCase(r.order?.order_type)}{r.order?.table ? `  Table ${r.order.table}` : ""}</span>
-        <span className="opacity-80">Date</span><span className="text-right">{formatDateTime(r.order?.paid_at ?? r.printed_at)}</span>
-        {r.order?.customer ? <><span className="opacity-80">Customer</span><span className="text-right">{r.order.customer.name}{r.order.customer.phone ? ` ${r.order.customer.phone}` : ""}</span></> : r.order?.guest_name ? <><span className="opacity-80">Guest</span><span className="text-right">{r.order.guest_name}</span></> : null}
-        {r.order?.cashier ? <><span className="opacity-80">Cashier</span><span className="text-right">{r.order.cashier}</span></> : null}
+        {r.receipt_number ? <><span>Receipt</span><span className="text-right font-bold">{r.receipt_number}</span></> : null}
+        <span>Order</span><span className="text-right">{r.order?.label}  {titleCase(r.order?.order_type)}{r.order?.table ? `  Table ${r.order.table}` : ""}</span>
+        <span>Date</span><span className="text-right">{formatDateTime(r.order?.paid_at ?? r.printed_at)}</span>
+        {r.order?.customer ? <><span>Customer</span><span className="text-right">{r.order.customer.name}{r.order.customer.phone ? ` ${r.order.customer.phone}` : ""}</span></> : r.order?.guest_name ? <><span>Guest</span><span className="text-right">{r.order.guest_name}</span></> : null}
+        {r.order?.cashier ? <><span>Cashier</span><span className="text-right">{r.order.cashier}</span></> : null}
       </div>
       <Rule />
 
@@ -79,7 +81,7 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
         <div key={i} className="mt-1">
           <div className="grid grid-cols-[1fr_auto_auto] gap-x-2">
             <span className="break-words">{l.name}</span>
-            <span className="tabular whitespace-nowrap text-right opacity-80">{formatQty(l.quantity)} x {m(l.unit_price_minor)}</span>
+            <span className="tabular whitespace-nowrap text-right">{formatQty(l.quantity)} x {m(l.unit_price_minor)}</span>
             <span className="tabular whitespace-nowrap text-right">{m(l.line_subtotal_minor ?? l.line_total_minor)}</span>
           </div>
           {l.modifiers?.map((mo, j) => <div key={j} className="flex justify-between pl-3 text-[0.9em]"><span>+ {mo.name}</span><span className="tabular">{mo.price_minor ? m(mo.price_minor) : ""}</span></div>)}
@@ -91,9 +93,10 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
 
       {/* Totals */}
       {/* The shared bill block (lib/bill.ts): the lines above add up to the Subtotal, and these rows add up to TOTAL. */}
-      {r.totals ? billRows({ ...r.totals, delivery_label: "Delivery charge" }, r.business?.currency).map((b) => <div key={b.key}>{row(b.label, b.amount_minor < 0 ? `-${m(-b.amount_minor)}` : m(b.amount_minor), b.info ? { muted: true } : undefined)}</div>) : null}
+      {r.totals ? billRows({ ...r.totals, is_staff_meal: r.order?.is_staff_meal, delivery_label: "Delivery charge" }, r.business?.currency).map((b) => <div key={b.key}>{row(b.label, b.amount_minor < 0 ? `-${m(-b.amount_minor)}` : m(b.amount_minor), b.info ? { muted: true } : undefined)}</div>) : null}
       <div className="my-1 border-t border-black" />
       {row("TOTAL", m(r.totals?.total_minor), { bold: true, big: true })}
+      {r.order?.is_staff_meal ? <div className="text-center font-bold">STAFF MEAL{r.order.staff_meal_reason ? ` - ${r.order.staff_meal_reason}` : ""}</div> : null}
       <Rule />
 
       {/* Payments */}
@@ -102,7 +105,7 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
           {row(`Paid by ${titleCase(p.method)}`, m(p.amount_minor))}
           {p.method === "cash" && p.tendered_minor ? row("Cash tendered", m(p.tendered_minor), { muted: true }) : null}
           {p.method === "cash" && p.tendered_minor ? row("Change", m(p.change_minor ?? 0), { muted: true }) : null}
-          {p.reference ? <div className="text-[0.9em] opacity-80">Ref {p.reference}</div> : null}
+          {p.reference ? <div className="text-[0.9em]">Ref {p.reference}</div> : null}
         </div>
       ))}
       {r.refunds?.map((rf, i) => <div key={i}>{row(`Refund ${titleCase(rf.method)}`, `-${m(rf.amount_minor)}`)}</div>)}
@@ -117,9 +120,9 @@ export function ReceiptView({ r, branding }: { r: Receipt; branding?: ReceiptBra
       {/* Footer */}
       <Rule />
       {r.footer ? <div className="whitespace-pre-line text-center font-bold">{r.footer}</div> : null}
-      {footerQr ? <div className="mt-1 text-center"><img src={footerQr} alt="QR code" className="mx-auto" /><div className="mt-0.5 text-[0.85em] opacity-80">Scan for our menu and reviews</div></div> : null}
+      {footerQr ? <div className="mt-1 text-center"><img src={footerQr} alt="QR code" className="mx-auto" /><div className="mt-0.5 text-[0.85em]">Scan for our menu and reviews</div></div> : null}
       {r.feedback_whatsapp ? <div className="mt-1 text-center text-[0.9em]">WhatsApp {r.feedback_whatsapp}</div> : null}
-      <div className="mt-2 text-center text-[0.8em] opacity-70">Powered by EasAlpha</div>
+      <div className="mt-2 text-center text-[0.8em]">Powered by EasAlpha</div>
     </div>
   );
 }

@@ -10,14 +10,17 @@ function escapeHtml(s: string): string {
 }
 
 export function linesToHtml(lines: PrintLine[], width: PaperWidth): string {
-  const rows = renderPlainText(lines, width);
+  // A blank row is a single space: a text-mode driver (Generic / Text Only) only moves down for text it is given.
+  const rows = renderPlainText(lines, width).map((r) => r || " ");
   const paperMm = width === 58 ? 48 : 72; // printable area
-  const fontPx = width === 58 ? 11 : 12;
+  // 1.5 mm a character, the printer's own font A, so charsPerLine(width) columns fill the printable area exactly
+  // (12 px Courier is 7.2 px a character: 48 columns ran to 91 mm and the right edge fell off an 80 mm roll).
+  const fontPx = 9.5;
   return `<!doctype html><html><head><meta charset="utf-8"><title>Print</title>
 <style>
-  @page { margin: 2mm; size: ${width}mm auto; }
+  @page { margin: 0; size: ${width}mm auto; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  pre { width: ${paperMm}mm; margin: 0; font: ${fontPx}px/1.25 "Courier New", Consolas, monospace; white-space: pre; color: #000; }
+  pre { width: ${paperMm}mm; margin: 0; padding: 2mm 0 0 ${width === 58 ? 2 : 3}mm; font: ${fontPx}px/1.25 "Courier New", Consolas, monospace; white-space: pre; color: #000; }
 </style></head><body><pre>${escapeHtml(rows.join("\n"))}</pre></body></html>`;
 }
 

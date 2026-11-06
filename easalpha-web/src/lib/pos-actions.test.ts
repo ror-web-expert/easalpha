@@ -47,7 +47,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { localToCart, payOrder, regularPricing, reopenFields, serverToLocal, TotalChangedError } from "./pos-actions";
+import { localToCart, payOrder, regularPricing, reopenFields, saveOrder, serverToLocal, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -360,5 +360,37 @@ describe("an offline khata sale for a regular customer", () => {
   it("leaves the discount to the server while online", () => {
     h.tiers = [{ id: "t3", name: "Back within 3 days", within_days: 3, kind: "percent", value: 10, min_order_minor: 0, excluded_product_ids: [], excluded_category_ids: [], excluded_order_types: [], active: true, archived_at: null }];
     expect(regularPricing({ ...cart(), customer: { ...cart().customer!, last_order_at: yesterday } }).discounts ?? []).toEqual([]);
+  });
+});
+
+describe("saveOrder carries the staff-meal flag on an order the server already has (first client report, 30 Oct 2026)", () => {
+  beforeEach(() => { server = fresh([["Karahi", 125600]]); });
+  it("sends it on PATCH both ways, as a boolean, and takes the server's answer into the cart", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const base = h.handler!;
+    h.handler = (path, opts) => {
+      const o = base(path, opts) as Order;
+      if (opts.method !== "PATCH") return o;
+      const b = opts.body as Record<string, unknown>;
+      bodies.push(b);
+      // Orders::Pricing: a staff meal totals zero and keeps its reason; charged normally it goes back to the full total.
+      return { ...o, is_staff_meal: !!b.is_staff_meal, staff_meal_reason: (b.staff_meal_reason as string | null) ?? null, total_minor: b.is_staff_meal ? 0 : o.total_minor };
+    };
+    const on = await saveOrder({ ...opened(), is_staff_meal: true, staff_meal_reason: "Chef lunch" });
+    expect(bodies.at(-1)).toMatchObject({ is_staff_meal: true, staff_meal_reason: "Chef lunch" });
+    expect(on.offline).toBe(false);
+    expect(on.cart.is_staff_meal).toBe(true);
+    expect(on.cart.staff_meal_reason).toBe("Chef lunch");
+    const off = await saveOrder({ ...on.cart, is_staff_meal: false, staff_meal_reason: "" });
+    expect(bodies.at(-1)).toMatchObject({ is_staff_meal: false, staff_meal_reason: null });
+    expect(off.cart.is_staff_meal).toBe(false);
+    expect(off.cart.staff_meal_reason).toBe("");
+  });
+  it("queues it with the offline update", async () => {
+    h.online = false;
+    const r = await saveOrder({ ...opened(), is_staff_meal: true, staff_meal_reason: "Rider meal" });
+    expect(r.offline).toBe(true);
+    expect(r.cart.is_staff_meal).toBe(true);
+    expect(h.queued.at(-1)).toMatchObject({ type: "order_update", id: "o-1", payload: { is_staff_meal: true, staff_meal_reason: "Rider meal" } });
   });
 });

@@ -154,6 +154,11 @@ export async function storeServerOrder(o: Order) {
   return saveLocal(serverToLocal(o, prev));
 }
 
+/** The staff-meal fields for an update: always both, so a switch off reaches the server as well as a switch on. */
+function staffMealFields(cart: Cart): Pick<OrderInput, "is_staff_meal" | "staff_meal_reason"> {
+  return { is_staff_meal: !!cart.is_staff_meal, staff_meal_reason: cart.is_staff_meal ? cart.staff_meal_reason || null : null };
+}
+
 function orderInput(cart: Cart, place: boolean, approver_pin?: string): OrderInput {
   return {
     id: cart.id, order_type: cart.order_type, source: "till", table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null,
@@ -188,7 +193,9 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
       let order: Order;
       if (cart.saved && !cart.local_only) {
         const input = orderInput(cart, place, opts.approver_pin);
-        order = await api<Order>(`/orders/${cart.id}`, { method: "PATCH", auth: "pos", body: { ...input, place: undefined, id: undefined, is_staff_meal: undefined, staff_meal_reason: undefined, pin: opts.pin } });
+        // The staff-meal flag travels on updates too, as an explicit boolean so switching it off reaches the server
+        // (a saved staff meal used to spring back to Rs 0 after every save: first client report, 30 Oct 2026).
+        order = await api<Order>(`/orders/${cart.id}`, { method: "PATCH", auth: "pos", body: { ...input, place: undefined, id: undefined, ...staffMealFields(cart), pin: opts.pin } });
         if (place && ["draft", "held"].includes(order.status)) order = await api<Order>(`/orders/${cart.id}/place`, { method: "POST", auth: "pos" });
       } else {
         order = await api<Order>("/orders", { method: "POST", auth: "pos", body: orderInput(cart, place, opts.approver_pin) });
@@ -205,7 +212,7 @@ export async function saveOrder(cart: Cart, opts: { place?: boolean; approver_pi
     const prev = await db.orders.get(cart.id);
     const local = cartToLocal(cart, place ? "placed" : cart.status, { till_serial: prev?.till_serial ?? null, label: prev?.label ?? cart.label ?? "draft", serial: prev?.serial ?? null, created_at: prev?.created_at, payments: prev?.payments ?? [], paid_minor: prev?.paid_minor ?? 0, local_only: false });
     await saveLocal(local);
-    await enqueue({ type: "order_update", id: cart.id, membership_id: membershipId ?? undefined, payload: { order_type: cart.order_type, table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, notes: cart.notes || null, lines: cart.lines.map(toLineInput), client_seq: Date.now(), address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null, ...chargeFields(cart) } });
+    await enqueue({ type: "order_update", id: cart.id, membership_id: membershipId ?? undefined, payload: { order_type: cart.order_type, table_id: cart.table_id, guest_name: cart.guest_name || null, covers: cart.covers, customer_id: cart.customer?.id ?? null, notes: cart.notes || null, lines: cart.lines.map(toLineInput), client_seq: Date.now(), address_id: cart.order_type === "delivery" ? cart.address_id ?? null : null, ...chargeFields(cart), ...staffMealFields(cart) } });
     return { cart: { ...cart, saved: true, status: local.status }, local, offline: true };
   }
   const till_serial = await nextTillSerial();
@@ -598,7 +605,7 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
     business: { name: biz?.name ?? "", legal_name: null, phone: useDeviceStore.getState().business?.phone ?? null, logo_key: catalogLogo ?? useDeviceStore.getState().business?.logo_key ?? null, currency: biz?.currency ?? "PKR" },
     branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
     header: receipt.header ?? null, footer: receipt.footer ?? null, language: receipt.language ?? "en", paper: receipt.paper ?? "80",
-    order: { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type as Receipt["order"]["order_type"], table: o.table_code, business_day: o.business_day, placed_at: o.created_at, paid_at: o.updated_at, cashier: o.cashier_name, customer: o.customer_id ? { name: o.customer_name ?? "", phone: o.customer_phone, khata_no: null } : null, guest_name: o.guest_name, notes: o.notes },
+    order: { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type as Receipt["order"]["order_type"], table: o.table_code, business_day: o.business_day, placed_at: o.created_at, paid_at: o.updated_at, cashier: o.cashier_name, is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason, customer: o.customer_id ? { name: o.customer_name ?? "", phone: o.customer_phone, khata_no: null } : null, guest_name: o.guest_name, notes: o.notes },
     lines: active.map((l) => { const t = lineTotals(l); return { name: l.name, quantity: String(l.quantity), unit_price_minor: l.price_override_minor ?? l.unit_price_minor, modifiers: l.modifiers.map((m) => ({ name: m.name, price_minor: m.price_minor })), line_subtotal_minor: t.line_subtotal_minor, line_total_minor: t.line_total_minor, discount_minor: t.line_discount_minor, notes: l.notes ?? null }; }),
     totals: { subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor, tax_lines: [...taxGroups.values()].filter((g) => g.rate), delivery_charge_minor: o.delivery_charge_minor ?? 0, rounding_minor: o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, due_minor: Math.max(0, o.total_minor - o.paid_minor) },
     payments: o.payments.map((p) => ({ method: p.method_code, amount_minor: p.amount_minor, tendered_minor: p.tendered_minor ?? null, change_minor: p.change_minor ?? 0, reference: p.reference ?? null })),

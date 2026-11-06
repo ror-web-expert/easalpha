@@ -177,6 +177,37 @@ RSpec.describe "Orders and kitchen", type: :request do
     expect(json[:is_staff_meal]).to be true
   end
 
+  it "switches a saved order to a staff meal and back: the till sends the flag on every update (first client report, 30 Oct 2026)" do
+    api_post "/api/v1/orders", { order_type: "walk_in", lines: [ { product_id: m[:chai].id } ] }, headers: auth_headers(cashier)
+    id = json[:id]
+    full = json[:total_minor]
+    expect(full).to be > 0
+    api_patch "/api/v1/orders/#{id}", { is_staff_meal: true, staff_meal_reason: "Chef lunch" }, headers: auth_headers(cashier)
+    expect(response).to have_http_status(:forbidden)
+    manager
+    api_patch "/api/v1/orders/#{id}", { is_staff_meal: true, staff_meal_reason: "Chef lunch", approver_pin: "9999" }, headers: auth_headers(cashier)
+    expect(response).to have_http_status(:ok)
+    expect(json[:is_staff_meal]).to be true
+    expect(json[:total_minor]).to eq(0)
+    expect(json[:subtotal_minor]).to eq(8_000)
+    expect(json[:staff_meal_reason]).to eq("Chef lunch")
+    # An update that leaves the flag out keeps the staff meal; one that sends it false charges the order normally, no PIN needed.
+    api_patch "/api/v1/orders/#{id}", { notes: "no ice" }, headers: auth_headers(cashier)
+    expect(json[:is_staff_meal]).to be true
+    api_patch "/api/v1/orders/#{id}", { is_staff_meal: false }, headers: auth_headers(cashier)
+    expect(response).to have_http_status(:ok)
+    expect(json[:is_staff_meal]).to be false
+    expect(json[:staff_meal_reason]).to be_nil
+    expect(json[:total_minor]).to eq(full)
+    # The receipt carries the flag and the reason, so the bill can show a "Staff meal" row instead of "Rounding".
+    api_patch "/api/v1/orders/#{id}", { is_staff_meal: true, staff_meal_reason: "Kitchen dinner", approver_pin: "9999" }, headers: auth_headers(cashier)
+    get "/api/v1/orders/#{id}/receipt", headers: auth_headers(cashier)
+    expect(response).to have_http_status(:ok)
+    expect(json[:order][:is_staff_meal]).to be true
+    expect(json[:order][:staff_meal_reason]).to eq("Kitchen dinner")
+    expect(json[:totals][:total_minor]).to eq(0)
+  end
+
   it "holds and resumes a draft, assigns and releases a table, and summarises the day" do
     table = within(biz) { DiningTable.create!(branch: Branch.first, code: "T1", seats: 4) }
     api_post "/api/v1/orders", { order_type: "dine_in", table_id: table.id, lines: [ { product_id: m[:chai].id } ] }, headers: headers
