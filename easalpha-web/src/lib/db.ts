@@ -48,6 +48,10 @@ export interface LocalOrder {
   local_only: boolean;
   /** 1 when the order is currently open on the till (draft/held/placed...). Index-friendly. */
   open: number;
+  /** "rejected" once the server refused the order, or a payment, void, update or refund of it; sync_error says why.
+   *  A paid order keeps its paid status (the money was taken) but the Orders screen flags it and leaves it out of the totals. */
+  sync_status?: "rejected";
+  sync_error?: string | null;
   delivery_charge_minor?: number;
   address_id?: string | null;
   /** SPEC Charges and Tax: per-order charge values and the tax choice, as last known from the server or the cashier. */
@@ -77,7 +81,11 @@ export interface QueueItem {
   sending_at?: number;
 }
 
-export interface AttentionItem { id: string; type: string; code: string; message: string; payload: Record<string, unknown>; created_at: string }
+export interface AttentionItem {
+  id: string; type: string; code: string; message: string; payload: Record<string, unknown>; created_at: string;
+  /** The order whose rejection holds this record back (a payment for a rejected order): shown under it, retried and dismissed with it. */
+  blocked_by?: string;
+}
 
 export interface KV { key: string; value: unknown }
 
