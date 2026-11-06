@@ -3,9 +3,23 @@
 #   bin/start api    migrations, seeds and Row-Level Security policies as the database owner, then Puma
 #   bin/start jobs   Solid Queue worker
 # With EASALPHA_APP_DB_PASSWORD set, the running process connects as the easalpha_app role, which the policies apply
-# to (a superuser ignores them). Without it the process keeps the PGUSER it was given, as before.
+# to (a superuser ignores them). Without it the process keeps the PGUSER it was given, as before: in production that
+# is said loudly at every start and GET /api/v1/health answers "rls": false, but the start goes on (6 Nov 2026
+# review, R9; the one-time setup is in docs/DEPLOY.md, "Row-Level Security").
 set -euo pipefail
 role="${1:-api}"
+if [ "${RAILS_ENV:-}" = "production" ] && [ -z "${EASALPHA_APP_DB_PASSWORD:-}" ]; then
+  cat >&2 <<'WARN'
+################################################################################
+# WARNING: EASALPHA_APP_DB_PASSWORD is not set.
+# This process connects to PostgreSQL as the database owner, which Row-Level
+# Security does not bind: tenant isolation rests on the application's own
+# scoping alone. GET /api/v1/health answers "rls": false until it is set.
+# Once: put `openssl rand -hex 24` in .env as EASALPHA_APP_DB_PASSWORD, then
+# docker compose up -d api jobs (docs/DEPLOY.md, "Row-Level Security").
+################################################################################
+WARN
+fi
 if [ "$role" = "api" ]; then
   bin/rails db:prepare
   bin/rails db:seed

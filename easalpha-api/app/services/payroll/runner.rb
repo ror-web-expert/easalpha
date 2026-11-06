@@ -22,8 +22,15 @@ module Payroll
       employees = employees.reject { |e| on_a_run.include?(e.id) }
       raise Api::Errors::Conflict.new("payroll.exists", "Payroll for #{month.strftime('%B %Y')} already exists") if employees.empty? && on_a_run.any?
       # SPEC: the run snapshots the divisor, the fines and the allowances it used, so later rule changes never move a paid month.
-      run = PayrollRun.create!(branch: branch, month: month, notes: notes, generated_by_membership_id: actor&.id,
-                               settings_snapshot: { salary_method: defaults.absent_rule, fixed_divisor: defaults.fixed_divisor, rules_enabled: defaults.rules_enabled, defaults: PayrollSerializers.rule(defaults) })
+      begin
+        run = PayrollRun.create!(branch: branch, month: month, notes: notes, generated_by_membership_id: actor&.id,
+                                 settings_snapshot: { salary_method: defaults.absent_rule, fixed_divisor: defaults.fixed_divisor, rules_enabled: defaults.rules_enabled, defaults: PayrollSerializers.rule(defaults) })
+      rescue ActiveRecord::RecordNotUnique
+        # A branch keeps one live run a month (a cancelled one does not count): someone who joined since is paid by
+        # cancelling that run and generating it again.
+        who = employees.size == 1 ? "the employee" : "the #{employees.size} employees"
+        raise Api::Errors::Conflict.new("payroll.exists", "Payroll for #{month.strftime('%B %Y')} already exists for #{branch&.name}; cancel it and generate it again to include #{who} added since")
+      end
       main_branch = branch || Branch.active.order(is_main: :desc).first
       commissions = Reports::Commissions.run(branch: main_branch, from: from, to: to)[:rows].group_by { |r| r[:membership_id] }
       # Tips are shared among the people who earned them: the run's branch when it has one, every branch otherwise.
@@ -31,6 +38,8 @@ module Payroll
       tips_scope = tips_scope.where(branch_id: branch.id) if branch
       tips_total = tips_scope.sum(:tip_minor)
       tip_sharers = employees.select(&:shares_tips)
+      canteen = Canteen::Payroll.enabled?
+      deducted = canteen ? Canteen::Payroll.deducted_months : []
       employees.each do |e|
         rule = e.rule
         days_in_month = (to - from).to_i + 1
@@ -43,10 +52,11 @@ module Payroll
         absence = (BigDecimal(e.base_salary_minor.to_s) / divisor * absence_days).round
         overtime = rule.overtime_enabled ? (BigDecimal(att[:overtime_minutes].to_s) / 60 * rule.overtime_rate_minor_per_hour).round : 0
         comps = e.employee_salary_components.includes(:salary_component).map { |c| { name: c.salary_component.name, kind: c.salary_component.kind, amount_minor: c.amount_for(base) } }
-        # Canteen: the month's meals come off the salary; pay! then settles the worker's account (Canteen::Payroll).
-        if Canteen::Payroll.enabled?
-          meals = Canteen::Payroll.for(e, from: from, to: to)
-          comps << { name: "Canteen meals (#{meals[:meals]})", kind: "deduction", amount_minor: meals[:amount_minor], canteen: true } if meals[:amount_minor].positive?
+        # Canteen: the month's meals, and any an earlier run missed, come off the salary; the payslip keeps their ids so
+        # no other run takes them again, and pay! then settles the worker's account (Canteen::Payroll).
+        if canteen
+          meals = Canteen::Payroll.due(e, month: month, deducted: deducted)
+          comps << { name: Canteen::Payroll.line_name(meals[:meals], meals[:carried]), kind: "deduction", amount_minor: meals[:amount_minor], canteen: true } if meals[:amount_minor].positive?
         end
         earnings = comps.select { |c| c[:kind] == "earning" }.sum { |c| c[:amount_minor] }
         deductions = comps.select { |c| c[:kind] == "deduction" }.sum { |c| c[:amount_minor] }
@@ -71,7 +81,7 @@ module Payroll
                         advances_recovered_minor: recovered, tips_minor: tips, commission_minor: commission, net_minor: net, days_present: att[:present], days_absent: att[:absent], days_leave: att[:leave],
                         detail: { components: comps, attendance: att, advances: adv_detail, active_days: active_days, days_in_month: days_in_month, absent_rule: rule.absent_rule, divisor: divisor,
                                   daily_rate_minor: (BigDecimal(e.base_salary_minor.to_s) / divisor).round, absence_days: absence_days.to_f, lost_days: att[:lost_days], overtime_minor: overtime,
-                                  charges: att[:charges], rule: PayrollSerializers.rule(rule) })
+                                  charges: att[:charges], rule: PayrollSerializers.rule(rule), canteen: canteen ? meals.slice(:claim_ids, :carried) : nil }.compact)
       end
       refresh_totals!(run)
       AuditLog.record(action: "payroll_generate", record: run, after: { month: month, employees: run.employees_count, net_minor: run.net_minor })

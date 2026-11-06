@@ -33,4 +33,50 @@ RSpec.describe "Row-Level Security" do
       conn.close
     end
   end
+
+  def connect(user:, password:)
+    cfg = ActiveRecord::Base.connection_db_config.configuration_hash
+    PG.connect(host: cfg[:host], port: cfg[:port], dbname: cfg[:database], user: user, password: password)
+  end
+
+  def app_role = connect(user: "easalpha_app", password: ENV.fetch("EASALPHA_APP_DB_PASSWORD", "easalpha_app"))
+
+  # R9: the health endpoint's rls flag is this check on the API's own connection.
+  it "says the policies bind the easalpha_app role and not a superuser" do
+    app = app_role
+    as_app = Struct.new(:pg) { def select_value(sql) = pg.exec(sql).getvalue(0, 0) }.new(app)
+    expect(EasAlpha::Rls.active?(as_app)).to be(true)
+    expect(EasAlpha::Rls.active?).to be(false) # the specs connect as postgres
+  ensure
+    app&.close
+  end
+
+  # With EASALPHA_APP_DB_PASSWORD set the app role also writes the other databases (Solid Cable's in production), whose
+  # tables the owner made at db:prepare: without the grants every live update failed to broadcast. The probe table is
+  # made by the owner and committed, then its grants are taken away, as in a database db:rls never reached.
+  it "grants the app role a database whose tables the owner made" do
+    cfg = ActiveRecord::Base.connection_db_config.configuration_hash
+    owner = connect(user: cfg[:username], password: cfg[:password])
+    table = "rls_grant_probe_#{SecureRandom.hex(4)}"
+    owner.exec("CREATE TABLE #{table} (id bigserial PRIMARY KEY, body text)")
+    owner.exec("REVOKE ALL ON #{table} FROM easalpha_app; REVOKE ALL ON SEQUENCE #{table}_id_seq FROM easalpha_app")
+    app = app_role
+    expect { app.exec("INSERT INTO #{table} (body) VALUES ('before')") }.to raise_error(PG::InsufficientPrivilege)
+    EasAlpha::Rls.grant_database!(cfg)
+    app.exec("INSERT INTO #{table} (body) VALUES ('after')")
+    expect(app.exec("SELECT body FROM #{table}").values).to eq([ [ "after" ] ])
+  ensure
+    app&.close
+    owner&.exec("DROP TABLE IF EXISTS #{table}")
+    owner&.close
+  end
+
+  it "grants every other database of the environment, not the primary one again" do
+    primary = ActiveRecord::Base.connection_db_config
+    cable = ActiveRecord::DatabaseConfigurations::HashConfig.new(Rails.env, "cable", primary.configuration_hash.merge(database: "easalpha_production_cable"))
+    allow(ActiveRecord::Base.configurations).to receive(:configs_for).with(env_name: Rails.env).and_return([ primary, cable ])
+    allow(EasAlpha::Rls).to receive(:grant_database!)
+    EasAlpha::Rls.grant_other_databases!
+    expect(EasAlpha::Rls).to have_received(:grant_database!).once.with(hash_including(database: "easalpha_production_cable"))
+  end
 end

@@ -4,8 +4,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 COPY server.js ./
-# Runs as the image's node user (uid 1000), not root. An existing wasessions volume on a server was made by root;
-# chown it once before this image starts (6 Nov 2026 review, A14).
+# Runs as the image's node user (uid and gid 1000), not root (6 Nov 2026 review, A14). A wasessions volume an older
+# root image made is owned by root; deploy/docker-compose.yml's volume-owner service chowns it before this image starts.
 RUN mkdir -p sessions && chown -R node:node /app
 USER node
 EXPOSE 3010

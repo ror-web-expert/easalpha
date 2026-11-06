@@ -1,5 +1,6 @@
 "use client";
-// Canteen, Today: what is being served now, how many meals so far, each session's plan and the latest tokens.
+// Canteen, Today: what is being served now, how many meals so far, the meals refused at sync, each session's plan and
+// the latest tokens.
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Fingerprint, MonitorSmartphone, Utensils } from "lucide-react";
@@ -11,6 +12,7 @@ import { Cards, PageHeader } from "@/components/admin/page";
 import { Badge, Card, CardBody, CardHeader, CardTitle, EmptyRow, Loading, SummaryCard, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { CANTEEN_KIOSK_PERMS, sessionWindow } from "@/components/canteen/helpers";
 import { noAccessFor, RequirePermission } from "@/components/admin/no-access";
+import { RefusedClaimsCard } from "@/components/canteen/refused-claims";
 
 export default function CanteenTodayPage() {
   return <RequirePermission perms={CANTEEN_KIOSK_PERMS}><TodayBoard /></RequirePermission>;
@@ -35,6 +37,7 @@ function TodayBoard() {
             <SummaryCard label="Collected" value={t.counts.served} tone="success" sub={`${t.counts.claimed - t.counts.served} waiting at the counter`} />
             <SummaryCard label="Workers" value={t.counts.workers} sub="active employees" />
           </Cards>
+          <RefusedClaimsCard rows={t.refused ?? []} total={t.counts.refused} />
           <div className="grid gap-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <Card>
               <CardHeader><CardTitle>Plans for today</CardTitle><Link href="/admin/canteen/plans" className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-sm font-medium text-primary hover:bg-muted">Edit</Link></CardHeader>

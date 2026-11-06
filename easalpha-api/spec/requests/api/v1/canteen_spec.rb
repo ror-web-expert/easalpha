@@ -144,6 +144,39 @@ RSpec.describe "Canteen", type: :request do
     expect(json[:canteen][:plans].first[:items].size).to eq(2)
   end
 
+  # R19: a meal the kiosk took offline and the server refused at replay reached nobody: the kiosk kept counting it as
+  # waiting to send and no screen listed it. The admin Today page lists it, with who, what and why, until resolved.
+  it "lists the meals refused at sync on the admin Today page until a canteen manager resolves them" do
+    plan = publish_lunch!
+    worker
+    rec = { type: "meal_claim", id: SecureRandom.uuid, payload: { fingerprint_id: "FP-001", meal_plan_item_id: plan[:items].first[:id], meal_session_id: lunch.id, token_label: "Q1-007", client_created_at: 5.minutes.ago.iso8601, source: "fingerprint" } }
+    second = rec.merge(id: SecureRandom.uuid, payload: rec[:payload].merge(token_label: "Q1-008", client_created_at: 2.minutes.ago.iso8601))
+    api_post "/api/v1/sync/push", { records: [ rec, second ] }, headers: device_headers(kiosk)
+    expect(json[:results].map { |r| r[:status] }).to eq(%w[accepted rejected])
+
+    get "/api/v1/canteen/today", headers: headers
+    expect(response).to have_http_status(:ok)
+    expect(json[:counts][:refused]).to eq(1)
+    expect(json[:refused].size).to eq(1)
+    row = json[:refused].first
+    expect(row).to include(record_id: second[:id], token_label: "Q1-008", employee_id: worker.id, employee_name: "Akbar Ali", fingerprint_id: "FP-001", dish: "Zinger Burger", session: "Lunch",
+                           device: "Q1", code: "canteen.already_taken", taken_at: Time.iso8601(second[:payload][:client_created_at]).utc.iso8601(3))
+    expect(row[:message]).to start_with("Akbar Ali already took Zinger Burger")
+    expect(row.keys).not_to include(:payload)
+    get "/api/v1/canteen/today", headers: device_headers(kiosk) # the kiosk has its own list, from the sync results
+    expect(json).not_to have_key(:refused)
+
+    cashier = add_member!(biz, "cashier")
+    api_post "/api/v1/canteen/refused/#{row[:id]}/resolve", { resolution: "fixed" }, headers: auth_headers(cashier)
+    expect(response).to have_http_status(:forbidden)
+    api_post "/api/v1/canteen/refused/#{row[:id]}/resolve", { resolution: "fixed" }, headers: headers
+    expect(response).to have_http_status(:no_content)
+    within(biz) { expect(SyncRejection.find(row[:id])).to have_attributes(resolution: "fixed", resolved_by_membership_id: owner.id) }
+    get "/api/v1/canteen/today", headers: headers
+    expect(json[:counts][:refused]).to eq(0)
+    expect(json[:refused]).to eq([])
+  end
+
   it "reports meals by day, session and dish, per worker, as CSV too, and takes the month off the payroll run" do
     plan = publish_lunch!
     worker

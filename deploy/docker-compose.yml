@@ -11,11 +11,26 @@ services:
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U postgres"], interval: 5s, retries: 20 }
 
+  # Runs to completion before the API, the job worker and the WhatsApp gateway start, at every "up": those images run
+  # as uid 1000 (rails, node), and a storage or wasessions volume an older root image made is owned by root, so
+  # uploads, logos, bill PDFs and the linked WhatsApp phone failed with "permission denied" (6 Nov 2026 review, R32).
+  # chown is idempotent; on a volume already owned it changes nothing. "docker compose ps -a" shows it Exited (0).
+  volume-owner:
+    image: alpine:3.20
+    restart: "no"
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["chown", "-R", "1000:1000", "/rails/storage", "/app/sessions"]
+    volumes:
+      - "storage:/rails/storage"
+      - "wasessions:/app/sessions"
+
   api:
     build: ../easalpha-api
     restart: unless-stopped
     # bin/start: migrations, seeds and the Row-Level Security policies, then Puma (as the easalpha_app role when
-    # EASALPHA_APP_DB_PASSWORD is set, so the policies apply; a superuser ignores them).
+    # EASALPHA_APP_DB_PASSWORD is set, so the policies apply; a superuser ignores them). Unset, every start prints a
+    # WARNING and /api/v1/health answers "rls": false (docs/DEPLOY.md, "Row-Level Security").
     command: bin/start api
     environment: &api_env
       RAILS_ENV: production
@@ -50,7 +65,9 @@ services:
       SMTP_AUTHENTICATION: ${SMTP_AUTHENTICATION:-plain}
       MAIL_FROM: ${MAIL_FROM:-EasAlpha <no-reply@easalpha.com>}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-hello@easalpha.com}
-    depends_on: { db: { condition: service_healthy } }
+    depends_on:
+      db: { condition: service_healthy }
+      volume-owner: { condition: service_completed_successfully }
     ports: ["3001:3001"]
     volumes: ["storage:/rails/storage"]
 
@@ -59,7 +76,9 @@ services:
     restart: unless-stopped
     command: bin/start jobs
     environment: *api_env
-    depends_on: [api]
+    depends_on:
+      api: { condition: service_started }
+      volume-owner: { condition: service_completed_successfully }
     volumes: ["storage:/rails/storage"]
 
   web:
@@ -89,6 +108,7 @@ services:
     environment:
       PORT: "3010"
       WHATSAPP_GATEWAY_TOKEN: ${WHATSAPP_GATEWAY_TOKEN}
+    depends_on: { volume-owner: { condition: service_completed_successfully } }
     volumes: ["wasessions:/app/sessions"]
 
   # Nightly backup of the database, uploads and linked WhatsApp phones into ./backups (BACKUP_DIR), kept BACKUP_KEEP_DAYS.

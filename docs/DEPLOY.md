@@ -29,6 +29,7 @@ Caddy as the only thing listening on the internet. The EasAlpha containers publi
 | Caddy: append `deploy/Caddyfile.easalpha` to `/opt/caddy/Caddyfile` and reload (needs sudo) | server | **you**, two commands below |
 | DNS: `easalpha.com`, `www`, `api` A records to `103.173.62.218` | registrar | **you** |
 | GitHub repository, secrets, variables, first push | laptop | **you**: `gh auth login` then `scripts/github-setup.sh` |
+| Row-Level Security: `EASALPHA_APP_DB_PASSWORD` in `.env` | server | **you**, until then every API start prints a WARNING and `/api/v1/health` says `"rls":false` (below) |
 
 ### Caddy (once, with sudo)
 
@@ -51,6 +52,32 @@ other app keeps working. Certificates are issued automatically the first time th
 
 If the domain is on Cloudflare, keep the three records "DNS only" (grey cloud) at least until the first certificate is
 issued; the proxy (orange cloud) also works afterwards, with SSL mode "Full (strict)". Check with `dig +short api.easalpha.com`.
+
+### Row-Level Security (once, on the server)
+
+The database itself keeps one business's rows from another only when the API connects as the `easalpha_app` role.
+Until `EASALPHA_APP_DB_PASSWORD` is set the API and the job worker connect as `postgres`, a superuser, which the
+policies do not bind, so tenant isolation rests on the application's own scoping alone. While that is so, every start
+of the api and jobs containers prints a `WARNING: EASALPHA_APP_DB_PASSWORD is not set` block (`docker compose logs api`)
+and `GET /api/v1/health` answers `"rls":false`. Nothing else changes and nothing fails. To switch it on:
+
+```bash
+ssh sajid@103.173.62.218 && cd ~/easalpha
+openssl rand -hex 24                     # copy the value
+nano .env                                # EASALPHA_APP_DB_PASSWORD=<the value> (add the line if .env has none)
+docker compose up -d api jobs
+curl -s https://api.easalpha.com/api/v1/health   # {"status":"ok",...,"rls":true}
+```
+
+At start the api container runs `db:rls` as the owner before Puma: it creates the role (or sets its password from the
+variable), applies the policies, and grants the role the tables of the main database and of the others the API
+connects to (Solid Cable's `easalpha_production_cable`, and the queue and cache databases), so live updates keep
+working. Only then does `bin/start` switch the process to `easalpha_app`; the jobs container switches the same way.
+Keep the value in `.env`: the role's password follows it at every start, so changing it and running
+`docker compose up -d api jobs` rotates it, and emptying it goes back to `postgres` (the role stays, unused).
+`docker compose exec api bin/rails console` keeps connecting as `postgres` (the compose environment), which a support
+console needs. If `"rls"` stays `false` after the restart, `docker compose logs api` shows the WARNING (the variable
+did not reach the container) or a connection error for `easalpha_app` (the api start that creates the role failed).
 
 ### GitHub (once, on your laptop)
 
@@ -109,14 +136,19 @@ images on GitHub's machines (not on the 2-CPU server), pushes them to `ghcr.io/<
 Migrations, seeds and the Row-Level Security policies run when the api container starts (`bin/start api`: `db:prepare`,
 `db:seed`, `db:rls`), before Puma listens; the old web container keeps serving until the new one is up. With
 `EASALPHA_APP_DB_PASSWORD` set in `.env`, the API and the job worker then connect as the `easalpha_app` role, which the
-policies apply to (the `postgres` superuser ignores them, so until that variable is set tenant isolation rests on the
-application's own scoping alone). Set it once: `openssl rand -hex 24`, paste, `docker compose up -d api jobs`. A failed health check fails the run and prints the API log; the previous
+policies apply to; without it they stay on `postgres`, say so in a WARNING at every start and answer `"rls":false` on
+`/api/v1/health` (one-time setup: "Row-Level Security" above). A failed health check fails the run and prints the API log; the previous
 images stay on the server, so `IMAGE_TAG=<previous sha>` in `.env` and `docker compose up -d` rolls back.
 
 Since 6 Nov 2026 the API, web and WhatsApp containers run as uid 1000 (`rails` / `node`), not root (security review,
-A14; the images were not rebuilt on a laptop, so the first CI build is the test). The two volumes they write were made
-by root, so once, before the first deploy of those images: `docker run --rm -v easalpha_storage:/d alpine chown -R 1000:1000 /d`
-and the same for `easalpha_wasessions`. Without it uploads and the WhatsApp session fail with "permission denied".
+A14; the images were not rebuilt on a laptop, so the first CI build is the test). The two volumes they write,
+`easalpha_storage` (uploads, logos, bill PDFs) and `easalpha_wasessions` (the linked WhatsApp phone), were made by root
+on this server. The `volume-owner` service in `docker-compose.yml` (alpine, as root, no network) chowns both to
+`1000:1000` at every `docker compose up`, and the api, jobs and whatsapp containers start only once it has exited 0, so
+no deploy needs a hand step for it (6 Nov 2026 review, R32; not yet run on the server: no Docker where it was written).
+`docker compose ps -a` lists it as Exited (0); `docker compose logs volume-owner` shows any error. Fallback by hand, if
+it ever fails: `docker run --rm -v easalpha_storage:/d alpine chown -R 1000:1000 /d` and the same for
+`easalpha_wasessions`. Without either, uploads and the WhatsApp session fail with "permission denied".
 
 Watch a run: `gh run watch`, or Actions on GitHub. Tagged release: `git tag v1.0.0 && git push --tags` also builds and
 uploads the desktop installers to the Download page (`desktop.yml`).
@@ -125,11 +157,11 @@ uploads the desktop installers to the Download page (`desktop.yml`).
 
 ```bash
 ssh sajid@103.173.62.218 && cd ~/easalpha
-docker compose ps                         # five containers Up
+docker compose ps                         # db, api, jobs, web, whatsapp, backup, umami Up (ps -a: volume-owner and umami-db-init Exited (0))
 docker compose logs -f api                # or jobs, web, whatsapp, db
 docker compose exec api bin/rails console # Rails console (production)
 docker compose restart api                # after editing .env
-curl -s https://api.easalpha.com/api/v1/health
+curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Security is set up
 ```
 
 - **Super admin**: `https://easalpha.com/super`, login in `~/easalpha/.env` (`SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`).
@@ -148,7 +180,8 @@ curl -s https://api.easalpha.com/api/v1/health
   (for example `rclone copy "$1" remote:easalpha-backups`) or pull the folder nightly from another machine with rsync.
   Restore the database: `docker compose stop api jobs`, then
   `docker compose exec -T db pg_restore -U postgres --clean --if-exists -d easalpha_production < backups/easalpha-<date>.dump`,
-  then `docker compose start api jobs`. Restore uploads: `docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data`.
+  then `docker compose start api jobs`. Restore uploads: `docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data`,
+  then `docker compose up -d` (volume-owner gives the restored files back to uid 1000).
 - **Paddle**: international card subscriptions arrive as webhooks at `POST /api/v1/webhooks/paddle`. The API refuses them
   (503) until `PADDLE_WEBHOOK_SECRET` is in `.env` (Paddle, Notifications, the endpoint's secret), and checks the signature
   and a five-minute freshness window on every event.
@@ -169,7 +202,7 @@ curl -s https://api.easalpha.com/api/v1/health
 
 | File | Purpose |
 |---|---|
-| `deploy/docker-compose.yml` | the five services; builds from source when used alone |
+| `deploy/docker-compose.yml` | the services (and the one-shot `volume-owner` and `umami-db-init`); builds from source when used alone |
 | `deploy/docker-compose.images.yml` | overlay: use the ghcr.io images instead of building |
 | `deploy/docker-compose.proxy.yml` | overlay: no published ports, web and api join the `kamal` network for Caddy |
 | `deploy/backup.sh` | the nightly backup loop the `backup` service runs; `backup.sh now` for one backup |

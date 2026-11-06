@@ -72,6 +72,8 @@ export function loadSettings(): Settings {
   }
   const port = Number(raw.printServerPort);
   const updateUrl = typeof raw.updateUrl === "string" && /^https?:\/\//.test(raw.updateUrl.trim()) ? raw.updateUrl.trim().replace(/\/+$/, "") : "";
+  // Kept as origins ("https://pos.example.pk"); an empty list is kept too, so an owner can drop the default easalpha.com.
+  const origins = Array.isArray(raw.printServerOrigins) ? raw.printServerOrigins.map((o) => originOf(String(o))).filter((o): o is string => !!o) : null;
   return {
     // "http://localhost:3000" was the default written by builds before 0.3.0; treat it as unset so those installs move
     // to the hosted service. A developer server is still reachable as http://127.0.0.1:3000.
@@ -81,6 +83,7 @@ export function loadSettings(): Settings {
         : DEFAULT_SETTINGS.webUrl,
     printServerPort: Number.isInteger(port) && port > 0 && port < 65536 ? port : DEFAULT_SETTINGS.printServerPort,
     ...(typeof raw.printServerToken === "string" && raw.printServerToken.trim() ? { printServerToken: raw.printServerToken.trim() } : {}),
+    ...(origins ? { printServerOrigins: [...new Set(origins)] } : {}),
     printers: Array.isArray(raw.printers)
       ? (raw.printers.map(sanitizePrinter).filter(Boolean) as PrinterConfig[])
       : [],
@@ -102,4 +105,14 @@ export function saveSettings(next: Partial<Settings>): Settings {
 
 export function newId(): string {
   return "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+/** "https://pos.example.pk/pos" -> "https://pos.example.pk": what a browser sends as Origin. Null for anything not http(s). */
+export function originOf(url: string): string | null {
+  try {
+    const u = new URL(url.trim());
+    return u.protocol === "http:" || u.protocol === "https:" ? u.origin : null;
+  } catch {
+    return null;
+  }
 }

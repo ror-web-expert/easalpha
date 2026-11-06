@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_06_162417) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1665,7 +1665,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_06_162417) do
     t.datetime "updated_at", null: false
     t.jsonb "settings_snapshot", default: {}, null: false
     t.index ["branch_id"], name: "index_payroll_runs_on_branch_id"
-    t.index ["business_id", "branch_id", "month"], name: "index_payroll_runs_on_business_id_and_branch_id_and_month", unique: true
+    t.index ["business_id", "branch_id", "month"], name: "index_payroll_runs_one_live_per_branch_month", unique: true, where: "((status)::text <> 'cancelled'::text)"
     t.index ["business_id"], name: "index_payroll_runs_on_business_id"
     t.check_constraint "status::text = ANY (ARRAY['generated'::character varying, 'approved'::character varying, 'paid'::character varying, 'cancelled'::character varying]::text[])", name: "payroll_runs_status_check"
   end

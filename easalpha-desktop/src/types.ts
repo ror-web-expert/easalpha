@@ -62,6 +62,8 @@ export type Settings = {
   printServerPort: number;
   /** Tablets send this with every print job (Authorization: Bearer); without it anyone on the shop's network could print or open the drawer. */
   printServerToken?: string;
+  /** Web addresses (origins) whose pages may call the print server, besides webUrl. Unset: webUrl and https://easalpha.com. */
+  printServerOrigins?: string[];
   printers: PrinterConfig[];
   /** Release feed for self-update (a folder holding latest.yml and the installers). Empty = the feed built into the app. */
   updateUrl?: string;
