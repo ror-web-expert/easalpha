@@ -17,7 +17,7 @@ import { useAuthStore } from "@/store/auth";
 import { toast } from "@/store/toast";
 import { Cards, type DateRange, DateRangePicker, FilterBar, PageHeader } from "@/components/admin/page";
 import { useAction } from "@/components/admin/crud";
-import { MethodSelect, PayrollGuard, usePayMethods, useWageEmployees, WageEmployeeSelect } from "@/components/admin/payroll-shared";
+import { MethodSelect, PayFromWarning, PayrollGuard, usePayMethods, useWageEmployees, WageEmployeeSelect } from "@/components/admin/payroll-shared";
 import {
   attendanceChips, capRecovery, chipText, dayLabel, daysText, dueState, hasErrors, isWageStaff, maxRecovery, payTypeLabel, periodLabel, rateLabel, resultsByEmployee, rowGross, shiftDay,
   validateWageRow, WAGE_HISTORY_COLUMNS, wageBatchRow, type WageBatchResult, wageHistoryRow, wageNet, type WageRow, wageRowFromPreview, wageStatusVariant, wageTotals, weekOf,
@@ -26,7 +26,7 @@ import { Badge, Button, Checkbox, Dialog, EmptyRow, EmptyState, ErrorState, Fiel
 
 const WAGE_PERMS = ["payroll.manage", "PAYROLL", "wages.pay"];
 /** Everything a wage payment or a void moves. */
-const KEYS = ["wages_due", "wages", "employee_statement", "advances", "expenses", "accounts", "payroll_overview"];
+const KEYS = ["wages_due", "wages", "employee_statement", "advances", "expenses", "accounts", "payment_accounts", "payroll_overview"];
 
 interface DueResponse { day: string; data: WagePreview[] }
 interface BatchBody { day: string; method_code?: string; rows: ReturnType<typeof wageBatchRow>[] }
@@ -189,6 +189,7 @@ function DueSection({ today, onVoid }: { today: string; onVoid: (w: WagePayment)
             <TR className="font-medium"><TD colSpan={4}>Total</TD><TD right>{formatMoney(chosenTotal)}</TD></TR>
           </TBody>
         </Table>
+        <PayFromWarning methodCode={method} amountMinor={chosenTotal} />
       </Dialog>
     </>
   );

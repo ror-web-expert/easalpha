@@ -107,12 +107,18 @@ module Payroll
       category = ExpenseCategory.active.find_by(name: "Salaries") || ExpenseCategory.create!(name: "Salaries")
       PayrollRun.transaction do
         run.payslips.includes(:employee).each do |p|
-          Canteen::Payroll.settle!(p, actor: actor, branch: branch) if Canteen::Payroll.enabled?
+          meals = Canteen::Payroll.enabled? ? Canteen::Payroll.settle!(p, actor: actor, branch: branch) : 0
           if p.net_minor.positive?
             e = Expenses::Recorder.create!({ category_id: category.id, amount_minor: p.net_minor, method_code: method_code, paid_to: p.employee.name, note: "Salary #{run.label}", spent_on: Date.current.to_s }, actor: actor, branch: branch, source: "payroll_sync")
             p.update!(paid_at: Time.current, expense_id: e.id, payment_account_id: e.payment_account_id)
           else
             p.update!(paid_at: Time.current) # nothing to hand over, but the month is settled
+          end
+          # The tip share comes out of Tips Payable, up to what the books show as this payslip's salary: the cash, the
+          # meals it cleared and the advances paid out before (all in Salaries).
+          if p.tips_minor.positive?
+            Finance::Journal.tips_paid!(p, amount_minor: [ p.tips_minor, [ p.net_minor, 0 ].max + meals + p.advances_recovered_minor ].min,
+                                           business_day: branch.business_day_for(Time.current), branch_id: branch.id)
           end
           Array(p.detail["advances"]).each do |ad|
             a = Advance.lock.find_by(employee_id: p.employee_id, number: ad["advance"].to_s.delete_prefix("ADV-").to_i) or next

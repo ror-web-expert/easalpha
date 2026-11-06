@@ -75,7 +75,9 @@ module Canteen
       return 0 if amount <= 0
       customer = Workers.link!(payslip.employee)
       Claims.internal_method!(Claims::PAYROLL_CODE, "Salary deduction")
-      Payments::Khata.receive!(customer, amount_minor: amount, method_code: Claims::PAYROLL_CODE, reference: "Payroll #{month}", actor: actor, branch: branch)
+      # Salary the worker earned clears what they owe for meals: the journal books it as salary expense against the
+      # receivable (Finance::Journal.internal_receipt!), so the run's salary expense is gross of the deduction.
+      Payments::Khata.receive!(customer, amount_minor: amount, method_code: Claims::PAYROLL_CODE, reference: "Payroll #{month}", actor: actor, branch: branch, internal: true)
       amount
     end
 

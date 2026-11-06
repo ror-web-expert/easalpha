@@ -67,6 +67,9 @@ module Canteen
     end
 
     # The worker's share goes on their account, the rest on the company's internal method; a free meal is just placed.
+    # The books (Finance::Journal.internal_sale!): the meal is sold at its menu price, so revenue and output tax are
+    # the order's; the worker owes their share (receivable, cleared by the payroll deduction) and the company's share
+    # is a Staff Meals expense, never money in a bank.
     def self.pay!(order, claim, actor:, device:)
       if order.total_minor.zero?
         Orders::Transitions.place!(order, actor: actor, device: device)
@@ -81,12 +84,11 @@ module Canteen
       Payments::Processor.new(order, actor: actor, device: device).call(payments: lines)
     end
 
-    # Methods the system pays with that the till never shows.
+    # Methods the system pays with that the till never shows. They move no money, so they have no payment account.
     def self.internal_method!(code, name)
       m = PaymentMethod.find_by(code: code)
       m ||= PaymentMethod.create!(code: code, name: name, kind: "custom", works_offline: true, internal: true, sort_order: 99)
       m.update!(active: true, internal: true) unless m.active && m.internal
-      m.ensure_account!
       m
     end
 

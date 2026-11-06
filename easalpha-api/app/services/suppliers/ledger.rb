@@ -48,8 +48,10 @@ module Suppliers
     def adjust!(supplier, amount_minor:, reason:, actor:, branch:)
       raise Api::Errors::BadRequest.new("adjustment.amount", "Amount cannot be zero") if amount_minor.zero?
       raise Api::Errors::BadRequest.new("adjustment.reason", "A reason is required") if reason.blank?
+      day = branch.business_day_for(Time.current)
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day) # QA B9
       SupplierAdjustment.transaction do
-        adj = SupplierAdjustment.create!(supplier: supplier, branch_id: branch.id, amount_minor: amount_minor, reason: reason, business_day: branch.business_day_for(Time.current), by_membership_id: actor&.id)
+        adj = SupplierAdjustment.create!(supplier: supplier, branch_id: branch.id, amount_minor: amount_minor, reason: reason, business_day: day, by_membership_id: actor&.id)
         supplier.move_balance!(amount_minor)
         Finance::Journal.supplier_adjustment!(adj)
         AuditLog.record(action: "ledger_adjustment", record: adj, after: { supplier: supplier.name, amount_minor: amount_minor, reason: reason })

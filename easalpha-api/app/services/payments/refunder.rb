@@ -68,6 +68,7 @@ module Payments
           customer.update!(balance_minor: customer.balance_minor - amount_minor)
           Finance::Journal.khata_refund!(refund) # khata has no payment account, so the journal is posted here
         end
+        Finance::Journal.internal_refund!(refund) if method.internal? # nor has an internal method (the canteen subsidy)
         # Money refunded is not money owed (QA T8). On a settled order a part refund corrects the sale (a cold dish): the
         # order stays paid, nothing is due, and a reopen does not ask for it again; reports and the journal take the
         # refund off the sale. Money given back on an open order is owed again.

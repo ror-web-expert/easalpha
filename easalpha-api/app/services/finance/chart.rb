@@ -48,6 +48,7 @@ module Finance
       [ "5140", "Marketing", "expense", false, "5100" ],
       [ "5150", "Repairs and Maintenance", "expense", false, "5100" ],
       [ "5160", "Transport and Fuel", "expense", false, "5100" ],
+      [ "5170", "Staff Meals", "expense", false, "5100" ], # the company's share of subsidised canteen meals
       [ "5190", "Other Expenses", "expense", false, "5100" ],
       [ "5200", "Waste and Spoilage", "expense", false, nil ],
       [ "5300", "Rider Commissions", "expense", false, nil ],

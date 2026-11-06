@@ -165,6 +165,7 @@ module Payments
 
     def post_to_account!(payment)
       return Finance::Journal.khata_sale!(payment) if payment.payment_method.khata?
+      return Finance::Journal.internal_sale!(payment) if payment.payment_method.internal? # no money account: the journal only
       account = payment.payment_method.cash? && @shift&.drawer_account ? @shift.drawer_account : payment.payment_account
       return unless account
       payment.update_column(:payment_account_id, account.id)
