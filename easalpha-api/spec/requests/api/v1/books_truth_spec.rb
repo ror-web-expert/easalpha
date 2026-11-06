@@ -52,7 +52,7 @@ RSpec.describe "Books tell the truth", type: :request do
       expect(response).to have_http_status(:ok), response.body
       within(biz) do
         lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
-        Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: today, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
+        Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: Canteen::Sessions.day_for(branch, lunch, Time.current), items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
       end
     end
 
@@ -324,7 +324,7 @@ RSpec.describe "Books tell the truth", type: :request do
       month = today.beginning_of_month
       worker = within(biz) do
         lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
-        Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: today, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
+        Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: Canteen::Sessions.day_for(branch, lunch, Time.current), items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
         e = Employee.create!(name: "Akbar Ali", base_salary_minor: 3_000_000, pay_frequency: "monthly", joined_on: Date.new(2026, 1, 1), shares_tips: true)
         (month..month.end_of_month).each { |d| Attendance.create!(employee_id: e.id, business_day: d, status: "present", source: "manual") }
         e

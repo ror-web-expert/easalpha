@@ -83,7 +83,8 @@ RSpec.describe Finance::ProfitLoss, type: :request do
     expect(response).to have_http_status(:ok), response.body
     kiosk, worker = within(biz) do
       lunch = MealSession.create!(branch: branch, name: "Lunch", starts_at: "00:00", ends_at: "23:59")
-      Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: day, items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
+      # The plan of the day the session opened on (Canteen::Sessions.day_for): before the 02:01 cutoff, the day before.
+      Canteen::Plans.publish!(Canteen::Plans.save!(branch: branch, session: lunch, date: Canteen::Sessions.day_for(branch, lunch, Time.current), items: [ { product_id: m[:burger].id, worker_price_minor: 20_000 } ]))
       [ Device.create!(branch: branch, name: "Kiosk 1", kind: "kiosk", paired_at: Time.current, code: "Q1"),
         Employee.create!(name: "Akbar Ali", base_salary_minor: 3_000_000, pay_frequency: "monthly", joined_on: Date.new(2026, 1, 1), fingerprint_id: "FP-001", fingerprint_enrolled: true, shares_tips: true) ]
     end

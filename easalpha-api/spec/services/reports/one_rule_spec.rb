@@ -2,7 +2,8 @@ require "rails_helper"
 
 # The one revenue rule across every report (final round of 6 Nov 2026: reports#0-#4, #6, #8, #9, B5, B13, B14). One
 # business day: a paid order, a part-refunded one, a fully refunded one, a reopened one whose excess was refunded, a
-# staff meal and a khata sale, then an expense, a drawer payout and a count that finds buns missing. Every report and
+# staff meal and a khata sale, then an expense, a drawer payout, a count that finds buns missing and a drawer counted
+# short at the close. Every report and
 # the profit and loss say the same revenue and tax, the tax is the Tax Payable movement, and the profit and loss's net
 # is the balance sheet's current earnings. A refund the next day, after the day was closed, leaves the closed day as
 # it stood and lands on its own day.
@@ -127,6 +128,9 @@ RSpec.describe "The one revenue rule", type: :request do
       count = Stock::Posting.create!({ kind: "count", from_section_id: StockSection.default_for(branch).id }, lines: [ { stock_item_id: bun.id, counted_qty: 90 } ], actor: owner, branch: branch)
       Stock::Posting.post!(count, actor: owner) # 95 expected after five burgers: five buns short
     end
+    expected = within(biz) { Shift.find(shift[:id]).expected_cash }
+    api_post "/api/v1/shifts/#{shift[:id]}/close", { counted_cash_minor: expected - 1_000 }, headers: h # the drawer counts Rs 10 short
+    expect(response).to have_http_status(:ok), response.body
 
     # Rs 522 + Rs 422 + 0 + Rs 522 + Rs 522; tax Rs 72 on each, less Rs 13.79 for the Rs 100 refund.
     f = figures(day)
@@ -138,9 +142,10 @@ RSpec.describe "The one revenue rule", type: :request do
 
     pl = f[:pl]
     expect(pl).to include(cost_of_goods_minor: 10_000, gross_profit_minor: 171_379 - 10_000)
-    expect(pl[:operating]).to include(expenses_minor: 5_000, stock_differences_minor: 10_000, other_minor: 3_000)
-    expect(pl[:operating][:other]).to eq([ { code: "5190", name: "Other Expenses", kind: "expense", amount_minor: 3_000 } ]) # the payout
-    expect(pl[:net_profit_minor]).to eq(171_379 - 10_000 - 5_000 - 10_000 - 3_000)
+    # The payout is an expense of its own (Petty cash); the shortage at the count is only in the journal.
+    expect(pl[:operating]).to include(expenses_minor: 8_000, stock_differences_minor: 10_000, other_minor: 1_000)
+    expect(pl[:operating][:other]).to eq([ { code: "5195", name: "Cash Over and Short", kind: "expense", amount_minor: 1_000 } ])
+    expect(pl[:net_profit_minor]).to eq(171_379 - 10_000 - 8_000 - 10_000 - 1_000)
     expect(pl[:net_profit_minor]).to eq(books(day)[:earnings])
     expect(pl[:net_profit_minor]).to eq(within(biz) { Finance::Statements.balance_sheet(as_of: day)[:current_earnings_minor] })
 
