@@ -4,7 +4,7 @@ import type { AttentionItem, QueueItem } from "@/lib/db";
 
 // The Attention page with the till's tables and the sync calls stubbed: what matters here is whose records a role sees
 // and what the money note says.
-const h = vi.hoisted(() => ({ attention: [] as AttentionItem[], queue: [] as QueueItem[], lacks: [] as string[], me: "m-cashier" }));
+const h = vi.hoisted(() => ({ attention: [] as AttentionItem[], queue: [] as QueueItem[], lacks: [] as string[], me: "m-cashier", settle: vi.fn(async () => 0) }));
 
 vi.mock("@/lib/db", () => ({
   db: {
@@ -12,7 +12,7 @@ vi.mock("@/lib/db", () => ({
     queue: { orderBy: () => ({ toArray: async () => h.queue }) },
   },
 }));
-vi.mock("@/lib/sync", () => ({ dismissAttention: vi.fn(), retryAttention: vi.fn(), processQueue: vi.fn(), flushDismissals: vi.fn(async () => {}), isMoneyRecord: (a: AttentionItem) => a.type === "payment" || a.type === "customer_payment" }));
+vi.mock("@/lib/sync", () => ({ dismissAttention: vi.fn(), retryAttention: vi.fn(), processQueue: vi.fn(), flushDismissals: vi.fn(async () => {}), settleResolvedAttention: h.settle, isMoneyRecord: (a: AttentionItem) => a.type === "payment" || a.type === "customer_payment" }));
 vi.mock("@/store/device", () => {
   const state = { session: { membership: { id: h.me } } };
   return { useDeviceStore: (sel: (s: typeof state) => unknown) => sel(state), usePosCan: () => (...codes: string[]) => codes.some((c) => !h.lacks.includes(c)) };
@@ -33,6 +33,17 @@ beforeEach(() => {
   h.lacks = [];
   h.attention = [];
   h.queue = [];
+  h.settle.mockClear();
+});
+
+// Leftovers of 7 Nov 2026 (L3): what a manager resolved on the admin's Needs attention stayed listed here.
+describe("refusals resolved in the admin", () => {
+  it("asks the server about the listed refusals as the page opens", async () => {
+    h.attention = [rejectedRecord("o-1", "order", "m-cashier")];
+    render(<AttentionPage />);
+    expect(await screen.findByText(/\(o-1\)/)).toBeInTheDocument();
+    expect(h.settle).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Attention for a cashier without OFFLINE_ORDERS (QA K8)", () => {
