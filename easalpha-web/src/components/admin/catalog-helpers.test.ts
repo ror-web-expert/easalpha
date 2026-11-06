@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  CONSUMABLE_ORDER_TYPES, copyAllOrderTypes, copyOrderType, consumablesToInputs, detectImportSource, discountLabel, discountPayload, discountProblem, discountedPriceMinor,
+  CONSUMABLE_ORDER_TYPES, categorySaveBlocker, copyAllOrderTypes, copyOrderType, consumablesToInputs, detectImportSource, discountLabel, discountPayload, discountProblem, discountedPriceMinor,
+  dealDatesProblem, dealDay, labelPriceMinor, productSaveBlocker,
   imageProblem, menuExportFileName, moveItem, type ConsumableRow,
 } from "./catalog-helpers";
 
@@ -109,5 +110,48 @@ describe("misc", () => {
     expect(moveItem(list, 3, 0)).toEqual(["d", "a", "b", "c"]);
     expect(moveItem(list, 1, 1)).toBe(list);
     expect(list).toEqual(["a", "b", "c", "d"]);
+  });
+});
+
+// S7: the product and category forms greyed Save and said nothing.
+describe("why Save is greyed", () => {
+  const f = { name: "Chai", category_id: "c1", base_price_minor: 8000 };
+  it("names the first thing missing on the product form", () => {
+    expect(productSaveBlocker({ ...f, name: " " }, { categories: 1 })).toBe("Enter the product name to save.");
+    expect(productSaveBlocker({ ...f, category_id: "" }, { categories: 0 })).toBe("Add a category first: every product sits in one.");
+    expect(productSaveBlocker({ ...f, category_id: "" }, { categories: 2 })).toBe("Choose a category to save.");
+    expect(productSaveBlocker(f, { categories: 2, discountError: "A discount cannot be negative." })).toBe("A discount cannot be negative.");
+    expect(productSaveBlocker(f, { categories: 2, codeProblems: 1 })).toBe("Fix the barcodes marked below to save.");
+    expect(productSaveBlocker(f, { categories: 2 })).toBeNull();
+  });
+  it("needs only a name on the category form, since a missing menu is made on save", () => {
+    expect(categorySaveBlocker({ name: "" })).toBe("Enter a name to save.");
+    expect(categorySaveBlocker({ name: "Drinks" })).toBeNull();
+  });
+});
+
+// S9: the Edit deal boxes showed "2026-11-06T00:00:00.000Z", and Valid to before Valid from was accepted.
+describe("deal dates", () => {
+  it("puts a day in the date box whether the API sent a day or midnight UTC", () => {
+    expect(dealDay("2026-11-06")).toBe("2026-11-06");
+    expect(dealDay("2026-11-06T00:00:00.000Z")).toBe("2026-11-06");
+    expect(dealDay(null)).toBe("");
+  });
+  it("refuses Valid to before Valid from, and allows the same day", () => {
+    expect(dealDatesProblem("2026-11-07", "2026-11-06")).toBe("Valid to must be on or after Valid from.");
+    expect(dealDatesProblem("2026-11-06", "2026-11-06")).toBeNull();
+    expect(dealDatesProblem("", "2026-11-06")).toBeNull();
+  });
+});
+
+// S15: labels printed the full price while the till sold the item after its own discount.
+describe("labelPriceMinor", () => {
+  const p = { base_price_minor: 6000, discount_value: "10", discount_type: "amount" as const, variants: [{ id: "v1", price_minor: 9000 }] };
+  it("prints what the till charges: the size's price less the product discount, times the pack", () => {
+    expect(labelPriceMinor(p, null)).toBe(5000);
+    expect(labelPriceMinor(p, "v1")).toBe(8000);
+    expect(labelPriceMinor(p, null, 6)).toBe(30000);
+    expect(labelPriceMinor({ ...p, discount_value: "20", discount_type: "percent" }, null)).toBe(4800);
+    expect(labelPriceMinor({ ...p, discount_value: "0.0", discount_type: "percent" }, null)).toBe(6000);
   });
 });

@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/admin/page";
 import { useAction, useList, useRemove, useSave } from "@/components/admin/crud";
 import { ImageUpload } from "@/components/admin/image-upload";
+import { dealDatesProblem, dealDay } from "@/components/admin/catalog-helpers";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, MoneyInput, Select, Table, TBody, TD, TH, THead, TR, Textarea } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,9 @@ export default function DealsPage() {
   const [form, setForm] = useState<Form | null>(null);
   const [del, setDel] = useState<Deal | null>(null);
   const pname = (id: string) => products.data?.find((p) => p.id === id)?.name ?? "?";
+  // Why Save is greyed, and Valid to before Valid from (S9: it was accepted).
+  const datesProblem = form ? dealDatesProblem(form.valid_from, form.valid_to) : null;
+  const blocker = !form ? null : !form.name.trim() ? "Enter a name to save." : !form.items.some((i) => i.product_id) ? "Add at least one product to save." : datesProblem;
   return (
     <>
       <PageHeader icon={Gift} title="Deals" description="Fixed-price combos: a name, a price, a customer-facing description and the component products with quantities. Starred deals sit at the front of the till." actions={<Button onClick={() => setForm(blank)}><Plus className="h-4 w-4" /> New deal</Button>} />
@@ -49,7 +53,7 @@ export default function DealsPage() {
                 <TD>{d.active ? <Badge variant="success">active</Badge> : <Badge>inactive</Badge>}</TD>
                 <TD right className="font-medium">{formatMoney(d.price_minor)}</TD>
                 <TD right className="whitespace-nowrap">
-                  <Button variant="ghost" size="icon-sm" onClick={() => setForm({ id: d.id, name: d.name, description: d.description ?? "", image_key: d.image_key ?? "", price_minor: d.price_minor, active: d.active, show_online: d.show_online, is_favourite: !!d.is_favourite, valid_from: d.valid_from ?? "", valid_to: d.valid_to ?? "", items: d.items.map((i) => ({ product_id: i.product_id, variant_id: i.variant_id ?? "", quantity: i.quantity, choice_group: i.choice_group ?? "" })) })} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon-sm" onClick={() => setForm({ id: d.id, name: d.name, description: d.description ?? "", image_key: d.image_key ?? "", price_minor: d.price_minor, active: d.active, show_online: d.show_online, is_favourite: !!d.is_favourite, valid_from: dealDay(d.valid_from), valid_to: dealDay(d.valid_to), items: d.items.map((i) => ({ product_id: i.product_id, variant_id: i.variant_id ?? "", quantity: i.quantity, choice_group: i.choice_group ?? "" })) })} aria-label="Edit"><Pencil className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon-sm" onClick={() => setDel(d)} aria-label="Delete"><Trash2 className="h-4 w-4 text-danger" /></Button>
                 </TD>
               </TR>
@@ -58,7 +62,7 @@ export default function DealsPage() {
         </Table>
       )}
       <Dialog open={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit deal" : "New deal"} size="lg"
-        footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!form?.name || !form?.items.some((i) => i.product_id)} onClick={() => form && save.mutate({ ...form, image_key: form.image_key || null, valid_from: form.valid_from || null, valid_to: form.valid_to || null, items: form.items.filter((i) => i.product_id) })}>Save</Button></>}>
+        footer={<>{blocker ? <span className="mr-auto text-xs text-fg-muted" role="status">{blocker}</span> : null}<Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!!blocker} title={blocker ?? undefined} onClick={() => form && save.mutate({ ...form, image_key: form.image_key || null, valid_from: form.valid_from || null, valid_to: form.valid_to || null, items: form.items.filter((i) => i.product_id) })}>Save</Button></>}>
         {form ? (
           <div className="space-y-3">
             <ImageUpload label="Deal image" value={form.image_key} onChange={(k) => setForm({ ...form, image_key: k ?? "" })} />
@@ -66,7 +70,7 @@ export default function DealsPage() {
               <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
               <Field label="Price"><MoneyInput value={form.price_minor} onChange={(v) => setForm({ ...form, price_minor: v })} /></Field>
               <Field label="Valid from"><Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} /></Field>
-              <Field label="Valid to"><Input type="date" value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} /></Field>
+              <Field label="Valid to" error={datesProblem ?? undefined} hint={datesProblem ? undefined : "Both days count in full, in your time zone"}><Input type="date" min={form.valid_from || undefined} value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} /></Field>
             </div>
             <Field label="Description" hint="Shown to customers on the website and the receipt"><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
             <div className="flex flex-wrap gap-4">

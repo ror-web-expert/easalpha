@@ -8,10 +8,13 @@ module Api
       before_action :read_only_guard!, except: %i[index show barcodes barcode_lookup analysis]
 
       def index
+        # archived=true lists the archived products on their own, so one can be found again and restored (S8).
+        archived = params[:archived] == "true"
         scope = Product.where(archived_at: nil).includes(:variants, :product_prices, :product_modifier_groups, :barcodes, :tax_rate).order(:sort_order, :name)
+        scope = scope.unscope(where: :archived_at).where.not(archived_at: nil) if archived
         scope = scope.where(category_id: params[:category_id]) if params[:category_id].present?
         scope = scope.where(is_favourite: true) if params[:favourites] == "true"
-        scope = scope.where(active: true) unless params[:include_inactive] == "true"
+        scope = scope.where(active: true) unless params[:include_inactive] == "true" || archived
         scope = scope.where("products.name ILIKE :q OR products.sku ILIKE :q OR products.name_ur ILIKE :q OR products.id IN (SELECT product_id FROM product_barcodes WHERE code = :code)", q: ApplicationRecord.contains_pattern(params[:q]), code: params[:q].to_s.strip) if params[:q].present?
         rows, cursor = paginate(scope)
         costs = Catalog::Analysis.costs_for(rows)
@@ -45,8 +48,10 @@ module Api
         product = Product.find(params[:id])
         before = MenuSerializers.product(product, full: true)
         Product.transaction do
+          product.update!(category: Category.active.find(params[:category_id])) if params[:category_id].present? && params[:category_id] != product.category_id
+          # Ticking Active on an archived product opened by its address restores it; it used to say Saved and stay archived (S8).
+          restore!(product) if product.archived_at && ActiveModel::Type::Boolean.new.cast(params[:active])
           product.update!(product_params)
-          product.update!(category: Category.active.find(params[:category_id])) if params[:category_id].present?
           apply_nested!(product)
         end
         after = MenuSerializers.product(product.reload, full: true)
@@ -55,12 +60,21 @@ module Api
         render json: after
       end
 
+      # Archive, not delete: past orders keep the product. Its barcodes stay with it, so a restore brings them back; the
+      # till and the lookups skip archived products, and a code another product claims moves to that product (S8).
       def destroy
         product = Product.find(params[:id])
         product.update!(archived_at: Time.current, active: false)
-        product.barcodes.delete_all # an archived product frees its codes for reuse
         audit!("update", record: product, after: { archived_at: product.archived_at })
         head :no_content
+      end
+
+      # POST /products/:id/restore  an archived product back on the menu and the till, active, with its barcodes (S8)
+      def restore
+        product = Product.where.not(archived_at: nil).find(params[:id])
+        Product.transaction { restore!(product) }
+        audit!("update", record: product, after: { restored: true })
+        render json: MenuSerializers.product(product.reload, full: true)
       end
 
       def reorder
@@ -127,6 +141,7 @@ module Api
         if (taken = ProductBarcode.joins(:product).where(products: { archived_at: nil }).includes(:product).find_by(code: code))
           raise Api::Errors::Conflict.new("barcode.taken", "#{code} is already on #{taken.product.name}")
         end
+        ProductBarcode.where(code: code, product_id: Product.where.not(archived_at: nil).select(:id)).delete_all # left on an archived product
         b = product.barcodes.create!(code: code, variant_id: params[:variant_id].presence, quantity: params[:quantity].presence || 1)
         audit!("update", record: product, approved_by: approver == current_membership ? nil : approver.user, after: { barcode_added: code, variant_id: b.variant_id, quantity: b.quantity.to_s })
         render json: { barcode: MenuSerializers.barcode(b), product: MenuSerializers.product(product.reload, full: true) }, status: :created
@@ -155,6 +170,12 @@ module Api
       end
 
       private
+
+      def restore!(product)
+        category = product.category
+        raise Api::Errors::Conflict.new("product.category_archived", "Its category #{category.name} is archived. Choose another category for it, then restore it.") if category.archived_at
+        product.update!(archived_at: nil, active: true)
+      end
 
       def barcode_row(b)
         { id: b.id, code: b.code, quantity: b.quantity.to_s, product_id: b.product_id, product_name: b.product.name, variant_id: b.variant_id, variant_name: b.variant&.name,

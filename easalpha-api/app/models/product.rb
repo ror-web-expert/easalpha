@@ -5,7 +5,13 @@ class Product < ApplicationRecord
   has_many :order_type_consumables, dependent: :destroy
   has_many :quick_add_items, dependent: :destroy
   has_many :barcodes, -> { order(:created_at) }, class_name: "ProductBarcode", dependent: :delete_all
-  validates :discount_type, inclusion: { in: DISCOUNT_TYPES }
+  # The product form sends no discount as null type and value: that is "no discount", kept as 0 percent (the columns
+  # are not null). Validating the nulls refused every product without a discount and made removing one impossible (S2).
+  before_validation do
+    self.discount_value = 0 if discount_value.blank?
+    self.discount_type = "percent" if discount_type.blank?
+  end
+  validates :discount_type, inclusion: { in: DISCOUNT_TYPES, message: "must be percent or amount" }
   validates :discount_value, numericality: { greater_than_or_equal_to: 0 }
   validates :discount_value, numericality: { less_than_or_equal_to: 100 }, if: -> { discount_type == "percent" }
 

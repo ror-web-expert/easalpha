@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Package, Pencil, Star, Trash2, TrendingUp } from "lucide-react";
+import { ArchiveRestore, Package, Pencil, Plus, Star, Trash2, TrendingUp } from "lucide-react";
 import type { Category, Product } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -59,7 +59,8 @@ export function CategoryBanner({ category }: { category: Category }) {
 const editHref = (p: Product) => `/admin/products/catalog/${p.id}`;
 
 /** One product as a card: photo, name, price, margin badge, status, and the analysis and edit buttons. Everything on it is reachable by keyboard. */
-export function ProductTile({ product: p, categoryName, showPrices, onFav, onAnalyse, onRemove }: { product: Product; categoryName: string; showPrices: boolean; onFav: (p: Product) => void; onAnalyse: (p: Product) => void; onRemove: (p: Product) => void }) {
+/** onRestore: the tile is an archived product (S8), shown with Restore in place of Archive. */
+export function ProductTile({ product: p, categoryName, showPrices, onFav, onAnalyse, onRemove, onRestore }: { product: Product; categoryName: string; showPrices: boolean; onFav: (p: Product) => void; onAnalyse: (p: Product) => void; onRemove: (p: Product) => void; onRestore?: (p: Product) => void }) {
   const off = discountLabel(p.discount_value, p.discount_type);
   const tone = marginTone(p.cost);
   const margin = marginLabel(p.cost);
@@ -67,7 +68,7 @@ export function ProductTile({ product: p, categoryName, showPrices, onFav, onAna
     <div className={cn("group relative flex flex-col overflow-hidden rounded-2xl border bg-card transition-shadow hover:shadow-[var(--shadow-pop)]", !p.active && "opacity-80")}>
       <Link href={editHref(p)} className="relative block aspect-[4/3] overflow-hidden bg-muted" aria-label={`Edit ${p.name}`} tabIndex={-1}>
         <TileImage src={p.image_key} name={p.name} className={cn("h-full w-full transition-transform duration-300 group-hover:scale-[1.03]", !p.active && "grayscale")} />
-        {!p.active ? <Badge className="absolute left-2 top-2 bg-card shadow-[var(--elev-1)]">Inactive</Badge> : !p.show_online ? <Badge variant="outline" className="absolute left-2 top-2 bg-card shadow-[var(--elev-1)]">Till only</Badge> : null}
+        {p.archived_at ? <Badge variant="warning" className="absolute left-2 top-2 shadow-[var(--elev-1)]">Archived</Badge> : !p.active ? <Badge className="absolute left-2 top-2 bg-card shadow-[var(--elev-1)]">Inactive</Badge> : !p.show_online ? <Badge variant="outline" className="absolute left-2 top-2 bg-card shadow-[var(--elev-1)]">Till only</Badge> : null}
         {off ? <Badge variant="accent" className="absolute bottom-2 left-2 shadow-[var(--elev-1)]">{off} off</Badge> : null}
       </Link>
       <button type="button" onClick={() => onFav(p)} aria-label={p.is_favourite ? "Remove from favourites" : "Add to favourites"} aria-pressed={p.is_favourite}
@@ -95,26 +96,30 @@ export function ProductTile({ product: p, categoryName, showPrices, onFav, onAna
         <span className="flex items-center">
           <Button variant="ghost" size="icon-sm" onClick={() => onAnalyse(p)} aria-label={`Analysis for ${p.name}`} title="Product analysis"><TrendingUp className="h-4 w-4" /></Button>
           <Link href={editHref(p)} aria-label={`Edit ${p.name}`} title="Edit" className="grid h-8 w-8 place-items-center rounded-full text-fg-secondary hover:bg-fg/8"><Pencil className="h-4 w-4" /></Link>
-          <Button variant="ghost" size="icon-sm" className="text-danger hover:bg-danger-soft" onClick={() => onRemove(p)} aria-label={`Archive ${p.name}`} title="Archive (delete)"><Trash2 className="h-4 w-4" /></Button>
+          {onRestore
+            ? <Button variant="ghost" size="icon-sm" onClick={() => onRestore(p)} aria-label={`Restore ${p.name}`} title="Restore: back on the till and the website"><ArchiveRestore className="h-4 w-4" /></Button>
+            : <Button variant="ghost" size="icon-sm" className="text-danger hover:bg-danger-soft" onClick={() => onRemove(p)} aria-label={`Archive ${p.name}`} title="Archive (delete)"><Trash2 className="h-4 w-4" /></Button>}
         </span>
       </div>
     </div>
   );
 }
 
-export function ProductGrid({ rows, catName, showPrices, onFav, onAnalyse, onRemove }: { rows: Product[]; catName: (id: string) => string; showPrices: boolean; onFav: (p: Product) => void; onAnalyse: (p: Product) => void; onRemove: (p: Product) => void }) {
+export function ProductGrid({ rows, catName, showPrices, onFav, onAnalyse, onRemove, onRestore, empty }: { rows: Product[]; catName: (id: string) => string; showPrices: boolean; onFav: (p: Product) => void; onAnalyse: (p: Product) => void; onRemove: (p: Product) => void; onRestore?: (p: Product) => void; empty?: React.ReactNode }) {
   if (!rows.length) {
+    if (empty) return <>{empty}</>;
     return (
       <div className="grid place-items-center rounded-2xl border border-dashed bg-card py-16 text-center">
         <Package className="mb-2 h-8 w-8 text-fg-muted" />
         <p className="text-sm font-medium text-heading">No products here</p>
         <p className="mt-1 text-sm text-fg-muted">Pick another category, clear the search, or add a product.</p>
+        <Link href="/admin/products/catalog/new" className="mt-3"><Button size="sm"><Plus className="h-4 w-4" /> New product</Button></Link>
       </div>
     );
   }
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-      {rows.map((p) => <ProductTile key={p.id} product={p} categoryName={catName(p.category_id)} showPrices={showPrices} onFav={onFav} onAnalyse={onAnalyse} onRemove={onRemove} />)}
+      {rows.map((p) => <ProductTile key={p.id} product={p} categoryName={catName(p.category_id)} showPrices={showPrices} onFav={onFav} onAnalyse={onAnalyse} onRemove={onRemove} onRestore={p.archived_at ? onRestore : undefined} />)}
     </div>
   );
 }

@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 /** Data table (the review's DataTable). Columns that do not fit scroll sideways inside the card, never the page; the
  *  first column stays put while the rest scroll (`stickyFirst`, on by default), and a soft shade on the left or right
  *  edge shows there is more to see that way (review 1.3: columns looked clipped with no hint to scroll).
- *  `compact` shortens every row from 48px to 40px. */
-export function Table({ className, compact, stickyFirst = true, ...props }: React.TableHTMLAttributes<HTMLTableElement> & { compact?: boolean; stickyFirst?: boolean }) {
+ *  `compact` shortens every row from 48px to 40px. `stickyLast` keeps the last column (the row's actions) in view too:
+ *  at 1280x720 the staff and rider tables hid Set PIN and Deactivate behind the sideways scroll (S16). */
+export function Table({ className, compact, stickyFirst = true, stickyLast, ...props }: React.TableHTMLAttributes<HTMLTableElement> & { compact?: boolean; stickyFirst?: boolean; stickyLast?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [edge, setEdge] = useState({ left: false, right: false });
   useEffect(() => {
@@ -28,11 +29,13 @@ export function Table({ className, compact, stickyFirst = true, ...props }: Reac
     <div className="relative w-full rounded-2xl border bg-card">
       <div ref={ref} data-table-scroll="" className={cn("w-full overflow-x-auto overflow-y-hidden rounded-2xl", compact && "[&_td]:h-10 [&_th]:h-10",
         stickyFirst && "[&_td:first-child]:sticky [&_td:first-child]:left-0 [&_td:first-child]:z-[1] [&_td:first-child]:bg-inherit [&_th:first-child]:sticky [&_th:first-child]:left-0 [&_th:first-child]:z-[2] [&_th:first-child]:bg-table-head",
-        stickyFirst && edge.left && "[&_td:first-child]:shadow-[1px_0_0_var(--border)] [&_th:first-child]:shadow-[1px_0_0_var(--border)]")}>
+        stickyFirst && edge.left && "[&_td:first-child]:shadow-[1px_0_0_var(--border)] [&_th:first-child]:shadow-[1px_0_0_var(--border)]",
+        stickyLast && "[&_td:last-child]:sticky [&_td:last-child]:right-0 [&_td:last-child]:z-[1] [&_td:last-child]:bg-inherit [&_th:last-child]:sticky [&_th:last-child]:right-0 [&_th:last-child]:z-[2] [&_th:last-child]:bg-table-head",
+        stickyLast && edge.right && "[&_td:last-child]:shadow-[-1px_0_0_var(--border)] [&_th:last-child]:shadow-[-1px_0_0_var(--border)]")} data-sticky-last={stickyLast ? "" : undefined}>
         <table className={cn("w-full text-sm", className)} {...props} />
       </div>
       {edge.left ? <div aria-hidden className="pointer-events-none absolute inset-y-px left-px w-6 rounded-l-2xl bg-linear-to-r from-black/10 to-transparent" /> : null}
-      {edge.right ? <div aria-hidden data-more-right="" className="pointer-events-none absolute inset-y-px right-px w-10 rounded-r-2xl bg-linear-to-l from-black/15 to-transparent" /> : null}
+      {edge.right && !stickyLast ? <div aria-hidden data-more-right="" className="pointer-events-none absolute inset-y-px right-px w-10 rounded-r-2xl bg-linear-to-l from-black/15 to-transparent" /> : null}
     </div>
   );
 }

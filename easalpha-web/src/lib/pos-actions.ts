@@ -15,6 +15,7 @@ import { useSyncStore, type OpenCounts } from "@/store/sync";
 import { useCustomerStore } from "@/store/customers";
 import { rememberRecentCustomer, readRecentCustomers } from "@/lib/pos-customers";
 import { saleTime, withRegularDiscount } from "@/lib/pos-regular";
+import { publicTaxRegistration, receiptBranding } from "@/lib/receipt-format";
 import type { HeaderPills, Order, OrderInput, PaymentInput, PaymentResult, Receipt, Shift, ZReport, CashMovement } from "@/lib/types";
 import { OPEN_STATUSES } from "@/lib/types";
 
@@ -773,7 +774,7 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
   const biz = catalog?.business ?? useDeviceStore.getState().business;
   // The catalog sync's business block carries logo_key (API catalog_controller); the pairing payload is the fallback for older caches.
   const catalogLogo = catalog?.business.logo_key;
-  const receipt = (settings.receipt ?? {}) as { header?: string; footer?: string; language?: string; paper?: string };
+  const receipt = receiptBranding(settings); // the pos.receipt.* settings the Branding page saves, as the server receipt (S6)
   const active = o.lines.filter((l) => l.status !== "cancelled");
   const taxGroups = new Map<string, { rate: number; inclusive: boolean; taxable_minor: number; tax_minor: number }>();
   // The base is what each line is taxed on: after its product discount and its share of the order's discount, as
@@ -794,7 +795,7 @@ export function buildLocalReceipt(o: LocalOrder, duplicate = false): Receipt {
   return {
     receipt_number: o.receipt_number, duplicate, printed_at: new Date().toISOString(),
     business: { name: biz?.name ?? "", legal_name: null, phone: useDeviceStore.getState().business?.phone ?? null, email: null, logo_key: catalogLogo ?? useDeviceStore.getState().business?.logo_key ?? null, currency: biz?.currency ?? "PKR" },
-    branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: branch?.tax_registration ?? null },
+    branch: { name: branch?.name ?? "", address: branch?.address ?? null, city: branch?.city ?? null, phone: branch?.phone ?? null, tax_registration: publicTaxRegistration(branch?.tax_registration) },
     header: receipt.header ?? null, footer: receipt.footer ?? null, language: receipt.language ?? "en", paper: receipt.paper ?? "80",
     order: { id: o.id, serial: o.serial, label: o.label, order_type: o.order_type as Receipt["order"]["order_type"], table: o.table_code, business_day: o.business_day, placed_at: o.created_at, paid_at: o.updated_at, cashier: o.cashier_name, till: useDeviceStore.getState().device?.name ?? null, is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason, customer: o.customer_id ? { name: o.customer_name ?? "", phone: o.customer_phone, khata_no: null } : null, guest_name: o.guest_name, notes: o.notes },
     // A weighed line prints its weight with the unit, and a scale label says it set the amount (as Receipts::Builder).

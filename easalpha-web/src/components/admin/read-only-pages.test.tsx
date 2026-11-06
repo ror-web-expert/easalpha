@@ -26,7 +26,7 @@ const MANAGER = ["app.admin", "staff.manage", "menu.edit", "customers.view", "re
 beforeEach(() => {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockImplementation((async (path: string) => {
-    if (path === "/business") return { id: "biz", name: "Victim Grill", phone: "+923001234567", settings: {} };
+    if (path === "/business") return { id: "biz", name: "Victim Grill", phone: "+923001234567", country: "PK", currency: "PKR", time_zone: "Asia/Karachi", settings: {} }; // the API always sends a zone (null: false)
     if (path === "/settings") return { groups: {}, values: {}, version: 1 };
     if (path === "/roles") return { data: [{ id: "r1", name: "Cashier", system_key: "cashier", is_system: true, permissions: [{ code: "orders.create", limit: null }] }] };
     if (path === "/roles/permissions") return { data: [{ code: "orders.create", module: "EasAlpha extras", label: "Take orders", description: "Take orders", surface: "both", restriction: false, implies: [], spec: false }], modules: ["EasAlpha extras"] };

@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Package, Plus, Sparkles, Trash2, TrendingUp } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArchiveRestore, ArrowLeft, Package, Plus, Sparkles, Trash2, TrendingUp } from "lucide-react";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { Category, DiscountType, ModifierGroup, Product, Station, TaxRate } from "@/lib/types";
 import { FORMAT_LABELS, barcodeFormat, looksLikeBadEan } from "@/lib/barcode";
@@ -11,13 +11,14 @@ import { loadSymbol, svgDataUrl, symbolSvg } from "@/components/admin/barcode-la
 import { toast } from "@/store/toast";
 import { formatMoney } from "@/lib/money";
 import { PageHeader } from "@/components/admin/page";
-import { useList, useRemove, useSave } from "@/components/admin/crud";
+import { useAction, useList, useRemove, useSave } from "@/components/admin/crud";
+import { SampleMenuButton } from "@/components/admin/menu-start";
 import { ImageUpload } from "@/components/admin/image-upload";
 import { ConsumablesTab } from "@/components/admin/catalog-consumables";
 import { ProductAnalysisDialog } from "@/components/admin/product-analysis";
 import { IngredientsTab } from "@/components/admin/catalog-ingredients";
-import { discountLabel, discountPayload, discountProblem, discountedPriceMinor } from "@/components/admin/catalog-helpers";
-import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, ConfirmDialog, Field, Input, Loading, MoneyInput, Select, Tabs, Textarea } from "@/components/ui";
+import { categorySaveBlocker, discountLabel, discountPayload, discountProblem, discountedPriceMinor, productSaveBlocker } from "@/components/admin/catalog-helpers";
+import { Badge, Button, Card, CardBody, CardHeader, CardTitle, Checkbox, ConfirmDialog, Dialog, Field, Input, Loading, MoneyInput, Select, Tabs, Textarea } from "@/components/ui";
 import { titleCase, uuid } from "@/lib/utils";
 
 const ORDER_TYPES = ["dine_in", "takeaway", "delivery", "walk_in"];
@@ -98,6 +99,11 @@ export default function ProductEditPage() {
   const [analyse, setAnalyse] = useState(false);
   const [barcodeError, setBarcodeError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  // S7: a product needs a category; with none yet the form offers one here instead of an empty "Choose..." box.
+  const [newCategory, setNewCategory] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const addCategory = useAction<string, { id: string }>(["categories"], (name) => api("/categories", { method: "POST", body: { name } }), "Category added");
+  const restore = useAction<string>(["products", "product"], (pid) => api(`/products/${pid}/restore`, { method: "POST" }), "Product restored: it is back on the till at the next sync");
   useEffect(() => {
     const p = q.data;
     if (!p) return;
@@ -116,7 +122,12 @@ export default function ProductEditPage() {
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
   const discountError = discountProblem(form.discount_value, form.discount_type, form.base_price_minor);
   const codeProblems = useMemo(() => barcodeProblems(form.barcodes), [form.barcodes]);
-  const canSave = !!form.name && !!form.category_id && form.base_price_minor >= 0 && !discountError && !Object.keys(codeProblems).length;
+  const blocker = productSaveBlocker(form, { categories: cats.data?.length ?? 0, discountError, codeProblems: Object.keys(codeProblems).length });
+  const canSave = !blocker;
+  const saveCategory = () => {
+    if (newCategory === null || categorySaveBlocker({ name: newCategory })) return;
+    addCategory.mutate(newCategory.trim(), { onSuccess: (c) => { setNewCategory(null); set("category_id", c.id); void qc.invalidateQueries({ queryKey: ["categories"] }); } });
+  };
   const submit = () => {
     setBarcodeError(null);
     save.mutate({
@@ -148,9 +159,16 @@ export default function ProductEditPage() {
       <PageHeader icon={Package} title={isNew ? "New product" : form.name || "Product"} description="Basic Info holds price, discount and variants; Ingredients the recipe per variant; Order Inventory the supplies deducted by order type." actions={<>
         <Link href="/admin/products/catalog"><Button variant="ghost"><ArrowLeft className="h-4 w-4" /> Catalog</Button></Link>
         {!isNew ? <Button variant="secondary" onClick={() => setAnalyse(true)}><TrendingUp className="h-4 w-4" /> Analysis</Button> : null}
-        {!isNew ? <Button variant="destructive" onClick={() => setDel(true)}><Trash2 className="h-4 w-4" /> Archive</Button> : null}
-        {tab === "basic" ? <Button onClick={submit} loading={save.isPending} disabled={!canSave}>Save</Button> : null}
+        {!isNew && !q.data?.archived_at ? <Button variant="destructive" onClick={() => setDel(true)}><Trash2 className="h-4 w-4" /> Archive</Button> : null}
+        {tab === "basic" && blocker && !(cats.isLoading || (!isNew && q.isLoading)) ? <span className="text-xs text-fg-muted" role="status">{blocker}</span> : null}
+        {tab === "basic" ? <Button onClick={submit} loading={save.isPending} disabled={!canSave} title={blocker ?? undefined}>Save</Button> : null}
       </>} />
+      {q.data?.archived_at ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm" role="status">
+          <span>This product is archived: it is off the till and the website, and its barcodes do not sell. Restore it to sell it again, or tick Active and save.</span>
+          <Button size="sm" variant="secondary" loading={restore.isPending} onClick={() => restore.mutate(id)}><ArchiveRestore className="h-4 w-4" /> Restore</Button>
+        </div>
+      ) : null}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs<Tab> value={tab} onChange={setTab} items={[{ value: "basic", label: "Basic Info" }, { value: "ingredients", label: "Ingredients" }, { value: "inventory", label: "Order Inventory" }]} />
         {isNew && tab !== "basic" ? <span className="text-sm text-fg-muted">Save the product first; recipes and order inventory attach to a saved product.</span> : null}
@@ -165,7 +183,19 @@ export default function ProductEditPage() {
               <Field label="Product name"><Input value={form.name} onChange={(e) => set("name", e.target.value)} autoFocus required /></Field>
               <Field label="Name (Urdu)"><Input dir="rtl" value={form.name_ur} onChange={(e) => set("name_ur", e.target.value)} /></Field>
               <Field label="Description" className="sm:col-span-2"><Textarea value={form.description} onChange={(e) => set("description", e.target.value)} /></Field>
-              <Field label="Category"><Select value={form.category_id} onChange={(e) => set("category_id", e.target.value)}><option value="">Choose…</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+              <Field label="Category" htmlFor={cats.data && !cats.data.length ? undefined : "product-category"} hint={cats.data && !cats.data.length ? "No categories yet: add the first one here, or load the sample menu." : undefined}>
+                {cats.data && !cats.data.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => setNewCategory("")}><Plus className="h-4 w-4" /> Add a category</Button>
+                    <SampleMenuButton variant="ghost" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Select id="product-category" value={form.category_id} onChange={(e) => set("category_id", e.target.value)}><option value="">Choose…</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+                    <Button variant="ghost" size="icon" onClick={() => setNewCategory("")} aria-label="Add a category" title="Add a category"><Plus className="h-4 w-4" /></Button>
+                  </div>
+                )}
+              </Field>
               <Field label="Base price" hint={label ? `${label} off: sells at ${formatMoney(discountedPriceMinor(form.base_price_minor, form.discount_value, form.discount_type))}` : undefined}><MoneyInput value={form.base_price_minor} onChange={(v) => set("base_price_minor", v)} required /></Field>
               <Field label="Discount" error={discountError ?? undefined} hint={discountError ? undefined : "Blank for none. Switch between a percentage and a rupee amount."}>
                 <div className="flex items-center gap-2">
@@ -273,7 +303,11 @@ export default function ProductEditPage() {
 
       {!isNew && product && tab !== "basic" && form.variants.length !== savedVariants.length ? <p className="mt-3 text-xs text-fg-muted"><Badge variant="warning">Unsaved variants</Badge> Variants added on Basic Info appear here once saved.</p> : null}
       <ProductAnalysisDialog productId={isNew ? null : id} open={analyse} onClose={() => setAnalyse(false)} />
-      <ConfirmDialog open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate(id, { onSuccess: () => router.replace("/admin/products/catalog") })} title={`Archive ${form.name}?`} description="It leaves the till on the next sync; past orders keep it." confirmLabel="Archive" destructive loading={remove.isPending} />
+      <Dialog open={newCategory !== null} onClose={() => setNewCategory(null)} title="Add a category" description="It goes into your default menu; menus and the order of categories are under Categories." size="sm"
+        footer={<><Button variant="secondary" onClick={() => setNewCategory(null)}>Cancel</Button><Button loading={addCategory.isPending} disabled={!!categorySaveBlocker({ name: newCategory ?? "" })} title={categorySaveBlocker({ name: newCategory ?? "" }) ?? undefined} onClick={saveCategory}>Add</Button></>}>
+        <Field label="Category name" hint="Such as Burgers, Karahi or Drinks"><Input value={newCategory ?? ""} onChange={(e) => setNewCategory(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveCategory(); }} autoFocus /></Field>
+      </Dialog>
+      <ConfirmDialog open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate(id, { onSuccess: () => router.replace("/admin/products/catalog") })} title={`Archive ${form.name}?`} description="It leaves the till on the next sync; past orders keep it, and so do its barcodes. Tick Archived on the Catalog to find it and restore it." confirmLabel="Archive" destructive loading={remove.isPending} />
     </>
   );
 }

@@ -8,6 +8,7 @@ import type { BusinessModule, BusinessModules } from "@/lib/types";
 import { MODULE_INFO, MODULE_KEYS, useApplyModules, useModules } from "@/lib/modules";
 import { PageHeader } from "@/components/admin/page";
 import { Card, CardBody, Loading, Switch } from "@/components/ui";
+import { SettingsScreenCard, useSettings } from "@/components/admin/settings-screen";
 import { useAuthStore } from "@/store/auth";
 import { toast } from "@/store/toast";
 
@@ -27,6 +28,8 @@ export default function ModulesPage() {
   const apply = useApplyModules();
   const qc = useQueryClient();
   const [busy, setBusy] = useState<BusinessModule | null>(null);
+  const settings = useSettings();
+  const accountKeys = settings.data?.groups.store?.screens["Customer Accounts"];
 
   const toggle = async (name: BusinessModule, on: boolean) => {
     setBusy(name);
@@ -68,13 +71,19 @@ export default function ModulesPage() {
                   <ul className="grid gap-1.5 text-sm sm:grid-cols-2">
                     {info.screens.map((s) => <li key={s} className="flex items-center gap-2 text-fg-secondary"><CheckCircle2 className={on ? "h-4 w-4 shrink-0 text-success" : "h-4 w-4 shrink-0 text-fg-muted"} />{s}</li>)}
                   </ul>
-                  {on ? <Link href={FIRST_STEP[name].href} className="text-sm font-medium text-primary hover:underline">{FIRST_STEP[name].label}</Link> : null}
+                  {on ? <span className="flex flex-wrap gap-4"><Link href={FIRST_STEP[name].href} className="text-sm font-medium text-primary hover:underline">{FIRST_STEP[name].label}</Link>{name === "customer_accounts" ? <a href="#customer-accounts-settings" className="text-sm font-medium text-primary hover:underline">Account settings</a> : null}</span> : null}
                 </CardBody>
               </Card>
             );
           })}
         </div>
       )}
+      {/* S16: the account settings (bill day, due days, reminders, credit hold) were only at the foot of Monthly Bills. */}
+      {modules.customer_accounts && accountKeys?.length ? (
+        <div className="mt-4 grid max-w-5xl gap-4 lg:grid-cols-2" id="customer-accounts-settings">
+          <SettingsScreenCard screen="Customer Accounts" keys={accountKeys} className="lg:col-span-2" />
+        </div>
+      ) : null}
     </>
   );
 }

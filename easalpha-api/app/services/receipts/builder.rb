@@ -6,11 +6,11 @@ module Receipts
     def build(order, duplicate: false)
       business = order.business
       branch = order.branch
-      receipt = business.setting("receipt") || {}
+      receipt = Receipts::Branding.for(business, branch: branch) # the pos.receipt.* settings (S6)
       {
         receipt_number: order.receipt_number, duplicate: duplicate, printed_at: Time.current,
         business: { name: business.name, legal_name: business.legal_name, phone: business.phone, email: business.email, logo_key: business.logo_key, currency: business.currency },
-        branch: { name: branch.name, address: branch.address, city: branch.city, phone: branch.phone, tax_registration: branch.tax_registration },
+        branch: { name: branch.name, address: branch.address, city: branch.city, phone: branch.phone, tax_registration: branch.public_tax_registration },
         header: receipt["header"], footer: receipt["footer"], language: receipt["language"] || "en", paper: receipt["paper"] || "80",
         order: { id: order.id, serial: order.serial, label: order.label, order_type: order.order_type, table: order.dining_table&.code, business_day: order.business_day,
                  placed_at: order.placed_at, paid_at: order.paid_at, cashier: Membership.unscoped.find_by(id: order.completed_by_membership_id || order.taken_by_membership_id)&.user&.name,

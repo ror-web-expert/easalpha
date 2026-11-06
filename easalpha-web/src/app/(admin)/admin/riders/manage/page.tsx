@@ -65,7 +65,7 @@ export default function RidersPage() {
       </FilterBar>
       {tab === "temporary" ? <p className="mb-3 text-sm text-fg-secondary">{TEMPORARY_RIDER_SENTENCE}</p> : null}
       {riders.isLoading ? <Loading /> : tab === "permanent" ? (
-        <Table>
+        <Table stickyLast>
           <THead><tr><TH>Rider</TH><TH>Phone</TH><TH>Vehicle</TH><TH right>Charge per delivery</TH><TH>Status</TH><TH right>Assigned / completed</TH><TH right>Float</TH><TH>Login</TH><TH right>Actions</TH></tr></THead>
           <TBody>
             {rows.length ? rows.map((r) => {
@@ -90,7 +90,7 @@ export default function RidersPage() {
           </TBody>
         </Table>
       ) : (
-        <Table>
+        <Table stickyLast>
           <THead><tr><TH>Rider</TH><TH>Phone</TH><TH>Lifetime</TH><TH>Remaining</TH><TH>Status</TH><TH>Permissions</TH><TH right>Assigned / completed</TH><TH right>Actions</TH></tr></THead>
           <TBody>
             {rows.length ? rows.map((r) => {

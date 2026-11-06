@@ -26,7 +26,8 @@ function BranchHoursCard({ branch }: { branch: Branch }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">{branch.name} <span className="font-mono text-xs text-fg-muted">{branch.code}</span> {branch.is_main ? <Badge variant="primary">main</Badge> : null}</CardTitle>
-        <Button size="sm" disabled={!dirty || !f.start || !f.end} loading={save.isPending} onClick={() => save.mutate({ id: branch.id, business_day_start: f.start, day_end_time: f.end })}>Save</Button>
+        {/* Saving the window unchanged confirms it and ticks the setup checklist (S10), so Save is not tied to a change. */}
+        <Button size="sm" variant={dirty ? "primary" : "secondary"} disabled={!f.start || !f.end} loading={save.isPending} onClick={() => save.mutate({ id: branch.id, business_day_start: f.start, day_end_time: f.end })}>Save</Button>
       </CardHeader>
       <CardBody className="grid gap-3 sm:grid-cols-2">
         <Field label="Start" hint="When the business day opens"><Input type="time" value={f.start} onChange={(e) => setF({ ...f, start: e.target.value })} /></Field>

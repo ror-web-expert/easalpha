@@ -17,6 +17,21 @@ export function includedTills(plan: Pick<BillingPlan, "limits">): number | null 
   return limits.tills ?? null;
 }
 
+/** The yearly cycle as Billing::Issuer charges it: ten monthly prices for twelve months. The Plan dialog said it the
+ *  other way round, "ten months for the price of twelve" (S12). */
+export const YEARLY_TERMS = "Yearly: twelve months for the price of ten";
+
+/** The plan's monthly price in the currency the business is billed in (a business abroad was shown rupees). */
+export function planMonthlyMinor(plan: Pick<BillingPlan, "price_pkr_minor" | "price_usd_minor">, currency: BillingCurrency): number {
+  return currency === "USD" ? plan.price_usd_minor ?? 0 : plan.price_pkr_minor;
+}
+
+/** A plan limit as people read it: "WhatsApp messages a month", not "Whatsapp Utility Messages" (S13). */
+const LIMIT_LABELS: Record<string, string> = { tills: "Tills", staff: "Staff", branches: "Branches", whatsapp_utility_messages: "WhatsApp messages a month" };
+export function planLimitLabel(key: string): string {
+  return LIMIT_LABELS[key] ?? key.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
 /** The invoice amount the API will issue: the plan price plus each extra till, times ten for a yearly cycle, in the
  *  business's billing currency. The admin Plan page multiplied the whole plan price by the till count before, so
  *  Business with 5 tills read Rs 44,995. */

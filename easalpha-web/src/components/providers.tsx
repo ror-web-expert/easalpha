@@ -7,6 +7,7 @@ import { useThemeStore } from "@/store/theme";
 import { Toaster } from "@/components/ui/toast";
 import { ApiError, shareSessionAcrossTabs } from "@/lib/api";
 import { UpdateNotice } from "@/components/update-notice";
+import { scrubStoredSecrets } from "@/lib/stored-secrets";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -22,11 +23,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }),
   );
   useEffect(() => {
+    // Before the stores load: a branch record saved while the API still sent the tax token is cleaned as it loads (S1).
+    const stopScrub = scrubStoredSecrets();
     useAuthStore.persist.rehydrate();
     useDeviceStore.persist.rehydrate();
     useThemeStore.getState().init();
     // A refresh in another tab spends the token this tab holds: follow the pair it saves (review R28).
-    return shareSessionAcrossTabs();
+    const stopSharing = shareSessionAcrossTabs();
+    return () => { stopScrub(); stopSharing(); };
   }, []);
   return (
     <QueryClientProvider client={client}>

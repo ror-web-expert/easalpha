@@ -36,6 +36,57 @@ class AuditLog < ApplicationRecord
     { user_id: support ? nil : Current.user_id, super_admin_id: support, branch_id: Current.branch_id, device_id: Current.device&.id, ip: Current.ip }
   end
 
+  # The Entity filter shows these instead of table names (S13); any other table reads as its words ("Order items").
+  ENTITY_LABELS = {
+    "businesses" => "Business", "branches" => "Branches", "memberships" => "Staff", "users" => "User accounts", "roles" => "Roles",
+    "dining_tables" => "Tables", "account_entries" => "Account ledger", "payment_accounts" => "Payment accounts",
+    "stock_ledger_entries" => "Stock ledger", "devices" => "Devices", "settings" => "Settings"
+  }.freeze
+
+  def self.entity_label(table) = table.blank? ? nil : ENTITY_LABELS.fetch(table.to_s) { table.to_s.humanize }
+
+  # Credentials that can sit inside a row's jsonb (a branch's tax registration, the business settings column) or in
+  # what a controller logs. The row keeps the key, so the log still shows that it changed, but never the value (S1).
+  # The settings registry's own secrets (PRA access code and bearer token, the expense PIN digest) and setting keys
+  # ending .token or .secret match by key too. A bare "token" is a secret only inside a tax registration: elsewhere it
+  # is a meal token label ("L-012") the canteen logs.
+  SECRET_KEYS = %w[secret password api_key access_token refresh_token bearer_token access_code client_secret webhook_secret private_key].freeze
+  NESTED_SECRETS = { "tax_registration" => %w[token] }.freeze
+  REDACTED = "[redacted]".freeze
+
+  def self.redact(value, parent = nil)
+    case value
+    when Hash then value.to_h { |k, v| [ k, secret_key?(k, parent) && v.is_a?(String) && v.present? ? REDACTED : redact(v, k) ] }
+    when Array then value.map { |v| redact(v, parent) }
+    else value
+    end
+  end
+
+  def self.secret_key?(key, parent = nil)
+    k = key.to_s
+    SECRET_KEYS.include?(k) || k.end_with?(".token", ".secret") || NESTED_SECRETS.fetch(parent.to_s, []).include?(k) || Settings::Registry.key(k)&.secret || false
+  end
+
+  # Rows written before redact existed: a branch's tax token in the branch form's before/after and in the automatic
+  # change rows. The log is append-only, so its trigger is off only while those values are replaced, inside one
+  # transaction. Returns the number of rows rewritten. Run by the migration of 7 Nov 2026 and by `rails audit:redact`.
+  def self.redact_stored!
+    keys = SECRET_KEYS + NESTED_SECRETS.values.flatten + Settings::Registry::KEYS.values.select(&:secret).map(&:key)
+    pattern = %("(#{keys.map { |k| Regexp.escape(k) }.join('|')}|[^"]*\\.token|[^"]*\\.secret)":)
+    count = 0
+    transaction do
+      connection.execute("ALTER TABLE audit_logs DISABLE TRIGGER audit_logs_append_only")
+      unscoped.where("before::text ~ :p OR after::text ~ :p", p: pattern).select(:id, :before, :after).find_each do |row|
+        before, after = redact(row.before), redact(row.after)
+        next if before == row.before && after == row.after
+        unscoped.where(id: row.id).update_all(before: before, after: after)
+        count += 1
+      end
+      connection.execute("ALTER TABLE audit_logs ENABLE TRIGGER audit_logs_append_only")
+    end
+    count
+  end
+
   # actor: who made the change, captured earlier by the Audited concern; defaults to the current request context.
   def self.record(action:, record: nil, before: nil, after: nil, business: Current.business, approved_by: nil, table_name: nil, record_id: nil, business_id: nil, actor: nil)
     actor ||= current_actor
@@ -48,7 +99,7 @@ class AuditLog < ApplicationRecord
       business_id: business_id || business&.id, branch_id: actor[:branch_id], user_id: actor[:user_id], device_id: actor[:device_id],
       super_admin_id: actor[:super_admin_id], approved_by_user_id: approved_by&.id, action: action.to_s,
       table_name: table_name, record_id: record_id,
-      before: before, after: after, ip: actor[:ip], occurred_at: Time.current
+      before: redact(before), after: redact(after), ip: actor[:ip], occurred_at: Time.current
     )
   end
 

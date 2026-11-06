@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Layers, Plus, Pencil, Trash2, ArrowUp, ArrowDown, Move } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Category, Menu, Station } from "@/lib/types";
@@ -8,11 +9,18 @@ import { useAction, useList, useRemove, useSave } from "@/components/admin/crud"
 import { ImageUpload } from "@/components/admin/image-upload";
 import { BrandImage } from "@/components/admin/brand-image";
 import { DragHandle, SortableList, SortableRow, type SortHandle } from "@/components/admin/catalog-sortable";
+import { categorySaveBlocker } from "@/components/admin/catalog-helpers";
+import { SampleMenuButton } from "@/components/admin/menu-start";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, EmptyRow, Field, Input, Loading, Select, Switch, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 
 type Form = { id?: string; menu_id: string; name: string; name_ur: string; subtitle: string; image_key: string; station_id: string; show_online: boolean };
 
+// useSearchParams needs a Suspense boundary on a page Next.js pre-renders.
 export default function CategoriesPage() {
+  return <Suspense fallback={<Loading />}><CategoriesView /></Suspense>;
+}
+
+function CategoriesView() {
   const menus = useList<Menu>("menus", "/menus");
   const stations = useList<Station>("stations", "/stations");
   const [menuId, setMenuId] = useState("");
@@ -33,7 +41,15 @@ export default function CategoriesPage() {
     reorder.mutate(ids);
   };
   const onDrop = (next: Category[]) => { setOrdered(next); reorder.mutate(next.map((c) => c.id), { onSettled: () => setOrdered(null) }); };
-  const blank = (): Form => ({ menu_id: menuId || menus.data?.[0]?.id || "", name: "", name_ur: "", subtitle: "", image_key: "", station_id: "", show_online: true });
+  // The default menu first. With no menu yet the API makes a Main menu with this category (S7: the Menu box was empty and Save greyed).
+  const defaultMenu = menus.data?.find((m) => m.is_default)?.id ?? menus.data?.[0]?.id ?? "";
+  const blank = (): Form => ({ menu_id: menuId || defaultMenu, name: "", name_ur: "", subtitle: "", image_key: "", station_id: "", show_online: true });
+  // ?new=1 (the catalog's "Add a category") opens the form at once, once the menus are known.
+  const params = useSearchParams();
+  const wantsNew = params?.get("new") === "1";
+  const [opened, setOpened] = useState(false);
+  useEffect(() => { if (wantsNew && !opened && !menus.isLoading) { setOpened(true); setForm(blank()); } }, [wantsNew, opened, menus.isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  const blocker = form ? categorySaveBlocker(form) : null;
   const edit = (c: Category): Form => ({ id: c.id, menu_id: c.menu_id, name: c.name, name_ur: c.name_ur ?? "", subtitle: c.subtitle ?? "", image_key: c.image_key ?? "", station_id: c.station_id ?? "", show_online: c.show_online });
   const cells = (c: Category, i: number, handle?: SortHandle) => (
     <>
@@ -73,17 +89,21 @@ export default function CategoriesPage() {
         <Table>
           <THead><tr><TH></TH><TH>Name</TH><TH>Menu</TH><TH>Station</TH><TH>Online</TH><TH right>Products</TH><TH right>Order</TH><TH right>Actions</TH></tr></THead>
           <TBody>
-            {!rows.length ? <EmptyRow colSpan={8}>No categories yet.</EmptyRow>
+            {!rows.length ? <EmptyRow colSpan={8} icon={Layers} action={menuId ? undefined : <span className="flex flex-wrap justify-center gap-2"><Button size="sm" onClick={() => setForm(blank())}><Plus className="h-4 w-4" /> Add your first category</Button><SampleMenuButton size="sm" /></span>}>
+                {menuId ? "No categories in this menu yet." : "No categories yet. A category groups products on the till and the website, such as Burgers or Drinks: add the first, then its products, or start from the sample menu."}
+              </EmptyRow>
               : arrange ? <SortableList items={rows} getId={(c) => c.id} onReorder={onDrop} disabled={reorder.isPending}>{(c, i, handle) => <SortableRow key={c.id} handle={handle}>{cells(c, i, handle)}</SortableRow>}</SortableList>
               : rows.map((c, i) => <TR key={c.id}>{cells(c, i)}</TR>)}
           </TBody>
         </Table>
       )}
       <Dialog open={!!form} onClose={() => setForm(null)} title={form?.id ? "Edit category" : "New category"} size="sm"
-        footer={<><Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!form?.name || !form?.menu_id} onClick={() => form && save.mutate({ ...form, subtitle: form.subtitle.trim() || null, image_key: form.image_key || null, station_id: form.station_id || null })}>Save</Button></>}>
+        footer={<>{blocker ? <span className="mr-auto text-xs text-fg-muted" role="status">{blocker}</span> : null}<Button variant="secondary" onClick={() => setForm(null)}>Cancel</Button><Button loading={save.isPending} disabled={!!blocker} title={blocker ?? undefined} onClick={() => form && save.mutate({ ...form, menu_id: form.menu_id || undefined, subtitle: form.subtitle.trim() || null, image_key: form.image_key || null, station_id: form.station_id || null })}>Save</Button></>}>
         {form ? (
           <div className="space-y-3">
-            <Field label="Menu"><Select value={form.menu_id} onChange={(e) => setForm({ ...form, menu_id: e.target.value })}>{menus.data?.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></Field>
+            {menus.data?.length
+              ? <Field label="Menu"><Select value={form.menu_id} onChange={(e) => setForm({ ...form, menu_id: e.target.value })}>{menus.data.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></Field>
+              : <Field label="Menu" hint="You have no menu yet: a Main menu is made with this category. Add more menus under Menus."><Input value="Main menu" disabled /></Field>}
             <Field label="Name"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
             <Field label="Subtitle" hint="A short line under the name on the website and the till"><Input value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} placeholder="Chargrilled over coal" /></Field>
             <Field label="Name (Urdu)"><Input dir="rtl" value={form.name_ur} onChange={(e) => setForm({ ...form, name_ur: e.target.value })} /></Field>

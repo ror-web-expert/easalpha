@@ -4,6 +4,7 @@ class Branch < ApplicationRecord
   has_many :devices, dependent: :destroy
   validates :name, :code, :time_zone, :day_end_time, :business_day_start, presence: true
   validates :code, uniqueness: { scope: :business_id }
+  validates :time_zone, inclusion: { in: ->(_) { Business::TIME_ZONES }, message: "must be a time zone such as Asia/Karachi" }, if: :will_save_change_to_time_zone?
   scope :active, -> { where(archived_at: nil) }
 
   before_validation { self.code ||= "B#{Branch.unscoped.where(business_id: business_id).count + 1}" }
@@ -30,6 +31,35 @@ class Branch < ApplicationRecord
   # The instant a business day ends: its end time on the following calendar date (02:01 the next morning by default).
   def business_day_end_at(day)
     Time.use_zone(time_zone) { Time.zone.parse("#{day + 1} #{day_end_time.strftime('%H:%M')}") }
+  end
+
+  # The tax registration holds the public numbers a receipt prints and the API token only the tax adapter uses. The
+  # token never leaves the server (S1, 6 Nov 2026: it printed on receipts and reached every till): staff and receipts
+  # get the public numbers, an allow-list; someone who manages settings sees only that a token is saved.
+  PUBLIC_TAX_KEYS = %w[authority ntn strn pos_id].freeze
+
+  def public_tax_registration = (tax_registration || {}).slice(*PUBLIC_TAX_KEYS)
+
+  def masked_tax_registration
+    token = (tax_registration || {})["token"].to_s
+    public_tax_registration.merge("token_set" => token.present?, "token_hint" => token.length >= 12 ? "ends #{token.last(4)}" : nil)
+  end
+
+  # The branch form never receives the token back, so a blank or missing token keeps the saved one; a new token
+  # replaces it and token_clear removes it. Only the known keys are taken from the form. Returns :changed or :removed for the audit.
+  def apply_tax_registration(incoming)
+    incoming = incoming.to_h.stringify_keys
+    merged = (tax_registration || {}).merge(incoming.slice(*PUBLIC_TAX_KEYS).transform_values { |v| v.to_s.strip.presence })
+    token = incoming["token"].to_s.strip
+    change = nil
+    if ActiveModel::Type::Boolean.new.cast(incoming["token_clear"])
+      change = :removed if merged.delete("token")
+    elsif token.present? && token != merged["token"]
+      merged["token"] = token
+      change = :changed
+    end
+    self.tax_registration = merged.compact
+    change
   end
 
   QR_DEFAULTS = { "enabled" => false, "cashier_accept" => true, "call_waiter" => true, "ask_bill" => true, "running_bill" => true, "guest_name" => true, "welcome" => nil }.freeze

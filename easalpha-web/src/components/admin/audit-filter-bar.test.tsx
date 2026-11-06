@@ -21,4 +21,17 @@ describe("AuditFilterBar", () => {
     expect(within(select).getByRole("option", { name: "Khata over limit (offline)" })).toHaveValue("khata_over_limit_offline");
     expect(within(select).getByRole("option", { name: "Manager approval" })).toHaveValue("approve");
   });
+
+  // S13: the Entity filter listed table names (order_items, memberships).
+  it("lists entities by their labels, and a table without one by its words", async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => (path === "/audit_logs/entities"
+      ? { data: ["memberships", "order_items", "stock_documents"], actions: [], entity_labels: { memberships: "Staff", order_items: "Order items" } }
+      : { data: [] }) as never);
+    const filters = { range: { from: "2026-11-01", to: "2026-11-06" }, userId: "", action: "", table: "", recordId: "" };
+    render(<QueryClientProvider client={new QueryClient()}><AuditFilterBar value={filters} onChange={() => {}} /></QueryClientProvider>);
+    const select = screen.getByLabelText("Entity");
+    expect(await within(select).findByRole("option", { name: "Staff" })).toHaveValue("memberships");
+    expect(within(select).getByRole("option", { name: "Order items" })).toHaveValue("order_items");
+    expect(within(select).getByRole("option", { name: "Stock documents" })).toHaveValue("stock_documents");
+  });
 });

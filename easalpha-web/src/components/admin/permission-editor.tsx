@@ -118,7 +118,7 @@ export function PermissionEditor({ membershipId }: { membershipId: string }) {
     qc.setQueryData(["staff_permissions", membershipId], out);
     qc.invalidateQueries({ queryKey: ["staff"] });
     const warning = accessWarning(member.data?.staff_type, member.data?.cashier_role, out.apps);
-    const detail = `${out.mode === "custom" ? "Their own set" : "Their role's set"}: ${out.granted.length} permissions. Takes effect at the next sign-in.`;
+    const detail = `${out.mode === "custom" ? "Their own permissions" : "The role's permissions"}: ${out.granted.length} granted. Takes effect at the next sign-in.`;
     if (warning) toast.info(`${msg}, but check it`, `${warning} ${detail}`); else toast.success(msg, detail);
   };
   const save = useMutation({

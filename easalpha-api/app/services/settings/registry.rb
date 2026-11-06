@@ -54,7 +54,7 @@ module Settings
       [ "pos.customer_required.delivery", "point_of_sale", "Customer Required", "boolean", true, "A customer must be selected on delivery orders" ],
       [ "pos.customer_fields", "point_of_sale", "Customer Fields", "json", %w[name phone address], "Details asked for when a customer is added" ],
       [ "pos.order_behavior.confirmation_popup", "point_of_sale", "Order Behavior", "boolean", true, "Show a confirmation popup after each order; off means auto-redirect" ],
-      [ "pos.order_behavior.direct_unpaid_orders", "point_of_sale", "Order Behavior", "boolean", false, "Skip the payment screen for cashiers who hold PLACE_UNPAID_DIRECT; admins always qualify; reopened orders always use it" ],
+      [ "pos.order_behavior.direct_unpaid_orders", "point_of_sale", "Order Behavior", "boolean", false, "Skip the payment screen for cashiers allowed to place unpaid orders directly; admins always qualify; reopened orders always use it" ],
       [ "pos.order_behavior.default_payment_method", "point_of_sale", "Order Behavior", "string", "cash", "Method the payment screen pre-selects; reopened orders open on their original method" ],
       [ "pos.lock_minutes", "point_of_sale", "Order Behavior", "integer", 5, "Minutes of no activity before the till locks; 0 never" ],
       [ "pos.notifications.new_order_sound", "point_of_sale", "POS Notifications", "boolean", true, "Sound on the POS when a web or app order arrives" ],
@@ -95,12 +95,12 @@ module Settings
       [ "pos.print_server.port", "point_of_sale", "Print Server", "integer", 9100, "Print server port" ],
       [ "pos.print_server.token", "point_of_sale", "Print Server", "string", nil, "The token the desktop app shows under Printers; tablets send it with every print job" ],
 
-      [ "charges.service_charge.mode", "charges_tax", "Service Charge", "string", "percent", "percent or fixed" ],
+      [ "charges.service_charge.mode", "charges_tax", "Service Charge", "string", "percent", "How the service charge is worked out: a percent of the bill or a fixed amount" ],
       [ "charges.service_charge.value", "charges_tax", "Service Charge", "number", 0, "Pre-filled on the POS payment page; zero or blank disables" ],
       [ "charges.service_charge.order_types", "charges_tax", "Service Charge", "json", [ "dine_in" ], "Order types the default applies to" ],
-      [ "charges.delivery_charge.mode", "charges_tax", "Delivery Charge", "string", "fixed", "percent or fixed" ],
+      [ "charges.delivery_charge.mode", "charges_tax", "Delivery Charge", "string", "fixed", "How the delivery charge is worked out: a percent of the bill or a fixed amount" ],
       [ "charges.delivery_charge.value", "charges_tax", "Delivery Charge", "number", 0, "Pre-filled on the delivery order page; zero or blank disables; zones may override" ],
-      [ "tax.pra.environment", "charges_tax", "PRA e-IMS", "string", "sandbox", "sandbox or production" ],
+      [ "tax.pra.environment", "charges_tax", "PRA e-IMS", "string", "sandbox", "PRA environment: Sandbox while testing, Production for real invoices" ],
       [ "tax.pra.pos_id", "charges_tax", "PRA e-IMS", "string", nil, "POS ID from PRA registration" ],
       [ "tax.pra.access_code", "charges_tax", "PRA e-IMS", "string", nil, "Access code from PRA registration", true ],
       [ "tax.pra.bearer_token", "charges_tax", "PRA e-IMS", "string", nil, "Bearer token held server-side, used only by the cashier app", true ],
@@ -123,8 +123,8 @@ module Settings
       [ "discount_requires_reason", "point_of_sale", "Order Behavior", "boolean", true, "A discount needs a reason" ],
       [ "kitchen_ticket_print", "point_of_sale", "KDS Alerts", "boolean", true, "Print kitchen tickets as well as showing the KDS" ],
       [ "default_order_type", "point_of_sale", "Order Behavior", "string", "dine_in", "Order type the POS opens on (Dine-in unless you choose another)" ],
-      [ "big_void_alert_minor", "security_cash", "Cashier PIN", "integer", 500_000, "WhatsApp the owner when a void is above this amount, in paisa" ],
-      [ "cash_short_alert_minor", "security_cash", "Cashier Drawer", "integer", 100_000, "WhatsApp the owner when a till is short by more than this, in paisa" ]
+      [ "big_void_alert_minor", "security_cash", "Cashier PIN", "money", 500_000, "WhatsApp the owner when a void is above this amount" ],
+      [ "cash_short_alert_minor", "security_cash", "Cashier Drawer", "money", 100_000, "WhatsApp the owner when a till is short by more than this amount" ]
     ].freeze
 
     KEYS = ROWS.map { |k, g, s, t, d, l, secret = false| Key.new(key: k, group: g, screen: s, type: t, default: d, label: l, secret: secret) }.index_by(&:key).freeze
@@ -138,19 +138,58 @@ module Settings
     def self.valid?(k) = KEYS.key?(k.to_s)
     def self.keys = KEYS.keys
 
+    # Numbers that only make sense in a range. They were saved as typed (S14: bill day 45, a credit hold of -5 days,
+    # 2.5 days kept as 2); now a value outside is refused with the reason.
+    RANGES = {
+      "khata.monthly_bills.day" => 1..28, "khata.monthly_bills.due_days" => 0..365, "khata.monthly_bills.min_balance" => 0..,
+      "khata.overdue.remind_after_days" => 0..365, "khata.credit_hold_days" => 0..365, "pos.lock_minutes" => 0..1440,
+      "pos.kds.timeout_minutes" => 1..1440, "pos.barcode_scanning.min_length" => 1..64, "pos.barcode_scanning.max_key_interval_ms" => 1..1000,
+      "pos.barcode_scanning.scale_item_digits" => 1..10, "pos.barcode_scanning.scale_decimals" => 0..4,
+      "pos.pending_reminder.red_minutes_before_close" => 0..1440, "catalog.display.columns" => 3..6, "pos.print_server.port" => 1..65_535,
+      "cash_rounding" => 0..1000, "total_rounding" => 0..1000, "charges.service_charge.value" => 0.., "charges.delivery_charge.value" => 0..,
+      "tax.rate_cash_percent" => 0..100, "tax.rate_card_percent" => 0..100, "big_void_alert_minor" => 0.., "cash_short_alert_minor" => 0..
+    }.freeze
+
+    # A money key ("money") is stored in paisa like every amount; the settings screen shows and takes rupees (S11).
+    # Errors name the setting as the screen does, not by its key (S13: "security.expense_report_pin must be 4 digits").
     def self.cast(key, value)
       k = key(key) or raise ArgumentError, "unknown setting: #{key}"
       return nil if value.nil? || (value == "" && k.type != "string")
-      case k.type
-      when "boolean" then ActiveModel::Type::Boolean.new.cast(value)
-      when "integer" then Integer(value)
-      when "number" then Float(value)
-      when "pin"
-        raise ArgumentError, "#{key} must be 4 digits" unless value.to_s.match?(/\A\d{4}\z/)
-        BCrypt::Password.create(value.to_s)
-      when "json" then value.is_a?(String) ? JSON.parse(value) : value
-      else value.to_s
+      name = k.label.split(/;| \(/).first.strip
+      if k.type == "pin"
+        raise ArgumentError, "#{name}: enter exactly 4 digits" unless value.to_s.match?(/\A\d{4}\z/)
+        return BCrypt::Password.create(value.to_s)
       end
+      cast =
+        case k.type
+        when "boolean" then ActiveModel::Type::Boolean.new.cast(value)
+        when "integer", "money" then whole(value) || raise(ArgumentError, "#{name}: enter a whole number")
+        when "number" then Float(value, exception: false) || raise(ArgumentError, "#{name}: enter a number")
+        when "json" then value.is_a?(String) ? parse_json(value, name) : value
+        else value.to_s
+        end
+      in_range!(k.key, cast, name, money: k.type == "money")
+    end
+
+    def self.whole(value)
+      return value if value.is_a?(Integer)
+      return value.to_i if value.is_a?(Numeric) && value == value.to_i
+      value.to_s.strip.match?(/\A-?\d+\z/) ? value.to_s.to_i : nil
+    end
+
+    def self.parse_json(value, name)
+      JSON.parse(value)
+    rescue JSON::ParserError
+      raise ArgumentError, "#{name}: not valid JSON"
+    end
+
+    def self.in_range!(key, value, name, money: false)
+      range = RANGES[key]
+      return value if range.nil? || !value.is_a?(Numeric) || range.cover?(value)
+      shown = ->(n) { money ? "Rs #{n / 100}" : n.to_s }
+      raise ArgumentError, "#{name}: cannot be negative" if range.end.nil? && range.begin.zero?
+      raise ArgumentError, "#{name}: enter at least #{shown.call(range.begin)}" if range.end.nil?
+      raise ArgumentError, "#{name}: enter a number from #{shown.call(range.begin)} to #{shown.call(range.end)}"
     end
   end
 end

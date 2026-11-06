@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileJson, Hash, LayoutGrid, List, Move, Package, Plus, SlidersHorizontal, Star, Trash2, TrendingUp } from "lucide-react";
+import { ArchiveRestore, Download, FileJson, Hash, LayoutGrid, List, Move, Package, Plus, SlidersHorizontal, Star, Trash2, TrendingUp } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import type { Category, Page, Product } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
@@ -16,6 +16,7 @@ import { discountLabel } from "@/components/admin/catalog-helpers";
 import { marginLabel, marginTone, type CatalogView } from "@/components/admin/catalog-grid-helpers";
 import { CategoryBanner, CategoryChips, ProductGrid, TileImage } from "@/components/admin/catalog-grid";
 import { ProductAnalysisDialog } from "@/components/admin/product-analysis";
+import { MenuStart } from "@/components/admin/menu-start";
 import { Badge, Button, Checkbox, ConfirmDialog, EmptyRow, EmptyState, Loading, OverflowMenu, Select, Switch, Table, Tabs, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
@@ -35,17 +36,22 @@ export default function ProductsPage() {
   const [inactiveOverride, setInactiveOverride] = useState<boolean | null>(null);
   const inactive = inactiveOverride ?? display.data.show_inactive;
   const [arrange, setArrange] = useState(false);
+  // Archived products on their own, each with Restore (S8: the archive dialog promised a way back that did not exist).
+  const [archived, setArchived] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [downloading, setDownloading] = useState(false);
   const cats = useList<Category>("categories", "/categories");
-  const list = usePagedList<Product>(["products"], "/products", { q: dq, category_id: cat, favourites: fav ? "true" : "", include_inactive: inactive ? "true" : "" }, { enabled: !arrange });
+  const list = usePagedList<Product>(["products"], "/products", { q: dq, category_id: cat, favourites: fav ? "true" : "", include_inactive: inactive ? "true" : "", archived: archived ? "true" : "" }, { enabled: !arrange });
   const favM = useAction<{ id: string; value: boolean }>(["products"], ({ id, value }) => api(`/products/${id}/favourite`, { method: "POST", body: { value } }));
   // Archive, not delete: past orders keep the product; it leaves the till on the next sync (the same action as the product page).
   const remove = useRemove(["products"], (pid: string) => `/products/${pid}`, "Product archived");
+  const restore = useAction<string>(["products", "categories"], (pid) => api(`/products/${pid}/restore`, { method: "POST" }), "Product restored: it is back on the till at the next sync");
   const catName = (id: string) => cats.data?.find((c) => c.id === id)?.name ?? "-";
   const total = useMemo(() => (cats.data ?? []).reduce((s, c) => s + (c.product_count ?? 0), 0), [cats.data]);
   const current = cat ? cats.data?.find((c) => c.id === cat) : undefined;
   const grid = view === "grid" && !arrange;
+  // A business with no products at all, nothing filtered: say how to start (S7) instead of "No products here".
+  const startHere = !list.isLoading && !list.rows.length && !dq && !cat && !fav && !archived && total === 0 ? <MenuStart hasCategories={!!cats.data?.length} onImport={() => setPanel("import")} /> : null;
   // Review 4.4: a column that is empty on every visible row only takes width away from the name.
   const showSku = list.rows.some((p) => p.sku || p.pct_code);
   const showVariants = list.rows.some((p) => p.variants?.length);
@@ -73,8 +79,9 @@ export default function ProductsPage() {
         <SearchInput value={q} onChange={setQ} placeholder="Name, SKU, Urdu name" />
         {!grid ? <Select className="w-auto" value={cat} onChange={(e) => setCat(e.target.value)}><option value="">All categories</option>{cats.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select> : null}
         {!grid ? <Checkbox label="Favourites" checked={fav} onChange={(e) => setFav(e.target.checked)} disabled={arrange} /> : null}
-        <Checkbox label="Include inactive" checked={inactive} onChange={(e) => setInactiveOverride(e.target.checked)} />
-        <Switch checked={arrange} onChange={setArrange} label="Arrange" />
+        <Checkbox label="Include inactive" checked={inactive} onChange={(e) => setInactiveOverride(e.target.checked)} disabled={archived} />
+        <Checkbox label="Archived" checked={archived} onChange={(e) => { setArchived(e.target.checked); if (e.target.checked) setArrange(false); }} />
+        <Switch checked={arrange} onChange={setArrange} label="Arrange" disabled={archived} />
         {arrange ? <span className="flex items-center gap-1 text-xs text-fg-muted"><Move className="h-3.5 w-3.5" /> {cat ? "Drag rows by the grip; the order saves on drop." : "Choose a category to arrange its products."}</span> : null}
         <Tabs<CatalogView> value={view} onChange={setView} className="ml-auto" items={[
           { value: "grid", label: <span className="flex items-center gap-1.5"><LayoutGrid className="h-4 w-4" /> Grid</span> },
@@ -86,7 +93,10 @@ export default function ProductsPage() {
       {arrange ? (
         cat ? <ArrangeList categoryId={cat} includeInactive={inactive} showImages={display.data.images} /> : <EmptyState icon={Move} title="Pick a category" hint="Products are arranged inside their category, the same order the till and the website show." />
       ) : list.isLoading ? <Loading /> : grid ? (
-        <ProductGrid rows={list.rows} catName={catName} showPrices={display.data.show_prices} onFav={toggleFav} onAnalyse={setAnalyse} onRemove={setDel} />
+        <ProductGrid rows={list.rows} catName={catName} showPrices={display.data.show_prices} onFav={toggleFav} onAnalyse={setAnalyse} onRemove={setDel} onRestore={(p) => restore.mutate(p.id)}
+          empty={startHere ?? (archived ? <EmptyState icon={ArchiveRestore} title="No archived products" hint="Products you archive wait here; Restore puts one back on the till and the website." /> : undefined)} />
+      ) : startHere ? (
+        startHere
       ) : (
         <Table>
           <THead><tr><TH></TH><TH>Name</TH><TH>Category</TH>{showSku ? <TH>SKU</TH> : null}{showVariants ? <TH>Variants</TH> : null}<TH>Status</TH><TH right>Price</TH>{showMargin ? <TH right>Margin</TH> : null}<TH></TH></tr></THead>
@@ -103,12 +113,14 @@ export default function ProductsPage() {
                 <TD className="text-fg-secondary">{catName(p.category_id)}</TD>
                 {showSku ? <TD className="font-mono text-xs text-fg-secondary">{p.sku ?? "-"}{p.pct_code ? <span className="ml-2 text-fg-muted">PCT {p.pct_code}</span> : null}</TD> : null}
                 {showVariants ? <TD className="text-fg-secondary">{p.variants?.length ? p.variants.map((v) => v.name).join(", ") : "-"}</TD> : null}
-                <TD><ProductStatus active={p.active} online={p.show_online} /></TD>
+                <TD><ProductStatus active={p.active} online={p.show_online} archived={!!p.archived_at} /></TD>
                 <TD right className="font-medium">{display.data.show_prices ? formatMoney(p.base_price_minor) : "-"}{discountLabel(p.discount_value, p.discount_type) ? <Badge variant="accent" className="ml-2">{discountLabel(p.discount_value, p.discount_type)} off</Badge> : null}</TD>
                 {showMargin ? <TD right>{marginLabel(p.cost) ? <Badge variant={marginTone(p.cost) ?? "neutral"}>{marginLabel(p.cost)}</Badge> : <span className="text-fg-muted">-</span>}</TD> : null}
-                <TD className="w-24"><span className="flex items-center justify-end"><Button variant="ghost" size="icon-sm" onClick={() => setAnalyse(p)} aria-label={`Analysis for ${p.name}`} title="Product analysis"><TrendingUp className="h-4 w-4" /></Button><Button variant="ghost" size="icon-sm" className="text-danger hover:bg-danger-soft" onClick={() => setDel(p)} aria-label={`Archive ${p.name}`} title="Archive (delete)"><Trash2 className="h-4 w-4" /></Button></span></TD>
+                <TD className="w-24"><span className="flex items-center justify-end"><Button variant="ghost" size="icon-sm" onClick={() => setAnalyse(p)} aria-label={`Analysis for ${p.name}`} title="Product analysis"><TrendingUp className="h-4 w-4" /></Button>{p.archived_at
+                  ? <Button variant="ghost" size="icon-sm" onClick={() => restore.mutate(p.id)} aria-label={`Restore ${p.name}`} title="Restore: back on the till and the website"><ArchiveRestore className="h-4 w-4" /></Button>
+                  : <Button variant="ghost" size="icon-sm" className="text-danger hover:bg-danger-soft" onClick={() => setDel(p)} aria-label={`Archive ${p.name}`} title="Archive (delete)"><Trash2 className="h-4 w-4" /></Button>}</span></TD>
               </TR>
-            )) : <EmptyRow colSpan={6 + (showSku ? 1 : 0) + (showVariants ? 1 : 0) + (showMargin ? 1 : 0)} icon={Package} action={<Link href="/admin/products/catalog/new"><Button size="sm"><Plus className="h-4 w-4" /> New product</Button></Link>}>{dq || cat || fav ? "No products match these filters. Clear the search or pick another category." : "No products yet. Add your first item, or import a menu from Menu tools."}</EmptyRow>}
+            )) : <EmptyRow colSpan={6 + (showSku ? 1 : 0) + (showVariants ? 1 : 0) + (showMargin ? 1 : 0)} icon={Package} action={<Link href="/admin/products/catalog/new"><Button size="sm"><Plus className="h-4 w-4" /> New product</Button></Link>}>{archived ? "No archived products. Products you archive wait here until you restore them." : dq || cat || fav ? "No products match these filters. Clear the search or pick another category." : "No products yet. Add your first item, or import a menu from Menu tools."}</EmptyRow>}
           </TBody>
         </Table>
       )}
@@ -117,13 +129,14 @@ export default function ProductsPage() {
       <DisplaySettingsDialog open={panel === "display"} onClose={() => setPanel(null)} />
       <ProductCodesDialog open={panel === "codes"} onClose={() => setPanel(null)} />
       <ProductAnalysisDialog productId={analyse?.id ?? null} open={!!analyse} onClose={() => setAnalyse(null)} />
-      <ConfirmDialog open={!!del} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.id, { onSuccess: () => setDel(null) })} title={`Archive ${del?.name ?? "this product"}?`} description="It leaves the till on the next sync; past orders and reports keep it. Tick Include inactive to find it again." confirmLabel="Archive" destructive loading={remove.isPending} />
+      <ConfirmDialog open={!!del} onClose={() => setDel(null)} onConfirm={() => del && remove.mutate(del.id, { onSuccess: () => setDel(null) })} title={`Archive ${del?.name ?? "this product"}?`} description="It leaves the till on the next sync; past orders and reports keep it, and so do its barcodes. Tick Archived above to find it again and restore it." confirmLabel="Archive" destructive loading={remove.isPending} />
     </>
   );
 }
 
 /** One status pill per product (review 4.4): whether it sells, and where. */
-function ProductStatus({ active, online }: { active: boolean; online?: boolean }) {
+function ProductStatus({ active, online, archived }: { active: boolean; online?: boolean; archived?: boolean }) {
+  if (archived) return <Badge variant="warning">Archived</Badge>;
   if (!active) return <Badge>Inactive</Badge>;
   return <Badge variant="success" title={online ? "Sells at the till and on the website" : "Sells at the till only"}>{online ? "Active · Online" : "Active · Till only"}</Badge>;
 }

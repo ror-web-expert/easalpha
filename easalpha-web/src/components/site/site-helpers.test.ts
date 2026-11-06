@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COUNTRIES, countryByCode, detectCountry, isValidPhone, PLANS, TRIAL_DAYS, displayPriceMinor, formatMoney, isValidEmail, isValidPakistaniPhone, mailtoLink, monthlyMinor, normalizePhone, passwordStrength, signupPayload, toggleCurrency, validateSignup, whatsappLink, yearlyMinor, yearlyPerMonthMinor, yearlySavingMinor, type SignupInput, UI, t, toggleLang, isLang, telLink, contactFromPlatform, displayPhone, CONTACT } from "./site-helpers";
+import { COUNTRIES, countryByCode, countryForPhone, countryForTimeZone, detectCountry, detectSignupCountry, isValidPhone, PLANS, TRIAL_DAYS, displayPriceMinor, formatMoney, isValidEmail, isValidPakistaniPhone, mailtoLink, monthlyMinor, normalizePhone, passwordStrength, signupPayload, toggleCurrency, validateSignup, whatsappLink, yearlyMinor, yearlyPerMonthMinor, yearlySavingMinor, type SignupInput, UI, t, toggleLang, isLang, telLink, contactFromPlatform, displayPhone, CONTACT } from "./site-helpers";
 
 const starter = PLANS[0];
 const pro = PLANS[1];
@@ -112,6 +112,26 @@ describe("phone", () => {
     expect(detectCountry("en")).toBe("PK");
     expect(detectCountry("xx-QQ")).toBe("PK");
   });
+  // S3: Chrome in en-US with its clock on Asia/Karachi and a +92 phone made a US business billed in dollars.
+  it("takes the country from the phone, then the time zone, before the browser language, and Pakistan when unsure", () => {
+    expect(detectSignupCountry({ timeZone: "Asia/Karachi", locale: "en-US" })).toBe("PK");
+    expect(detectSignupCountry({ phone: "+92 300 1234567", timeZone: "America/New_York", locale: "en-US" })).toBe("PK");
+    expect(detectSignupCountry({ phone: "+971 50 123 4567", timeZone: "Asia/Karachi", locale: "en-US" })).toBe("AE");
+    expect(detectSignupCountry({ phone: "+1 415 555 0132", timeZone: "America/Vancouver", locale: "en-US" })).toBe("CA"); // +1 says nothing
+    expect(detectSignupCountry({ timeZone: "America/Chicago", locale: "en" })).toBe("US");
+    expect(detectSignupCountry({ timeZone: "Australia/Perth" })).toBe("AU");
+    expect(detectSignupCountry({ timeZone: "Europe/Kyiv", locale: "en-GB" })).toBe("GB");
+    expect(detectSignupCountry({ timeZone: "Europe/Kyiv", locale: "en" })).toBe("PK");
+    expect(detectSignupCountry({})).toBe("PK");
+  });
+  it("reads a dialling code only from a number written with it", () => {
+    expect(countryForPhone("+92 ")).toBeNull(); // the form's untouched prefix
+    expect(countryForPhone("0300 1234567")).toBeNull();
+    expect(countryForPhone("00971501234567")).toBe("AE");
+    expect(countryForPhone("+880 1712 345678")).toBe("BD");
+    expect(countryForTimeZone("Asia/Calcutta")).toBe("IN");
+    expect(countryForTimeZone("Mars/Base")).toBeNull();
+  });
 });
 
 describe("password", () => {
@@ -136,6 +156,10 @@ describe("validateSignup", () => {
     expect(signupPayload({ ...good, email: " Ali@KarachiGrill.pk " })).toEqual({
       name: "Ali Raza", business_name: "Karachi Grill", email: "ali@karachigrill.pk", password: "spicy-biryani-1", phone: "+923001234567", country: "PK", currency: "PKR", time_zone: "Asia/Karachi",
     });
+  });
+  it("sends the browser's own zone when it lies in the chosen country, else the country's", () => {
+    expect(signupPayload({ ...good, country: "US", phone: "+1 415 555 0132", timeZone: "America/Chicago" }).time_zone).toBe("America/Chicago");
+    expect(signupPayload({ ...good, country: "PK", timeZone: "America/Chicago" }).time_zone).toBe("Asia/Karachi");
   });
 });
 

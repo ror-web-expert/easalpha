@@ -10,7 +10,7 @@ import type { Session } from "@/lib/types";
 import { Button, Field, Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { track } from "@/lib/analytics";
-import { COUNTRIES, DEFAULT_COUNTRY, PASSWORD_MIN, PLANS, type SignupErrors, type SignupInput, countryByCode, detectCountry, passwordStrength, signupPayload, validateSignup } from "./site-helpers";
+import { COUNTRIES, DEFAULT_COUNTRY, PASSWORD_MIN, PLANS, type SignupErrors, type SignupInput, browserTimeZone, countryByCode, countryForPhone, detectSignupCountry, passwordStrength, signupPayload, validateSignup } from "./site-helpers";
 
 const STRENGTH: Record<ReturnType<typeof passwordStrength>, { width: string; color: string; text: string }> = {
   "too short": { width: "w-1/4", color: "bg-slate-300", text: `At least ${PASSWORD_MIN} characters` },
@@ -32,17 +32,27 @@ export function SignupForm() {
   const session = useAuthStore((s) => s.session);
   const hydrated = useAuthStore((s) => s.hydrated);
   const [form, setForm] = useState<SignupInput>({ name: "", businessName: "", email: "", phone: "+92 ", password: "", agree: false, country: DEFAULT_COUNTRY });
-  // The browser's locale picks the country on first paint; the dialling code follows it until the owner types a number.
+  // The browser's time zone, then its language, picks the country on first paint (S3: the language alone turned a
+  // Karachi owner with an en-US browser into a US business); the dialling code follows it until a number is typed.
   useEffect(() => {
-    const code = detectCountry(typeof navigator === "undefined" ? null : navigator.language);
-    if (code !== DEFAULT_COUNTRY) setForm((f) => ({ ...f, country: code, phone: `${countryByCode(code).dial} ` }));
+    const zone = browserTimeZone();
+    const code = detectSignupCountry({ timeZone: zone, locale: typeof navigator === "undefined" ? null : navigator.language });
+    setForm((f) => ({ ...f, timeZone: zone, ...(code !== DEFAULT_COUNTRY ? { country: code, phone: `${countryByCode(code).dial} ` } : {}) }));
   }, []);
+  // Once the owner picks a country it stays; until then a number typed with its code (+971 ...) moves the country.
+  const picked = useRef(false);
   const changeCountry = (code: string) => {
+    picked.current = true;
     setForm((f) => {
       const prevDial = countryByCode(f.country).dial;
       const untouched = f.phone.trim() === "" || f.phone.trim() === prevDial;
       return { ...f, country: code, phone: untouched ? `${countryByCode(code).dial} ` : f.phone };
     });
+  };
+  const changePhone = (phone: string) => {
+    set("phone", phone);
+    const byPhone = picked.current ? null : countryForPhone(phone);
+    if (byPhone) setForm((f) => (f.country === byPhone ? f : { ...f, country: byPhone }));
   };
   const [touched, setTouched] = useState<Partial<Record<keyof SignupInput, boolean>>>({});
   const [showPassword, setShowPassword] = useState(false);
@@ -103,7 +113,7 @@ export function SignupForm() {
           </select>
         </Field>
         <Field label="Mobile number" error={show("phone")} hint="With country code. Used for WhatsApp login codes.">
-          <Input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} onBlur={() => blur("phone")} autoComplete="tel" inputMode="tel" placeholder={`${countryByCode(form.country).dial} 300 1234567`} required className="h-12" aria-invalid={!!show("phone")} />
+          <Input type="tel" value={form.phone} onChange={(e) => changePhone(e.target.value)} onBlur={() => blur("phone")} autoComplete="tel" inputMode="tel" placeholder={`${countryByCode(form.country).dial} 300 1234567`} required className="h-12" aria-invalid={!!show("phone")} />
         </Field>
       </div>
       <Field label="Password" error={show("password")} htmlFor="signup-password">

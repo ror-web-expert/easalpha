@@ -14,10 +14,12 @@ module Serializers
       settings: Setting.without_secrets(b.settings), settings_version: b.settings_version, read_only: b.read_only?, created_at: b.created_at }
   end
 
-  def branch(br)
+  # tax: :public (every till, session and receipt) carries the registration numbers only; :manage (the branch
+  # screens, for settings.manage) adds whether an API token is saved. The token itself is never serialized (S1).
+  def branch(br, tax: :public)
     { id: br.id, business_id: br.business_id, name: br.name, code: br.code, address: br.address, city: br.city, phone: br.phone,
       time_zone: br.time_zone, day_end_time: br.day_end_time&.strftime("%H:%M"), business_day_start: br.business_day_start&.strftime("%H:%M"),
-      business_day_window: br.business_day_window, tax_registration: br.tax_registration,
+      business_day_window: br.business_day_window, tax_registration: tax == :manage ? br.masked_tax_registration : br.public_tax_registration,
       opening_hours: br.opening_hours, qr_settings: br.qr_config, is_main: br.is_main, archived_at: br.archived_at }
   end
 
@@ -67,12 +69,13 @@ module Serializers
       signed_out_at: rt.revoked_at, expires_at: rt.expires_at, active: rt.revoked_at.nil? && rt.expires_at > Time.current }
   end
 
-  # A row EasAlpha support wrote on an approved session names the support person (super_admin_id), not the owner.
+  # A row EasAlpha support wrote on an approved session names the support person (super_admin_id), not the owner;
+  # before and after are redacted again on the way out, for rows written before AuditLog.redact existed (S1).
   def audit_log(a, names: {}, support_names: {})
     actor = a.super_admin_id ? "EasAlpha support (#{support_names[a.super_admin_id] || 'staff'})" : names[a.user_id]
-    { id: a.id, action: a.action, table_name: a.table_name, record_id: a.record_id, user_id: a.user_id, user_name: actor, super_admin_id: a.super_admin_id,
+    { id: a.id, action: a.action, table_name: a.table_name, entity: AuditLog.entity_label(a.table_name), record_id: a.record_id, user_id: a.user_id, user_name: actor, super_admin_id: a.super_admin_id,
       device_id: a.device_id, approved_by_user_id: a.approved_by_user_id, approved_by_name: names[a.approved_by_user_id],
-      before: a.before, after: a.after, ip: a.ip, occurred_at: a.occurred_at }
+      before: AuditLog.redact(a.before), after: AuditLog.redact(a.after), ip: a.ip, occurred_at: a.occurred_at }
   end
 
   def checklist_item(i)

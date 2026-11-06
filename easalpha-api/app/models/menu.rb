@@ -5,6 +5,14 @@ class Menu < ApplicationRecord
   scope :active, -> { where(archived_at: nil) }
   after_save { Menu.where.not(id: id).update_all(is_default: false) if is_default }
 
+  DEFAULT_NAME = "Main menu".freeze
+
+  # The menu a category goes into when none is named: the default one, else the first, else a new "Main menu". A new
+  # business has no menu, and its first category used to wait on a Menu box with nothing in it (S7, 6 Nov 2026).
+  def self.default!
+    active.find_by(is_default: true) || active.order(:sort_order, :created_at).first || create!(name: DEFAULT_NAME, is_default: true)
+  end
+
   # time_rules: { "days" => [1..7], "start" => "06:00", "end" => "11:00" }; empty means always available.
   def available_at?(time, zone: "Asia/Karachi")
     return true if time_rules.blank?

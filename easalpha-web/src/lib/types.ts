@@ -37,15 +37,22 @@ export interface Business {
   settings: BusinessSettings; read_only: boolean; created_at: string;
 }
 
+/** A branch's tax registration as the API sends it: the public numbers only. The API token stays on the server; the
+ *  branch screens (settings.manage) learn only whether one is saved, token_set, and its last characters (S1). */
+export interface TaxRegistration {
+  authority?: string | null; ntn?: string | null; strn?: string | null; pos_id?: string | null;
+  token_set?: boolean; token_hint?: string | null;
+}
+
 export interface Branch {
   id: ID; business_id: ID; name: string; code: string; address: string | null; city: string | null; phone: string | null;
   time_zone: string | null; day_end_time: string | null; business_day_start?: string | null; business_day_window?: string | null;
-  tax_registration: Record<string, string> | null;
+  tax_registration: TaxRegistration | null;
   opening_hours: Record<string, unknown> | null; qr_settings?: Partial<QrSettings> | null; is_main: boolean; archived_at: string | null;
 }
 
 // ---- Settings store (SPEC "Settings and multi-outlet"): typed keys grouped by screen, with a version tills compare. ----
-export type SettingType = "string" | "boolean" | "integer" | "number" | "json" | "pin";
+export type SettingType = "string" | "boolean" | "integer" | "number" | "money" | "json" | "pin";
 export interface SettingKey {
   key: string; group: string; screen: string; type: SettingType; label: string;
   /** Secrets (pins, tokens) come back as "set" or null, never the real value. */
@@ -113,13 +120,13 @@ export interface PairedDevice { device_token: string; device: Device; business: 
 export interface SetupStaff { id: ID; name: string | null; role: string; staff_type: StaffType; has_pin: boolean; pin_locked: boolean }
 
 export interface AuditLog {
-  id: ID; action: string; table_name: string | null; record_id: ID | null; user_id: ID | null; device_id: ID | null;
+  id: ID; action: string; table_name: string | null; /** the table as people read it, "Order items" */ entity?: string | null; record_id: ID | null; user_id: ID | null; device_id: ID | null;
   approved_by_user_id: ID | null; before: Record<string, unknown> | null; after: Record<string, unknown> | null;
   ip: string | null; occurred_at: string;
   user_name?: string | null; approved_by_name?: string | null;
 }
 
-export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string> }
+export interface AuditEntities { data: string[]; actions: string[]; action_labels?: Record<string, string>; /** "Order items" for order_items (S13) */ entity_labels?: Record<string, string> }
 export interface AuditInsights {
   total: number; by_action: Record<string, number>; by_entity: Record<string, number>;
   by_actor: { user_id: ID | null; name: string; count: number }[]; by_day: Record<string, number>;
@@ -357,7 +364,7 @@ export interface CustomerPayment {
 export interface Receipt {
   receipt_number: string | null; duplicate: boolean; printed_at: string;
   business: { name: string; legal_name: string | null; phone: string | null; email?: string | null; logo_key: string | null; currency: string };
-  branch: { name: string; address: string | null; city: string | null; phone: string | null; tax_registration: Record<string, string> | null };
+  branch: { name: string; address: string | null; city: string | null; phone: string | null; tax_registration: TaxRegistration | null };
   header: string | null; footer: string | null; language: string; paper: string;
   order: { id: ID; serial: number | null; label: string; order_type: OrderType; table: string | null; business_day: string; placed_at: string | null; paid_at: string | null;
     cashier: string | null; /** The till (device) the order was taken on; receipts from before 6 Nov 2026 lack it. */ till?: string | null;

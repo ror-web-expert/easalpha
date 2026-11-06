@@ -11,9 +11,11 @@ module Api
         render_page(rows, cursor) { |a| Serializers.audit_log(a, names: names, support_names: support_names) }
       end
 
-      # GET /audit_logs/entities  the entity types seen in this business and every action with its label, for the filter
+      # GET /audit_logs/entities  the entity types seen in this business and every action with its label, for the filter.
+      # entity_labels names each table as a person reads it ("Order items", "Staff"), not as the database does (S13).
       def entities
-        render json: { data: AuditLog.where(business_id: current_business.id).distinct.order(:table_name).pluck(:table_name).compact,
+        tables = AuditLog.where(business_id: current_business.id).distinct.order(:table_name).pluck(:table_name).compact
+        render json: { data: tables, entity_labels: tables.to_h { |t| [ t, AuditLog.entity_label(t) ] },
                        actions: AuditLog::ACTIONS, action_labels: AuditLog::ACTION_LABELS }
       end
 

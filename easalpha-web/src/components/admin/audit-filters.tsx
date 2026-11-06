@@ -26,6 +26,12 @@ export function actionVariant(action: string): BadgeVariant {
   return "neutral";
 }
 
+/** The entity as people read it ("Order items", "Staff"), from the API's labels or the table's own words (S13: the
+ *  Entity filter listed table names). */
+export function entityLabel(table: string, labels?: Record<string, string>): string {
+  return labels?.[table] ?? table.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
 /** The label the API gives an action ("Till clock corrected"); an action it has no label for reads as its words. */
 export function actionLabel(action: string, labels?: Record<string, string>): string {
   return labels?.[action] ?? action.replace(/_/g, " ");
@@ -35,7 +41,7 @@ export function useAuditOptions() {
   const entities = useQuery({ queryKey: ["audit_logs", "entities"], queryFn: () => api<AuditEntities>("/audit_logs/entities"), staleTime: 5 * 60_000 });
   const staff = useQuery({ queryKey: ["staff", "all"], queryFn: () => api<Page<Membership>>("/staff", { query: { limit: 200 } }), staleTime: 5 * 60_000 });
   const actors = (staff.data?.data ?? []).map((m) => ({ id: m.user_id, name: m.user?.name ?? m.user_id.slice(0, 8) })).sort((a, b) => a.name.localeCompare(b.name));
-  return { actions: entities.data?.actions ?? [], labels: entities.data?.action_labels ?? {}, entities: entities.data?.data ?? [], actors };
+  return { actions: entities.data?.actions ?? [], labels: entities.data?.action_labels ?? {}, entities: entities.data?.data ?? [], entityLabels: entities.data?.entity_labels ?? {}, actors };
 }
 
 /** Date range, actor, action and entity filters; the record id box only on the Log tab. */
@@ -55,7 +61,7 @@ export function AuditFilterBar({ value, onChange, showRecord, children }: { valu
       </Select>
       <Select className="w-auto" value={value.table} onChange={(e) => set({ table: e.target.value })} aria-label="Entity">
         <option value="">All entities</option>
-        {opts.entities.map((t) => <option key={t} value={t}>{t}</option>)}
+        {opts.entities.map((t) => <option key={t} value={t}>{entityLabel(t, opts.entityLabels)}</option>)}
       </Select>
       {showRecord ? <Input className="w-48 font-mono text-xs" placeholder="Record ID" value={value.recordId} onChange={(e) => set({ recordId: e.target.value })} aria-label="Record ID" /> : null}
       {children}

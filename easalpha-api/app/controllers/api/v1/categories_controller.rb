@@ -12,9 +12,12 @@ module Api
         render json: { data: scope.map { |c| MenuSerializers.category(c, product_count: counts[c.id] || 0) } }
       end
 
+      # menu_id is optional: without one the category goes into the default menu, made on first use (S7).
       def create
-        menu = Menu.active.find(params.require(:menu_id))
-        c = Category.create!(category_params.merge(menu: menu))
+        c = Category.transaction do
+          menu = params[:menu_id].present? ? Menu.active.find(params[:menu_id]) : Menu.default!
+          Category.create!(category_params.merge(menu: menu))
+        end
         audit!("create", record: c, after: MenuSerializers.category(c))
         render json: MenuSerializers.category(c, product_count: 0), status: :created
       end
