@@ -54,4 +54,11 @@ export function savingsLine(r: Pick<Receipt, "totals" | "business">): string | n
 
 /** The receipt number as the barcode encodes it: yymmdd-BRANCH-serial, printed on every paid receipt. */
 export const RECEIPT_NUMBER_RE = /^\d{6}-\S+-\d+$/;
-export const isReceiptNumber = (code: string): boolean => RECEIPT_NUMBER_RE.test(code.trim());
+/**
+ * The label of an order saved offline: the till's code and its counter (T1-001; a tablet's is W2-014). A receipt paid
+ * offline has no receipt number yet, so this is its barcode, and the scan must find the order by it (QA T12).
+ */
+export const TILL_SERIAL_RE = /^[TW]\d+-\d{3,}$/i;
+export const isTillSerial = (code: string): boolean => TILL_SERIAL_RE.test(code.trim());
+/** A receipt's barcode: its receipt number, or the till serial of a receipt printed offline. */
+export const isReceiptNumber = (code: string): boolean => RECEIPT_NUMBER_RE.test(code.trim()) || isTillSerial(code);

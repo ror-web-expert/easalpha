@@ -476,10 +476,38 @@ export async function voidOrder(id: string, reason: string, approver_pin?: strin
   return { offline: true };
 }
 
-export async function refundOrder(id: string, amount_minor: number, method_code: string, reason: string, approver_pin?: string) {
-  const res = await api<{ order: Order }>(`/orders/${id}/refunds`, { method: "POST", auth: "pos", body: { amount_minor, method_code, reason, approver_pin, refund_id: uuid() } });
-  await storeServerOrder(res.order);
-  return res;
+/**
+ * `refund_id` is made once per refund dialog and sent with every try: a refund the server took but answered too late
+ * (a timeout) and then pressed again is answered with the one it recorded, never booked twice (web-till#5).
+ */
+export async function refundOrder(id: string, amount_minor: number, method_code: string, reason: string, approver_pin?: string, refund_id: string = uuid()) {
+  const res = await api<{ order: Order }>(`/orders/${id}/refunds`, { method: "POST", auth: "pos", body: { amount_minor, method_code, reason, approver_pin, refund_id } });
+  const local = await storeServerOrder(res.order);
+  return { ...res, local };
+}
+
+/**
+ * An open order paid in full (a reopened order whose total fell to what was paid, its excess refunded) closed from the
+ * Orders screen: POST /orders/:id/complete, as the payment screen does (QA T5). Online only; the server answers
+ * order.overpaid while an excess is still to go back. Returns the order and its receipt.
+ */
+export async function completeOrder(id: string): Promise<{ local: LocalOrder; receipt: Receipt }> {
+  if (!isOnline()) throw new ApiError("offline", "Completing an order needs the internet", 0);
+  const order = await api<Order>(`/orders/${id}/complete`, { method: "POST", auth: "pos" });
+  const local = await storeServerOrder(order);
+  const receipt = await api<Receipt>(`/orders/${id}/receipt`, { auth: "pos" }).catch(() => buildLocalReceipt(local));
+  return { local, receipt };
+}
+
+/**
+ * The till's own copy of an order by a code its receipt carries: the receipt number, or the till serial (T1-001) that a
+ * receipt printed offline has as its barcode (QA T12), from any day, newest first; null when the till has none.
+ */
+export async function findLocalOrder(code: string): Promise<LocalOrder | null> {
+  const wanted = code.trim().toLowerCase();
+  if (!wanted) return null;
+  const rows = (await db.orders.toArray()).filter((o) => [o.receipt_number, o.till_serial, o.label].some((v) => (v ?? "").toLowerCase() === wanted));
+  return rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0] ?? null;
 }
 
 export async function holdOrder(cart: Cart): Promise<Cart> {
@@ -570,11 +598,12 @@ export async function loadOrderForEdit(id: string): Promise<Cart> {
 /**
  * SPEC reopen flow (REOPEN_ORDER): POST /orders/:id/reopen brings a completed order back as open, keeping its payments.
  * The cart comes back in edit mode with `reopened` set so the panel hides the controls the user may not use and the
- * save goes through the payment screen. Online only: a reopen is never queued.
+ * save goes through the payment screen. Online only: a reopen is never queued. `approver_pin` is a manager's, for a
+ * cashier without REOPEN_ORDER (QA T11).
  */
-export async function reopenOrder(id: string): Promise<Cart> {
+export async function reopenOrder(id: string, approver_pin?: string): Promise<Cart> {
   if (!isOnline()) throw new ApiError("offline", "Reopening an order needs the internet", 0);
-  const o = await api<Order>(`/orders/${id}/reopen`, { method: "POST", auth: "pos" });
+  const o = await api<Order>(`/orders/${id}/reopen`, { method: "POST", auth: "pos", body: approver_pin ? { approver_pin } : undefined });
   const local = await storeServerOrder(o);
   return { ...localToCart(local), ...reopenFields(o) };
 }

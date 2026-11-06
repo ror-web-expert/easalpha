@@ -38,7 +38,7 @@ const h = vi.hoisted(() => ({
 const later = () => new Promise((resolve) => setTimeout(resolve, 0));
 vi.mock("@/lib/db", () => ({
   db: {
-    orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o) },
+    orders: { get: async (id: string) => h.rows.get(id), put: async (o: { id: string }) => void h.rows.set(o.id, o), toArray: async () => [...h.rows.values()] },
     queue: {
       get: async (id: string) => { const r = h.queued.find((q) => q.id === id); return r ? { ...r, status: r.status ?? "pending" } : undefined; },
       delete: async (id: string) => { const i = h.queued.findIndex((q) => q.id === id); if (i >= 0) h.queued.splice(i, 1); },
@@ -87,7 +87,7 @@ vi.mock("@/lib/api", async () => {
 });
 
 import { ApiError } from "@/lib/api";
-import { loadOrderForEdit, localToCart, payOrder, payStep, regularPricing, reopenFields, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
+import { completeOrder, findLocalOrder, loadOrderForEdit, localToCart, payOrder, payStep, refundOrder, regularPricing, reopenFields, reopenOrder, saveOrder, serverToLocal, storeServerOrder, TotalChangedError } from "./pos-actions";
 import { useCustomerStore } from "@/store/customers";
 import { toCachedCustomer } from "./offline-customers";
 import { defaultPaymentMethod, payableTotals, roundsCash } from "./pos-rules";
@@ -670,6 +670,46 @@ describe("payOrder on a reopened order with nothing left to pay (QA T5)", () => 
     expect(e).toMatchObject({ code: "offline" });
     expect(payStep(e)).toBe("complete");
     expect(h.queued).toEqual([]);
+  });
+});
+
+describe("the Orders screen's actions", () => {
+  const bodies: Record<string, unknown>[] = [];
+  beforeEach(() => {
+    bodies.length = 0;
+    server = fresh([["Karahi", 100000]], { status: "paid", paid_minor: 100000, methods: { cash: 100000 } });
+    const serve = h.handler!;
+    h.handler = (path, opts) => {
+      if (path.endsWith("/refunds")) { bodies.push(opts.body as Record<string, unknown>); return { order: asOrder(server) }; }
+      if (path.endsWith("/reopen")) { bodies.push((opts.body ?? {}) as Record<string, unknown>); server.status = "served"; server.reopened_at = "2026-10-13T11:00:00Z"; return asOrder(server); }
+      return serve(path, opts);
+    };
+  });
+
+  it("refunds with the id the dialog made, every try (web-till#5)", async () => {
+    await refundOrder("o-1", 50000, "cash", "Cold", undefined, "refund-1");
+    await refundOrder("o-1", 50000, "cash", "Cold", undefined, "refund-1");
+    expect(bodies.map((b) => b.refund_id)).toEqual(["refund-1", "refund-1"]);
+  });
+
+  it("sends a manager's PIN with a reopen (QA T11)", async () => {
+    await reopenOrder("o-1", "4321");
+    expect(bodies[0]).toEqual({ approver_pin: "4321" });
+  });
+
+  it("completes an open order paid in full and takes the server's receipt (QA T5)", async () => {
+    server.status = "served";
+    const r = await completeOrder("o-1");
+    expect(h.calls).toEqual(["complete", "receipt"]);
+    expect(r.local.status).toBe("paid");
+    expect(r.receipt).toMatchObject({ receipt_number: "R-7" });
+  });
+
+  it("finds the till's copy by the till serial an offline receipt carries, from any day (QA T12)", async () => {
+    h.rows.set("a", { ...serverToLocal(asOrder(server)), id: "a", label: "#12", till_serial: "T1-007", business_day: "2026-11-01", created_at: "2026-11-01T10:00:00Z" });
+    h.rows.set("b", { ...serverToLocal(asOrder(server)), id: "b", label: "#13", till_serial: "T1-0070", created_at: "2026-11-02T10:00:00Z" });
+    expect((await findLocalOrder(" t1-007 "))?.id).toBe("a");
+    expect(await findLocalOrder("T1-008")).toBeNull();
   });
 });
 
