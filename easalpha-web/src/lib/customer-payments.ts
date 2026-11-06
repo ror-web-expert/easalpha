@@ -23,11 +23,12 @@ export interface ReceiveResult {
 }
 
 /**
- * POST /customers/:id/payments online (a cashier without khata.collect gets 403 permission.denied / approval.required,
- * which the caller resolves with a manager's PIN in `approver_pin`); offline, or when the server does not answer, a
- * customer_payment record is queued under a fixed id and the saved balance takes the amount off at once.
+ * POST /customers/:id/payments online (a cashier without khata.collect gets 403 approval.required, which the caller
+ * resolves with a manager's PIN in `approver_pin`); offline, or when the server does not answer, a customer_payment
+ * record is queued and the saved balance takes the amount off at once. `paymentId` is fixed for one press of Receive:
+ * the server answers a repeat with the payment it already has, so a retry never takes the money twice.
  */
-export async function receiveCustomerPayment(customer: AccountCustomer, input: ReceiveInput, approver_pin?: string): Promise<ReceiveResult> {
+export async function receiveCustomerPayment(customer: AccountCustomer, input: ReceiveInput, approver_pin?: string, paymentId: string = uuid()): Promise<ReceiveResult> {
   const membershipId = useDeviceStore.getState().session?.membership?.id ?? null;
   const cached = useCustomerStore.getState().byId.get(customer.id);
   const before = cached?.balance_minor ?? customer.balance_minor ?? null;
@@ -35,17 +36,18 @@ export async function receiveCustomerPayment(customer: AccountCustomer, input: R
   const sent = { ...input, reference };
   if (isOnline()) {
     try {
-      const res = await api<{ payment: CustomerPayment; customer: Customer }>(`/customers/${customer.id}/payments`, { method: "POST", auth: "pos", body: { amount_minor: input.amount_minor, method_code: input.method_code, reference, approver_pin } });
+      const res = await api<{ payment: CustomerPayment; customer: Customer }>(`/customers/${customer.id}/payments`, { method: "POST", auth: "pos", body: { payment_id: paymentId, amount_minor: input.amount_minor, method_code: input.method_code, reference, approver_pin } });
       // The server's copy of the customer carries the new balance: the saved list and the recent list take it.
       await useCustomerStore.getState().apply([res.customer]);
       rememberRecentCustomer(res.customer);
-      return { offline: false, id: res.payment.id, number: res.payment.number, received_at: res.payment.received_at, previous_balance_minor: res.customer.balance_minor + input.amount_minor, new_balance_minor: res.customer.balance_minor, input: sent, customer };
+      return { offline: false, id: res.payment.id, number: res.payment.number == null ? null : String(res.payment.number), received_at: res.payment.received_at, previous_balance_minor: res.customer.balance_minor + input.amount_minor, new_balance_minor: res.customer.balance_minor, input: sent, customer };
     } catch (e) {
       if (!(e instanceof ApiError && e.isNetwork)) throw e;
       noteNetworkFailure();
     }
   }
-  const id = uuid();
+  // The same id as the online attempt: a POST that reached the server but timed out is a duplicate at replay, not a second payment.
+  const id = paymentId;
   const client_created_at = new Date().toISOString();
   await enqueue({ type: "customer_payment", id, membership_id: membershipId ?? undefined, payload: { customer_id: customer.id, amount_minor: input.amount_minor, method_code: input.method_code, reference, direction: "received", client_created_at } });
   await useCustomerStore.getState().notePayment(customer.id, input.amount_minor);

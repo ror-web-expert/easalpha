@@ -230,7 +230,8 @@ export interface OrderItem {
 export interface OrderSummary {
   id: ID; serial: number | null; label: string; till_serial: string | null; business_day: string; order_type: OrderType; source: string;
   status: OrderStatus; payment_status: string; table_id: ID | null; table_code: string | null; guest_name: string | null; covers: number | null;
-  customer_id: ID | null; rider_id: ID | null; shift_id: ID | null; is_staff_meal: boolean;
+  customer_id: ID | null; /** The customer's name and phone on order rows (since 6 Nov 2026). */ customer_name?: string | null; customer_phone?: string | null;
+  rider_id: ID | null; shift_id: ID | null; is_staff_meal: boolean;
   /** rounding_minor: all the rounding in total_minor (whole rupees plus cash); cash_rounding_minor: the cash part (absent before 17 Oct 2026). */
   subtotal_minor: number; discount_minor: number; service_charge_minor: number; tax_minor: number; rounding_minor: number; cash_rounding_minor?: number; tip_minor: number;
   delivery_charge_minor: number; total_minor: number; paid_minor: number; due_minor: number; item_count: number;
@@ -323,7 +324,7 @@ export interface AccountEntry {
   description: string | null; by_membership_id: ID | null; shift_id: ID | null; reversed_by_entry_id: ID | null; occurred_at: string;
 }
 export interface CustomerPayment {
-  id: ID; number: string; customer_id: ID; direction: string; amount_minor: number; method_code: string | null; reference: string | null;
+  id: ID; number: number | string; customer_id: ID; direction: string; amount_minor: number; method_code: string | null; reference: string | null;
   collected_by_membership_id: ID | null; business_day: string; received_at: string;
 }
 

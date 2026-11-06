@@ -37,6 +37,8 @@ export interface LocalOrder {
   total_minor: number;
   paid_minor: number;
   payments: LocalPayment[];
+  /** "cash:4500,khata:2000" from the server: how the order was paid, for the refund's default method. */
+  payment_method_summary?: string | null;
   receipt_number: string | null;
   void_reason: string | null;
   membership_id: string | null;

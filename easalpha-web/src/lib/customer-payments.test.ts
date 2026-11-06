@@ -37,8 +37,8 @@ beforeEach(() => {
 
 describe("receiveCustomerPayment online", () => {
   it("posts the payment and takes the server's new balance into the saved list and the recent list", async () => {
-    const r = await receiveCustomerPayment(sadia, { amount_minor: 50_000, method_code: "cash", reference: " slip 88 " });
-    expect(h.calls).toEqual([{ path: "/customers/sadia/payments", body: { amount_minor: 50_000, method_code: "cash", reference: "slip 88", approver_pin: undefined } }]);
+    const r = await receiveCustomerPayment(sadia, { amount_minor: 50_000, method_code: "cash", reference: " slip 88 " }, undefined, "11111111-2222-4333-8444-555555555555");
+    expect(h.calls).toEqual([{ path: "/customers/sadia/payments", body: { payment_id: "11111111-2222-4333-8444-555555555555", amount_minor: 50_000, method_code: "cash", reference: "slip 88", approver_pin: undefined } }]);
     expect(r).toMatchObject({ offline: false, id: "cp-1", number: "CP-000012", previous_balance_minor: 194_500, new_balance_minor: 144_500 });
     expect(useCustomerStore.getState().byId.get("sadia")?.balance_minor).toBe(144_500);
     expect(readRecentCustomers()[0]).toMatchObject({ id: "sadia", balance_minor: 144_500 });
@@ -67,6 +67,20 @@ describe("receiveCustomerPayment offline", () => {
     expect(r).toMatchObject({ offline: true, number: null, previous_balance_minor: 194_500, new_balance_minor: 144_500 });
     expect(useCustomerStore.getState().byId.get("sadia")?.balance_minor).toBe(144_500);
     expect(readRecentCustomers()[0]).toMatchObject({ id: "sadia", balance_minor: 144_500 });
+  });
+
+  it("prints the server's numeric payment number as text (QA 6 Nov 2026: padStart on a number broke the receipt)", async () => {
+    h.handler = () => ({ payment: { ...serverPayment, number: 12 }, customer: { ...sadia, balance_minor: 144_500 } });
+    const r = await receiveCustomerPayment(sadia, { amount_minor: 50_000, method_code: "cash" });
+    expect(r.number).toBe("12");
+  });
+
+  it("queues under the same id the online attempt used, so a POST that reached the server is a duplicate at replay", async () => {
+    h.handler = () => { throw new ApiError("network", "Request timed out", 0); };
+    const r = await receiveCustomerPayment(sadia, { amount_minor: 20_000, method_code: "cash" }, undefined, "99999999-2222-4333-8444-555555555555");
+    expect(h.calls.at(-1)?.body).toMatchObject({ payment_id: "99999999-2222-4333-8444-555555555555" });
+    expect(r).toMatchObject({ offline: true, id: "99999999-2222-4333-8444-555555555555" });
+    expect(h.queued.at(-1)).toMatchObject({ type: "customer_payment", id: "99999999-2222-4333-8444-555555555555" });
   });
 
   it("goes the same way when the server does not answer", async () => {

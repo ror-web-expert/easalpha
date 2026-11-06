@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Banknote } from "lucide-react";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
-import { accountPaymentReceipt, receiveCustomerPayment, type AccountCustomer } from "@/lib/customer-payments";
+import { accountPaymentReceipt, receiveCustomerPayment, type AccountCustomer, type ReceiveResult } from "@/lib/customer-payments";
+import { uuid } from "@/lib/utils";
 import { paymentReceiptLines, printJob } from "@/lib/print";
 import { useApproval } from "@/components/approval";
 import { useCatalogStore } from "@/store/catalog";
@@ -29,27 +30,41 @@ export function ReceivePaymentDialog({ open, onClose, customer, onReceived }: { 
   const [method, setMethod] = useState("");
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setAmount(0); setReference(""); setMethod(methods.find((m) => m.kind === "cash")?.code ?? methods[0]?.code ?? ""); } }, [open, methods]);
+  // One payment id per opening of the dialog: pressing Receive again after an error re-sends the same payment, which the
+  // server answers with the one it already recorded (QA 6 Nov 2026: a second press took the money twice).
+  const paymentId = useRef(uuid());
+  useEffect(() => { if (open) { paymentId.current = uuid(); setAmount(0); setReference(""); setMethod(methods.find((m) => m.kind === "cash")?.code ?? methods[0]?.code ?? ""); } }, [open, methods]);
   const chosen = methods.find((m) => m.code === method);
   const needsRef = !!chosen?.needs_reference && !reference.trim();
   const ok = amount > 0 && !!chosen && !needsRef && !busy;
   const balance = customer.balance_minor;
   const owes = balance == null ? null : balance > 0 ? `Owes ${formatMoney(balance, currency)}.` : balance < 0 ? `${formatMoney(-balance, currency)} in credit.` : "Owes nothing.";
 
+  /** The receipt goes out after the dialog has closed: a printer problem never makes a recorded payment look failed. */
+  const printReceipt = async (r: ReceiveResult) => {
+    try {
+      const printed = await printJob({ role: "receipt", lines: paymentReceiptLines(accountPaymentReceipt(r), { settings }) }, { settings });
+      if (!printed.ok) toast.error("Payment recorded, but the receipt did not print", printed.error);
+    } catch (e) { toast.error("Payment recorded, but the receipt did not print", errorMessage(e)); }
+  };
+
   const submit = async () => {
     if (!ok || !chosen) return;
     setBusy(true);
+    let r: ReceiveResult;
     try {
-      const r = await run((pin) => receiveCustomerPayment(customer, { amount_minor: amount, method_code: chosen.code, reference }, pin), `Receive ${formatMoney(amount, currency)} from ${customer.name}`);
-      const now = r.new_balance_minor === null ? "" : ` Balance now ${r.new_balance_minor < 0 ? `${formatMoney(-r.new_balance_minor, currency)} in credit` : formatMoney(r.new_balance_minor, currency)}.`;
-      toast.success(`${formatMoney(amount, currency)} received from ${customer.name}`, `${r.offline ? "Kept on this till; it reaches the account when the till is back online." : "Recorded on the account."}${now}`);
-      const printed = await printJob({ role: "receipt", lines: paymentReceiptLines(accountPaymentReceipt(r), { settings }) }, { settings });
-      if (!printed.ok) toast.error("Could not print the receipt", printed.error);
-      onReceived?.(r.new_balance_minor);
-      onClose();
+      r = await run((pin) => receiveCustomerPayment(customer, { amount_minor: amount, method_code: chosen.code, reference }, pin, paymentId.current), `Receive ${formatMoney(amount, currency)} from ${customer.name}`);
     } catch (e) {
       if (!(e instanceof ApiError && e.code === "approval.cancelled")) toast.error("Could not receive the payment", errorMessage(e));
-    } finally { setBusy(false); }
+      setBusy(false);
+      return;
+    }
+    const now = r.new_balance_minor === null ? "" : ` Balance now ${r.new_balance_minor < 0 ? `${formatMoney(-r.new_balance_minor, currency)} in credit` : formatMoney(r.new_balance_minor, currency)}.`;
+    toast.success(`${formatMoney(amount, currency)} received from ${customer.name}`, `${r.offline ? "Kept on this till; it reaches the account when the till is back online." : "Recorded on the account."}${now}`);
+    setBusy(false);
+    onReceived?.(r.new_balance_minor);
+    onClose();
+    void printReceipt(r);
   };
 
   return (

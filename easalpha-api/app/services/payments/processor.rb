@@ -128,7 +128,7 @@ module Payments
       customer = Customer.active.lock.find(@order.customer_id)
       raise Api::Errors::Conflict.new("khata.walk_in", "Walk-in customers cannot buy on account") if customer.is_walk_in
       if customer.over_limit?(amount)
-        raise Api::Errors::Conflict.new("khata.over_limit", "#{customer.name} would exceed the credit limit of #{customer.credit_limit_minor / 100}") unless offline
+        raise Api::Errors::Conflict.new("khata.over_limit", "#{customer.name} would exceed the credit limit of Rs #{ActiveSupport::NumberHelper.number_to_delimited(customer.credit_limit_minor / 100)}") unless offline
         AuditLog.record(action: "khata_over_limit_offline", record: @order,
                         after: { customer_id: customer.id, customer: customer.name, credit_limit_minor: customer.credit_limit_minor, balance_minor: customer.balance_minor, amount_minor: amount })
       end

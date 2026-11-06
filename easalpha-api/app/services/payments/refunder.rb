@@ -1,6 +1,22 @@
 module Payments
   # Refunds part or all of a paid order back through a payment method. Manager only.
   class Refunder
+    # What was put on the customer's account goes back to the account: refunding it in cash or by card would pay out money
+    # the customer never paid (QA 6 Nov 2026). Cash, card, wallet and bank are interchangeable (a card sale refunded in
+    # cash is fine), and an account refund of a cash sale is store credit, allowed when the order has a customer.
+    def self.check_method!(order, method, amount_minor)
+      on_account = ->(scope) { scope.joins(:payment_method).where(payment_methods: { kind: "khata" }) }
+      paid = Payment.where(order_id: order.id, status: "captured")
+      back = Refund.where(order_id: order.id)
+      if method.khata?
+        raise Api::Errors::Conflict.new("refund.method", "Order #{order.label} has no customer to credit") if order.customer_id.blank?
+        return
+      end
+      other = (paid.sum(:amount_minor) - on_account.(paid).sum(:amount_minor)) - (back.sum(:amount_minor) - on_account.(back).sum(:amount_minor))
+      return if amount_minor <= other
+      raise Api::Errors::Conflict.new("refund.method", other.positive? ? "Only #{other / 100} of order #{order.label} was paid in money; refund the rest to the customer's account" : "Order #{order.label} was put on the customer's account: refund it to the account, not in money")
+    end
+
     def self.call(order, amount_minor:, method_code:, reason:, actor:, approver: nil, device: nil, shift: nil, id: nil)
       method = PaymentMethod.active.find_by!(code: method_code)
       refund = nil
@@ -18,6 +34,7 @@ module Payments
         refunded = Refund.where(order_id: order.id).sum(:amount_minor)
         captured = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor)
         raise Api::Errors::Conflict.new("refund.too_much", "Refund exceeds what was paid") if amount_minor <= 0 || refunded + amount_minor > captured
+        check_method!(order, method, amount_minor)
         refund = Refund.create!(id: id, order: order, branch_id: order.branch_id, payment_method: method, payment_account: method.payment_account, amount_minor: amount_minor,
                                 reason: reason, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, shift_id: shift&.id, business_day: day, refunded_at: Time.current)
         account = method.cash? && shift&.drawer_account ? shift.drawer_account : method.payment_account

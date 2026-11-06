@@ -41,8 +41,10 @@ module Payments
         raise Api::Errors::BadRequest.new("payment.date", "Dates must be YYYY-MM-DD")
       end
       raise Api::Errors::BadRequest.new("payment.date", "The date cannot be in the future") if on > today
-      allowed = on == today || actor&.can?("khata.adjust") || actor&.can?("customers.manage")
-      raise Api::Errors::Forbidden.new("permission.denied", "Dating a payment to another day needs khata.adjust or customers.manage") unless allowed
+      # Only someone who may adjust accounts dates money to another day: the default cashier holds customers.manage, so
+      # that permission is not enough (QA 6 Nov 2026: a cashier backdated a payment a month).
+      allowed = on == today || actor&.can?("khata.adjust")
+      raise Api::Errors::Forbidden.new("permission.denied", "Dating a payment to another day needs khata.adjust") unless allowed
       on
     end
   end

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorMessage } from "@/lib/api";
 import type { CostAnalysis, Delivery, Order, PaymentMethod, Receipt, Refund, Rider } from "@/lib/types";
+import { defaultRefundMethod, paidBy } from "@/lib/refund-method";
 import { formatMoney, formatPercent, formatQty } from "@/lib/money";
 import { formatDateTime } from "@/lib/dates";
 import { titleCase } from "@/lib/utils";
@@ -95,7 +96,7 @@ export function OrderDrawer({ id, onClose }: { id: string | null; onClose: () =>
         {canReopen ? <Button variant="secondary" onClick={() => setReopenOpen(true)}>Reopen</Button> : null}
         {canComplete ? <Button onClick={() => completeM.mutate()} loading={completeM.isPending}>Complete</Button> : null}
         {isOpen ? <Button variant="destructive" onClick={() => setVoidOpen(true)}>Void order</Button> : null}
-        {canRefund ? <Button variant="secondary" onClick={() => { setAmount(o.paid_minor); setRefundOpen(true); }}>Refund</Button> : null}
+        {canRefund ? <Button variant="secondary" onClick={() => { setAmount(o.paid_minor); setMethod(methods.data ? defaultRefundMethod(o.payment_method_summary, methods.data.data) : paidBy(o.payment_method_summary)[0]?.code ?? "cash"); setRefundOpen(true); }}>Refund</Button> : null}
         <Button variant="secondary" onClick={onClose}>Close</Button>
       </>) : undefined}
     >

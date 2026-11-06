@@ -5,6 +5,7 @@ import { RefreshCw, Printer, Ban, RotateCcw, Play, Pencil, Unlock } from "lucide
 import { type LocalOrder } from "@/lib/db";
 import { fetchReceipt, listLocalOrders, refreshOrdersFromServer, refundOrder, reopenOrder, resumeOrder, storeServerOrder, voidOrder } from "@/lib/pos-actions";
 import { isReceiptNumber } from "@/lib/receipt-format";
+import { defaultRefundMethod } from "@/lib/refund-method";
 import { scannerConfig } from "@/lib/barcode";
 import { useBarcodeScanner, playScanTone } from "@/components/pos/scanner";
 import { isOnline } from "@/lib/sync";
@@ -165,7 +166,7 @@ function OrdersScreen() {
       <Dialog open={!!sel && !voidOpen && !refund} onClose={() => setSel(null)} title={sel ? `Order ${sel.label}` : ""} description={sel ? `${titleCase(sel.status)} · ${titleCase(sel.order_type)} · ${formatTime(sel.created_at)}${sel.void_reason ? ` · ${sel.void_reason}` : ""}${sel.sync_status === "rejected" ? ` · Rejected by the server: ${sel.sync_error ?? "no reason given"}. See Attention.` : ""}` : undefined} size="md"
         footer={sel ? <>
           {OPEN.includes(sel.status) ? <Button variant="destructive" onClick={() => setVoidOpen(true)}><Ban className="h-4 w-4" /> Void</Button> : null}
-          {["paid", "closed"].includes(sel.status) && can("orders.refund", "shifts.any") ? <Button variant="secondary" onClick={() => setRefund({ amount: sel.paid_minor, method: methods.find((m) => m.kind === "cash")?.code ?? "cash", reason: "" })}><RotateCcw className="h-4 w-4" /> Refund</Button> : null}
+          {["paid", "closed"].includes(sel.status) && can("orders.refund", "shifts.any") ? <Button variant="secondary" onClick={() => setRefund({ amount: sel.paid_minor, method: defaultRefundMethod(sel.payment_method_summary, methods, sel.payments), reason: "" })}><RotateCcw className="h-4 w-4" /> Refund</Button> : null}
           {["paid", "closed"].includes(sel.status) && !sel.local_only && can("REOPEN_ORDER") ? <Button variant="secondary" onClick={() => doReopen(sel)} loading={busy} title="Reopen this completed order for editing (REOPEN_ORDER)"><Unlock className="h-4 w-4" /> Reopen</Button> : null}
           {["paid", "closed", "refunded"].includes(sel.status) ? <Button variant="secondary" onClick={() => print(sel, true)}><Printer className="h-4 w-4" /> Reprint</Button> : null}
           {sel.status === "held" ? <Button onClick={() => openInSell(sel, true)}><Play className="h-4 w-4" /> Recall</Button> : OPEN.includes(sel.status) ? <Button onClick={() => openInSell(sel)}><Pencil className="h-4 w-4" /> Open</Button> : null}

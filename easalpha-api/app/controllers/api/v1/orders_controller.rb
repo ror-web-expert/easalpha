@@ -7,7 +7,7 @@ module Api
       # GET /orders?business_day=&status=&order_type=&source=&payment_status=&q=&open=true
       def index
         require_permission!("orders.create", "reports.view_all", "reports.view_branch", "reports.view_own", "kitchen.view")
-        scope = Order.includes(:dining_table, :items).where(branch_id: current_branch.id)
+        scope = Order.includes(:dining_table, :items, :customer).where(branch_id: current_branch.id)
         scope = scope.on_day(params[:business_day].presence || current_branch.business_day_for(Time.current)) unless params[:all_days] == "true" || params[:preorders] == "true"
         scope = scope.open if params[:open] == "true"
         scope = scope.where.not(scheduled_for: nil).reorder(:scheduled_for) if params[:preorders] == "true"
@@ -53,7 +53,7 @@ module Api
         tiles = { today: by_day[today].to_i, yesterday: by_day[today - 1].to_i, last_30_days: by_day.select { |d, _| d >= today - 29 }.values.sum,
                   previous_days: by_day.reject { |d, _| d == today }.values.sum, all_time: by_day.values.sum, oldest_day: by_day.keys.min }
         list = params[:business_day].present? ? scope.where(business_day: params[:business_day]) : scope
-        rows, cursor = paginate(list.includes(:dining_table, :items))
+        rows, cursor = paginate(list.includes(:dining_table, :items, :customer))
         render json: { tiles: tiles, calendar: by_day.sort.map { |d, n| { day: d, count: n } }, data: rows.map { |o| OrderSerializers.summary(o) }, next_cursor: cursor }
       end
 

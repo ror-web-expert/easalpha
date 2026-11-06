@@ -121,7 +121,9 @@ function wrap(text: string, width: number): string[] {
 }
 
 /** "left ......... right" padded to the width; a long left part goes on its own line(s) first. */
-export function row(left: string, right: string, width: number, bold = false): PrintLine[] {
+export function row(leftIn: string, rightIn: string, width: number, bold = false): PrintLine[] {
+  // Numbers reach here too (a payment number from the API): text them first, so padStart never meets a number.
+  const left = String(leftIn ?? ""), right = String(rightIn ?? "");
   const fit = width - right.length - 1;
   if (left.length <= fit) return [{ text: left + " ".repeat(Math.max(1, width - left.length - right.length)) + right, bold }];
   return [...wrap(left, width).map((text) => ({ text, bold })), { text: right.padStart(width), bold }];
@@ -247,7 +249,7 @@ export function paymentReceiptLines(p: AccountPaymentReceipt, opts: { settings?:
   const m = (v: number | null | undefined) => formatMoney(v, c);
   const balance = (v: number) => (v < 0 ? `${m(-v)} in credit` : m(v));
   const lines: PrintLine[] = [...storeBlock(p, width, rs.secondaryPhone), { divider: true }, center("ACCOUNT PAYMENT", { bold: true }), { divider: true }];
-  if (p.number) lines.push(...row("Receipt", p.number, width, true));
+  if (p.number != null && p.number !== "") lines.push(...row("Receipt", String(p.number), width, true));
   lines.push(...row("Date", formatDateTime(p.received_at), width));
   if (p.cashier) lines.push(...row("Cashier", p.cashier, width));
   lines.push(...row("Customer", p.customer.name, width));

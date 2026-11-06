@@ -91,9 +91,9 @@ export function serverToLocal(o: Order, prev?: LocalOrder | null): LocalOrder {
   }));
   return {
     id: o.id, serial: o.serial, till_serial: o.till_serial, label: o.label, status: o.status, payment_status: o.payment_status, order_type: o.order_type, table_id: o.table_id, table_code: o.table_code,
-    guest_name: o.guest_name, covers: o.covers, customer_id: o.customer_id, customer_name: prev?.customer_name ?? null, customer_phone: prev?.customer_phone ?? null, notes: o.notes,
+    guest_name: o.guest_name, covers: o.covers, customer_id: o.customer_id, customer_name: o.customer_name ?? prev?.customer_name ?? null, customer_phone: o.customer_phone ?? prev?.customer_phone ?? null, notes: o.notes,
     is_staff_meal: o.is_staff_meal, staff_meal_reason: o.staff_meal_reason ?? null, lines, subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor,
-    tax_minor: o.tax_minor, rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor ?? o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, payments: prev?.payments ?? [], receipt_number: o.receipt_number,
+    tax_minor: o.tax_minor, rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor ?? o.rounding_minor, tip_minor: o.tip_minor, total_minor: o.total_minor, paid_minor: o.paid_minor, payments: prev?.payments ?? [], payment_method_summary: o.payment_method_summary ?? prev?.payment_method_summary ?? null, receipt_number: o.receipt_number,
     void_reason: o.void_reason, membership_id: o.taken_by_membership_id, cashier_name: prev?.cashier_name ?? null, business_day: o.business_day, client_created_at: o.client_created_at ?? o.created_at,
     created_at: o.created_at, updated_at: o.updated_at, local_only: false, open: OPEN_STATUSES.includes(o.status) ? 1 : 0,
     delivery_charge_minor: o.delivery_charge_minor ?? 0, address_id: prev?.address_id ?? null,

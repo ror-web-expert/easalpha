@@ -5,7 +5,7 @@ module OrderSerializers
     { id: o.id, serial: o.serial, label: o.label, till_serial: o.till_serial, business_day: o.business_day, order_type: o.order_type, source: o.source,
       status: o.status, payment_status: o.payment_status, spec_status: o.spec_status, spec_payment_status: o.spec_payment_status,
       reopen_count: o.reopen_count, edit_count: o.edit_count, reopened_at: o.reopened_at, unpaid_direct: o.unpaid_direct, completed_by_membership_id: o.completed_by_membership_id, table_id: o.table_id, table_code: o.dining_table&.code, guest_name: o.guest_name, covers: o.covers,
-      customer_id: o.customer_id, rider_id: o.rider_id, shift_id: o.shift_id, is_staff_meal: o.is_staff_meal, scheduled_for: o.scheduled_for,
+      customer_id: o.customer_id, customer_name: o.customer&.name, customer_phone: o.customer&.phone, rider_id: o.rider_id, shift_id: o.shift_id, is_staff_meal: o.is_staff_meal, scheduled_for: o.scheduled_for,
       subtotal_minor: o.subtotal_minor, discount_minor: o.discount_minor, service_charge_minor: o.service_charge_minor, tax_minor: o.tax_minor,
       rounding_minor: o.rounding_minor, cash_rounding_minor: o.cash_rounding_minor, tip_minor: o.tip_minor, delivery_charge_minor: o.delivery_charge_minor, total_minor: o.total_minor,
       paid_minor: o.paid_minor, due_minor: o.due_minor, item_count: o.items.count { |i| !i.cancelled? },
