@@ -35,7 +35,8 @@ module Stock
       last = SafetyNetRun.order(ran_at: :desc).first
       { enabled: Deduction.enabled?, interval_minutes: INTERVAL / 60, lookback_days: LOOKBACK / 1.day,
         last_run_at: last&.ran_at, last_trigger: last&.trigger, last_checked: last&.checked, last_deducted: last&.deducted, last_errors: last&.errors_count,
-        next_run_at: last ? last.ran_at + INTERVAL : nil, running: last.present? && last.ran_at > INTERVAL * 2 + 1.minute ? false : last.present?,
+        # Running means a sweep within the last two intervals (and a minute's slack), i.e. the job is being scheduled.
+        next_run_at: last ? last.ran_at + INTERVAL : nil, running: last.present? && last.ran_at > (INTERVAL * 2 + 1.minute).ago,
         pending: candidates.count }
     end
   end
