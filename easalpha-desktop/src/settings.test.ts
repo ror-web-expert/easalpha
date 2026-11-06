@@ -17,9 +17,9 @@ test("settings default, save and reload with printer sanitising", () => {
     webUrl: "https://pos.example.pk/",
     printServerPort: 9000,
     printers: [
-      { id: "a", name: " Counter ", kind: "network", host: "192.168.1.9", port: 0, width: 58, role: "receipt" },
+      { id: "a", name: " Counter ", kind: "network", host: "192.168.1.9", port: 0, width: 58, role: "receipt", barcode: "plain" },
       { id: "b", name: "", kind: "usb", width: 80 as 80, vendorId: 1208, productId: 514 },
-      { id: "c", name: "Office", kind: "system", width: 99 as unknown as 80, role: "bogus" as unknown as "kitchen", systemName: "HP" },
+      { id: "c", name: "Office", kind: "system", width: 99 as unknown as 80, role: "bogus" as unknown as "kitchen", barcode: "bogus" as unknown as "off", systemName: "HP" },
     ],
   });
   const s = loadSettings();
@@ -28,10 +28,13 @@ test("settings default, save and reload with printer sanitising", () => {
   assert.equal(s.printers.length, 3);
   assert.equal(s.printers[0].name, "Counter");
   assert.equal(s.printers[0].port, 9100); // invalid port falls back to 9100
+  assert.equal(s.printers[0].barcode, "plain");
   assert.equal(s.printers[1].name, "Printer");
   assert.equal(s.printers[1].vendorId, 1208);
+  assert.equal(s.printers[1].barcode, "code128"); // default written out
   assert.equal(s.printers[2].width, 80); // unknown width -> 80
   assert.equal(s.printers[2].role, undefined); // unknown role dropped
+  assert.equal(s.printers[2].barcode, "code128"); // unknown mode -> default
   assert.equal(s.printers[2].systemName, "HP");
   fs.rmSync(dir, { recursive: true, force: true });
 });

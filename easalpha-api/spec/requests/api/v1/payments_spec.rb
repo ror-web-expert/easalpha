@@ -34,6 +34,11 @@ RSpec.describe "Payments and receipts", type: :request do
     expect(json[:receipt][:totals][:total_minor]).to eq(52_000)
     expect(json[:receipt][:receipt_number]).to match(/\A\d{6}-B1-1\z/)
     expect(json[:receipt][:payments].first).to include(method: "cash", change_minor: 48_000)
+    # The barcode on the receipt: GET /orders?q=<receipt number> finds the order whatever day the list is on
+    number = json[:receipt][:receipt_number]
+    get "/api/v1/orders", params: { q: number, business_day: "2000-01-01" }, headers: auth_headers(cashier)
+    expect(response).to have_http_status(:ok)
+    expect(json[:data].map { |o| o[:receipt_number] }).to eq([ number ])
     get "/api/v1/payment_accounts", headers: headers
     cash = json[:data].find { |a| a[:name] == "Cash" }
     expect(cash[:current_balance_minor]).to eq(52_000)

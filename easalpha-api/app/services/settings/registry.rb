@@ -80,6 +80,8 @@ module Settings
       [ "pos.receipt.footer_qr_url", "point_of_sale", "Receipt Branding", "string", nil, "QR code in the footer: a review link or menu URL" ],
       [ "pos.receipt.paper", "point_of_sale", "Receipt Branding", "string", "80", "Thermal paper width, 58 or 80 mm" ],
       [ "pos.receipt.language", "point_of_sale", "Receipt Branding", "string", "en", "Receipt language" ],
+      [ "pos.receipt.barcode", "point_of_sale", "Receipt Branding", "boolean", true, "Print a barcode of the receipt number, so a scan at the till finds the order for a reprint, refund or reopen" ],
+      [ "pos.receipt.policy", "point_of_sale", "Receipt Branding", "string", nil, "Return or exchange policy printed above the footer" ],
       [ "catalog.display.images", "point_of_sale", "Display Settings", "boolean", true, "Show product images on POS tiles and the catalog" ],
       [ "catalog.display.columns", "point_of_sale", "Display Settings", "integer", 4, "Tiles per row on the POS" ],
       [ "catalog.display.tile_size", "point_of_sale", "Display Settings", "string", "small", "Item tiles on the POS: small fits more items, large shows a big picture of each" ],

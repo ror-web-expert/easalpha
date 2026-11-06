@@ -138,16 +138,18 @@ export default function BrandingPage() {
           <CardBody className="grid gap-6 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Header text" hint="Printed under the address, before the order. Use new lines for several lines." className="sm:col-span-2"><Textarea value={receipt.header} onChange={(e) => setR("header", e.target.value)} rows={2} placeholder="Thank you for dining with us" /></Field>
+              <Field label="Return policy" hint="Printed above the footer, e.g. exchange within 24 hours with this receipt." className="sm:col-span-2"><Textarea value={receipt.policy} onChange={(e) => setR("policy", e.target.value)} rows={2} placeholder="No returns without this receipt" /></Field>
               <Field label="Footer text" hint="Printed in bold at the bottom, above the QR." className="sm:col-span-2"><Textarea value={receipt.footer} onChange={(e) => setR("footer", e.target.value)} rows={2} placeholder="Follow us @yourrestaurant" /></Field>
               <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
                 <Switch checked={receipt.show_logo} onChange={(v) => setR("show_logo", v)} label="Print the logo at the top" />
+                <Switch checked={receipt.barcode} onChange={(v) => setR("barcode", v)} label="Barcode of the receipt number at the bottom (a scan at the till opens the order)" />
                 {!logo ? <span className="text-xs text-fg-muted">No logo uploaded yet</span> : null}
               </div>
               <Field label="Footer QR link" hint="Scan for our menu and reviews. Leave blank for no QR."><Input type="url" value={receipt.footer_qr_url} onChange={(e) => setR("footer_qr_url", e.target.value)} placeholder={storefrontHref ? `https://yourdomain${storefrontHref}` : "https://"} /></Field>
               <Field label="Secondary phone" hint="Printed next to the primary number"><Input type="tel" value={receipt.secondary_phone} onChange={(e) => setR("secondary_phone", e.target.value)} placeholder="+92" /></Field>
               <Field label="Paper width"><Select value={receipt.paper} onChange={(e) => setR("paper", e.target.value === "58" ? "58" : "80")}><option value="80">80 mm (48 chars)</option><option value="58">58 mm (32 chars)</option></Select></Field>
               <Field label="Language"><Select value={receipt.language} onChange={(e) => setR("language", e.target.value === "ur" ? "ur" : "en")}><option value="en">English</option><option value="ur">Urdu</option></Select></Field>
-              <p className="text-xs text-fg-muted sm:col-span-2">Keys: pos.receipt.header, pos.receipt.footer, pos.receipt.show_logo, pos.receipt.footer_qr_url, pos.receipt.paper, pos.receipt.language, store.secondary_phone. Tills re-sync when the settings version changes.</p>
+              <p className="text-xs text-fg-muted sm:col-span-2">Keys: pos.receipt.header, pos.receipt.footer, pos.receipt.policy, pos.receipt.show_logo, pos.receipt.barcode, pos.receipt.footer_qr_url, pos.receipt.paper, pos.receipt.language, store.secondary_phone. Tills re-sync when the settings version changes.</p>
             </div>
             <div className="lg:w-[340px]">
               <div className="mb-2 flex items-center justify-between text-xs text-fg-muted"><span>Live preview</span><span>{receipt.paper} mm · sample order</span></div>

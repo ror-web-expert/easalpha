@@ -4,6 +4,9 @@
 export type PrintLine =
   | { text: string; align?: "left" | "center" | "right"; bold?: boolean; size?: 1 | 2 }
   | { qr: string }
+  /** Code 128 of the data, the data printed under it. `bars` ("1" a bar module, "0" a space) is set by the web app for
+   *  transports that draw the bars themselves (the system driver); ESC/POS printers encode the data on their own. */
+  | { barcode: string; bars?: string }
   | { feed: number }
   | { divider: true }
   | { cut: true }
@@ -13,6 +16,9 @@ export type PrintRole = "receipt" | "kitchen" | "report";
 export type PrinterRole = "receipt" | "kitchen";
 export type PrinterKind = "network" | "usb" | "system";
 export type PaperWidth = 58 | 80;
+/** How a { barcode } line reaches the printer: GS k 73 with the "{B" code set prefix (Epson and most makes), the same
+ *  without the prefix (clones that print "{B" as part of the number), or the value as a text line (no barcode). */
+export type BarcodeMode = "code128" | "plain" | "off";
 
 export type PrintJob = {
   role: PrintRole;
@@ -30,6 +36,8 @@ export type PrinterConfig = {
   kind: PrinterKind;
   width: PaperWidth;
   role?: PrinterRole;
+  /** Default "code128". */
+  barcode?: BarcodeMode;
   /** network */
   host?: string;
   port?: number;

@@ -62,7 +62,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
             {cart.label && cart.label !== "draft" ? cart.label : "New order"}
             {cart.saved ? <Badge className="ml-2" variant={cart.local_only ? "warning" : "primary"}>{cart.local_only ? "on till" : cart.status === "draft" ? "not placed" : cart.status}</Badge> : null}
             {reopened ? <Badge className="ml-1" variant="warning">reopened{cart.reopen_count && cart.reopen_count > 1 ? ` ×${cart.reopen_count}` : ""}</Badge> : null}
-            {cart.is_staff_meal ? <Badge className="ml-1" variant="accent">staff meal</Badge> : null}
+            {cart.is_staff_meal ? <Badge className="ml-1" variant="accent" title={cart.staff_meal_reason ? `Staff meal: ${cart.staff_meal_reason}` : "Staff meal"}>staff meal</Badge> : null}
           </div>
           <div className="truncate text-xs text-fg-muted">{cart.lines.reduce((s, l) => s + l.quantity, 0)} items{paid ? ` · paid ${formatMoney(paid, currency)}` : ""}</div>
         </div>
@@ -76,7 +76,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
         {cart.order_type === "dine_in" ? <button onClick={onTable} className={cn("flex h-11 items-center gap-1.5 rounded-md border px-3 text-sm", cart.table_id ? "border-primary bg-primary-soft" : "hover:bg-muted")}><Grid3X3 className="h-4 w-4" />{cart.table_code ?? "Table"}</button> : null}
         {/* Review 3.3: the two icon buttons say what they are. */}
         <button onClick={onNotes} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.notes ? "border-primary bg-primary-soft" : "hover:bg-muted")} title="Order notes"><StickyNote className="h-4 w-4 shrink-0" />Notes</button>
-        <button onClick={onStaffMeal} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.is_staff_meal ? "border-accent bg-accent-soft" : "hover:bg-muted")} title="Staff meal: the order total becomes zero"><BadgePercent className="h-4 w-4 shrink-0" />Staff</button>
+        <button onClick={onStaffMeal} className={cn("flex h-11 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[10px] font-medium leading-none", cart.is_staff_meal ? "border-accent bg-accent-soft" : "hover:bg-muted")} title={cart.is_staff_meal ? "Staff meal is on: tap to charge this order normally" : "Staff meal: the bill shows a Staff meal line and the total becomes zero"}><BadgePercent className="h-4 w-4 shrink-0" />Staff</button>
       </div>
       <ul className="flex-1 overflow-y-auto">
         {empty ? <li className="px-4 py-12 text-center text-fg-muted">Tap items to add them. F2 searches.</li> : null}
@@ -119,7 +119,7 @@ export function OrderPanel({ cart, currency, settings, onQty, onEditLine, onOver
           {/* One bill block for every surface (lib/bill.ts): Subtotal, each discount (voucher with its code, loyalty, the
               automatic regular discount, item discounts), charges, exclusive tax, tip and a Rounding line when the shown
               figures need it, so the block always adds up to the total by hand. */}
-          {billRows({ ...t, discounts: discountRows(cart.discounts, t.discount_minor), service_charge_label: `Service charge ${chargeDisplay(resolveServiceCharge(cart, settings), currency)}`.trim() }, currency).map((r) => (
+          {billRows({ ...t, is_staff_meal: cart.is_staff_meal, discounts: discountRows(cart.discounts, t.discount_minor), service_charge_label: `Service charge ${chargeDisplay(resolveServiceCharge(cart, settings), currency)}`.trim() }, currency).map((r) => (
             <div key={r.key} className={cn("flex justify-between gap-2", r.info && "text-xs text-fg-muted")}><span className="truncate">{r.label}</span><span className="shrink-0 tabular">{r.amount_minor < 0 ? `-${formatMoney(-r.amount_minor, currency)}` : formatMoney(r.amount_minor, currency)}</span></div>
           ))}
           {paid ? <div className="flex justify-between"><span>Total</span><span className="tabular">{formatMoney(t.total_minor, currency)}</span></div> : null}
