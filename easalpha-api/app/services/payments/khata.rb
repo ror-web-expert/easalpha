@@ -4,12 +4,15 @@ module Payments
     module_function
 
     # id: the till's own UUID for a payment taken offline, so a replay of the same record is a duplicate, never a second receipt.
-    def receive!(customer, amount_minor:, method_code:, reference: nil, actor:, shift: nil, branch:, direction: "received", id: nil)
+    # received_on: the day the money came, when it is not today (a bank transfer seen later, or entered after
+    # midnight); never in the future, never into a locked day, and only for someone who may adjust accounts.
+    def receive!(customer, amount_minor:, method_code:, reference: nil, actor:, shift: nil, branch:, direction: "received", id: nil, received_on: nil)
       raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount_minor.positive?
       raise Api::Errors::Conflict.new("khata.walk_in", "The walk-in customer has no account") if customer.is_walk_in
       method = PaymentMethod.active.find_by!(code: method_code)
       raise Api::Errors::BadRequest.new("khata.method", "Choose a cash, card, wallet or bank method") if method.khata?
-      day = branch.business_day_for(Time.current)
+      day = dated(received_on, today: branch.business_day_for(Time.current), actor: actor)
+      raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(branch.id, day)
       cp = nil
       Customer.transaction do
         customer.lock!
@@ -28,6 +31,19 @@ module Payments
                                  variables: { customer_name: customer.name, amount: amount_minor / 100, new_balance: customer.balance_minor / 100, business_name: customer.business.name })
       end
       cp
+    end
+
+    def dated(received_on, today:, actor:)
+      return today if received_on.blank?
+      on = begin
+        Date.parse(received_on.to_s)
+      rescue Date::Error
+        raise Api::Errors::BadRequest.new("payment.date", "Dates must be YYYY-MM-DD")
+      end
+      raise Api::Errors::BadRequest.new("payment.date", "The date cannot be in the future") if on > today
+      allowed = on == today || actor&.can?("khata.adjust") || actor&.can?("customers.manage")
+      raise Api::Errors::Forbidden.new("permission.denied", "Dating a payment to another day needs khata.adjust or customers.manage") unless allowed
+      on
     end
   end
 end

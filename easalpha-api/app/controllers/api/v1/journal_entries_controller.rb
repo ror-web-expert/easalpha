@@ -28,12 +28,17 @@ module Api
           { account: h[:gl_account_id].present? ? GlAccount.active.find(h[:gl_account_id]) : h[:code], debit_minor: h[:debit_minor], credit_minor: h[:credit_minor], description: h[:description] }
         end
         day = params[:business_day].present? ? Date.parse(params[:business_day]) : current_branch.business_day_for(Time.current)
+        day_lock_guard!(day)
         e = Finance::Journal.post!(business_day: day, description: params[:description], lines: lines, kind: "manual", actor: current_membership, branch_id: current_branch.id)
         render json: FinanceSerializers.journal_entry(e.reload, full: true), status: :created
       end
 
+      # Only a hand-written voucher is reversed here: an automatic one mirrors money that moved, and is undone by
+      # voiding or refunding the record behind it.
       def reverse
         e = JournalEntry.find(params[:id])
+        raise Api::Errors::Conflict.new("journal.automatic", "#{e.label} was posted by #{e.ref_table&.humanize&.downcase || 'the system'}; void or refund that record instead") unless e.kind == "manual"
+        day_lock_guard!(today)
         r = Finance::Journal.reverse!(e, actor: current_membership, description: params[:reason].presence)
         audit!("cancel", record: e, after: { reversed_by: r.label, reason: params[:reason] })
         render json: FinanceSerializers.journal_entry(r.reload, full: true), status: :created

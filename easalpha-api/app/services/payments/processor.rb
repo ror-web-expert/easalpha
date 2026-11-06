@@ -16,7 +16,7 @@ module Payments
     # left to pay is skipped. Either is written to the audit log with what the till sent.
     def call(payments:, tip_minor: 0, offline: false)
       lines = Array(payments).map { |p| p.to_h.with_indifferent_access }
-      existing = lines.map { |l| l[:id].presence && Payment.find_by(id: l[:id]) }
+      existing = lines.map { |l| l[:id].presence && own_payment(l[:id]) }
       return Result.new(order: @order, payments: existing.compact, change_minor: 0) if lines.any? && existing.all?
       raise Api::Errors::Conflict.new("order.status", "Order is #{@order.status} and cannot be paid") unless @order.status.in?(%w[draft held placed preparing ready served dispatched])
       raise Api::Errors::Conflict.new("order.empty", "Nothing to pay") if @order.active_items.empty?
@@ -32,12 +32,15 @@ module Payments
         @order.tip_minor += tip_minor.to_i if tip_minor.to_i.positive?
         apply_rounding!(lines)
         Orders::Pricing.recalculate!(@order)
+        @order.save! # the journal reads the order's parts (tax, tip, rounding) from the row while each payment posts
         due = @order.total_minor - @order.paid_minor
         lines.each do |l|
-          if l[:id].present? && (existing = Payment.find_by(id: l[:id]))
+          if l[:id].present? && (existing = own_payment(l[:id]))
             created << existing
             next
           end
+          day = money_day(l)
+          raise Api::Errors::Conflict.new("day.locked", "#{day} is locked") if DayClose.locked?(@order.branch_id, day)
           method = PaymentMethod.active.find_by!(code: l[:method_code].to_s)
           amount = l[:amount_minor].to_i
           raise Api::Errors::BadRequest.new("payment.amount", "Amount must be positive") unless amount.positive?
@@ -58,8 +61,8 @@ module Payments
           payment = Payment.new(id: l[:id].presence, order: @order, branch_id: @order.branch_id, shift_id: @shift&.id, payment_method: method, payment_account: method.payment_account,
                                 method_code: method.code, amount_minor: applied, tendered_minor: tendered, change_minor: change, reference: l[:reference].presence,
                                 card_terminal_ref: l[:card_terminal_ref].presence, received_by_membership_id: @actor&.id, device_id: @device&.id, customer_id: @order.customer_id,
-                                business_day: @order.business_day || Date.current, received_at: Time.current, client_created_at: l[:client_created_at])
-          handle_khata!(method, applied)
+                                business_day: day, received_at: Time.current, client_created_at: l[:client_created_at])
+          handle_khata!(method, applied, offline: offline)
           payment.shift_id ||= @shift&.id
           payment.save!
           post_to_account!(payment)
@@ -88,8 +91,9 @@ module Payments
     # invoice and the audit row. Also used to complete an order whose payments already cover a corrected total.
     def finalize_paid!
       @order.receipt_number ||= "#{@order.business_day&.strftime('%y%m%d')}-#{@order.branch.code}-#{@order.serial}"
+      first_time = @order.paid_at.nil? # a reopened order paid again keeps its one count in the customer's orders and spend
       Orders::Transitions.mark_paid!(@order, actor: @actor, device: @device)
-      update_customer_stats!
+      update_customer_stats! if first_time
       Loyalty.earn!(@order)
       Tax::Invoicer.enqueue_for(@order)
       AuditLog.record(action: "create", record: @order, after: { paid_minor: @order.paid_minor, methods: @order.payment_method_summary }, table_name: "payments")
@@ -115,14 +119,44 @@ module Payments
                       after: { amount_minor: taken_minor, order_total_minor: @order.total_minor, reason: taken_minor.zero? ? "nothing left to pay" : "more than the amount due" })
     end
 
-    def handle_khata!(method, amount)
+    # offline: the sale already happened on the till, so a customer over the limit is still charged, and the breach is
+    # written to the audit log for a manager instead of leaving the order unpaid with nothing on the account.
+    def handle_khata!(method, amount, offline: false)
       return unless method.khata?
       BusinessModules.require!(@business, "customer_accounts")
       raise Api::Errors::Conflict.new("khata.no_customer", "Choose a customer to put this order on account") if @order.customer_id.blank?
       customer = Customer.active.lock.find(@order.customer_id)
       raise Api::Errors::Conflict.new("khata.walk_in", "Walk-in customers cannot buy on account") if customer.is_walk_in
-      raise Api::Errors::Conflict.new("khata.over_limit", "#{customer.name} would exceed the credit limit of #{customer.credit_limit_minor / 100}") if customer.over_limit?(amount)
+      if customer.over_limit?(amount)
+        raise Api::Errors::Conflict.new("khata.over_limit", "#{customer.name} would exceed the credit limit of #{customer.credit_limit_minor / 100}") unless offline
+        AuditLog.record(action: "khata_over_limit_offline", record: @order,
+                        after: { customer_id: customer.id, customer: customer.name, credit_limit_minor: customer.credit_limit_minor, balance_minor: customer.balance_minor, amount_minor: amount })
+      end
+      credit_hold!(customer, offline: offline)
       customer.update!(balance_minor: customer.balance_minor + amount)
+    end
+
+    # No new sales on account while a bill is overdue beyond khata.credit_hold_days; offline, as with the limit, the
+    # sale stands and the breach goes to the audit log.
+    def credit_hold!(customer, offline:)
+      Customers::Overdue.check_credit!(customer, business: @business, today: @order.branch.business_day_for(Time.current))
+    rescue Api::Errors::Conflict => e
+      raise unless offline && e.code == "khata.overdue"
+      AuditLog.record(action: "khata_overdue_offline", record: @order, after: { customer_id: customer.id, customer: customer.name, balance_minor: customer.balance_minor, reason: e.message })
+    end
+
+    # A payment id names one payment of this order; one from another order is a mistake, not a repeat.
+    def own_payment(id)
+      p = Payment.find_by(id: id) or return nil
+      raise Api::Errors::Conflict.new("payment.foreign_id", "Payment #{id} belongs to order #{p.order.label}") unless p.order_id == @order.id
+      p
+    end
+
+    # The business day the money moved: the shift's, else the day of the sale on the till (an offline payment) or now.
+    def money_day(line)
+      return @shift.business_day if @shift
+      at = line[:client_created_at].present? ? (Time.iso8601(line[:client_created_at].to_s) rescue nil) : nil
+      @order.branch.business_day_for(at || Time.current)
     end
 
     def post_to_account!(payment)

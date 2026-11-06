@@ -65,7 +65,11 @@ RSpec.describe "Finance double entry", type: :request do
       expect(json[:data].all? { |e| e[:lines].sum { |l| l[:debit_minor] } == e[:lines].sum { |l| l[:credit_minor] } }).to be true
 
       total = within(biz) { Order.where(status: %w[paid closed]).sum(:total_minor) }
-      expect(balance("4000")).to eq(total)
+      tax = within(biz) { Order.where(status: %w[paid closed]).sum(:tax_minor) }
+      expect(tax).to be > 0
+      # The sale is split: the net sale to Sales Revenue, the tax collected to Tax Payable.
+      expect(balance("4000")).to eq(total - tax)
+      expect(balance("2100")).to eq(tax)
       expect(balance("5130")).to eq(5_000)
       expect(mirror_balance("Bank")).to eq(3_000)
       expect(mirror_balance("Cash")).to eq(total - 5_000 - 3_000)
@@ -77,15 +81,60 @@ RSpec.describe "Finance double entry", type: :request do
       expect(json[:totals][:debit_minor]).to eq(json[:totals][:credit_minor])
       get "/api/v1/finance/balance_sheet", headers: headers
       expect(json[:balanced]).to be true
-      expect(json[:current_earnings_minor]).to eq(total - 5_000)
+      expect(json[:current_earnings_minor]).to eq(total - tax - 5_000)
       expect(json[:total_assets_minor]).to eq(total - 5_000)
       get "/api/v1/finance/liabilities", headers: headers
-      expect(json[:total_minor]).to eq(0)
+      expect(json[:total_minor]).to eq(tax)
       get "/api/v1/finance/equity", headers: headers
-      expect(json[:total_with_earnings_minor]).to eq(total - 5_000)
+      expect(json[:total_with_earnings_minor]).to eq(total - tax - 5_000)
       get "/api/v1/finance/accounts/#{within(biz) { GlAccount.find_by!(code: '4000').id }}/ledger?from=#{today_for(biz) - 1}&to=#{today_for(biz)}", headers: headers
       expect(json[:rows].size).to eq(1)
-      expect(json[:closing_minor]).to eq(total)
+      expect(json[:closing_minor]).to eq(total - tax)
+    end
+
+    it "splits a sale into sale, tax, service charge, delivery charge, tip and rounding, across split payments, and a khata refund takes it all back" do
+      api_patch "/api/v1/settings", { values: { "charges.service_charge.mode" => "fixed", "charges.service_charge.value" => 150, "charges.service_charge.order_types" => %w[delivery],
+                                                "charges.delivery_charge.mode" => "fixed", "charges.delivery_charge.value" => 100, "total_rounding" => 1 } }, headers: headers
+      api_post "/api/v1/customers", { name: "Rao Bilal", phone: "03491234567" }, headers: headers
+      cust = json[:id]
+      api_post "/api/v1/orders", { order_type: "delivery", customer_id: cust, lines: [ { product_id: m[:burger].id, quantity: 1 } ], place: true }, headers: headers
+      o = json
+      expect(o).to include(service_charge_minor: 15_000, delivery_charge_minor: 10_000)
+      # Two payments on account: the second completes the order with a Rs 10.50 tip, which rounds the total up 50 paisa
+      # (Rs 830 + 10.50 = 840.50 becomes 841).
+      expect(o[:total_minor]).to eq(83_000)
+      api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "khata", amount_minor: 30_000 } ] }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      api_post "/api/v1/orders/#{o[:id]}/payments", { payments: [ { method_code: "khata", amount_minor: 54_100 } ], tip_minor: 1_050 }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      expect(json[:order][:payment_status]).to eq("paid")
+      order = within(biz) { Order.find(o[:id]) }
+      expect(order.tip_minor).to eq(1_050)
+      expect(order.rounding_minor).not_to eq(0)
+      sale = order.total_minor - order.tax_minor - order.service_charge_minor - order.delivery_charge_minor - order.tip_minor - order.rounding_minor
+      expect(balance("1100")).to eq(order.total_minor)
+      expect(balance("4000")).to eq(sale)
+      expect(balance("2100")).to eq(order.tax_minor)
+      expect(balance("4010")).to eq(order.service_charge_minor)
+      expect(balance("4020")).to eq(order.delivery_charge_minor)
+      expect(balance("2400")).to eq(order.tip_minor)
+      expect(balance("4120")).to eq(order.rounding_minor)
+      get "/api/v1/finance/trial_balance?from=#{today_for(biz)}&to=#{today_for(biz)}", headers: headers
+      expect(json[:balanced]).to be true
+
+      # A part refund on account takes a share back; the full refund leaves every account at zero again.
+      api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: 10_000, method_code: "khata", reason: "Late" }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      expect(balance("1100")).to eq(order.total_minor - 10_000)
+      api_post "/api/v1/orders/#{o[:id]}/refunds", { amount_minor: order.total_minor - 10_000, method_code: "khata", reason: "Cancelled" }, headers: headers
+      expect(response).to have_http_status(:created), response.body
+      expect(json[:order][:status]).to eq("refunded")
+      %w[1100 4000 2100 4010 4020 2400 4120].each { |code| expect(balance(code)).to eq(0), "#{code} should net to zero" }
+      within(biz) do
+        expect(Customer.find(cust).balance_minor).to eq(0)
+        expect(JournalEntry.where(ref_table: "refunds").count).to eq(2)
+        expect(JournalEntry.all.all? { |e| e.lines.sum(&:debit_minor) == e.lines.sum(&:credit_minor) }).to be true
+      end
     end
 
     it "books goods received to inventory and payables, supplier payments against payables, and cost of goods on the sale" do

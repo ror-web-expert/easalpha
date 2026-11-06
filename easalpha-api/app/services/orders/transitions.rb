@@ -142,12 +142,13 @@ module Orders
       order
     end
 
-    # SPEC reopen: a completed order comes back for editing. It stays open (served or dispatched) until it goes
-    # through the payment screen and is completed again; the story counts every reopen.
+    # SPEC reopen: a completed order comes back for editing. It stays open (served, a delivery too: its ride is over,
+    # so it must not show as out with a rider again) until it goes through the payment screen and is completed
+    # again; the story counts every reopen.
     def reopen!(order, actor:, device: nil)
       raise Api::Errors::Conflict.new("order.status", "Only a completed order can be reopened; this one is #{order.status}") unless order.completed?
       raise Api::Errors::Conflict.new("order.empty", "This order has no items") if order.active_items.empty?
-      to = order.order_type == "delivery" ? "dispatched" : "served"
+      to = "served"
       Order.transaction do
         order.reopened_at = Time.current
         order.reopen_count += 1

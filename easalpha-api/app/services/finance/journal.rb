@@ -41,21 +41,31 @@ module Finance
       JournalEntry.where(ref_table: ref.class.table_name, ref_id: ref.id, reversed_by_id: nil, kind: "auto").find_each { |e| reverse!(e, actor: actor, business_day: business_day) }
     end
 
-    COUNTER = { "order_payment" => "4000", "refund" => "4000", "expense" => :expense, "supplier_payment" => "2010", "customer_payment" => "1100", "customer_refund" => "1100",
-                "deposit" => "3010", "withdrawal" => "3020", "opening" => "3010", "adjustment" => :adjustment, "rider_float" => "1030" }.freeze
+    COUNTER = { "order_payment" => :sale, "refund" => :sale, "expense" => :expense, "supplier_payment" => "2010", "customer_payment" => "1100", "customer_refund" => "1100",
+                "deposit" => :movement, "withdrawal" => :movement, "opening" => "3010", "adjustment" => :adjustment, "rider_float" => "1030" }.freeze
+
+    # A drawer movement by its kind: a drop goes to the safe and cash in comes from it, a payout or cash out is a
+    # petty expense, a rider float is petty cash. Deposits and withdrawals on a company account stay the owner's.
+    MOVEMENT_COUNTER = { "drop" => "1050", "cash_in" => "1050", "cash_out" => "5190", "payout" => "5190", "float_issue" => "1030", "float_return" => "1030" }.freeze
 
     # One payment-account entry becomes one balanced journal: the account's ledger mirror against its counterpart.
     def from_account_entry!(entry)
       return if entry.kind.in?(%w[transfer_in transfer_out closing])
       counter = COUNTER[entry.kind] or return
-      counter = case counter
-      when :expense then expense_account_for(entry)
-      when :adjustment then entry.amount_minor.positive? ? "4100" : "5190"
-      else counter
-      end
       mirror = Chart.for_payment_account(entry.payment_account)
       amount = entry.amount_minor.abs
       return if amount.zero?
+      if counter == :sale
+        record = entry.ref_table == "payments" ? Payment.find_by(id: entry.ref_id) : (entry.ref_table == "refunds" ? Refund.find_by(id: entry.ref_id) : nil)
+        return sale_split!(record, money_account: mirror, amount_minor: entry.amount_minor, business_day: entry.business_day, description: entry.description, branch_id: entry.branch_id) if record
+        counter = "4000" # an entry with no order behind it
+      end
+      counter = case counter
+      when :expense then expense_account_for(entry)
+      when :adjustment then entry.amount_minor.positive? ? "4100" : "5190"
+      when :movement then movement_account_for(entry)
+      else counter
+      end
       lines = entry.amount_minor.positive? ? [ { account: mirror, debit_minor: amount }, { account: counter, credit_minor: amount } ] : [ { account: counter, debit_minor: amount }, { account: mirror, credit_minor: amount } ]
       post!(business_day: entry.business_day, lines: lines, description: entry.description, ref: entry, branch_id: entry.branch_id)
     end
@@ -66,15 +76,75 @@ module Finance
       e ? Chart.for_expense_category(e.category) : "5190"
     end
 
+    def movement_account_for(entry)
+      mv = entry.ref_table == "cash_movements" ? CashMovement.find_by(id: entry.ref_id) : nil
+      MOVEMENT_COUNTER[mv&.kind] || (entry.amount_minor.positive? ? "3010" : "3020")
+    end
+
+    # What a sale is made of, each part to its own account: the net sale, tax collected, service and delivery
+    # charges, tips owed to staff, and the rounding that made the total a whole figure.
+    SALE_ACCOUNTS = { sales: "4000", tax: "2100", service_charge: "4010", delivery_charge: "4020", tip: "2400", rounding: "4120" }.freeze
+
+    # The parts of an order's total, in minor units; the sale is whatever the other parts leave (so an inclusive tax
+    # comes out of it too). nil for an order with nothing to pay.
+    def sale_parts(order)
+      total = order.total_minor.to_i
+      return nil if total <= 0
+      tax, service, delivery, tip, rounding = %i[tax_minor service_charge_minor delivery_charge_minor tip_minor rounding_minor].map { |f| order.public_send(f).to_i }
+      { sales: total - tax - service - delivery - tip - rounding, tax: tax, service_charge: service, delivery_charge: delivery, tip: tip, rounding: rounding }
+    end
+
+    # Splits an amount across the parts in proportion, largest remainder, so the pieces add up to the amount exactly.
+    def allocate(amount, parts)
+      total = parts.values.sum
+      return parts.transform_values { 0 } if amount.zero? || total.zero?
+      return parts.dup if amount == total
+      shares = parts.transform_values { |v| Rational(v * amount, total) }
+      out = shares.transform_values(&:floor)
+      shares.sort_by { |_, s| -(s - s.floor) }.first(amount - out.values.sum).each { |k, _| out[k] += 1 }
+      out
+    end
+
+    # The sale split already in the journal for an order's payments and refunds (credits positive), by part.
+    def sale_posted(order)
+      entries = JournalEntry.where("(ref_table = 'payments' AND ref_id IN (?)) OR (ref_table = 'refunds' AND ref_id IN (?))",
+                                   Payment.where(order_id: order.id).select(:id), Refund.where(order_id: order.id).select(:id))
+      rows = JournalLine.joins(:gl_account).where(journal_entry_id: entries.select(:id), gl_accounts: { code: SALE_ACCOUNTS.values })
+                        .group("gl_accounts.code").pluck(Arel.sql("gl_accounts.code"), Arel.sql("SUM(credit_minor) - SUM(debit_minor)")).to_h
+      SALE_ACCOUNTS.transform_values { |code| rows[code].to_i }
+    end
+
+    # A payment (amount positive) or refund (negative) on an order: the money account against the sale split. The
+    # revenue side is brought up to the share of what the order has received net of refunds, so split payments add
+    # up exactly, a full refund takes back exactly what the sale posted, and a reopened order whose total changed is
+    # corrected by its next payment. Once per record: a repeat posts nothing.
+    def sale_split!(record, money_account:, amount_minor:, business_day:, description:, branch_id:)
+      return if amount_minor.zero? || JournalEntry.exists?(ref_table: record.class.table_name, ref_id: record.id)
+      order = record.order
+      parts = sale_parts(order) || { sales: amount_minor.abs }
+      net = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor) - Refund.where(order_id: order.id).sum(:amount_minor)
+      posted = sale_posted(order)
+      deltas = allocate(net, parts).to_h { |k, v| [ k, v - posted[k] ] }
+      # Out of step (a refund posted before the split existed, say): this record takes its own proportional share.
+      deltas = allocate(amount_minor.abs, parts).transform_values { |v| amount_minor.negative? ? -v : v } unless deltas.values.sum == amount_minor
+      lines = deltas.filter_map { |k, d| d.zero? ? nil : (d.positive? ? { account: SALE_ACCOUNTS[k], credit_minor: d } : { account: SALE_ACCOUNTS[k], debit_minor: -d }) }
+      lines << (amount_minor.positive? ? { account: money_account, debit_minor: amount_minor } : { account: money_account, credit_minor: -amount_minor })
+      post!(business_day: business_day, lines: lines, description: description, ref: record, branch_id: branch_id)
+    end
+
     def transfer!(from:, to:, amount_minor:, business_day:, actor: nil, note: nil, ref: nil)
       post!(business_day: business_day, description: "Transfer #{from.name} to #{to.name}#{note.present? ? ": #{note}" : ''}", actor: actor, ref: ref,
             lines: [ { account: Chart.for_payment_account(to), debit_minor: amount_minor }, { account: Chart.for_payment_account(from), credit_minor: amount_minor } ])
     end
 
-    # A sale settled to a customer account: receivable against sales.
+    # A sale settled to a customer account: receivable against the sale split.
     def khata_sale!(payment)
-      post!(business_day: payment.business_day, description: "Order #{payment.order.label} on account", ref: payment, branch_id: payment.branch_id,
-            lines: [ { account: "1100", debit_minor: payment.amount_minor }, { account: "4000", credit_minor: payment.amount_minor } ])
+      sale_split!(payment, money_account: "1100", amount_minor: payment.amount_minor, business_day: payment.business_day, description: "Order #{payment.order.label} on account", branch_id: payment.branch_id)
+    end
+
+    # Money given back on an account sale: the sale split comes back out, the receivable goes down.
+    def khata_refund!(refund)
+      sale_split!(refund, money_account: "1100", amount_minor: -refund.amount_minor, business_day: refund.business_day, description: "Refund #{refund.order.label} on account: #{refund.reason}", branch_id: refund.branch_id)
     end
 
     # Goods received from a supplier: inventory against payables.

@@ -10,24 +10,28 @@ module Payments
         order.lock!
         return Refund.find(id) if id && Refund.exists?(id: id)
         raise Api::Errors::Conflict.new("refund.not_paid", "Only a paid order can be refunded") unless order.paid_minor.positive?
-        raise Api::Errors::Conflict.new("day.locked", "#{order.business_day} is locked. A manager must reopen it first.") if order.business_day && DayClose.locked?(order.branch_id, order.business_day)
+        # A part payment on an open order is not refunded from under the kitchen: the order is voided or completed first.
+        raise Api::Errors::Conflict.new("refund.order_open", "Order #{order.label} is still #{order.status}. Void or complete it before refunding.") unless order.status.in?(%w[paid closed refunded])
+        # The refund is dated to the day the money goes back, not the day of the sale: the sale stays on its own day.
+        day = shift&.business_day || order.branch.business_day_for(Time.current)
+        raise Api::Errors::Conflict.new("day.locked", "#{day} is locked. A manager must reopen it first.") if DayClose.locked?(order.branch_id, day)
         refunded = Refund.where(order_id: order.id).sum(:amount_minor)
         captured = Payment.where(order_id: order.id, status: "captured").sum(:amount_minor)
         raise Api::Errors::Conflict.new("refund.too_much", "Refund exceeds what was paid") if amount_minor <= 0 || refunded + amount_minor > captured
         refund = Refund.create!(id: id, order: order, branch_id: order.branch_id, payment_method: method, payment_account: method.payment_account, amount_minor: amount_minor,
-                                reason: reason, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, shift_id: shift&.id, business_day: order.business_day || Date.current, refunded_at: Time.current)
+                                reason: reason, by_membership_id: actor&.id, approved_by_membership_id: approver&.id, shift_id: shift&.id, business_day: day, refunded_at: Time.current)
         account = method.cash? && shift&.drawer_account ? shift.drawer_account : method.payment_account
         refund.update_column(:payment_account_id, account.id) if account
         account&.post!(kind: "refund", amount_minor: -amount_minor, business_day: refund.business_day, ref: refund, description: "Refund #{order.label}: #{reason}", by: actor, shift_id: shift&.id, branch_id: order.branch_id)
         if method.khata? && order.customer_id
           customer = Customer.lock.find(order.customer_id)
           customer.update!(balance_minor: customer.balance_minor - amount_minor)
+          Finance::Journal.khata_refund!(refund) # khata has no payment account, so the journal is posted here
         end
         order.paid_minor -= amount_minor
         full = refunded + amount_minor >= captured
         if full
           order.status = "refunded"
-          order.payment_status = "refunded"
           OrderStatusEvent.create!(order: order, from_status: "paid", to_status: "refunded", membership_id: actor&.id, device_id: device&.id, reason: reason, occurred_at: Time.current)
           Orders::Story.record!(order, "cancelled", actor: actor, device: device, amount_before: order.total_minor, amount_after: 0, note: "refunded: #{reason}")
           # SPEC Return stock on cancellation: a completed order's ingredients come back when the setting is on; otherwise staff record waste.
@@ -38,9 +42,9 @@ module Payments
               Stock::Deduction.waste!(order, reason: "refund: #{reason}")
             end
           end
-        else
-          order.payment_status = "partial"
         end
+        # The same rule as pricing: a reopened order whose excess was refunded is paid, not stranded as partial.
+        order.payment_status = Orders::Pricing.payment_status_for(order)
         order.save!
         Customer.where(id: order.customer_id).update_all([ "net_spent_minor = net_spent_minor - ?", amount_minor ]) if order.customer_id
         AuditLog.record(action: "refund", record: order, after: { amount_minor: amount_minor, method: method.code, reason: reason, full: full }, approved_by: approver&.user)
