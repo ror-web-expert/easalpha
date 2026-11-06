@@ -157,6 +157,11 @@ module Api
       def create
         require_permission!("orders.create")
         if params[:id].present? && (existing = Order.find_by(id: params[:id]))
+          # A repeated create answers with the order it made. A finished one is not that: the till still holds a sale it
+          # completed (its receipt left on screen), and lines added to it would be dropped without a word (QA T9).
+          unless existing.open?
+            raise Api::Errors::Conflict.new("order.closed", "#{existing.label} is already #{existing.status}: start a new order", details: { order: OrderSerializers.full(existing) })
+          end
           return render json: OrderSerializers.full(existing), status: :ok
         end
         approvals = collect_approvals
@@ -201,7 +206,10 @@ module Api
         before_items = Orders::Story.snapshot(order)
         amount_before = order.total_minor
         builder = Orders::Builder.new(order, actor: current_membership, device: current_device, branch: current_branch)
-        builder.update!(attrs: staff_meal_change(order, order_attrs.except(:id), approvals), lines: lines_param, approvals: approvals)
+        # The till's clock dates an order once, at create, inside the Orders::ClientTime window; every save sends that
+        # time back. An update never re-dates it, so it cannot move the order a year back and buy a regular-discount
+        # tier (review orders-money#7), nor clamp a long-open order's time again on each save.
+        builder.update!(attrs: staff_meal_change(order, order_attrs.except(:id, :client_created_at), approvals), lines: lines_param, approvals: approvals)
         Orders::Transitions.after_edit!(order, added: builder.added, removed: builder.removed)
         if order.sent?
           diff = Orders::Story.diff(before_items, Orders::Story.snapshot(order.reload))
@@ -257,6 +265,7 @@ module Api
         require_permission!("orders.create", "discounts.apply")
         order = Order.includes(items: :modifiers).find(params[:id])
         raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+        day_lock_guard!(order.business_day) # an open order left on a day locked by force changes no more, as in Builder#update!
         # Review 3.9: every discount change is logged with the order's discount and total before and after.
         before = { discount_minor: order.discount_minor, total_minor: order.total_minor }
         if params[:voucher_code].present?
@@ -296,6 +305,9 @@ module Api
       def remove_discount
         require_permission!("orders.create")
         order = Order.includes(items: :modifiers).find(params[:id])
+        # As for adding one: a settled sale, or one on a locked day, keeps its discounts (and its voucher stays used).
+        raise Api::Errors::Conflict.new("order.not_editable", "This order can no longer be changed") unless order.editable?
+        day_lock_guard!(order.business_day)
         d = order.discounts.find(params[:discount_id])
         before = { kind: d.kind, value: d.value.to_f, amount_minor: d.amount_minor, discount_minor: order.discount_minor, total_minor: order.total_minor }
         Marketing::Vouchers.release!(d) if d.kind == "voucher"
