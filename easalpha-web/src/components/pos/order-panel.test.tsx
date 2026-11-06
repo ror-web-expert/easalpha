@@ -9,7 +9,7 @@ const order = (over: Partial<Cart> = {}): Cart => ({
   id: "o-1", saved: true, local_only: false, status: "placed", order_type: "takeaway", lines: [line("Karahi", 125600)], customer: null, table_id: null, table_code: null,
   guest_name: "", covers: null, notes: "", is_staff_meal: false, staff_meal_reason: "", label: "#7", client_created_at: "2026-10-13T10:00:00Z", ...over,
 });
-const panel = (cart: Cart, extra: { onPlaceUnpaid?: () => void } = {}) => render(
+const panel = (cart: Cart, extra: { onPlaceUnpaid?: () => void; onAddress?: () => void } = {}) => render(
   <OrderPanel cart={cart} currency="PKR" settings={{ cash_rounding: 10 }} onQty={vi.fn()} onEditLine={vi.fn()} onOverride={vi.fn()} onRemove={vi.fn()} onCustomer={vi.fn()} onTable={vi.fn()}
     onNotes={vi.fn()} onStaffMeal={vi.fn()} onHold={vi.fn()} onSend={vi.fn()} onPay={vi.fn()} onNew={vi.fn()} canOverride {...extra} />,
 );
@@ -39,5 +39,28 @@ describe("OrderPanel heading", () => {
     expect(screen.getByText("New order")).toBeInTheDocument();
     expect(screen.getByText(/not placed/i)).toBeInTheDocument();
     expect(screen.queryByText("draft")).toBeNull();
+  });
+});
+
+// T3/F3: a delivery shows where it goes and its zone; the charge line names the zone.
+describe("OrderPanel delivery address", () => {
+  it("shows the address and zone of a delivery, opens the picker, and names the zone on the charge", () => {
+    const onAddress = vi.fn();
+    panel(order({ order_type: "delivery", address_id: "a1", address_text: "House 12, Phase 5 DHA", zone_name: "DHA", delivery_charge_minor: 15000, delivery_charge_percent: 0 }), { onAddress });
+    const row = screen.getByRole("button", { name: /House 12, Phase 5 DHA/ });
+    expect(row).toHaveTextContent("DHA");
+    row.click();
+    expect(onAddress).toHaveBeenCalled();
+    expect(figure("Delivery (DHA)")).toBe("Rs 150");
+  });
+
+  it("asks for an address on a delivery without one", () => {
+    panel(order({ order_type: "delivery" }), { onAddress: vi.fn() });
+    expect(screen.getByRole("button", { name: /Delivery address/ })).toBeInTheDocument();
+  });
+
+  it("shows no address row on a takeaway", () => {
+    panel(order(), { onAddress: vi.fn() });
+    expect(screen.queryByRole("button", { name: /Delivery address/ })).toBeNull();
   });
 });

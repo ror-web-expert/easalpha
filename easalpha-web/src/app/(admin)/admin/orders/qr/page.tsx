@@ -57,7 +57,7 @@ export default function QrOrdersPage() {
                 {rows.length ? rows.map((o) => (
                   <TR key={o.id} onClick={() => setSelected(o.id)}>
                     <TD className="font-semibold">{o.source === "online" ? <span className="inline-flex items-center gap-1"><Badge variant="info">Website</Badge><span className="text-xs font-normal text-fg-secondary">{o.order_type === "delivery" ? "Delivery" : "Pickup"}</span></span> : <span>Table {o.table_code ?? "-"}</span>}</TD>
-                    <TD>{o.guest_name ?? <span className="text-fg-muted">No name</span>}{o.address_text ? <div className="max-w-[260px] truncate text-xs text-fg-secondary" title={o.address_text}>{o.address_text}</div> : null}</TD>
+                    <TD>{o.guest_name ?? <span className="text-fg-muted">No name</span>}{o.guest_phone ? <div className="text-xs text-fg-secondary">{o.guest_phone}</div> : null}{o.address_text ? <div className="max-w-[260px] truncate text-xs text-fg-secondary" title={o.address_text}>{o.address_text}</div> : null}</TD>
                     <TD><span className="font-mono text-xs">{o.label}</span> <Badge variant={o.qr_status === "pending" ? "warning" : o.qr_status === "accepted" ? "success" : "danger"} className="ml-1">{o.qr_status}</Badge> {tab !== "pending" ? <Badge variant={orderStatusVariant(o.status)} className="ml-1">{o.status}</Badge> : null}</TD>
                     <TD right>{o.item_count}</TD>
                     <TD right className="font-medium">{formatMoney(o.total_minor)}</TD>

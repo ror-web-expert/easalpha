@@ -56,6 +56,9 @@ export interface LocalOrder {
   sync_error?: string | null;
   delivery_charge_minor?: number;
   address_id?: string | null;
+  /** The delivery address as the cashier picked it, and its zone from the quote, so the order shows them when it opens again. */
+  address_text?: string | null;
+  zone_name?: string | null;
   /** SPEC Charges and Tax: per-order charge values and the tax choice, as last known from the server or the cashier. */
   service_charge_percent?: number | null;
   service_charge_fixed_minor?: number | null;

@@ -7,6 +7,7 @@ import { api, errorMessage } from "@/lib/api";
 import type { Delivery, DeliveryStatus } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatDateTime, formatTime, isoDay } from "@/lib/dates";
+import { deliveryAddressLine, deliveryPhone } from "@/lib/delivery-address";
 import { titleCase } from "@/lib/utils";
 import { usePagedList } from "@/lib/hooks";
 import { Cards, FilterBar, LoadMore, PageHeader } from "@/components/admin/page";
@@ -102,7 +103,8 @@ export default function DeliveryBoardPage() {
                 {rows.filter((r) => r.status === s).map((d) => (
                   <div key={d.id} className="cursor-pointer rounded-md border bg-card p-2.5 shadow-sm hover:border-primary" onClick={() => setSelected(d.id)}>
                     <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-semibold">{d.order_label}</span><span className="text-xs text-fg-muted">{formatTime(d.created_at)}</span></div>
-                    <div className="mt-1 truncate text-sm">{d.guest_name ?? "Customer"}{d.zone_name ? <span className="text-fg-muted"> · {d.zone_name}</span> : null}</div>
+                    <div className="mt-1 truncate text-sm">{d.customer_name ?? d.guest_name ?? "Customer"}{d.zone_name ? <span className="text-fg-muted"> · {d.zone_name}</span> : null}</div>
+                    {deliveryAddressLine(d) ? <div className="mt-0.5 truncate text-xs text-fg-secondary" title={deliveryAddressLine(d)}>{deliveryAddressLine(d)}</div> : null}
                     <div className="mt-1 flex items-center justify-between text-xs text-fg-secondary"><span className="inline-flex items-center gap-1"><Bike className="h-3 w-3" /> {d.rider_name ?? "No rider"}</span><span className="tabular font-medium">{formatMoney(d.order_total_minor)}</span></div>
                     <div className="mt-2">{actions(d)}</div>
                   </div>
@@ -119,7 +121,7 @@ export default function DeliveryBoardPage() {
             {rows.length ? rows.map((d) => (
               <TR key={d.id} onClick={() => setSelected(d.id)}>
                 <TD className="font-mono font-medium">{d.order_label}</TD>
-                <TD>{d.guest_name ?? "-"}</TD>
+                <TD>{d.customer_name ?? d.guest_name ?? "-"}{deliveryAddressLine(d) ? <div className="max-w-[260px] truncate text-xs text-fg-secondary" title={deliveryAddressLine(d)}>{deliveryAddressLine(d)}</div> : null}</TD>
                 <TD className="text-fg-secondary">{d.zone_name ?? "-"}</TD>
                 <TD>{d.rider_name ?? <span className="text-fg-muted">-</span>}</TD>
                 <TD><Badge variant={deliveryStatusVariant(d.status)}>{DELIVERY_LABELS[d.status]}</Badge></TD>
@@ -180,9 +182,9 @@ function DeliveryDrawer({ id, onClose, onOpenOrder }: { id: string | null; onClo
           <div>
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-fg-secondary">Customer</div>
             <div className="rounded-md border p-3 text-sm">
-              <div className="font-medium">{d.customer?.name ?? d.guest_name ?? "Walk-in"}</div>
-              {d.customer?.phone ? <div className="mt-0.5 inline-flex items-center gap-1 text-fg-secondary"><Phone className="h-3.5 w-3.5" /> {d.customer.phone}</div> : null}
-              {d.address ? <div className="mt-1 flex items-start gap-1 text-fg-secondary"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{d.address.text}</span></div> : <div className="mt-1 text-fg-muted">No address on file</div>}
+              <div className="font-medium">{d.customer?.name ?? d.customer_name ?? d.guest_name ?? "Walk-in"}</div>
+              {deliveryPhone(d) ? <div className="mt-0.5 inline-flex items-center gap-1 text-fg-secondary"><Phone className="h-3.5 w-3.5" /> {deliveryPhone(d)}</div> : null}
+              {deliveryAddressLine(d) ? <div className="mt-1 flex items-start gap-1 text-fg-secondary"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{deliveryAddressLine(d)}</span></div> : <div className="mt-1 text-fg-muted">No address on file</div>}
             </div>
           </div>
           <div>

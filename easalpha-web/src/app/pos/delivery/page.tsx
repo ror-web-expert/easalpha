@@ -7,6 +7,7 @@ import { assignRider, DELIVERY_LABELS, deliveryStatusVariant, listDeliveries, li
 import type { Delivery, DeliveryStatus, Rider } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
 import { formatAgo, formatTime } from "@/lib/dates";
+import { deliveryAddressLine, deliveryPhone } from "@/lib/delivery-address";
 import { useCatalogStore } from "@/store/catalog";
 import { useSyncStore } from "@/store/sync";
 import { toast } from "@/store/toast";
@@ -86,7 +87,7 @@ export default function DeliveryPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-2xl font-bold">{d.order_label} <Badge variant={deliveryStatusVariant(d.status)}>{DELIVERY_LABELS[d.status] ?? titleCase(d.status)}</Badge></div>
-                    <div className="truncate text-sm text-fg-secondary">{d.customer?.name ?? d.guest_name ?? "Customer"}{d.customer?.phone ? <span className="inline-flex items-center gap-1"> · <Phone className="h-3 w-3" />{d.customer.phone}</span> : null} · {formatTime(d.created_at)}</div>
+                    <div className="truncate text-sm text-fg-secondary">{d.customer?.name ?? d.customer_name ?? d.guest_name ?? "Customer"}{deliveryPhone(d) ? <span className="inline-flex items-center gap-1"> · <Phone className="h-3 w-3" />{deliveryPhone(d)}</span> : null} · {formatTime(d.created_at)}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-xl font-semibold tabular">{formatMoney(d.order_total_minor, currency)}</div>
@@ -94,7 +95,7 @@ export default function DeliveryPage() {
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                  {d.address?.text || d.zone_name ? <span className="inline-flex items-center gap-1 text-fg-secondary"><MapPin className="h-4 w-4" />{d.address?.text ?? ""}{d.zone_name ? <Badge className="ml-1">{d.zone_name}</Badge> : null}</span> : null}
+                  {deliveryAddressLine(d) || d.zone_name ? <span className="inline-flex items-center gap-1 text-fg-secondary"><MapPin className="h-4 w-4" />{deliveryAddressLine(d)}{d.zone_name ? <Badge className="ml-1">{d.zone_name}</Badge> : null}</span> : null}
                   {d.charge_minor ? <span className="text-fg-muted">Delivery {formatMoney(d.charge_minor, currency)}</span> : null}
                   <span className={cn("font-medium", d.rider_name ? "" : "text-warning")}>{d.rider_name ? `Rider: ${d.rider_name}` : "No rider yet"}</span>
                   {d.failed_reason ? <span className="text-danger">{d.failed_reason}</span> : null}

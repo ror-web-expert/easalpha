@@ -583,6 +583,25 @@ describe("a summary row from GET /orders (review R2)", () => {
   });
 });
 
+// T3/F3: a delivery's address stays on the order through saves and reloads, and goes when the server drops it.
+describe("a delivery's address on the till's copy", () => {
+  it("takes the server's address, keeps the zone the till quoted for it, and puts both on the cart", () => {
+    server = fresh([["Karahi", 100000]]);
+    const prev: LocalOrder = { ...serverToLocal(asOrder(server)), address_id: "a1", address_text: "House 12, Phase 5 DHA", zone_name: "DHA" };
+    const local = serverToLocal({ ...asOrder(server), address_id: "a1", address_text: "House 12, Phase 5 DHA, Lahore" } as Order, prev);
+    expect(local).toMatchObject({ address_id: "a1", address_text: "House 12, Phase 5 DHA, Lahore", zone_name: "DHA" });
+    expect(localToCart(local)).toMatchObject({ address_id: "a1", address_text: "House 12, Phase 5 DHA, Lahore", zone_name: "DHA" });
+  });
+
+  it("clears the address when the server has none (the customer changed), and keeps the till's when an older server says nothing", () => {
+    server = fresh([["Karahi", 100000]]);
+    const prev: LocalOrder = { ...serverToLocal(asOrder(server)), address_id: "a1", address_text: "House 12", zone_name: "DHA" };
+    expect(serverToLocal({ ...asOrder(server), address_id: null } as Order, prev)).toMatchObject({ address_id: null, address_text: null, zone_name: null });
+    const older = serverToLocal(asOrder(server), prev); // no address_id key at all
+    expect(older).toMatchObject({ address_id: "a1", address_text: "House 12", zone_name: "DHA" });
+  });
+});
+
 describe("offline labels (review R29)", () => {
   const takeaway = (id: string): Cart => ({
     id, saved: false, local_only: false, status: "draft", order_type: "takeaway", lines: [openLine("Chai", 15000)], customer: null, table_id: null, table_code: null,

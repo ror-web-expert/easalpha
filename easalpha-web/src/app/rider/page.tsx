@@ -6,9 +6,11 @@ import { Bike, CloudOff, LocateFixed, LogOut, MapPin, Navigation, PackageCheck, 
 import { errorMessage } from "@/lib/api";
 import type { Delivery, RiderDeliveries, RiderFloat } from "@/lib/types";
 import { formatMoney } from "@/lib/money";
+import { linesText } from "@/lib/kitchen-bump";
 import { formatAgo, formatTime } from "@/lib/dates";
 import { DELIVERY_LABELS, deliveryStatusVariant } from "@/components/admin/delivery";
-import { addressLine, groupDeliveries, isCashOrder, riderNextSteps, type RiderStep } from "@/components/admin/riders-helpers";
+import { groupDeliveries, isCashOrder, riderNextSteps, type RiderStep } from "@/components/admin/riders-helpers";
+import { deliveryAddressLine, deliveryPhone } from "@/lib/delivery-address";
 import { riderApi } from "@/components/rider/api";
 import { flushOutbox, newOutboxId, useOutbox } from "@/components/rider/outbox";
 import { applyOutbox, directionsUrl, newlyAssigned } from "@/components/rider/outbox-helpers";
@@ -231,8 +233,9 @@ export default function RiderHomePage() {
 function DeliveryCard({ d, canFail, canCollect, seePhone, busy, onStep }: { d: Row; canFail: boolean; canCollect: boolean; seePhone: boolean; busy: boolean; onStep: (s: RiderStep) => void }) {
   const cash = isCashOrder(d);
   const steps = riderNextSteps(d.status, { canFail, cashOrder: cash && canCollect });
-  const address = addressLine(d.address);
-  const phone = d.customer?.phone;
+  // The saved address and the customer's phone, or a storefront guest's from the order itself (sync-auth#6).
+  const address = deliveryAddressLine(d);
+  const phone = deliveryPhone(d);
   const directions = directionsUrl(d.address, address);
   return (
     <Card>
@@ -240,7 +243,7 @@ function DeliveryCard({ d, canFail, canCollect, seePhone, busy, onStep }: { d: R
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="font-mono text-lg font-semibold">{d.order_label}</div>
-            <div className="text-sm">{d.customer?.name ?? d.guest_name ?? "Customer"}{d.zone_name ? <span className="text-fg-muted"> · {d.zone_name}</span> : null}</div>
+            <div className="text-sm">{d.customer?.name ?? d.customer_name ?? d.guest_name ?? "Customer"}{d.zone_name ? <span className="text-fg-muted"> · {d.zone_name}</span> : null}</div>
           </div>
           <div className="text-right">
             <div className="text-lg font-semibold tabular">{formatMoney(d.order_total_minor)}</div>
@@ -249,7 +252,7 @@ function DeliveryCard({ d, canFail, canCollect, seePhone, busy, onStep }: { d: R
         </div>
         {d.queued ? <Badge variant="warning" className="gap-1"><CloudOff className="h-3.5 w-3.5" /> Saved, waiting for signal</Badge> : null}
         {address ? <div className="flex items-start gap-2 text-sm"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" /><span>{address}</span></div> : null}
-        {d.items?.length ? <div className="text-xs text-fg-secondary">{d.items.map((i) => `${i.quantity} x ${i.name}`).join(", ")}</div> : null}
+        {d.items?.length ? <div className="text-xs text-fg-secondary">{linesText(d.items, " x ")}</div> : null}
         <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
           {d.assigned_at ? <span>Assigned {formatTime(d.assigned_at)}</span> : null}
           {d.picked_up_at ? <span>· Picked up {formatTime(d.picked_up_at)}</span> : null}

@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { QrCode, Check, X, Bell, ReceiptText, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { QrCode, Check, X, Bell, ReceiptText, RefreshCw, Wifi, WifiOff, MapPin, Phone } from "lucide-react";
 import { errorMessage } from "@/lib/api";
 import { acceptQrOrder, handleRequest, rejectQrOrder } from "@/lib/till-extras";
 import { storeServerOrder } from "@/lib/pos-actions";
 import type { QrOrder, TableRequest } from "@/lib/types";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, formatQty } from "@/lib/money";
 import { formatAgo, formatTime } from "@/lib/dates";
 import { useCatalogStore } from "@/store/catalog";
 import { toast } from "@/store/toast";
@@ -86,6 +86,15 @@ export default function QrOrdersPage() {
                 </div>
                 <Badge variant="warning">Pending</Badge>
               </div>
+              {/* What waits for the cashier (a guest's round on a running order, or all of a new one), and for a website
+                  delivery where it goes and whom to call (sync-auth#6). */}
+              {o.waiting_items?.length ? <div className="mt-2 text-sm"><span className="text-fg-secondary">{o.status === "draft" || o.status === "held" ? "Order: " : "New round: "}</span>{o.waiting_items.map((i) => `${formatQty(i.quantity)} × ${i.name}`).join(", ")}</div> : null}
+              {o.address_text || o.guest_phone ? (
+                <div className="mt-1 space-y-0.5 text-sm text-fg-secondary">
+                  {o.address_text ? <div className="flex items-start gap-1"><MapPin className="mt-0.5 h-4 w-4 shrink-0" />{o.address_text}</div> : null}
+                  {o.guest_phone ? <div className="flex items-center gap-1"><Phone className="h-4 w-4 shrink-0" />{o.guest_phone}</div> : null}
+                </div>
+              ) : null}
               <div className="mt-2 text-sm text-fg-secondary">{o.notes ? <span className="italic">“{o.notes}”</span> : null}</div>
               <div className="mt-auto flex items-end justify-between gap-2 pt-2">
                 <span className="text-xl font-semibold tabular">{formatMoney(o.total_minor, currency)}</span>

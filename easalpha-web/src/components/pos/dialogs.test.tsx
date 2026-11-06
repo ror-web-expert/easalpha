@@ -91,3 +91,38 @@ describe("CustomerDialog last order", () => {
     expect(screen.queryByRole("button", { name: /Repeat last order/ })).toBeNull();
   });
 });
+
+// T3/F3: a new customer added for a delivery brings their address, which goes on the order.
+describe("CustomerDialog new customer for a delivery", () => {
+  function renderNew(orderType: "delivery" | "takeaway") {
+    const onPick = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><CustomerDialog open onClose={vi.fn()} onPick={onPick} onRepeat={vi.fn()} orderType={orderType} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "New customer" }));
+    fireEvent.change(screen.getByPlaceholderText("Name"), { target: { value: "Hira" } });
+    return onPick;
+  }
+
+  it("asks for the delivery address and hands its id on with the customer", async () => {
+    apiMock.mockImplementation((path: string, opts: { method?: string; body?: Record<string, unknown> }) => {
+      if (path === "/customers" && opts.method === "POST") return Promise.resolve({ ...customer("hira", "Hira", null), addresses: [{ id: "addr-1", line1: "House 12", area: "Phase 5", is_default: true }] });
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    const onPick = renderNew("delivery");
+    fireEvent.change(screen.getByLabelText("Delivery address"), { target: { value: "House 12" } });
+    fireEvent.change(screen.getByLabelText("Area"), { target: { value: "Phase 5" } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Add customer/ })); });
+    expect(apiMock).toHaveBeenCalledWith("/customers", expect.objectContaining({ body: expect.objectContaining({ name: "Hira", addresses: [{ line1: "House 12", area: "Phase 5", is_default: true }] }) }));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: "hira" }), "addr-1");
+  });
+
+  it("keeps the room and roll number for other orders, with no address", async () => {
+    apiMock.mockResolvedValue(customer("hira", "Hira", null));
+    const onPick = renderNew("takeaway");
+    expect(screen.queryByLabelText("Delivery address")).toBeNull();
+    expect(screen.getByPlaceholderText("Room")).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Add customer/ })); });
+    expect(apiMock).toHaveBeenCalledWith("/customers", expect.objectContaining({ body: expect.objectContaining({ addresses: undefined }) }));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: "hira" }), undefined);
+  });
+});
