@@ -5,7 +5,7 @@
 #
 #   SUPER_ADMIN_EMAIL=you@example.com scripts/server-env.sh [out-file]      (default ~/easalpha-server.env)
 #   PROXY=tunnel (default): Cloudflare Tunnel, for a server nothing on the internet reaches (production since
-#     26 Nov 2026); CLOUDFLARE_TUNNEL_TOKEN=<token> fills the token in, or add it to the file later.
+#     26 Nov 2026); TUNNEL_TOKEN=<token> fills the token in, or add it to the file later.
 #   PROXY=caddy: Caddy on ports 80/443 with Let's Encrypt, for a server with its own public address.
 #   scp ~/easalpha-server.env <user>@<server>:easalpha/.env
 #
@@ -47,7 +47,7 @@ set_var SUPER_ADMIN_EMAIL "$SUPER_ADMIN_EMAIL"
 set_var SUPER_ADMIN_PASSWORD "$SUPER_ADMIN_PASSWORD"
 set_var UMAMI_APP_SECRET "$(rand 32)"
 set_var COMPOSE_FILE "docker-compose.yml:docker-compose.images.yml:docker-compose.$PROXY.yml"
-[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ] && set_var CLOUDFLARE_TUNNEL_TOKEN "$CLOUDFLARE_TUNNEL_TOKEN"
+[ -n "${TUNNEL_TOKEN:-}" ] && set_var TUNNEL_TOKEN "$TUNNEL_TOKEN"
 set_var IMAGE_REPO "ghcr.io/$OWNER/easalpha"
 set_var IMAGE_TAG latest
 
@@ -55,7 +55,7 @@ if grep -q '=change-me' "$OUT"; then echo "Left a change-me value in $OUT:"; gre
 echo "Wrote $OUT (mode 600)."
 echo "Super admin for https://easalpha.com/super: $SUPER_ADMIN_EMAIL / $SUPER_ADMIN_PASSWORD"
 echo "(only used to create the account on a fresh database; change it after the first login)"
-if [ "$PROXY" = tunnel ] && ! grep -q "^CLOUDFLARE_TUNNEL_TOKEN=." "$OUT"; then
-  echo "CLOUDFLARE_TUNNEL_TOKEN is still empty: every docker compose command refuses to run until it is set."
+if [ "$PROXY" = tunnel ] && ! grep -q "^TUNNEL_TOKEN=." "$OUT"; then
+  echo "TUNNEL_TOKEN is still empty: every docker compose command refuses to run until it is set."
 fi
 echo "Next: fill SMTP_* and the other optional values, then  scp $OUT <user>@<server>:easalpha/.env"

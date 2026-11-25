@@ -4,7 +4,8 @@
 # Builds are unsigned: Windows SmartScreen and macOS Gatekeeper warn on first open (see docs/SETUP.md).
 # After the three builds, the "publish" job (v* tags and manual runs) gathers every installer, writes downloads/manifest.json
 # and uploads the folder to the website server over SSH, so the site's Download page offers the new version with no
-# manual step. Secrets to add once: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key), DEPLOY_DOWNLOADS_PATH (the
+# manual step. Secrets to add once: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key), DEPLOY_KNOWN_HOSTS (the
+# server's host keys), TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET (the tailnet), DEPLOY_DOWNLOADS_PATH (the
 # server folder mounted as /app/public/downloads, e.g. /srv/easalpha/deploy/downloads). Variable PUBLIC_URL (the website,
 # e.g. https://easalpha.com) makes the installers update themselves from <PUBLIC_URL>/downloads; without it the update
 # feed is this repository's latest GitHub Release (AppImage and Windows; macOS needs a signed build, .deb by hand).
@@ -59,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { sparse-checkout: "easalpha-desktop/package.json\nscripts/downloads-manifest.mjs", sparse-checkout-cone-mode: false }
-      # The server is reached over the tailnet since 26 Nov 2026, as in images.yml's deploy job.
+      # The server is reached over the tailnet since 26 Nov 2026, as in deploy.yml.
       - if: ${{ env.DEPLOY_HOST != '' && env.TS_OAUTH_CLIENT_ID != '' }}
         name: Join the tailnet
         uses: tailscale/github-action@v4
@@ -80,9 +81,17 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_DOWNLOADS_PATH: ${{ secrets.DEPLOY_DOWNLOADS_PATH }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # The server's own host keys when the secret is set (as in deploy.yml); otherwise whatever answers now.
+          if [ -n "$DEPLOY_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::DEPLOY_KNOWN_HOSTS secret not set: trusting whatever host key DEPLOY_HOST presents now"
+            ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          fi
+          printf 'StrictHostKeyChecking yes\n' >> ~/.ssh/config
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_DOWNLOADS_PATH'"
           # new files first, manifest last, so a visitor never sees a version whose installer is still uploading
           rsync -av --exclude manifest.json -e "ssh -i ~/.ssh/deploy_key" downloads/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DOWNLOADS_PATH/"

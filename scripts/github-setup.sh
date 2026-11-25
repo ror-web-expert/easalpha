@@ -8,8 +8,9 @@
 # Moving to a new server is the same command with the new address: it points the secrets at it, installs the deploy key
 # there and checks it (docs/DEPLOY.md, "Moving to a new server"). Running it again changes nothing else.
 #
-# Secrets set:   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH, DEPLOY_DOWNLOADS_PATH, and TS_OAUTH_CLIENT_ID and
-#                TS_OAUTH_SECRET when given (a server only the tailnet reaches: the deploy joins it as tag:ci)
+# Secrets set:   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS, DEPLOY_PATH, DEPLOY_DOWNLOADS_PATH, and
+#                TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET when given (a server only the tailnet reaches: the deploy joins it
+#                as tag:ci)
 # Variables set: API_PUBLIC_URL (baked into the web image), PUBLIC_URL (desktop installers' update feed)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -33,6 +34,11 @@ gh auth status >/dev/null 2>&1 || { echo "Not logged in: run 'gh auth login' fir
 echo "1/5 Deploy key on the server ($DEPLOY_USER@$DEPLOY_HOST)"
 ssh-copy-id -i "$DEPLOY_KEY.pub" "$DEPLOY_USER@$DEPLOY_HOST" >/dev/null 2>&1 || true
 ssh -i "$DEPLOY_KEY" -o IdentitiesOnly=yes -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/downloads' && echo '   key works'"
+# The server's own host keys, read from its /etc/ssh over this signed-in session (not ssh-keyscan, which trusts
+# whatever answers): the deploy refuses any other machine that answers on DEPLOY_HOST.
+KNOWN_HOSTS="$(ssh -i "$DEPLOY_KEY" -o IdentitiesOnly=yes -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" 'cat /etc/ssh/ssh_host_*_key.pub' \
+  | awk -v h="$DEPLOY_HOST" 'NF >= 2 { print h, $1, $2 }')"
+[ -n "$KNOWN_HOSTS" ] || { echo "Could not read the server's host keys from /etc/ssh"; exit 1; }
 
 echo "2/5 Repository $REPO ($VISIBILITY)"
 if git remote get-url origin >/dev/null 2>&1; then
@@ -50,6 +56,7 @@ gh secret set DEPLOY_USER --repo "$FULL" --body "$DEPLOY_USER"
 gh secret set DEPLOY_PATH --repo "$FULL" --body "$DEPLOY_PATH"
 gh secret set DEPLOY_DOWNLOADS_PATH --repo "$FULL" --body "$DEPLOY_PATH/downloads"
 gh secret set DEPLOY_SSH_KEY --repo "$FULL" < "$DEPLOY_KEY"
+gh secret set DEPLOY_KNOWN_HOSTS --repo "$FULL" --body "$KNOWN_HOSTS"
 
 if [ -n "${TS_OAUTH_CLIENT_ID:-}" ] || [ -n "${TS_OAUTH_SECRET:-}" ]; then
   : "${TS_OAUTH_CLIENT_ID:?give TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET together}" "${TS_OAUTH_SECRET:?give TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET together}"
@@ -66,5 +73,5 @@ echo "5/5 Push $BRANCH (starts the ci, images and desktop workflows)"
 git push -u origin "$BRANCH"
 echo
 echo "Done. Watch the first deploy:  gh run watch   (or https://github.com/$FULL/actions)"
-echo "Nothing new was pushed (\"Everything up-to-date\")? Deploy the current $BRANCH to the server with: gh workflow run images --ref $BRANCH"
+echo "Nothing new was pushed (\"Everything up-to-date\")? Deploy the current $BRANCH to the server with: gh workflow run deploy --ref $BRANCH"
 echo "Server .env must exist at $DEPLOY_PATH/.env (deploy/.env.example is the template)."

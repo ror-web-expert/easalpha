@@ -61,8 +61,8 @@ RSpec.describe "deploy compose files" do
     it "runs the tunnel from the token in .env and refuses to start without one" do
       tunnel = overlay.fetch("cloudflared")
       expect(tunnel["command"]).to eq(%w[tunnel --no-autoupdate run])
-      expect(tunnel["environment"]["TUNNEL_TOKEN"]).to start_with("${CLOUDFLARE_TUNNEL_TOKEN:?")
-      expect(File.read(dir.join(".env.example"))).to match(/^CLOUDFLARE_TUNNEL_TOKEN=$/)
+      expect(tunnel["environment"]["TUNNEL_TOKEN"]).to start_with("${TUNNEL_TOKEN:?")
+      expect(File.read(dir.join(".env.example"))).to match(/^TUNNEL_TOKEN=$/)
     end
 
     it "mounts the caddy-tunnel folder, so the deploy's reload reads the Caddyfile rsync replaced" do
@@ -78,9 +78,9 @@ RSpec.describe "deploy compose files" do
     end
 
     it "lets both workflows that SSH to the server join the tailnet first, when the Tailscale client is set" do
-      %w[images.yml desktop.yml].each do |file|
+      %w[deploy.yml desktop.yml].each do |file|
         wf = YAML.safe_load(File.read(Rails.root.join("../.github/workflows", file)))
-        job = wf["jobs"][file == "images.yml" ? "deploy" : "publish"]
+        job = wf["jobs"][file == "deploy.yml" ? "deploy" : "publish"]
         expect(job["env"]["TS_OAUTH_CLIENT_ID"]).to eq("${{ secrets.TS_OAUTH_CLIENT_ID }}"), file
         names = job["steps"].map { |st| st["name"] || st["uses"] }
         join = job["steps"].find { |st| st["uses"].to_s.start_with?("tailscale/github-action@") }
@@ -89,6 +89,40 @@ RSpec.describe "deploy compose files" do
         expect(join["if"]).to include("env.TS_OAUTH_CLIENT_ID != ''")
         ssh_step = names.index { |n| n.to_s.match?(/SSH key|Upload to the website server/) }
         expect(names.index("Join the tailnet")).to be < ssh_step, "#{file}: the tailnet must be joined before the first SSH"
+      end
+    end
+
+    describe "the deploy workflow (deploy.yml, 26 Nov 2026)" do
+      let(:workflows) { Rails.root.join("../.github/workflows") }
+      let(:deploy) { YAML.safe_load(File.read(workflows.join("deploy.yml"))) }
+      let(:raw) { File.read(workflows.join("deploy.yml")) }
+      let(:steps) { deploy["jobs"]["deploy"]["steps"] }
+
+      it "runs after a successful image build, never straight from a push, and can be run by hand" do
+        triggers = deploy[true] || deploy["on"] # YAML 1.1 reads a bare "on" key as true
+        expect(triggers.keys).to contain_exactly("workflow_call", "workflow_dispatch")
+        call = YAML.safe_load(File.read(workflows.join("images.yml")))["jobs"]["deploy"]
+        expect(call).to include("needs" => "build", "uses" => "./.github/workflows/deploy.yml", "secrets" => "inherit")
+        expect(call["with"]["sha"]).to eq("${{ github.event.workflow_run.head_sha || github.sha }}")
+        expect(call["if"]).to include("github.event.workflow_run.conclusion == 'success'")
+      end
+
+      it "checks the server's host key against DEPLOY_KNOWN_HOSTS when it is set" do
+        ssh = steps.find { |st| st["name"].to_s.start_with?("SSH key") }
+        expect(ssh["env"]["DEPLOY_KNOWN_HOSTS"]).to eq("${{ secrets.DEPLOY_KNOWN_HOSTS }}")
+        expect(ssh["run"]).to include('printf \'%s\\n\' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts', "StrictHostKeyChecking yes")
+      end
+
+      it "sends the registry token over stdin, never on the SSH command line" do
+        pull = steps.find { |st| st["name"] == "Pull images and restart" }["run"]
+        expect(pull).to include(%q(printf '%s' "$GHCR_TOKEN" | ssh server "docker login ghcr.io -u '$GHCR_USER' --password-stdin"))
+        expect(pull.scan("$GHCR_TOKEN").size).to eq(1)
+      end
+
+      it "deploys the images of the release it was given and reloads Caddy" do
+        expect(deploy["jobs"]["deploy"]["env"]["RELEASE"]).to eq("${{ inputs.sha || inputs.tag || github.sha }}")
+        expect(raw).to include('echo "TAG=${FULL:0:7}" >> "$GITHUB_ENV"', "IMAGE_TAG=$TAG timeout 900 docker compose pull",
+                               "caddy reload --config /etc/caddy/Caddyfile")
       end
     end
   end
@@ -107,7 +141,7 @@ RSpec.describe "deploy compose files" do
     it "mounts the caddy folder, not the file, so a Caddyfile the deploy's rsync replaced is what reload reads" do
       expect(mounts(overlay.fetch("caddy"))).to include("./caddy:/etc/caddy:ro", "caddy_data:/data")
       expect(compose("docker-compose.caddy.yml")["volumes"].keys).to include("caddy_data")
-      expect(File.read(Rails.root.join("../.github/workflows/images.yml"))).to include("caddy reload --config /etc/caddy/Caddyfile")
+      expect(File.read(Rails.root.join("../.github/workflows/deploy.yml"))).to include("caddy reload --config /etc/caddy/Caddyfile")
     end
 
     it "proxies both names to the compose services with the client's own address in X-Forwarded-For" do

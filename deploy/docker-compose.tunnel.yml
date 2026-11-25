@@ -4,7 +4,7 @@
 # No port is published at all, and no router or firewall change is needed.
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml:docker-compose.tunnel.yml   (in .env)
 # The tunnel and its three public hostnames (each to http://caddy:80) are made in Cloudflare's dashboard; its token is
-# CLOUDFLARE_TUNNEL_TOKEN in .env (docs/DEPLOY.md, "Cloudflare Tunnel"). A server with its own public address can use
+# TUNNEL_TOKEN in .env (docs/DEPLOY.md, "Cloudflare Tunnel"). A server with its own public address can use
 # docker-compose.caddy.yml instead (Caddy on 80/443 with Let's Encrypt).
 services:
   cloudflared:
@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is not set in .env (docs/DEPLOY.md, "Cloudflare Tunnel")}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN is not set in .env (docs/DEPLOY.md, "Cloudflare Tunnel")}
     depends_on: [caddy]
   caddy:
     image: caddy:2.10-alpine

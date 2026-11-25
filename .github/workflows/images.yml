@@ -3,15 +3,12 @@
 #      ghcr.io/<owner>/easalpha-api, easalpha-web, easalpha-whatsapp. Tags: "latest" (branch), the git tag (releases), the short SHA.
 #      The web image bakes in the API address: repository variable API_PUBLIC_URL (Settings > Secrets and variables >
 #      Actions > Variables), e.g. https://api.easalpha.com.
-#   2. deploy: over SSH, copies deploy/ to the server, logs the server into ghcr.io with this run's token, pulls the new
-#      images (three tries of at most 15 minutes each; the server's .env keeps naming the running images until every
-#      new one is there, so a stalled pull leaves the site as it was), then restarts the stack (migrations and seeds run
-#      on API start), waits for the API health check and removes EasAlpha images older than the previous release.
-#      Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key whose public half is in the server's
-#      ~/.ssh/authorized_keys). Optional DEPLOY_PATH (default ~/easalpha). scripts/github-setup.sh sets all of these
-#      (moving to a new server: DEPLOY_HOST=<new ip> scripts/github-setup.sh, docs/DEPLOY.md "Moving to a new server").
-#      No DEPLOY_HOST secret: images are built and the deploy step is skipped. A server only the tailnet reaches:
-#      TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET too (Tailscale OAuth client for tag:ci).
+#   2. deploy: calls deploy.yml with the commit just built. Over the tailnet and SSH it copies deploy/ to the server,
+#      pulls the new images (the server's .env keeps naming the running ones until every new one is there, so a
+#      stalled pull leaves the site as it was), restarts the stack (migrations and seeds run on API start), waits for
+#      the API health check and removes EasAlpha images older than the previous release. Its secrets and how to run it
+#      by hand (redeploy, rollback): the top of deploy.yml and DEPLOY.md. No DEPLOY_HOST secret: images are built and
+#      nothing is deployed.
 name: images
 # 29 Oct 2026: a push to main no longer deploys by itself. The "ci" workflow runs first and this one starts when it has
 # finished (workflow_run); the build is skipped unless ci passed, so a red test suite never reaches the server. Tags
@@ -75,100 +72,11 @@ jobs:
             NEXT_PUBLIC_ANALYTICS_PROVIDER=${{ vars.ANALYTICS_PROVIDER || '' }}
             NEXT_PUBLIC_ANALYTICS_ID=${{ vars.ANALYTICS_ID || '' }}
 
+  # The deploy lives in deploy.yml (26 Nov 2026), which can also be run by hand to redeploy or roll back without a
+  # rebuild. It gets the commit this run built; the secrets go along with "inherit".
   deploy:
     needs: build
-    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') }}
-    concurrency: { group: deploy-production, cancel-in-progress: false }
-    # 18 Oct 2026: a pull stalled on the server and the job hung for 2 h 13 m until the SSH connection dropped.
-    timeout-minutes: 60
-    env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '~/easalpha' }}
-      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-    steps:
-      - if: ${{ env.DEPLOY_HOST == '' }}
-        run: echo "DEPLOY_HOST secret not set; images are on ghcr.io, nothing deployed."
-      - if: ${{ env.DEPLOY_HOST != '' }}
-        uses: actions/checkout@v4
-        with: { sparse-checkout: deploy, sparse-checkout-cone-mode: false }
-      # 26 Nov 2026: the server is a VM on an office network that only the tailnet reaches (DEPLOY_HOST is its
-      # 100.x Tailscale address). With a Tailscale OAuth client in TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET, this runner
-      # joins the tailnet as an ephemeral tag:ci machine for the job and is gone afterwards (docs/DEPLOY.md, "Tailscale
-      # for the deploy"). Without them it connects straight to DEPLOY_HOST, as it did to the old server.
-      - if: ${{ env.DEPLOY_HOST != '' && env.TS_OAUTH_CLIENT_ID != '' }}
-        name: Join the tailnet
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-          ping: ${{ env.DEPLOY_HOST }}
-      - if: ${{ env.DEPLOY_HOST != '' }}
-        name: SSH key
-        env: { DEPLOY_SSH_KEY: "${{ secrets.DEPLOY_SSH_KEY }}" }
-        run: |
-          mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          # The server is sometimes briefly unreachable: try the key scan a few times before giving up. "|| true": the
-          # step runs under bash -e, so a failed scan used to end it at the first try and the loop never retried
-          # (seen 26 Nov 2026, 5 seconds against the dead old server).
-          for i in 1 2 3 4 5; do ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true; test -s ~/.ssh/known_hosts && break; sleep 10; done
-          test -s ~/.ssh/known_hosts || { echo "No SSH answer from the server (DEPLOY_HOST, port 22) after 5 tries"; exit 1; }
-          # Keep-alives: a connection that stops answering ends after 3 minutes instead of hanging the job.
-          echo "Host server
-            HostName $DEPLOY_HOST
-            User $DEPLOY_USER
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
-            ServerAliveInterval 30
-            ServerAliveCountMax 6
-            ConnectTimeout 30" > ~/.ssh/config
-      - if: ${{ env.DEPLOY_HOST != '' }}
-        name: Copy compose files (never .env or downloads)
-        run: |
-          ssh server "mkdir -p $DEPLOY_PATH/downloads"
-          rsync -av --exclude '.env' --exclude 'downloads' --exclude '.env.example' deploy/ "server:$DEPLOY_PATH/"
-      - if: ${{ env.DEPLOY_HOST != '' }}
-        name: Pull images and restart
-        env:
-          GHCR_USER: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          SHA: ${{ env.HEAD_SHA }}
-        run: |
-          REPO="ghcr.io/${OWNER,,}/easalpha"; TAG="${SHA:0:7}"
-          ssh server "set -e
-            cd $DEPLOY_PATH
-            test -f .env || { echo '.env missing on the server: copy deploy/.env.example to $DEPLOY_PATH/.env and fill it in'; exit 1; }
-            echo '$GHCR_TOKEN' | docker login ghcr.io -u '$GHCR_USER' --password-stdin
-            # Pull first, naming the new images only in this shell: .env still names the running ones, so nothing
-            # changes on the server until every new image is here.
-            ok=
-            for n in 1 2 3; do
-              if IMAGE_REPO=$REPO IMAGE_TAG=$TAG timeout 900 docker compose pull --quiet; then ok=1; break; fi
-              echo \"Pull attempt \$n failed or took over 15 minutes, trying again\"; sleep 20
-            done
-            test -n \"\$ok\" || { echo 'Could not pull the new images; the running version was left as it was'; exit 1; }
-            PREV=\$(docker inspect -f '{{.Config.Image}}' \$(docker compose ps -q api) 2>/dev/null | sed 's/.*://' || true)
-            sed -i -e 's#^IMAGE_REPO=.*#IMAGE_REPO=$REPO#' -e 's#^IMAGE_TAG=.*#IMAGE_TAG=$TAG#' .env
-            grep -q '^IMAGE_REPO=' .env || echo 'IMAGE_REPO=$REPO' >> .env
-            grep -q '^IMAGE_TAG=' .env || echo 'IMAGE_TAG=$TAG' >> .env
-            docker compose up -d --remove-orphans
-            echo 'Waiting for the API...'
-            healthy=
-            for i in \$(seq 1 60); do
-              if docker compose exec -T api curl -fsS http://localhost:3001/api/v1/health >/dev/null 2>&1; then healthy=1; break; fi
-              sleep 5
-            done
-            test -n \"\$healthy\" || { echo 'API did not become healthy in 5 minutes'; docker compose logs --tail=100 api; exit 1; }
-            echo \"API healthy on $TAG (previous release \$PREV)\"
-            # Caddy in the stack (docker-compose.tunnel.yml or docker-compose.caddy.yml, 26 Nov 2026): \"up\" does not
-            # restart it for a changed Caddyfile, so reload it; a config Caddy refuses leaves the running one in place.
-            if docker compose ps -q caddy 2>/dev/null | grep -q .; then
-              docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo 'Caddy refused the new Caddyfile; the previous one is still serving'
-            fi
-            # Keep this release and the one before it for a rollback; older EasAlpha images only fill the disk
-            # (72 of them had taken it to 87% by 18 Oct 2026).
-            docker images --format '{{.Repository}}:{{.Tag}}' | grep '^$REPO-' | grep -v -e ':$TAG\$' -e \":\$PREV\\\$\" | xargs -r docker rmi >/dev/null 2>&1 || true
-            docker image prune -f >/dev/null"
+    uses: ./.github/workflows/deploy.yml
+    with: { sha: "${{ github.event.workflow_run.head_sha || github.sha }}" }
+    secrets: inherit

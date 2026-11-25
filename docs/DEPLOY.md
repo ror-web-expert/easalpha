@@ -13,7 +13,7 @@ site comes in through a Cloudflare Tunnel and deploys come in over Tailscale (10
 GitHub (push to main)                                   ubuntu-host (Ubuntu 24.04, Docker; tailnet 100.87.45.11, LAN 192.168.1.218)
   ci.yml       tests                                      cloudflared  -- dials out -->  Cloudflare (easalpha.com, www, api)
   images.yml   build 4 images -> ghcr.io                    caddy:80  (inside the stack, no port published)
-               deploy: join tailnet -> ssh -> pull -> up      easalpha.com, www   ->  web:3000   (Next.js)
+  deploy.yml   join tailnet -> ssh -> pull -> up              easalpha.com, www   ->  web:3000   (Next.js)
   desktop.yml  installers -> ~/easalpha/downloads              api.easalpha.com    ->  api:3001   (Rails API, WebSockets on /cable)
                                                           ~/easalpha/   .env, compose files, caddy-tunnel/, downloads/, backups/
                                                           containers: cloudflared, caddy, api, web, db, jobs, whatsapp, backup, umami
@@ -80,10 +80,10 @@ scp ~/easalpha-server.env ubuntu-host@100.87.45.11:easalpha/.env && ssh ubuntu-h
 ```
 
 `scripts/server-env.sh` starts from `deploy/.env.example`, generates the database, gateway and Umami secrets, copies the
-Rails master key from `easalpha-api/config/master.key` and selects the tunnel overlay. `CLOUDFLARE_TUNNEL_TOKEN` stays
+Rails master key from `easalpha-api/config/master.key` and selects the tunnel overlay. `TUNNEL_TOKEN` stays
 empty until step 3; every `docker compose` command refuses to run until it is filled in. Put the file in your password
 manager. Restoring the old data with the old `.env`? Use that file instead: change the `COMPOSE_FILE` line to
-`docker-compose.yml:docker-compose.images.yml:docker-compose.tunnel.yml` and add `CLOUDFLARE_TUNNEL_TOKEN=`. Keep the
+`docker-compose.yml:docker-compose.images.yml:docker-compose.tunnel.yml` and add `TUNNEL_TOKEN=`. Keep the
 same master key whenever old data is restored: staff PIN lookups, till sync signatures and sign-in tokens are derived
 from it.
 
@@ -96,7 +96,7 @@ from it.
 3. Add three public hostnames (shown as "Published application routes" in newer dashboards), each with service type
    **HTTP** and URL **caddy:80**: `easalpha.com`, `www.easalpha.com`, `api.easalpha.com`. Cloudflare makes the DNS
    records itself (proxied CNAMEs to the tunnel).
-4. On the server: `nano ~/easalpha/.env`, set `CLOUDFLARE_TUNNEL_TOKEN=<the value>`.
+4. On the server: `nano ~/easalpha/.env`, set `TUNNEL_TOKEN=<the value>`.
 
 The SSL/TLS mode does not matter for a tunnel; "Always Use HTTPS" can stay on. Cloudflare's upload limit (100 MB on the
 free plan) is above the 25 MB the Caddyfile allows.
@@ -109,7 +109,9 @@ tagged `tag:ci`, through an OAuth client:
 1. Access controls: add the tag's owner, keeping the rest of the policy as it is:
    `"tagOwners": { "tag:ci": ["autogroup:admin"] },`
    The default policy lets every machine reach every other one. If yours is narrower, also allow `tag:ci` to reach
-   `ubuntu-host` on port 22.
+   `ubuntu-host` on port 22. The deploy uses the server's normal OpenSSH over the tailnet address, not Tailscale SSH,
+   which does not admit `tag:ci`: keep Tailscale SSH off on ubuntu-host (`tailscale up` without `--ssh`), or it takes
+   over port 22 on that address and every deploy is refused.
 2. Settings, OAuth clients (or Trust credentials), Generate: scope **Auth Keys, write**, tag **tag:ci**. Copy the
    client id and the secret (it is shown once).
 3. Machines, `ubuntu-host`, the menu: **Disable key expiry**. A machine's key expires after 180 days by default; the
@@ -123,7 +125,7 @@ Commit and push this repository's deploy changes first, then:
 ```bash
 DEPLOY_HOST=100.87.45.11 DEPLOY_USER=ubuntu-host \
 TS_OAUTH_CLIENT_ID=<client id> TS_OAUTH_SECRET=<secret> scripts/github-setup.sh
-gh workflow run images --ref main                  # only if the push said "Everything up-to-date"
+gh workflow run deploy --ref main                  # only if the push said "Everything up-to-date"
 ```
 
 The script installs `~/.ssh/easalpha_deploy.pub` on the server, sets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`
@@ -250,11 +252,12 @@ other defaults with environment variables when they differ: `REPO=myorg/easalpha
 
 | Kind | Name | Value | Used by |
 |---|---|---|---|
-| secret | `DEPLOY_HOST` | the server's address: 100.87.45.11 on the tailnet (103.173.62.218 until Nov 2026) | images.yml deploy job, desktop.yml publish job |
+| secret | `DEPLOY_HOST` | the server's address: 100.87.45.11 on the tailnet (103.173.62.218 until Nov 2026) | deploy.yml, desktop.yml publish job |
+| secret | `DEPLOY_KNOWN_HOSTS` | the server's host keys, `100.87.45.11 ssh-ed25519 AAAA...` (one line per key), read from its `/etc/ssh`; unset = trust whatever answers (a warning in the log) | same |
 | secret | `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET` | Tailscale OAuth client for `tag:ci` (step 4 above); unset = connect without the tailnet | same |
 | secret | `DEPLOY_USER` | ubuntu-host (sajid until Nov 2026) | same |
 | secret | `DEPLOY_SSH_KEY` | private key `~/.ssh/easalpha_deploy` | same |
-| secret | `DEPLOY_PATH` | /home/ubuntu-host/easalpha | images.yml deploy job |
+| secret | `DEPLOY_PATH` | /home/ubuntu-host/easalpha | deploy.yml |
 | secret | `DEPLOY_DOWNLOADS_PATH` | /home/ubuntu-host/easalpha/downloads | desktop.yml publish job |
 | variable | `API_PUBLIC_URL` | https://api.easalpha.com | baked into the web image at build time |
 | variable | `PUBLIC_URL` | https://easalpha.com | update feed of the desktop installers |
@@ -285,7 +288,7 @@ git push                      # that is all
 `ci.yml` runs first: API specs, Rubocop and Brakeman, web lint, typecheck and unit tests, desktop tests. Only when it
 passes does `images.yml` start (29 Oct 2026; before that a red suite still deployed). It builds the API, web and WhatsApp
 images on GitHub's machines (not on the 2-CPU server), pushes them to `ghcr.io/<you>/easalpha-api|web|whatsapp` tagged
-`latest` and the short commit SHA, then the `deploy` job:
+`latest` and the short commit SHA, then calls `deploy.yml` (its own file since 26 Nov 2026) with that commit:
 
 1. joins the tailnet (when the `TS_OAUTH_*` secrets are set) and copies `deploy/` to `~/easalpha/` over SSH (never
    `.env`, never `downloads/`),
@@ -293,7 +296,19 @@ images on GitHub's machines (not on the 2-CPU server), pushes them to `ghcr.io/<
 3. logs the server into ghcr.io with the run's own token (no personal token to manage), `docker compose pull`,
    `docker compose up -d --remove-orphans`, prunes old images,
 4. waits up to five minutes for `GET /api/v1/health` inside the api container,
-5. reloads Caddy (in the stack since 26 Nov 2026), so a changed `deploy/caddy/Caddyfile` applies.
+5. reloads Caddy (in the stack since 26 Nov 2026), so a changed `deploy/caddy-tunnel/Caddyfile` applies.
+
+The registry token goes to the server over stdin, never on a command line. With `DEPLOY_KNOWN_HOSTS` set, the job
+trusts only those host keys (without it, whatever answers, with a warning in the log). Any failed step fails the job.
+
+**Redeploy or roll back by hand**, without a rebuild (the release's images must still be on ghcr.io, which keeps them all):
+
+```bash
+gh workflow run deploy --ref main                    # the head of main again
+gh workflow run deploy --ref main -f tag=42ce837     # an earlier release: its images and its deploy/ files
+```
+
+Or on GitHub: Actions, deploy, Run workflow.
 
 Migrations, seeds and the Row-Level Security policies run when the api container starts (`bin/start api`: `db:prepare`,
 `db:seed`, `db:rls`), before Puma listens; the old web container keeps serving until the new one is up. With
@@ -426,7 +441,8 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
 | `deploy/backup.sh` | the nightly backup loop the `backup` service runs; `backup.sh now` for one backup |
 | `deploy/Caddyfile.easalpha` | the site blocks to append to that other Caddy's file (proxy overlay only) |
 | `deploy/.env.example` | template of the server's `~/easalpha/.env` (`COMPOSE_FILE` selects the overlays) |
-| `.github/workflows/images.yml` | build + deploy after `ci` passes on `main`, on `v*` tags and on manual runs |
+| `.github/workflows/images.yml` | build after `ci` passes on `main`, on `v*` tags and on manual runs, then calls `deploy.yml` |
+| `.github/workflows/deploy.yml` | the deploy (tailnet, SSH, pull, up, health check); also by hand to redeploy or roll back |
 | `.github/workflows/desktop.yml` | installers on changes to `easalpha-desktop/` and on `v*` tags, uploaded to the Download page |
 | `.github/workflows/ci.yml` | tests on every push and pull request |
 | `scripts/github-setup.sh` | GitHub repo, secrets, variables, deploy key, push; again with a new `DEPLOY_HOST` to move servers |
