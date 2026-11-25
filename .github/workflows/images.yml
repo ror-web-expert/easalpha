@@ -8,8 +8,10 @@
 #      new one is there, so a stalled pull leaves the site as it was), then restarts the stack (migrations and seeds run
 #      on API start), waits for the API health check and removes EasAlpha images older than the previous release.
 #      Secrets: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (private key whose public half is in the server's
-#      ~/.ssh/authorized_keys). Optional DEPLOY_PATH (default ~/easalpha). scripts/github-setup.sh sets all of these.
-#      No DEPLOY_HOST secret: images are built and the deploy step is skipped.
+#      ~/.ssh/authorized_keys). Optional DEPLOY_PATH (default ~/easalpha). scripts/github-setup.sh sets all of these
+#      (moving to a new server: DEPLOY_HOST=<new ip> scripts/github-setup.sh, docs/DEPLOY.md "Moving to a new server").
+#      No DEPLOY_HOST secret: images are built and the deploy step is skipped. A server only the tailnet reaches:
+#      TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET too (Tailscale OAuth client for tag:ci).
 name: images
 # 29 Oct 2026: a push to main no longer deploys by itself. The "ci" workflow runs first and this one starts when it has
 # finished (workflow_run); the build is skipped unless ci passed, so a red test suite never reaches the server. Tags
@@ -84,12 +86,25 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '~/easalpha' }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
     steps:
       - if: ${{ env.DEPLOY_HOST == '' }}
         run: echo "DEPLOY_HOST secret not set; images are on ghcr.io, nothing deployed."
       - if: ${{ env.DEPLOY_HOST != '' }}
         uses: actions/checkout@v4
         with: { sparse-checkout: deploy, sparse-checkout-cone-mode: false }
+      # 26 Nov 2026: the server is a VM on an office network that only the tailnet reaches (DEPLOY_HOST is its
+      # 100.x Tailscale address). With a Tailscale OAuth client in TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET, this runner
+      # joins the tailnet as an ephemeral tag:ci machine for the job and is gone afterwards (docs/DEPLOY.md, "Tailscale
+      # for the deploy"). Without them it connects straight to DEPLOY_HOST, as it did to the old server.
+      - if: ${{ env.DEPLOY_HOST != '' && env.TS_OAUTH_CLIENT_ID != '' }}
+        name: Join the tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ env.DEPLOY_HOST }}
       - if: ${{ env.DEPLOY_HOST != '' }}
         name: SSH key
         env: { DEPLOY_SSH_KEY: "${{ secrets.DEPLOY_SSH_KEY }}" }
@@ -145,6 +160,11 @@ jobs:
             done
             test -n \"\$healthy\" || { echo 'API did not become healthy in 5 minutes'; docker compose logs --tail=100 api; exit 1; }
             echo \"API healthy on $TAG (previous release \$PREV)\"
+            # Caddy in the stack (docker-compose.tunnel.yml or docker-compose.caddy.yml, 26 Nov 2026): \"up\" does not
+            # restart it for a changed Caddyfile, so reload it; a config Caddy refuses leaves the running one in place.
+            if docker compose ps -q caddy 2>/dev/null | grep -q .; then
+              docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo 'Caddy refused the new Caddyfile; the previous one is still serving'
+            fi
             # Keep this release and the one before it for a rollback; older EasAlpha images only fill the disk
             # (72 of them had taken it to 87% by 18 Oct 2026).
             docker images --format '{{.Repository}}:{{.Tag}}' | grep '^$REPO-' | grep -v -e ':$TAG\$' -e \":\$PREV\\\$\" | xargs -r docker rmi >/dev/null 2>&1 || true

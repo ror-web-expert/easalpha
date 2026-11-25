@@ -1,0 +1,33 @@
+# For a server nothing on the internet can reach (production since 26 Nov 2026: a VM on an office network, behind NAT,
+# reached over Tailscale): cloudflared dials out to Cloudflare and carries easalpha.com, www and api.easalpha.com in to
+# Caddy (caddy-tunnel/Caddyfile), which keeps the body limit and the customer's address and proxies to web and api.
+# No port is published at all, and no router or firewall change is needed.
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml:docker-compose.tunnel.yml   (in .env)
+# The tunnel and its three public hostnames (each to http://caddy:80) are made in Cloudflare's dashboard; its token is
+# CLOUDFLARE_TUNNEL_TOKEN in .env (docs/DEPLOY.md, "Cloudflare Tunnel"). A server with its own public address can use
+# docker-compose.caddy.yml instead (Caddy on 80/443 with Let's Encrypt).
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.2
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN is not set in .env (docs/DEPLOY.md, "Cloudflare Tunnel")}
+    depends_on: [caddy]
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    volumes:
+      # The folder, not the file: the deploy's rsync replaces Caddyfile with a new file, which a single-file bind mount
+      # would not show to the running container.
+      - "./caddy-tunnel:/etc/caddy:ro"
+      - "caddy_data:/data"
+      - "caddy_config:/config"
+    depends_on: [web, api]
+  api:
+    ports: !reset []
+  web:
+    ports: !reset []
+volumes:
+  caddy_data:
+  caddy_config:

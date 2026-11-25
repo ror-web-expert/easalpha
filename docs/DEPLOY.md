@@ -1,57 +1,215 @@
 # Production deployment: easalpha.com
 
-How EasAlpha runs on the production server, how code gets there, and what to do by hand. Updated 11 Oct 2026. General
-install options (developer machine, LAN, installers) are in [SETUP.md](SETUP.md).
+How EasAlpha runs on the production server, how code gets there, and what to do by hand. Updated 26 Nov 2026, for the
+move to a new server: the shared server it ran on from 11 Oct 2026 (103.173.62.218, someone else's machine, behind
+that machine's Caddy) went down in Nov 2026 and took the database, the uploads and the backups with it. The new one is
+`ubuntu-host`, a Hyper-V VM on an office network (192.168.1.218 behind NAT) that nothing on the internet can reach: the
+site comes in through a Cloudflare Tunnel and deploys come in over Tailscale (100.87.45.11). General install options
+(developer machine, LAN, installers) are in [SETUP.md](SETUP.md).
 
 ## The picture
 
 ```
-GitHub (push to master)                         Server 103.173.62.218 (Ubuntu, Docker, 2 CPU / 4 GB)
-  ci.yml       tests                              /opt/caddy/Caddyfile  ->  caddy (ports 80/443, TLS from Let's Encrypt)
-  images.yml   build 3 images -> ghcr.io            storeslift.com      ->  kamal-proxy -> genifymart (already there, untouched)
-               deploy: ssh -> pull -> up -d         easalpha.com        ->  easalpha-web:3000   (Next.js)
-  desktop.yml  installers -> ~/easalpha/downloads     api.easalpha.com    ->  easalpha-api:3001   (Rails API, WebSockets on /cable)
-                                                  ~/easalpha/   .env, compose files, downloads/
-                                                  containers: easalpha-api, easalpha-web, easalpha-db-1, easalpha-jobs-1, easalpha-whatsapp-1
+GitHub (push to main)                                   ubuntu-host (Ubuntu 24.04, Docker; tailnet 100.87.45.11, LAN 192.168.1.218)
+  ci.yml       tests                                      cloudflared  -- dials out -->  Cloudflare (easalpha.com, www, api)
+  images.yml   build 4 images -> ghcr.io                    caddy:80  (inside the stack, no port published)
+               deploy: join tailnet -> ssh -> pull -> up      easalpha.com, www   ->  web:3000   (Next.js)
+  desktop.yml  installers -> ~/easalpha/downloads              api.easalpha.com    ->  api:3001   (Rails API, WebSockets on /cable)
+                                                          ~/easalpha/   .env, compose files, caddy-tunnel/, downloads/, backups/
+                                                          containers: cloudflared, caddy, api, web, db, jobs, whatsapp, backup, umami
 ```
 
-One compose project in `~/easalpha` (copied from `deploy/`), one `.env` that only exists on the server, and the existing
-Caddy as the only thing listening on the internet. The EasAlpha containers publish no ports: web and api join Caddy's
-`kamal` docker network and Caddy reaches them by name. The other application on the server is not touched.
+One compose project in `~/easalpha` (copied from `deploy/` by every deploy), one `.env` that lives on the server and in
+your password manager (the old server's `.env` existed nowhere else). Nothing on the server listens on the internet:
+cloudflared keeps an outbound connection to Cloudflare, which holds the certificates and hands requests to Caddy in the
+stack (`docker-compose.tunnel.yml`, `caddy-tunnel/Caddyfile`). No router, port-forwarding or firewall change is needed,
+and a change of the office's public address changes nothing. GitHub's deploy job reaches the server by joining the
+tailnet for the length of the job.
 
-## One-time setup (what is done, what is left)
+Other kinds of server, kept for later: one with its own public address uses `docker-compose.caddy.yml` (Caddy on 80/443
+with Let's Encrypt, `caddy/Caddyfile`; DNS A records to the address, Cloudflare SSL mode Full (strict)); one where
+another application's Caddy already holds 80/443 in Docker, as the shared server did, uses `docker-compose.proxy.yml`
+and appends `Caddyfile.easalpha` to that Caddy's file. `COMPOSE_FILE` in `.env` picks one.
+
+## Moving to a new server (26 Nov 2026)
+
+In this order: each step needs the one before it. Commands marked "laptop" run in this repository on your machine,
+which is on the same tailnet; "server" means `ssh ubuntu-host@100.87.45.11`.
+
+### 0. Save what can be saved from the old server
+
+Everything below existed only on 103.173.62.218: nothing in this repository or on GitHub holds it. Ask whoever runs that
+machine whether its disk can still be read (the machine back for an hour, a rescue mode, or a snapshot):
+
+| What | Where on the old server | Without it |
+|---|---|---|
+| Nightly backups, last 14 days: `easalpha-<date>.dump`, `umami-<date>.dump`, `storage-<date>.tar.gz`, `wasessions-<date>.tar.gz` | `~/easalpha/backups/` | every business, order, upload and linked WhatsApp phone is gone |
+| The server `.env` (SMTP app password, Paddle secret, super admin, Umami website id) | `~/easalpha/.env` | make a new one (step 2); the Rails master key is also on the laptop |
+| Or the Docker volumes themselves (`easalpha_pgdata`, `easalpha_storage`, `easalpha_wasessions`) | `/var/snap/docker/common/var-lib-docker/volumes/` (Docker came from the snap there) | as above |
+
+If the machine answers again even briefly, take a fresh backup and copy it off at once:
+
+```bash
+ssh sajid@103.173.62.218 'cd ~/easalpha && docker compose run --rm backup now'
+mkdir -p ~/easalpha-old && scp -r 'sajid@103.173.62.218:easalpha/backups' 'sajid@103.173.62.218:easalpha/.env' ~/easalpha-old/
+```
+
+If nothing can be had, the new server starts with an empty database (step 7, "Fresh start").
+
+### 1. Prepare the server (once, with sudo)
+
+```bash
+scp deploy/server-setup.sh ubuntu-host@100.87.45.11:easalpha-setup.sh    # laptop
+sudo bash ~/easalpha-setup.sh && exit                                      # server; log in again afterwards
+```
+
+`deploy/server-setup.sh` installs Docker Engine and Compose v2 from Docker's own repository (not the snap the old server
+had, which hid `/tmp` and kept its data under `/var/snap`), lets `ubuntu-host` run docker, caps container log files at
+10 MB x 3, installs rclone for the off-server backup copy and makes `~/easalpha`. Running it again changes nothing.
+
+The VM has **1 virtual CPU** (15 GB RAM, 73 GB disk, 4 GB swap). The old server had 2, and the stack runs PostgreSQL,
+Puma, the job worker, two Next.js servers (site, Umami) and the WhatsApp gateway: give the VM 2 to 4 virtual processors
+in Hyper-V Manager (VM shut down, Settings, Processor) before real shops use it.
+
+### 2. The server's `.env` (laptop)
+
+```bash
+SUPER_ADMIN_EMAIL=<your email> scripts/server-env.sh      # writes ~/easalpha-server.env, prints the super admin password
+nano ~/easalpha-server.env                                 # SMTP_* (mail), PADDLE_WEBHOOK_SECRET, SENTRY_DSN if used
+scp ~/easalpha-server.env ubuntu-host@100.87.45.11:easalpha/.env && ssh ubuntu-host@100.87.45.11 'chmod 600 ~/easalpha/.env'
+```
+
+`scripts/server-env.sh` starts from `deploy/.env.example`, generates the database, gateway and Umami secrets, copies the
+Rails master key from `easalpha-api/config/master.key` and selects the tunnel overlay. `CLOUDFLARE_TUNNEL_TOKEN` stays
+empty until step 3; every `docker compose` command refuses to run until it is filled in. Put the file in your password
+manager. Restoring the old data with the old `.env`? Use that file instead: change the `COMPOSE_FILE` line to
+`docker-compose.yml:docker-compose.images.yml:docker-compose.tunnel.yml` and add `CLOUDFLARE_TUNNEL_TOKEN=`. Keep the
+same master key whenever old data is restored: staff PIN lookups, till sync signatures and sign-in tokens are derived
+from it.
+
+### 3. Cloudflare Tunnel (Cloudflare dashboard)
+
+1. DNS, Records: delete the three A records `easalpha.com`, `www` and `api` (they point at the dead server, and the
+   tunnel's own records cannot be added while they exist).
+2. Zero Trust, Networks, Tunnels, Create a tunnel, Cloudflared, name `easalpha`. The install page shows a command ending
+   in `--token eyJ...`: copy that long value and skip the install (the stack runs cloudflared itself).
+3. Add three public hostnames (shown as "Published application routes" in newer dashboards), each with service type
+   **HTTP** and URL **caddy:80**: `easalpha.com`, `www.easalpha.com`, `api.easalpha.com`. Cloudflare makes the DNS
+   records itself (proxied CNAMEs to the tunnel).
+4. On the server: `nano ~/easalpha/.env`, set `CLOUDFLARE_TUNNEL_TOKEN=<the value>`.
+
+The SSL/TLS mode does not matter for a tunnel; "Always Use HTTPS" can stay on. Cloudflare's upload limit (100 MB on the
+free plan) is above the 25 MB the Caddyfile allows.
+
+### 4. Tailscale for the deploy (Tailscale admin console)
+
+GitHub's machines are not on the tailnet, so the deploy job joins it for its few minutes, as an ephemeral machine
+tagged `tag:ci`, through an OAuth client:
+
+1. Access controls: add the tag's owner, keeping the rest of the policy as it is:
+   `"tagOwners": { "tag:ci": ["autogroup:admin"] },`
+   The default policy lets every machine reach every other one. If yours is narrower, also allow `tag:ci` to reach
+   `ubuntu-host` on port 22.
+2. Settings, OAuth clients (or Trust credentials), Generate: scope **Auth Keys, write**, tag **tag:ci**. Copy the
+   client id and the secret (it is shown once).
+3. Machines, `ubuntu-host`, the menu: **Disable key expiry**. A machine's key expires after 180 days by default; the
+   server would then drop off the tailnet and every deploy would fail to reach it (the site itself, through the
+   tunnel, keeps working).
+
+### 5. GitHub and the first deploy (laptop)
+
+Commit and push this repository's deploy changes first, then:
+
+```bash
+DEPLOY_HOST=100.87.45.11 DEPLOY_USER=ubuntu-host \
+TS_OAUTH_CLIENT_ID=<client id> TS_OAUTH_SECRET=<secret> scripts/github-setup.sh
+gh workflow run images --ref main                  # only if the push said "Everything up-to-date"
+```
+
+The script installs `~/.ssh/easalpha_deploy.pub` on the server, sets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`
+(`/home/ubuntu-host/easalpha`), `DEPLOY_DOWNLOADS_PATH` and the two Tailscale secrets, and pushes. The run (Actions on
+GitHub, about 15 minutes) builds the images, joins the tailnet, copies `deploy/` to `~/easalpha`, pulls, starts the
+stack and waits for the API health check. Migrations and seeds run on the first API start, which also creates the
+super admin from `.env`.
+
+### 6. Check (server)
+
+```bash
+cd ~/easalpha
+docker compose config --quiet && docker compose ps      # cloudflared, caddy, db, api, jobs, web, whatsapp, backup, umami Up
+docker compose logs cloudflared | grep -i 'registered tunnel connection'   # four lines once the tunnel is up
+curl -s https://api.easalpha.com/api/v1/health            # from anywhere
+```
+
+In Cloudflare the tunnel shows **Healthy**. If the site answers 502, cloudflared is up but cannot reach `caddy:80`:
+`docker compose logs caddy web api`.
+
+### 7. The data
+
+**Restore** (the old backups were saved in step 0): copy them up, then restore as in "Backup" under "Daily operations":
+
+```bash
+scp ~/easalpha-old/backups/{easalpha,umami,storage,wasessions}-<date>.* ubuntu-host@100.87.45.11:easalpha/backups/
+cd ~/easalpha && docker compose stop api jobs umami
+docker compose exec -T db pg_restore -U postgres --clean --if-exists -d easalpha_production < backups/easalpha-<date>.dump
+docker compose exec -T db pg_restore -U postgres --clean --if-exists -d umami < backups/umami-<date>.dump
+docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data
+docker run --rm -v easalpha_wasessions:/data/wasessions -v $PWD/backups:/b postgres:16 tar -xzf /b/wasessions-<date>.tar.gz -C /data
+docker compose up -d                                       # volume-owner gives the restored files back to uid 1000
+```
+
+Tills, kitchen screens and phones keep working: the addresses are the same, and their device tokens (365 days, signed
+with the master key) match the restored devices. What a till sold offline since the old server went down should sync
+once a cashier signs in; anything the server refuses shows in the till's Attention list.
+
+**Fresh start** (nothing saved): the super admin from `.env` is all there is. Then:
+
+- Demo account: `docker compose exec api bin/rails demo:business`, the pictures with
+  `python3 scripts/demo-images.py https://api.easalpha.com/api/v1 demo@easalpha.com <password>` from the laptop, and the
+  canteen setup again (sessions, workers, plans).
+- Every real shop signs up again, and every till, kitchen screen and canteen kiosk is paired again (Admin, Settings,
+  Devices). Before that, look at the tills: an order sold offline is still in the till's queue, and the new server
+  refuses it because the business is new. Write those down from the till first.
+- Umami: log in at https://easalpha.com/stats (first login `admin` / `umami`, change it), add the website, put its id in
+  `.env` as `ANALYTICS_ID`, `docker compose up -d web`.
+
+### 8. After the move, both cases
+
+- WhatsApp: Admin, Settings, WhatsApp shows a QR; link the phone again (a restored `wasessions` may still be linked).
+- Desktop installers on the Download page: `gh workflow run desktop.yml --ref v0.5.0` (the latest tag) builds them and
+  uploads them over the tailnet to `~/easalpha/downloads`.
+- Backups off the server: the host cron under "Backup" below. This is the step that would have saved the data this
+  time; do it on day one. An office VM can also lose its disk or its power: the copy must leave the building.
+- Secrets that lived in the old server's `.env` are on a machine you no longer control: make a new Gmail app password
+  (and revoke the old one) and roll the Paddle webhook secret.
+- Real client addresses: both Caddyfiles take the customer's address from Cloudflare's `CF-Connecting-IP` (believed only
+  from cloudflared, or from Cloudflare's own ranges on a public server). The old snippet did not, so the API's login,
+  pairing and request limits counted Cloudflare's addresses: every shop behind the same Cloudflare location shared one
+  limit.
+- Optional, once the site runs: Row-Level Security (below), Solid Cache (under "Daily operations").
+
+## One-time setup (state on the new server)
 
 | Step | Where | State |
 |---|---|---|
-| Server folder `~/easalpha` with the compose files and a filled `.env` (generated secrets, master key, super admin login) | server | done |
-| Deploy SSH key pair `~/.ssh/easalpha_deploy` (public half must be in the server's `authorized_keys`) | laptop, server | key made; `scripts/github-setup.sh` installs it |
-| First images loaded on the server and the stack started (`IMAGE_REPO=easalpha`, `IMAGE_TAG=local`) | server | done by hand once; the pipeline replaces them |
-| Caddy: append `deploy/Caddyfile.easalpha` to `/opt/caddy/Caddyfile` and reload (needs sudo) | server | **you**, two commands below |
-| DNS: `easalpha.com`, `www`, `api` A records to `103.173.62.218` | registrar | **you** |
-| GitHub repository, secrets, variables, first push | laptop | **you**: `gh auth login` then `scripts/github-setup.sh` |
-| Row-Level Security: `EASALPHA_APP_DB_PASSWORD` in `.env` | server | **you**, until then every API start prints a WARNING and `/api/v1/health` says `"rls":false` (below) |
+| Docker, docker group, log caps, rclone, `~/easalpha` | server | **you**: step 1, `sudo bash ~/easalpha-setup.sh` |
+| More than 1 virtual CPU for the VM | Hyper-V host | **you**: step 1 |
+| `~/easalpha/.env` | laptop, then server | **you**: step 2, `scripts/server-env.sh` |
+| Cloudflare Tunnel with three public hostnames to `caddy:80`; token in `.env`; old A records deleted | Cloudflare | **you**: step 3 |
+| Tailscale `tag:ci` owner and OAuth client | Tailscale admin | **you**: step 4 |
+| Deploy key on the server, secrets, first deploy | laptop | **you**: step 5, `scripts/github-setup.sh` |
+| Backups copied off the server every night | server | **you**: "Backup" under "Daily operations" |
+| Row-Level Security: `EASALPHA_APP_DB_PASSWORD` in `.env` | server | optional, below; until then every API start prints a WARNING and `/api/v1/health` says `"rls":false` |
 
-### Caddy (once, with sudo)
+### Caddy
 
-```bash
-ssh sajid@103.173.62.218
-sudo sh -c 'cat ~sajid/easalpha/Caddyfile.easalpha >> /opt/caddy/Caddyfile'
-docker exec caddy caddy reload --config /etc/caddy/Caddyfile
-```
-
-The block goes after the `storeslift.com` site; Caddy picks the most specific host, so the `:443` catch-all for the
-other app keeps working. Certificates are issued automatically the first time the names resolve to the server.
-
-### DNS (once, at the registrar for easalpha.com)
-
-| Type | Name | Value |
-|---|---|---|
-| A | `@` (easalpha.com) | 103.173.62.218 |
-| A | `www` | 103.173.62.218 |
-| A | `api` | 103.173.62.218 |
-
-If the domain is on Cloudflare, keep the three records "DNS only" (grey cloud) at least until the first certificate is
-issued; the proxy (orange cloud) also works afterwards, with SSL mode "Full (strict)". Check with `dig +short api.easalpha.com`.
+`deploy/caddy-tunnel/Caddyfile` is the whole configuration behind the tunnel: plain HTTP on `caddy:80`, easalpha.com
+and www to `web:3000`, api.easalpha.com to `api:3001` with a 25 MB body limit, the customer's own address in
+`X-Forwarded-For`. Every deploy copies it to `~/easalpha/caddy-tunnel/` and reloads Caddy, so a change is a push; a
+Caddyfile Caddy refuses leaves the running one serving (the deploy log says so). By hand:
+`docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile`. `deploy/caddy/Caddyfile` is the same for a
+server with its own address (TLS from Let's Encrypt, Cloudflare's address ranges as the trusted proxies; the copy of
+https://www.cloudflare.com/ips from 26 Nov 2026).
 
 ### Row-Level Security (once, on the server)
 
@@ -62,7 +220,7 @@ of the api and jobs containers prints a `WARNING: EASALPHA_APP_DB_PASSWORD is no
 and `GET /api/v1/health` answers `"rls":false`. Nothing else changes and nothing fails. To switch it on:
 
 ```bash
-ssh sajid@103.173.62.218 && cd ~/easalpha
+ssh ubuntu-host@100.87.45.11 && cd ~/easalpha
 openssl rand -hex 24                     # copy the value
 nano .env                                # EASALPHA_APP_DB_PASSWORD=<the value> (add the line if .env has none)
 docker compose up -d api jobs
@@ -82,20 +240,22 @@ did not reach the container) or a connection error for `easalpha_app` (the api s
 ### GitHub (once, on your laptop)
 
 ```bash
-gh auth login                 # browser login, pick HTTPS, authorise
-scripts/github-setup.sh       # creates the private repo "easalpha", sets secrets + variables, installs the deploy key, pushes
+gh auth login                                    # browser login, pick HTTPS, authorise
+DEPLOY_HOST=100.87.45.11 DEPLOY_USER=ubuntu-host TS_OAUTH_CLIENT_ID=... TS_OAUTH_SECRET=... scripts/github-setup.sh
 ```
 
-Override the defaults with environment variables when they differ: `REPO=myorg/easalpha`, `DEPLOY_HOST`, `DEPLOY_USER`,
+`DEPLOY_HOST` has no default (since 26 Nov 2026: the old address would point deploys at a dead server). Override the
+other defaults with environment variables when they differ: `REPO=myorg/easalpha`, `DEPLOY_USER`,
 `PUBLIC_URL`, `API_PUBLIC_URL`. What the script sets:
 
 | Kind | Name | Value | Used by |
 |---|---|---|---|
-| secret | `DEPLOY_HOST` | 103.173.62.218 | images.yml deploy job, desktop.yml publish job |
-| secret | `DEPLOY_USER` | sajid | same |
+| secret | `DEPLOY_HOST` | the server's address: 100.87.45.11 on the tailnet (103.173.62.218 until Nov 2026) | images.yml deploy job, desktop.yml publish job |
+| secret | `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET` | Tailscale OAuth client for `tag:ci` (step 4 above); unset = connect without the tailnet | same |
+| secret | `DEPLOY_USER` | ubuntu-host (sajid until Nov 2026) | same |
 | secret | `DEPLOY_SSH_KEY` | private key `~/.ssh/easalpha_deploy` | same |
-| secret | `DEPLOY_PATH` | /home/sajid/easalpha | images.yml deploy job |
-| secret | `DEPLOY_DOWNLOADS_PATH` | /home/sajid/easalpha/downloads | desktop.yml publish job |
+| secret | `DEPLOY_PATH` | /home/ubuntu-host/easalpha | images.yml deploy job |
+| secret | `DEPLOY_DOWNLOADS_PATH` | /home/ubuntu-host/easalpha/downloads | desktop.yml publish job |
 | variable | `API_PUBLIC_URL` | https://api.easalpha.com | baked into the web image at build time |
 | variable | `PUBLIC_URL` | https://easalpha.com | update feed of the desktop installers |
 | variable | `ANALYTICS_PROVIDER` | umami (or plausible) | optional on GitHub; the production server sets it in `.env` instead |
@@ -127,11 +287,13 @@ passes does `images.yml` start (29 Oct 2026; before that a red suite still deplo
 images on GitHub's machines (not on the 2-CPU server), pushes them to `ghcr.io/<you>/easalpha-api|web|whatsapp` tagged
 `latest` and the short commit SHA, then the `deploy` job:
 
-1. copies `deploy/` to `~/easalpha/` over SSH (never `.env`, never `downloads/`),
+1. joins the tailnet (when the `TS_OAUTH_*` secrets are set) and copies `deploy/` to `~/easalpha/` over SSH (never
+   `.env`, never `downloads/`),
 2. writes `IMAGE_REPO` and `IMAGE_TAG` (the commit SHA) into the server's `.env`,
 3. logs the server into ghcr.io with the run's own token (no personal token to manage), `docker compose pull`,
    `docker compose up -d --remove-orphans`, prunes old images,
-4. waits up to five minutes for `GET /api/v1/health` inside the api container.
+4. waits up to five minutes for `GET /api/v1/health` inside the api container,
+5. reloads Caddy (in the stack since 26 Nov 2026), so a changed `deploy/caddy/Caddyfile` applies.
 
 Migrations, seeds and the Row-Level Security policies run when the api container starts (`bin/start api`: `db:prepare`,
 `db:seed`, `db:rls`), before Puma listens; the old web container keeps serving until the new one is up. With
@@ -196,8 +358,8 @@ migration, and `bin/start api` runs migrations as the database owner, which may 
 ## Daily operations on the server
 
 ```bash
-ssh sajid@103.173.62.218 && cd ~/easalpha
-docker compose ps                         # db, api, jobs, web, whatsapp, backup, umami Up (ps -a: volume-owner and umami-db-init Exited (0))
+ssh ubuntu-host@100.87.45.11 && cd ~/easalpha
+docker compose ps                         # cloudflared, caddy, db, api, jobs, web, whatsapp, backup, umami Up (ps -a: volume-owner and umami-db-init Exited (0))
 docker compose logs -f api                # or jobs, web, whatsapp, db
 docker compose exec api bin/rails console # Rails console (production)
 docker compose restart api                # after editing .env
@@ -216,8 +378,19 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
   into `BACKUP_DIR` (`~/easalpha/backups`): `easalpha-<date>.dump` (main database, pg_dump custom format),
   `umami-<date>.dump`, `storage-<date>.tar.gz` (uploads) and `wasessions-<date>.tar.gz` (linked WhatsApp phones, keep it
   as private as a password), and deletes files older than `BACKUP_KEEP_DAYS` (14). Run one now:
-  `docker compose run --rm backup now`. A backup on the same disk is only half a backup: set `BACKUP_COPY_CMD`
-  (for example `rclone copy "$1" remote:easalpha-backups`) or pull the folder nightly from another machine with rsync.
+  `docker compose run --rm backup now`. A backup on the same disk is only half a backup: the shared server took its
+  backups down with it in Nov 2026. Copy them off every night with rclone on the host (not `BACKUP_COPY_CMD`, which runs
+  inside the postgres:16 backup container, where there is no rclone, rsync, ssh or curl):
+  ```bash
+  sudo apt install -y rclone     # deploy/server-setup.sh already did this
+  rclone config        # add a remote named "offsite": Cloudflare R2 or Backblaze B2 (S3 type), or Google Drive
+  crontab -e           # then this line: 23:30 UTC (the server's clock) is 04:30 in Pakistan, an hour after the backup
+  30 23 * * * rclone copy /home/ubuntu-host/easalpha/backups offsite:easalpha-backups --max-age 3d >> /home/ubuntu-host/easalpha/offsite.log 2>&1
+  ```
+  Check it the next morning (`tail ~/easalpha/offsite.log`, `rclone ls offsite:easalpha-backups`), keep the bucket
+  private (the wasessions files are as good as a password), and restore the latest dump into a scratch database once a
+  month to know the backup works: `docker compose exec -T db createdb -U postgres restore_test`, `docker compose exec -T
+  db pg_restore -U postgres -d restore_test < backups/easalpha-<date>.dump`, then `dropdb` it.
   Restore the database: `docker compose stop api jobs`, then
   `docker compose exec -T db pg_restore -U postgres --clean --if-exists -d easalpha_production < backups/easalpha-<date>.dump`,
   then `docker compose start api jobs`. Restore uploads: `docker run --rm -v easalpha_storage:/data/storage -v $PWD/backups:/b postgres:16 tar -xzf /b/storage-<date>.tar.gz -C /data`,
@@ -244,11 +417,17 @@ curl -s https://api.easalpha.com/api/v1/health   # "rls":true once Row-Level Sec
 |---|---|
 | `deploy/docker-compose.yml` | the services (and the one-shot `volume-owner` and `umami-db-init`); builds from source when used alone |
 | `deploy/docker-compose.images.yml` | overlay: use the ghcr.io images instead of building |
-| `deploy/docker-compose.proxy.yml` | overlay: no published ports, web and api join the `kamal` network for Caddy |
+| `deploy/docker-compose.tunnel.yml` | overlay (production since 26 Nov 2026): cloudflared and Caddy in the stack, no port published |
+| `deploy/caddy-tunnel/Caddyfile` | that Caddy's whole configuration, reloaded by every deploy |
+| `deploy/docker-compose.caddy.yml` | overlay for a server with its own public address: Caddy on 80/443 with Let's Encrypt |
+| `deploy/caddy/Caddyfile` | that Caddy's configuration |
+| `deploy/server-setup.sh` | one-time root setup of a new server: Docker, docker group, log caps, rclone |
+| `deploy/docker-compose.proxy.yml` | overlay for a server where another Caddy runs in Docker: no published ports, web and api join its network (`kamal` on the old shared server) |
 | `deploy/backup.sh` | the nightly backup loop the `backup` service runs; `backup.sh now` for one backup |
-| `deploy/Caddyfile.easalpha` | the Caddy site blocks for easalpha.com and api.easalpha.com |
+| `deploy/Caddyfile.easalpha` | the site blocks to append to that other Caddy's file (proxy overlay only) |
 | `deploy/.env.example` | template of the server's `~/easalpha/.env` (`COMPOSE_FILE` selects the overlays) |
-| `.github/workflows/images.yml` | build + deploy on every push to master |
+| `.github/workflows/images.yml` | build + deploy after `ci` passes on `main`, on `v*` tags and on manual runs |
 | `.github/workflows/desktop.yml` | installers on changes to `easalpha-desktop/` and on `v*` tags, uploaded to the Download page |
 | `.github/workflows/ci.yml` | tests on every push and pull request |
-| `scripts/github-setup.sh` | one-time GitHub repo, secrets, variables, deploy key, first push |
+| `scripts/github-setup.sh` | GitHub repo, secrets, variables, deploy key, push; again with a new `DEPLOY_HOST` to move servers |
+| `scripts/server-env.sh` | writes a new server's `.env` with fresh secrets and the master key |

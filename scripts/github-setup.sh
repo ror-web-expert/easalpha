@@ -2,17 +2,23 @@
 # One-time GitHub setup for EasAlpha: creates the private repository, sets the deploy secrets and variables the workflows
 # use, installs the deploy key on the server and pushes the code (which triggers the first build and deploy).
 #
-#   gh auth login                      # once, in a browser
-#   scripts/github-setup.sh            # defaults below; override with env vars, e.g. REPO=myorg/easalpha
+#   gh auth login                                  # once, in a browser
+#   DEPLOY_HOST=<server ip> scripts/github-setup.sh  # other defaults below; override with env vars, e.g. REPO=myorg/easalpha
 #
-# Secrets set:   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH, DEPLOY_DOWNLOADS_PATH
+# Moving to a new server is the same command with the new address: it points the secrets at it, installs the deploy key
+# there and checks it (docs/DEPLOY.md, "Moving to a new server"). Running it again changes nothing else.
+#
+# Secrets set:   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH, DEPLOY_DOWNLOADS_PATH, and TS_OAUTH_CLIENT_ID and
+#                TS_OAUTH_SECRET when given (a server only the tailnet reaches: the deploy joins it as tag:ci)
 # Variables set: API_PUBLIC_URL (baked into the web image), PUBLIC_URL (desktop installers' update feed)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 REPO="${REPO:-easalpha}"                              # "name" (under your user) or "owner/name"
 VISIBILITY="${VISIBILITY:-private}"
-DEPLOY_HOST="${DEPLOY_HOST:-103.173.62.218}"
+# No default: the first server (103.173.62.218, shared) went down in Nov 2026, and a stale default would point every
+# deploy at it again.
+DEPLOY_HOST="${DEPLOY_HOST:?set DEPLOY_HOST to the server address, e.g. DEPLOY_HOST=203.0.113.10 scripts/github-setup.sh}"
 DEPLOY_USER="${DEPLOY_USER:-sajid}"
 DEPLOY_PATH="${DEPLOY_PATH:-/home/$DEPLOY_USER/easalpha}"
 DEPLOY_KEY="${DEPLOY_KEY:-$HOME/.ssh/easalpha_deploy}"   # private key; public half goes to the server
@@ -45,6 +51,13 @@ gh secret set DEPLOY_PATH --repo "$FULL" --body "$DEPLOY_PATH"
 gh secret set DEPLOY_DOWNLOADS_PATH --repo "$FULL" --body "$DEPLOY_PATH/downloads"
 gh secret set DEPLOY_SSH_KEY --repo "$FULL" < "$DEPLOY_KEY"
 
+if [ -n "${TS_OAUTH_CLIENT_ID:-}" ] || [ -n "${TS_OAUTH_SECRET:-}" ]; then
+  : "${TS_OAUTH_CLIENT_ID:?give TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET together}" "${TS_OAUTH_SECRET:?give TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET together}"
+  gh secret set TS_OAUTH_CLIENT_ID --repo "$FULL" --body "$TS_OAUTH_CLIENT_ID"
+  printf '%s' "$TS_OAUTH_SECRET" | gh secret set TS_OAUTH_SECRET --repo "$FULL"
+  echo "   Tailscale OAuth client set: deploys join the tailnet as tag:ci"
+fi
+
 echo "4/5 Variables"
 gh variable set API_PUBLIC_URL --repo "$FULL" --body "$API_PUBLIC_URL"
 gh variable set PUBLIC_URL --repo "$FULL" --body "$PUBLIC_URL"
@@ -53,4 +66,5 @@ echo "5/5 Push $BRANCH (starts the ci, images and desktop workflows)"
 git push -u origin "$BRANCH"
 echo
 echo "Done. Watch the first deploy:  gh run watch   (or https://github.com/$FULL/actions)"
+echo "Nothing new was pushed (\"Everything up-to-date\")? Deploy the current $BRANCH to the server with: gh workflow run images --ref $BRANCH"
 echo "Server .env must exist at $DEPLOY_PATH/.env (deploy/.env.example is the template)."

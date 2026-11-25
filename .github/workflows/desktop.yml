@@ -55,9 +55,19 @@ jobs:
     # The secrets context cannot be read in a step's "if", so the host goes through env first.
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
         with: { sparse-checkout: "easalpha-desktop/package.json\nscripts/downloads-manifest.mjs", sparse-checkout-cone-mode: false }
+      # The server is reached over the tailnet since 26 Nov 2026, as in images.yml's deploy job.
+      - if: ${{ env.DEPLOY_HOST != '' && env.TS_OAUTH_CLIENT_ID != '' }}
+        name: Join the tailnet
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          ping: ${{ env.DEPLOY_HOST }}
       - uses: actions/download-artifact@v4
         with: { path: downloads, pattern: "easalpha-pos-*", merge-multiple: true }
       - name: Write manifest.json (version, files per operating system)

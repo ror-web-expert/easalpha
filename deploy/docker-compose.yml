@@ -1,6 +1,8 @@
 # EasAlpha, complete stack: PostgreSQL, API, job worker, web app, WhatsApp gateway. Put a TLS proxy (Caddy, nginx) in
 # front of web:3000 and api:3001, or set FORCE_SSL=false for a plain LAN install.
-# Overlays: docker-compose.images.yml (prebuilt images from GitHub), docker-compose.proxy.yml (Caddy already in Docker).
+# Overlays: docker-compose.images.yml (prebuilt images from GitHub), docker-compose.tunnel.yml (Cloudflare Tunnel and
+# Caddy, for a server nothing on the internet reaches: production since 26 Nov 2026), docker-compose.caddy.yml (Caddy
+# on 80/443, a server with its own address), docker-compose.proxy.yml (another Caddy already in Docker).
 # List them in COMPOSE_FILE inside .env and every "docker compose" command picks them up.
 services:
   db:
@@ -112,8 +114,10 @@ services:
     volumes: ["wasessions:/app/sessions"]
 
   # Nightly backup of the database, uploads and linked WhatsApp phones into ./backups (BACKUP_DIR), kept BACKUP_KEEP_DAYS.
-  # One-off: docker compose run --rm backup now. Restore steps: docs/DEPLOY.md. Copy the folder off the server
-  # (BACKUP_COPY_CMD, or an rsync cron on another machine): a backup on the same disk is only half a backup.
+  # One-off: docker compose run --rm backup now. Restore steps: docs/DEPLOY.md. Copy the folder off the server with the
+  # host cron in docs/DEPLOY.md ("Backup"): a backup on the same disk is only half a backup, and the shared server took
+  # its backups down with it in Nov 2026. BACKUP_COPY_CMD runs in this postgres:16 container, which has no rclone,
+  # rsync, ssh or curl, so it cannot do that copy.
   backup:
     image: postgres:16
     restart: unless-stopped

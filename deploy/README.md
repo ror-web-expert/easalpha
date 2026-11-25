@@ -7,7 +7,7 @@ cp deploy/.env.example deploy/.env      # fill in the values; RAILS_MASTER_KEY i
 cd deploy && docker compose --env-file .env up -d --build
 ```
 
-Prebuilt images from GitHub Actions instead of building here: set `IMAGE_REPO` and `IMAGE_TAG` in `.env` and list `docker-compose.images.yml` in `COMPOSE_FILE` (see `.env.example`). A TLS proxy that already runs in Docker (Caddy on the production server): add `docker-compose.proxy.yml` too, which drops the published ports and joins the proxy's network; `Caddyfile.easalpha` is the matching Caddy snippet. Step-by-step for Ubuntu, Mac, a LAN and the desktop installers: `docs/SETUP.md`; the production server, pipeline and daily operations: `docs/DEPLOY.md`.
+Prebuilt images from GitHub Actions instead of building here: set `IMAGE_REPO` and `IMAGE_TAG` in `.env` and list `docker-compose.images.yml` in `COMPOSE_FILE` (see `.env.example`). A server nothing on the internet reaches (production since 26 Nov 2026, a VM behind NAT): add `docker-compose.tunnel.yml`, which runs a Cloudflare Tunnel and Caddy (`caddy-tunnel/Caddyfile`) in the stack and publishes no port; `server-setup.sh` prepares such a server once. A server with its own public address: `docker-compose.caddy.yml`, Caddy on ports 80/443 with `caddy/Caddyfile`. A server where another TLS proxy already runs in Docker: `docker-compose.proxy.yml` instead, which joins that proxy's network; `Caddyfile.easalpha` is the matching Caddy snippet. A new server's `.env`: `scripts/server-env.sh`. Step-by-step for Ubuntu, Mac, a LAN and the desktop installers: `docs/SETUP.md`; the production server, pipeline and daily operations: `docs/DEPLOY.md`.
 
 Then put a TLS proxy in front (Caddy example):
 

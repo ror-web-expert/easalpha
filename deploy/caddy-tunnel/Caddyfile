@@ -1,0 +1,39 @@
+# EasAlpha behind a Cloudflare Tunnel (docker-compose.tunnel.yml): the production server since 26 Nov 2026 is a VM on
+# an office network that nothing on the internet can reach, so cloudflared dials out to Cloudflare and hands every
+# request for easalpha.com, www and api.easalpha.com to this Caddy on caddy:80. Cloudflare holds the certificates;
+# this Caddy speaks plain HTTP inside the compose network, publishes no port, and keeps what the public Caddyfile
+# (../caddy/Caddyfile, a server with its own address) does: the 25 MB body limit and the customer's own address.
+# The deploy reloads it after every "up"; by hand: docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+{
+	auto_https off
+	servers {
+		# Every request comes from the cloudflared container on the compose network, with the customer's address in
+		# Cloudflare's CF-Connecting-IP. Nothing else can reach this Caddy: no port is published.
+		trusted_proxies static private_ranges
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+# The API's rate limits (Rack::Attack), audit log and sign-in records read the client address from X-Forwarded-For.
+(upstream_headers) {
+	header_up X-Forwarded-For {client_ip}
+}
+
+http://easalpha.com, http://www.easalpha.com {
+	encode zstd gzip
+	reverse_proxy web:3000 {
+		import upstream_headers
+	}
+}
+
+http://api.easalpha.com {
+	encode zstd gzip
+	# The largest legitimate body is a 5 MB image upload or a 200-record sync batch; anything bigger is dropped here,
+	# before it reaches Puma (6 Nov 2026 review, A15). Cloudflare's own limit is 100 MB.
+	request_body {
+		max_size 25MB
+	}
+	reverse_proxy api:3001 {
+		import upstream_headers
+	}
+}

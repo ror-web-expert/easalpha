@@ -31,10 +31,94 @@ RSpec.describe "deploy compose files" do
   end
 
   it "leaves volumes, depends_on and volume-owner alone in the overlays" do
-    %w[docker-compose.images.yml docker-compose.proxy.yml].each do |file|
+    %w[docker-compose.images.yml docker-compose.proxy.yml docker-compose.caddy.yml docker-compose.tunnel.yml].each do |file|
       services = compose(file)["services"]
       expect(services).not_to have_key("volume-owner"), file
-      services.each { |name, s| expect(s.keys & %w[volumes depends_on]).to eq([]), "#{file} changes #{name}" }
+      # A service an overlay adds (caddy) brings its own; one the base file defines keeps the base's wiring.
+      services.slice(*base.keys).each { |name, s| expect(s.keys & %w[volumes depends_on]).to eq([]), "#{file} changes #{name}" }
+    end
+  end
+
+  # 26 Nov 2026: the shared server went down. The new one is a VM nothing on the internet reaches, so a Cloudflare
+  # Tunnel brings the traffic in (docker-compose.tunnel.yml); docker-compose.caddy.yml is for a server with its own address.
+  describe "the Cloudflare Tunnel overlay, production since 26 Nov 2026" do
+    let(:overlay) { compose("docker-compose.tunnel.yml")["services"] }
+    let(:raw) { File.read(dir.join("docker-compose.tunnel.yml")) }
+    let(:caddyfile) { File.read(dir.join("caddy-tunnel/Caddyfile")) }
+
+    it "is what .env.example selects and what server-env.sh writes by default" do
+      expect(File.read(dir.join(".env.example"))).to match(/^COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml:docker-compose.tunnel.yml$/)
+      script = File.read(Rails.root.join("../scripts/server-env.sh"))
+      expect(script).to include('PROXY="${PROXY:-tunnel}"', 'set_var COMPOSE_FILE "docker-compose.yml:docker-compose.images.yml:docker-compose.$PROXY.yml"')
+    end
+
+    it "publishes no port at all: cloudflared dials out, Caddy and the apps stay inside the compose network" do
+      expect(overlay.keys).to contain_exactly("cloudflared", "caddy", "api", "web")
+      expect(overlay.values_at("cloudflared", "caddy").map { |sv| sv["ports"] }).to all(be_nil)
+      expect(raw).to match(/^  api:\n    ports: !reset \[\]$/).and match(/^  web:\n    ports: !reset \[\]$/)
+    end
+
+    it "runs the tunnel from the token in .env and refuses to start without one" do
+      tunnel = overlay.fetch("cloudflared")
+      expect(tunnel["command"]).to eq(%w[tunnel --no-autoupdate run])
+      expect(tunnel["environment"]["TUNNEL_TOKEN"]).to start_with("${CLOUDFLARE_TUNNEL_TOKEN:?")
+      expect(File.read(dir.join(".env.example"))).to match(/^CLOUDFLARE_TUNNEL_TOKEN=$/)
+    end
+
+    it "mounts the caddy-tunnel folder, so the deploy's reload reads the Caddyfile rsync replaced" do
+      expect(mounts(overlay.fetch("caddy"))).to include("./caddy-tunnel:/etc/caddy:ro", "caddy_data:/data")
+    end
+
+    it "serves the three names over plain HTTP to web and api, with the body limit and the customer's address" do
+      expect(caddyfile).to include("auto_https off", "http://easalpha.com, http://www.easalpha.com {", "reverse_proxy web:3000 {",
+                                   "http://api.easalpha.com {", "reverse_proxy api:3001 {", "max_size 25MB")
+      expect(caddyfile.scan("import upstream_headers").size).to eq(2)
+      # Only cloudflared reaches it (no published port), from the compose network's private range.
+      expect(caddyfile).to include("trusted_proxies static private_ranges", "client_ip_headers CF-Connecting-IP", "header_up X-Forwarded-For {client_ip}")
+    end
+
+    it "lets both workflows that SSH to the server join the tailnet first, when the Tailscale client is set" do
+      %w[images.yml desktop.yml].each do |file|
+        wf = YAML.safe_load(File.read(Rails.root.join("../.github/workflows", file)))
+        job = wf["jobs"][file == "images.yml" ? "deploy" : "publish"]
+        expect(job["env"]["TS_OAUTH_CLIENT_ID"]).to eq("${{ secrets.TS_OAUTH_CLIENT_ID }}"), file
+        names = job["steps"].map { |st| st["name"] || st["uses"] }
+        join = job["steps"].find { |st| st["uses"].to_s.start_with?("tailscale/github-action@") }
+        expect(join).not_to be_nil, file
+        expect(join["with"]).to include("tags" => "tag:ci", "oauth-secret" => "${{ secrets.TS_OAUTH_SECRET }}")
+        expect(join["if"]).to include("env.TS_OAUTH_CLIENT_ID != ''")
+        ssh_step = names.index { |n| n.to_s.match?(/SSH key|Upload to the website server/) }
+        expect(names.index("Join the tailnet")).to be < ssh_step, "#{file}: the tailnet must be joined before the first SSH"
+      end
+    end
+  end
+
+  describe "the Caddy overlay for a server with its own public address" do
+    let(:overlay) { compose("docker-compose.caddy.yml")["services"] }
+    let(:caddyfile) { File.read(dir.join("caddy/Caddyfile")) }
+    let(:raw) { File.read(dir.join("docker-compose.caddy.yml")) }
+
+    it "publishes only Caddy: web and api keep no host port (Docker's published ports go around ufw)" do
+      expect(overlay.fetch("caddy")["ports"]).to contain_exactly("80:80", "443:443", "443:443/udp")
+      expect(raw).to match(/^  api:\n    ports: !reset \[\]$/).and match(/^  web:\n    ports: !reset \[\]$/)
+      expect(overlay.keys).to contain_exactly("caddy", "api", "web")
+    end
+
+    it "mounts the caddy folder, not the file, so a Caddyfile the deploy's rsync replaced is what reload reads" do
+      expect(mounts(overlay.fetch("caddy"))).to include("./caddy:/etc/caddy:ro", "caddy_data:/data")
+      expect(compose("docker-compose.caddy.yml")["volumes"].keys).to include("caddy_data")
+      expect(File.read(Rails.root.join("../.github/workflows/images.yml"))).to include("caddy reload --config /etc/caddy/Caddyfile")
+    end
+
+    it "proxies both names to the compose services with the client's own address in X-Forwarded-For" do
+      expect(caddyfile).to include("easalpha.com, www.easalpha.com {", "reverse_proxy web:3000 {", "api.easalpha.com {", "reverse_proxy api:3001 {", "max_size 25MB")
+      expect(caddyfile.scan("import upstream_headers").size).to eq(2)
+      expect(caddyfile).to include("header_up X-Forwarded-For {client_ip}", "client_ip_headers CF-Connecting-IP")
+      # CF-Connecting-IP is believed only from Cloudflare's own ranges; a private or catch-all range would let anyone set it.
+      ranges = caddyfile[/trusted_proxies static (.+)$/, 1].split
+      expect(ranges).to include("173.245.48.0/20", "104.16.0.0/13", "172.64.0.0/13", "2606:4700::/32")
+      expect(ranges).not_to include("0.0.0.0/0", "::/0", "private_ranges")
+      expect(ranges.map { |r| IPAddr.new(r) }.none?(&:private?)).to be(true)
     end
   end
 

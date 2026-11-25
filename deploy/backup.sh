@@ -6,8 +6,9 @@
 #   storage-<date>.tar.gz      uploaded files (menu photos, logos, receipts)
 #   wasessions-<date>.tar.gz   linked WhatsApp phones (sensitive: treat like a password)
 # and deletes anything older than BACKUP_KEEP_DAYS (default 14). BACKUP_COPY_CMD, when set, runs after each backup with
-# the folder as $1 (for example an rclone or rsync line) so a copy leaves the server. "backup.sh now" runs one backup
-# at once and exits; docs/DEPLOY.md has the restore steps.
+# the folder as $1, inside this container (postgres:16 has no rclone, rsync, ssh or curl, so the copy off the server
+# is a host cron instead: docs/DEPLOY.md, "Backup"). "backup.sh now" runs one backup at once and exits;
+# docs/DEPLOY.md has the restore steps.
 set -eu
 DIR=${BACKUP_DIR_IN_CONTAINER:-/backups}
 KEEP=${BACKUP_KEEP_DAYS:-14}

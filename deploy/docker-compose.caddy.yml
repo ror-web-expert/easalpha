@@ -1,0 +1,26 @@
+# For a server of EasAlpha's own with a public address (production uses docker-compose.tunnel.yml instead, since its
+# server is behind NAT): Caddy runs in this stack,
+# holds ports 80 and 443, gets the certificates and proxies easalpha.com to web and api.easalpha.com to api
+# (caddy/Caddyfile). The web and api ports are not published, so the only way in from the internet is through Caddy
+# (ports Docker publishes go around ufw).
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml:docker-compose.caddy.yml   (in .env, then plain "docker compose up -d")
+# A server where another Caddy already holds 80/443 in Docker: docker-compose.proxy.yml instead of this file.
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      # The folder, not the file: the deploy's rsync replaces Caddyfile with a new file, which a single-file bind mount
+      # would not show to the running container.
+      - "./caddy:/etc/caddy:ro"
+      - "caddy_data:/data"
+      - "caddy_config:/config"
+    depends_on: [web, api]
+  api:
+    ports: !reset []
+  web:
+    ports: !reset []
+volumes:
+  caddy_data:
+  caddy_config:
