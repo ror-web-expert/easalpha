@@ -10,7 +10,10 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:2026.11.2
     restart: unless-stopped
-    command: ["tunnel", "--no-autoupdate", "run"]
+    # HTTP/2 over TCP 443, not the default QUIC over UDP 7844: on the office network (26 Nov 2026) every QUIC connection
+    # registered and then died within seconds ("failed to accept QUIC stream: timeout: no recent network activity"), and
+    # Cloudflare answered 530/1033 for the whole site. TCP 443 gets out of any network a browser gets out of.
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "run"]
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN is not set in .env (docs/DEPLOY.md, "Cloudflare Tunnel")}
     depends_on: [caddy]

@@ -68,7 +68,7 @@ RSpec.describe "deploy compose files" do
 
     it "runs the tunnel from the token in .env and refuses to start without one" do
       tunnel = overlay.fetch("cloudflared")
-      expect(tunnel["command"]).to eq(%w[tunnel --no-autoupdate run])
+      expect(tunnel["command"]).to eq(%w[tunnel --no-autoupdate --protocol http2 run])
       expect(tunnel["environment"]["TUNNEL_TOKEN"]).to start_with("${TUNNEL_TOKEN:?")
       expect(File.read(dir.join(".env.example"))).to match(/^TUNNEL_TOKEN=$/)
     end
