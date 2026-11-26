@@ -194,14 +194,20 @@ once a cashier signs in; anything the server refuses shows in the till's Attenti
 
 | Step | Where | State |
 |---|---|---|
-| Docker, docker group, log caps, rclone, `~/easalpha` | server | **you**: step 1, `sudo bash ~/easalpha-setup.sh` |
-| More than 1 virtual CPU for the VM | Hyper-V host | **you**: step 1 |
-| `~/easalpha/.env` | laptop, then server | **you**: step 2, `scripts/server-env.sh` |
-| Cloudflare Tunnel with three public hostnames to `caddy:80`; token in `.env`; old A records deleted | Cloudflare | **you**: step 3 |
-| Tailscale `tag:ci` owner and OAuth client | Tailscale admin | **you**: step 4 |
-| Deploy key on the server, secrets, first deploy | laptop | **you**: step 5, `scripts/github-setup.sh` |
-| Backups copied off the server every night | server | **you**: "Backup" under "Daily operations" |
-| Row-Level Security: `EASALPHA_APP_DB_PASSWORD` in `.env` | server | optional, below; until then every API start prints a WARNING and `/api/v1/health` says `"rls":false` |
+| Docker, docker group, log caps, rclone, `~/easalpha` | server | done 26 Nov 2026 (Docker 29.10, Compose v5.8) |
+| More than 1 virtual CPU for the VM | Hyper-V host | **you**: still 1 |
+| `~/easalpha/.env` | server | done; `TUNNEL_TOKEN` still empty (**you**) |
+| Cloudflare Tunnel `easalpha` with three public hostnames to `caddy:80`; old A records deleted | Cloudflare | done 26 Nov 2026; **you**: its token into `.env` as `TUNNEL_TOKEN`, then `docker compose up -d` |
+| Tailscale `tag:ci` owner and OAuth client | Tailscale admin | done 26 Nov 2026; **you**: the client id and secret into GitHub |
+| Deploy key on the server | server | done (`easalpha-deploy@github-actions` in `~/.ssh/authorized_keys`) |
+| GitHub secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_DOWNLOADS_PATH`, `DEPLOY_KNOWN_HOSTS`, `TS_OAUTH_*` | laptop | **you**: `scripts/github-setup.sh` (step 5); until then deploys fail at the SSH step |
+| First start | server | done by hand 26 Nov 2026: images 42ce837, fresh database (migrations, seeds, super admin), Row-Level Security on (`"rls":true`), every service but cloudflared up |
+| Demo account | server | done 26 Nov 2026: `demo:business` (30 days), pictures, canteen (sessions, 8 workers FP-001..008, plans to 3 Dec, kiosk and counter devices) |
+| Umami | server | done 26 Nov 2026: default admin password replaced (`UMAMI_ADMIN_PASSWORD` in `.env`), website EasAlpha, `ANALYTICS_ID` set |
+| Download page | server | done 26 Nov 2026: the 0.5.0 installers and update feeds in `~/easalpha/downloads` |
+| Backups copied off the server every night | server | **you**: "Backup" under "Daily operations" (backups run on the server; nothing leaves it yet) |
+| Mail (`SMTP_*`), WhatsApp (link a phone), Paddle webhook secret, Sentry | server `.env`, Admin | **you**: empty on the new server |
+| Row-Level Security: `EASALPHA_APP_DB_PASSWORD` in `.env` | server | done from the first start |
 
 ### Caddy
 
