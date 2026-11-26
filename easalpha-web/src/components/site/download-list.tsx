@@ -5,7 +5,7 @@ import { Apple, Check, ChevronDown, Clock, Download, Monitor, Smartphone, Termin
 import { CARD } from "@/components/site/sections";
 import { trackAttrs } from "@/lib/analytics";
 import {
-  AFTER_INSTALL, detectOs, installers, installerUrl, MOBILE_GUIDES, PLATFORM_GUIDES,
+  AFTER_INSTALL, builtDate, detectOs, installers, installerUrl, MOBILE_GUIDES, PLATFORM_GUIDES,
   type Installer, type Os,
 } from "@/components/site/download-helpers";
 
@@ -29,7 +29,7 @@ export function DownloadList({ baseUrl, version, list: given, builtAt }: { baseU
     if (detected === "ios" || detected === "android") setPhone(detected);
   }, []);
   const list = given ?? installers(version);
-  const built = builtAt ? new Date(builtAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : null;
+  const built = builtDate(builtAt);
   const mobile = os === "ios" || os === "android";
 
   return (

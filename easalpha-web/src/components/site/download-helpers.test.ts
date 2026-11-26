@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { AFTER_INSTALL, applyManifest, detectOs, downloadsBase, installers, installerUrl, MOBILE_GUIDES, ordered, originFromHeaders, PLATFORM_GUIDES } from "./download-helpers";
+import { AFTER_INSTALL, applyManifest, builtDate, detectOs, downloadsBase, installers, installerUrl, MOBILE_GUIDES, ordered, originFromHeaders, PLATFORM_GUIDES } from "./download-helpers";
 
 describe("download page", () => {
+  it("dates a build in Pakistan time, the same on the server and in the browser", () => {
+    // Built 23:05 UTC on 6 Nov is 04:05 on 7 Nov in Karachi: a zone-less format gave the server and the browser
+    // different text and React refused the server's HTML (#418).
+    expect(builtDate("2026-11-06T23:05:47.106Z")).toBe("7 November 2026");
+    expect(builtDate("2026-11-06T10:00:00Z")).toBe("6 November 2026");
+    expect(builtDate(null)).toBeNull();
+    expect(builtDate("not a date")).toBeNull();
+  });
+
   it("detects the operating system from the user agent", () => {
     expect(detectOs("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130")).toBe("windows");
     expect(detectOs("Mozilla/5.0 (X11; Linux x86_64) Firefox/131")).toBe("linux");

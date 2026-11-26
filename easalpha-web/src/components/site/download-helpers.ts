@@ -58,6 +58,15 @@ export function originFromHeaders(get: (name: string) => string | null, fallback
 
 /** With a manifest from the downloads folder: its version wins, and every installer is kept but marked available only
  *  when its file is really there, so the page can still show the guide for a build that comes with the next release. */
+/** The build date for "Version 0.5.0, 7 November 2026". Always in Pakistan time: the page is rendered on the server
+ *  (UTC) and again in the visitor's browser, and a date formatted in each one's own zone differed for a build made
+ *  after 19:00 UTC, which broke hydration (React #418 on /download, 26 Nov 2026). */
+export function builtDate(builtAt: string | null | undefined): string | null {
+  if (!builtAt) return null;
+  const d = new Date(builtAt);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Karachi" });
+}
+
 export function applyManifest(list: Installer[], manifest: { version: string; files: { file: string }[] } | null): { version: string | null; list: Installer[] } {
   if (!manifest) return { version: null, list: list.map((i) => ({ ...i, available: true })) };
   const have = new Set(manifest.files.map((f) => f.file));
