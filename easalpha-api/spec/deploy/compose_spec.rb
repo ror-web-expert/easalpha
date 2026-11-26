@@ -30,6 +30,14 @@ RSpec.describe "deploy compose files" do
     expect(mounts(base["backup"])).to include("storage:/data/storage:ro", "wasessions:/data/wasessions:ro") # reads as root
   end
 
+  # 26 Nov 2026: Docker Compose read "SENTRY_DSN=      # optional: ..." as the value "# optional: ...", so the API would
+  # not boot on the new server, and PADDLE_WEBHOOK_SECRET would have been a string anyone can read here.
+  it "keeps every comment of .env.example on its own line, never after a value" do
+    lines = File.readlines(dir.join(".env.example"), chomp: true).grep(/\A[A-Z_]+=/)
+    expect(lines.size).to be > 30
+    expect(lines.grep(/=.*\s#/)).to eq([])
+  end
+
   it "leaves volumes, depends_on and volume-owner alone in the overlays" do
     %w[docker-compose.images.yml docker-compose.proxy.yml docker-compose.caddy.yml docker-compose.tunnel.yml].each do |file|
       services = compose(file)["services"]
